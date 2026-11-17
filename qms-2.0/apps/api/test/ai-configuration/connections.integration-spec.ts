@@ -20,7 +20,7 @@ describe('AI connections with real PostgreSQL and actual loopback requests', () 
   const secret = 'only-disposable-test-secret';
   let server: Server;
   let baseUrl: string;
-  let received: Array<{ authorization?: string; body: unknown }> = [];
+  let received: Array<{ path?: string; authorization?: string; anthropicKey?: string; googleKey?: string; body: unknown }> = [];
   const originalNode = process.env.NODE_ENV;
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -29,8 +29,11 @@ describe('AI connections with real PostgreSQL and actual loopback requests', () 
       let body = '';
       request.on('data', chunk => { body += String(chunk); });
       request.on('end', () => {
-        received.push({ authorization: request.headers.authorization, body: JSON.parse(body) });
+        received.push({ path: request.url, authorization: request.headers.authorization, anthropicKey: request.headers['x-api-key'] as string | undefined, googleKey: request.headers['x-goog-api-key'] as string | undefined, body: JSON.parse(body) });
         if (request.url?.startsWith('/failure')) { response.statusCode = 401; response.end(secret); return; }
+        if (request.url?.endsWith('/responses')) { response.end(JSON.stringify({ status: 'completed', output: [{ type: 'message', status: 'completed', role: 'assistant', content: [{ type: 'output_text', text: '协议真实传输。' }] }] })); return; }
+        if (request.url?.endsWith('/messages')) { response.end(JSON.stringify({ type: 'message', role: 'assistant', stop_reason: 'end_turn', content: [{ type: 'text', text: '协议真实传输。' }] })); return; }
+        if (request.url?.endsWith(':generateContent')) { response.end(JSON.stringify({ candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [{ text: '协议真实传输。' }] } }] })); return; }
         response.end(JSON.stringify({ choices: [{ message: { content: '已选字段中的焊点异常。' } }] }));
       });
     });
@@ -132,5 +135,44 @@ describe('AI connections with real PostgreSQL and actual loopback requests', () 
   it('requires the channel default to belong to its bounded model list', async () => {
     const fixtureValue = await fixture();
     await expect(connections.create(fixtureValue.actor, fixtureValue.organizationId, { ...input(), defaultModel: 'unknown' }, randomUUID(), randomUUID())).rejects.toMatchObject({ response: expect.objectContaining({ code: 'AI_CONNECTION_INVALID' }) });
+  });
+  it('defaults legacy rows and missing input to Chat Completions and includes protocol in all projections', async () => {
+    const value = await fixture();
+    const created = await connections.create(value.actor, value.organizationId, input(), randomUUID(), randomUUID());
+    expect(created).toHaveProperty('protocol', 'OPENAI_CHAT_COMPLETIONS');
+    expect(await connections.resolve(value.organizationId, created.id)).toHaveProperty('protocol', 'OPENAI_CHAT_COMPLETIONS');
+    expect((await connections.list(value.actor, value.organizationId))[0]).toHaveProperty('protocol', 'OPENAI_CHAT_COMPLETIONS');
+    const id = randomUUID();
+    await prisma.$executeRaw`INSERT INTO ai_connections (id,organization_id,name,base_url,models,default_model,enabled) VALUES (${id}::uuid,${value.organizationId}::uuid,'legacy','https://model.example/v1',ARRAY['test-model'],'test-model',false)`;
+    const [legacy] = await prisma.$queryRaw<Array<{ protocol: string }>>`SELECT protocol FROM ai_connections WHERE id=${id}::uuid`;
+    expect(legacy!.protocol).toBe('OPENAI_CHAT_COMPLETIONS');
+    for (const protocol of ['SYSTEM_ONE', null]) {
+      await expect(prisma.$executeRaw`UPDATE ai_connections SET protocol=${protocol} WHERE id=${id}::uuid`).rejects.toThrow();
+    }
+    const [missing] = await prisma.$queryRaw<Array<{ total: number }>>`SELECT count(*)::int AS total FROM ai_connections WHERE protocol IS NULL`;
+    expect(missing!.total).toBe(0);
+  });
+  it.each(['OPENAI_RESPONSES', 'ANTHROPIC_MESSAGES', 'GEMINI_GENERATE_CONTENT'] as const)('persists %s, binds protocol replacement to a key and generates via the stored adapter', async protocol => {
+    const value = await fixture();
+    const created = await connections.create(value.actor, value.organizationId, input(), randomUUID(), randomUUID());
+    const blankUpdate = { ...input(), protocol, apiKey: '', expectedVersion: 1 };
+    await expect(connections.update(value.actor, value.organizationId, created.id, blankUpdate, randomUUID(), randomUUID())).rejects.toMatchObject({ response: expect.objectContaining({ code: 'AI_CONNECTION_INVALID' }) });
+    const update = { ...blankUpdate, apiKey: secret };
+    const changed = await connections.update(value.actor, value.organizationId, created.id, update, randomUUID(), randomUUID());
+    expect(changed).toHaveProperty('protocol', protocol);
+    expect(await connections.resolve(value.organizationId, created.id)).toHaveProperty('protocol', protocol);
+    const generated = await connections.generate(value.organizationId, created.id, 2, { model: 'model-test-2', prompt: '只整理事实。', selectedData: [{ label: '事实', value: '验证协议' }] });
+    expect(generated.text).toBe('协议真实传输。');
+    const request = received.at(-1)!;
+    if (protocol === 'OPENAI_RESPONSES') expect(request).toMatchObject({ path: '/v1/responses', authorization: `Bearer ${secret}` });
+    if (protocol === 'ANTHROPIC_MESSAGES') expect(request).toMatchObject({ path: '/v1/messages', anthropicKey: secret });
+    if (protocol === 'GEMINI_GENERATE_CONTENT') expect(request).toMatchObject({ path: '/v1/models/model-test-2:generateContent', googleKey: secret });
+    safe(generated);
+    const events = await prisma.auditEvent.findMany({ where: { resourceId: created.id, action: 'AI_CONNECTION_UPDATED' } });
+    expect(events[0]).toMatchObject({ metadata: expect.objectContaining({ protocol }) });
+    const directInput = { ...input(), protocol };
+    const direct = await connections.create(value.actor, value.organizationId, directInput, randomUUID(), randomUUID());
+    expect(direct).toHaveProperty('protocol', protocol);
+    expect((await connections.list(value.actor, value.organizationId)).find(row => row.id === direct.id)).toHaveProperty('protocol', protocol);
   });
 });

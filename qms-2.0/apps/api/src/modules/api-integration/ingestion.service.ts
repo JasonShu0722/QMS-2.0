@@ -28,6 +28,7 @@ const actorSnapshot = (actor: AdminActor, organizationId: string): AdminActor =>
 const itemDto = (row: ItemRow): IngestionItemDto => ({ id: row.id, jobId: row.job_id, receiptId: row.receipt_id, rowIndex: row.row_index, status: row.status, errorCode: row.error_code, errorField: row.error_field, duplicateOfItemId: row.duplicate_of_item_id, targetId: row.target_id, targetVersion: row.target_version, version: row.version });
 const ruleDto = (row: RuleRow): IngestionRuleDto => ({ ...row.configuration, organizationId: row.organization_id, id: row.id, version: row.version, creatorId: row.creator_id, updatedAt: row.updated_at.toISOString() });
 const aiRuleIdentity = (ai: IngestionRule['aiDescription']) => ai ? JSON.stringify([ai.connectionId, ai.model, ai.prompt, ai.inputFields.map(field => [field.path, field.label ?? '', field.variable]), ai.output.mode, ai.output.field, ai.output.target]) : null;
+const aiBindingIdentity = (binding: IngestionRule['aiApplication']) => binding ? JSON.stringify([binding.applicationId, binding.publishedVersion, binding.inputFields.map(field => [field.path, field.label ?? '', field.variable])]) : null;
 const displayedFields = (fields: IngestionFields): Record<string, string> => Object.fromEntries(Object.entries(fields).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && !['receiptId', 'sourceObservedAt'].includes(entry[0])));
 function proposedChanges(rule: IngestionRule, fields: IngestionFields, current: IngestionTargetRecord) {
   const permitted = Object.entries(fields).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && !['code', 'externalRecordKey', 'receiptId', 'sourceObservedAt'].includes(entry[0]) && (rule.target !== 'PROCESS_DEFECT' || processDefectSourceFields.includes(entry[0])) && (rule.mode === 'INSERT_ONLY' || rule.updateFields.includes(entry[0])));
@@ -111,25 +112,39 @@ export class IngestionService {
       const organizationId = await this.access(tx, actor);
       const rows = await tx.$queryRaw<RuleRow[]>`SELECT * FROM integration_ingestion_rules WHERE organization_id=${organizationId}::uuid ORDER BY updated_at DESC,id LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
       const [count] = await tx.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM integration_ingestion_rules WHERE organization_id=${organizationId}::uuid`;
-      return { items: rows.map(ruleDto), total: count!.total, page, limit };
+      const items = await Promise.all(rows.map(async row => {
+        const result = ruleDto(row);
+        if (row.configuration.aiApplication && this.ai) {
+          try { result.aiApplicationLatestVersion = await this.ai.latestApplicationVersion(tx, actor, row.configuration.aiApplication.applicationId); }
+          catch (error) { if (!(error instanceof HttpException) || (error.getResponse() as { code?: string }).code !== 'FEATURE_PERMISSION_DENIED') throw error; }
+        }
+        return result;
+      }));
+      return { items, total: count!.total, page, limit };
     }, { isolationLevel: 'RepeatableRead' });
   }
 
   async saveRule(actor: AdminActor, input: SaveIngestionRuleDto | UpdateIngestionRuleDto, traceId: string, key?: string, id?: string): Promise<IngestionRuleDto> {
     const organizationId = integrationScope(actor), configuration = normalizeIngestionRule(input);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_RULE_SAVED', payload: { id, ...input }, permission: 'ingestion:manage', isolationLevel: 'ReadCommitted' }, async tx => {
+    const permissions = ['ingestion:manage', ingestionTargetPermission(configuration.target), ...(configuration.enabled ? ['ingestion:run'] : []), ...((configuration.aiDescription || configuration.aiApplication) ? ['configuration:read'] : [])];
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'INGESTION_RULE_SAVED', payload: { id, ...input }, permission: permissions, isolationLevel: 'ReadCommitted' }, async tx => {
       const endpoint = await lockIntegrationEndpoint(tx, organizationId, configuration.endpointId);
       await this.access(tx, actor, 'ingestion:manage', false, configuration.target);
       const current = id ? await this.rule(tx, organizationId, id, (input as UpdateIngestionRuleDto).expectedVersion) : undefined;
       if (current && (current.endpoint_id !== configuration.endpointId || current.configuration.target !== configuration.target)) ingestionError('INGESTION_RULE_INVALID');
-      if (configuration.aiDescription) {
+      if (configuration.aiDescription || configuration.aiApplication) {
         if (!this.ai) ingestionError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503);
-        if (current && !configuration.enabled && aiRuleIdentity(current.configuration.aiDescription) === aiRuleIdentity(configuration.aiDescription)) {
-          configuration.aiDescription.connectionVersion = current.configuration.aiDescription!.connectionVersion;
+        const unchangedBinding = configuration.aiApplication && aiBindingIdentity(current?.configuration.aiApplication) === aiBindingIdentity(configuration.aiApplication);
+        if (current?.configuration.aiDescription && !configuration.enabled && (!configuration.aiApplication || unchangedBinding)
+          && (!configuration.aiDescription || aiRuleIdentity(current.configuration.aiDescription) === aiRuleIdentity(configuration.aiDescription))) {
+          configuration.aiDescription = current.configuration.aiDescription;
+          if (current.configuration.aiApplication) configuration.aiApplication = current.configuration.aiApplication;
         } else {
-          const connection = await this.ai.validateConnection(tx, actor, configuration.aiDescription.connectionId);
-          if (!connection.models.includes(configuration.aiDescription.model)) ingestionError('INGESTION_RULE_INVALID');
-          configuration.aiDescription.connectionVersion = connection.version;
+          const resolved = configuration.aiApplication ? await this.ai.resolveApplication(tx, actor, configuration.aiApplication)
+            : await this.ai.importApplication(tx, actor, configuration.name, configuration.aiDescription!);
+          if (configuration.aiApplication && configuration.aiDescription && aiRuleIdentity(resolved.aiDescription) !== aiRuleIdentity(configuration.aiDescription)) ingestionError('INGESTION_RULE_INVALID');
+          configuration.aiApplication = resolved.binding;
+          configuration.aiDescription = resolved.aiDescription;
         }
       }
       if (configuration.enabled) {
@@ -174,10 +189,10 @@ export class IngestionService {
       const fields = selectedDescriptionInput(rule.configuration, rows[input.rowIndex]);
       if (Buffer.byteLength(JSON.stringify(fields)) > 32768) ingestionError('INGESTION_RULE_INVALID');
       await this.event(tx, actor, organizationId, 'AI_DESCRIPTION_PREVIEWED', rule.id, traceId, { ruleVersion: rule.version, receiptId: receipt.id, rowIndex: input.rowIndex });
-      return { direct: (evaluated.fields as ProcessDefectIntegrationFields).description ?? '', fields, ai: rule.configuration.aiDescription };
+      return { direct: (evaluated.fields as ProcessDefectIntegrationFields).description ?? '', fields, ai: rule.configuration.aiDescription, application: rule.configuration.aiApplication };
     });
     let text: string | null = null;
-    try { text = await this.ai!.preview(actor, { connectionId: snapshot.ai.connectionId, model: snapshot.ai.model, prompt: snapshot.ai.prompt, fields: snapshot.fields, output: snapshot.ai.output }); } catch {}
+    try { text = await this.ai!.preview(actor, { connectionId: snapshot.ai.connectionId, model: snapshot.ai.model, prompt: snapshot.ai.prompt, fields: snapshot.fields, output: snapshot.ai.output, application: snapshot.application }); } catch {}
     await this.prisma.$transaction(async tx => { await this.access(tx, actor, 'ingestion:run', true, 'PROCESS_DEFECT'); await this.rule(tx, integrationScope(actor), input.ruleId, input.ruleVersion); });
     return { directDescription: snapshot.direct, inputFields: snapshot.fields, aiDescription: text, status: text === null ? 'FAILED' : 'SUCCEEDED' };
   }

@@ -5543,6 +5543,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/ai-applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiApplicationController_list"];
+        put?: never;
+        post: operations["AiApplicationController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/ai-applications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiApplicationController_read"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["AiApplicationController_update"];
+        trace?: never;
+    };
+    "/api/v1/admin/ai-applications/{id}/revisions/{publishedVersion}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AiApplicationController_readRevision"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/ai-applications/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AiApplicationController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/ai-applications/{id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AiApplicationController_test"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/problem-center": {
         parameters: {
             query?: never;
@@ -11159,6 +11239,12 @@ export interface components {
             inputFields: components["schemas"]["IngestionAiInputFieldDto"][];
             output: components["schemas"]["IngestionAiOutputDto"];
         };
+        IngestionAiApplicationBindingDto: {
+            /** Format: uuid */
+            applicationId: string;
+            publishedVersion: number;
+            inputFields: components["schemas"]["IngestionAiInputFieldDto"][];
+        };
         IngestionRuleDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -11183,6 +11269,9 @@ export interface components {
             sourceTimezone?: string;
             descriptionComposition?: components["schemas"]["IngestionDescriptionCompositionDto"];
             aiDescription?: components["schemas"]["IngestionAiDescriptionDto"];
+            aiApplication?: components["schemas"]["IngestionAiApplicationBindingDto"];
+            /** @description 可查看配置的账号可见，保存指定发布版本后才切换。 */
+            aiApplicationLatestVersion?: number | null;
             /** Format: uuid */
             id: string;
             version: number;
@@ -11221,6 +11310,7 @@ export interface components {
             sourceTimezone?: string;
             descriptionComposition?: components["schemas"]["IngestionDescriptionCompositionDto"];
             aiDescription?: components["schemas"]["IngestionAiDescriptionDto"];
+            aiApplication?: components["schemas"]["IngestionAiApplicationBindingDto"];
         };
         UpdateIngestionRuleDto: {
             /** Format: uuid */
@@ -11246,6 +11336,7 @@ export interface components {
             sourceTimezone?: string;
             descriptionComposition?: components["schemas"]["IngestionDescriptionCompositionDto"];
             aiDescription?: components["schemas"]["IngestionAiDescriptionDto"];
+            aiApplication?: components["schemas"]["IngestionAiApplicationBindingDto"];
             expectedVersion: number;
         };
         DeleteIngestionRuleDto: {
@@ -15001,6 +15092,8 @@ export interface components {
             organizationId: string;
             name: string;
             baseUrl: string;
+            /** @enum {string} */
+            protocol: "OPENAI_CHAT_COMPLETIONS" | "OPENAI_RESPONSES" | "ANTHROPIC_MESSAGES" | "GEMINI_GENERATE_CONTENT";
             models: string[];
             defaultModel: string;
             enabled: boolean;
@@ -15014,6 +15107,11 @@ export interface components {
         CreateAiConnectionDto: {
             name: string;
             baseUrl: string;
+            /**
+             * @default OPENAI_CHAT_COMPLETIONS
+             * @enum {string}
+             */
+            protocol: "OPENAI_CHAT_COMPLETIONS" | "OPENAI_RESPONSES" | "ANTHROPIC_MESSAGES" | "GEMINI_GENERATE_CONTENT";
             models: string[];
             defaultModel: string;
             enabled: boolean;
@@ -15022,6 +15120,11 @@ export interface components {
         UpdateAiConnectionDto: {
             name: string;
             baseUrl: string;
+            /**
+             * @default OPENAI_CHAT_COMPLETIONS
+             * @enum {string}
+             */
+            protocol: "OPENAI_CHAT_COMPLETIONS" | "OPENAI_RESPONSES" | "ANTHROPIC_MESSAGES" | "GEMINI_GENERATE_CONTENT";
             models: string[];
             defaultModel: string;
             enabled: boolean;
@@ -15040,6 +15143,109 @@ export interface components {
             /** @enum {string} */
             status: "SUCCESS" | "FAILED";
             code: string;
+        };
+        AiApplicationVariableDto: {
+            variable: string;
+            label: string;
+        };
+        AiApplicationOutputDto: {
+            /** @enum {string} */
+            mode: "TEXT" | "JSON";
+            field: string;
+            /** @enum {string} */
+            target: "description";
+        };
+        AiApplicationDto: {
+            name: string;
+            /** @enum {string} */
+            domain: "PROCESS_QUALITY";
+            /** @enum {string} */
+            scene: "PROCESS_DEFECT_DESCRIPTION";
+            enabled: boolean;
+            variables: components["schemas"]["AiApplicationVariableDto"][];
+            /** Format: uuid */
+            connectionId: string;
+            model: string;
+            prompt: string;
+            output: components["schemas"]["AiApplicationOutputDto"];
+            /** @enum {string} */
+            fallback: "DIRECT";
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            version: number;
+            publishedVersion: number | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AiApplicationPageDto: {
+            items: components["schemas"]["AiApplicationDto"][];
+            total: number;
+            page: number;
+            limit: number;
+        };
+        AiApplicationSettingsDto: {
+            name: string;
+            /** @enum {string} */
+            domain: "PROCESS_QUALITY";
+            /** @enum {string} */
+            scene: "PROCESS_DEFECT_DESCRIPTION";
+            enabled: boolean;
+            variables: components["schemas"]["AiApplicationVariableDto"][];
+            /** Format: uuid */
+            connectionId: string;
+            model: string;
+            prompt: string;
+            output: components["schemas"]["AiApplicationOutputDto"];
+            /** @enum {string} */
+            fallback: "DIRECT";
+        };
+        AiApplicationRevisionDto: {
+            /** Format: uuid */
+            applicationId: string;
+            /** Format: uuid */
+            organizationId: string;
+            publishedVersion: number;
+            configuration: components["schemas"]["AiApplicationSettingsDto"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        UpdateAiApplicationDto: {
+            name: string;
+            /** @enum {string} */
+            domain: "PROCESS_QUALITY";
+            /** @enum {string} */
+            scene: "PROCESS_DEFECT_DESCRIPTION";
+            enabled: boolean;
+            variables: components["schemas"]["AiApplicationVariableDto"][];
+            /** Format: uuid */
+            connectionId: string;
+            model: string;
+            prompt: string;
+            output: components["schemas"]["AiApplicationOutputDto"];
+            /** @enum {string} */
+            fallback: "DIRECT";
+            expectedVersion: number;
+        };
+        AiApplicationSampleDto: {
+            variable: string;
+            value: string;
+        };
+        TestAiApplicationDto: {
+            expectedVersion: number;
+            samples: components["schemas"]["AiApplicationSampleDto"][];
+        };
+        AiApplicationTestResultDto: {
+            /** Format: uuid */
+            applicationId: string;
+            version: number;
+            /** @enum {string} */
+            status: "SUCCESS" | "FAILED";
+            code: string;
+            text: string | null;
         };
         ProblemReportIdentityDto: {
             /** Format: uuid */
@@ -17975,7 +18181,7 @@ export interface components {
         /** @enum {string} */
         NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
         /** @enum {string} */
-        PlatformErrorCode: "AI_CONNECTION_INVALID" | "AI_CONNECTION_NOT_FOUND" | "AI_CONNECTION_UNAVAILABLE" | "AI_CONNECTION_VERSION_CONFLICT" | "AI_CONNECTION_TARGET_DENIED" | "AI_CONNECTION_REQUEST_FAILED" | "AI_CONNECTION_TIMEOUT" | "AI_CONNECTION_RESPONSE_INVALID" | "AI_CONNECTION_RESPONSE_TOO_LARGE" | "INGESTION_RULE_INVALID" | "INGESTION_FIELD_MISSING" | "INGESTION_FIELD_TYPE" | "INGESTION_FIELD_INVALID" | "INGESTION_SOURCE_VERSION_INVALID" | "INGESTION_RULE_OVERLAP" | "INGESTION_NOT_FOUND" | "INGESTION_PREVIEW_EXPIRED" | "INGESTION_INPUT_PROTECTED" | "INGESTION_CAPACITY_UNAVAILABLE" | "INGESTION_HISTORY_LIMIT_EXCEEDED" | "INGESTION_PREVIEW_LIMIT_EXCEEDED" | "INGESTION_STALE_CONFIRMATION" | "INGESTION_QUEUE_BLOCKED" | "INGESTION_PROCESSING_FAILED" | "INGESTION_AUTHORIZATION_REVOKED" | "INTEGRATION_INPUT_INVALID" | "INTEGRATION_ENDPOINT_NOT_FOUND" | "INTEGRATION_CREDENTIAL_NOT_FOUND" | "INTEGRATION_CREDENTIAL_REQUIRED" | "INTEGRATION_CREDENTIAL_LIMIT" | "INTEGRATION_CREDENTIAL_SECRET_UNAVAILABLE" | "INTEGRATION_CAPACITY_CONFLICT" | "INTEGRATION_AUTH_INVALID" | "INTEGRATION_ACCESS_DENIED" | "INTEGRATION_MESSAGE_INVALID" | "INTEGRATION_MESSAGE_CONFLICT" | "INTEGRATION_BODY_TOO_LARGE" | "INTEGRATION_CONTENT_TYPE_UNSUPPORTED" | "INTEGRATION_RATE_LIMITED" | "INTEGRATION_RECEIPT_NOT_FOUND" | "INTEGRATION_PAYLOAD_EXPIRED" | "ORGANIZATION_DIRECTORY_QUERY_INVALID" | "SUPPLIER_EIGHT_D_DOCUMENT_INVALID" | "SUPPLIER_EIGHT_D_ANALYSIS_INCOMPLETE" | "SUPPLIER_EIGHT_D_SUBMISSION_INCOMPLETE" | "SUPPLIER_EIGHT_D_DUE_AT_INVALID" | "SUPPLIER_EIGHT_D_DUE_AT_REQUIRED" | "SUPPLIER_EIGHT_D_EVIDENCE_CHANGED" | "SUPPLIER_EIGHT_D_EVIDENCE_INVALID" | "SUPPLIER_EIGHT_D_EVIDENCE_NOT_CLEAN" | "SUPPLIER_EIGHT_D_EXTENSION_REQUIRED" | "SUPPLIER_EIGHT_D_REQUIRED" | "SUPPLIER_EIGHT_D_RESPONDER_INVALID" | "SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_REVISION_NOT_FOUND" | "SUPPLIER_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_VERSION_CONFLICT" | "SUPPLIER_EIGHT_D_REPORT_PRIVATE_SUPPLEMENT" | "SUPPLIER_EIGHT_D_REPORT_ACCESS_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_INVALID" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_PDF_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_OBJECT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_QUERY_INVALID" | "SUPPLIER_EIGHT_D_REPORT_RENDER_FAILED" | "SUPPLIER_EIGHT_D_REPORT_STORAGE_UNAVAILABLE" | "PROCESS_EIGHT_D_CONFIGURATION_REQUIRED" | "PROCESS_EIGHT_D_CONFIGURATION_INVALID" | "PROCESS_EIGHT_D_NOT_FOUND" | "PROCESS_EIGHT_D_APPROVAL_LOCKED" | "PROCESS_EIGHT_D_CANCEL_APPROVAL_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_CLOSED_SOURCES_APPEND_ONLY" | "PROCESS_EIGHT_D_ANALYSIS_INCOMPLETE" | "PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE" | "PROCESS_EIGHT_D_DOCUMENT_INVALID" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_INVALID" | "PROCESS_EIGHT_D_SOURCES_INVALID" | "PROCESS_EIGHT_D_OWNER_ASSIGNMENT_INVALID" | "PROCESS_EIGHT_D_COLLABORATOR_INVALID" | "PROCESS_EIGHT_D_COLLABORATORS_INVALID" | "PROCESS_EIGHT_D_ASSIGNMENT_QUERY_INVALID" | "PROCESS_EIGHT_D_DUE_AT_INVALID" | "PROCESS_EIGHT_D_DUE_AT_REQUIRED" | "PROCESS_EIGHT_D_EXTENSION_REQUIRED" | "PROCESS_EIGHT_D_EVIDENCE_NOT_CLEAN" | "PROCESS_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT" | "PROCESS_EIGHT_D_REPORT_QUERY_INVALID" | "PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "PROCESS_EIGHT_D_REPORT_IMAGE_INVALID" | "PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT" | "PROCESS_EIGHT_D_REPORT_OBJECT_INVALID" | "PROCESS_EIGHT_D_REPORT_RENDER_FAILED" | "PROCESS_PRODUCTION_QUANTITY_INCOMPLETE" | "PROCESS_DEFECT_INPUT_INVALID" | "PROCESS_DEFECT_REQUIRED_FACTS_MISSING" | "PROCESS_DEFECT_DERIVED_FIELD_READ_ONLY" | "PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT" | "PROCESS_DEFECT_MANUAL_CONFIRMATION_REQUIRED" | "PROCESS_OPERATION_SECTOR_INPUT_INVALID" | "PROCESS_OPERATION_SECTOR_NAME_CONFLICT" | "PROCESS_OPERATION_SECTOR_NOT_FOUND" | "PROCESS_DEFECT_NOT_FOUND" | "PROCESS_DEFECT_TYPE_NOT_FOUND" | "PROCESS_DEFECT_QUERY_INVALID" | "PROCESS_DEFECT_STATUS_CONFLICT" | "PROCESS_DEFECT_CLASSIFICATION_INVALID" | "PROCESS_DEFECT_MATERIAL_NOT_FOUND" | "PROCESS_DEFECT_MATERIALS_INVALID" | "PROCESS_DEFECT_MATERIAL_OWNERSHIP_CONFLICT" | "PROCESS_DEFECT_SQE_INVALID" | "PROCESS_DEFECT_SQE_REQUIRED" | "PROCESS_DEFECT_SUPPLIER_INVALID" | "PROCESS_DEFECT_VERIFICATION_INVALID" | "SUPPLIER_INPUT_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_REQUIRED" | "SUPPLIER_RECORD_NOT_FOUND" | "SUPPLIER_DRAFT_LOCKED" | "SUPPLIER_PROFILE_DUPLICATE" | "SUPPLIER_COLLABORATION_NOT_ENABLED" | "SUPPLIER_PPAP_INPUT_INVALID" | "SUPPLIER_PPAP_NOT_FOUND" | "SUPPLIER_PPAP_STATE_INVALID" | "SUPPLIER_PPAP_ITEM_EXISTS" | "SUPPLIER_PPAP_ITEMS_INCOMPLETE" | "SUPPLIER_PPAP_ITEMS_NOT_REVIEWED" | "SUPPLIER_PPAP_ITEM_EVIDENCE_REQUIRED" | "SUPPLIER_INSPECTION_STANDARD_INPUT_INVALID" | "SUPPLIER_INSPECTION_STANDARD_NOT_FOUND" | "SUPPLIER_INSPECTION_STANDARD_STATE_INVALID" | "SUPPLIER_INSPECTION_STANDARD_ITEM_EXISTS" | "SUPPLIER_INSPECTION_STANDARD_ITEMS_REQUIRED" | "SUPPLIER_BARCODE_INPUT_INVALID" | "SUPPLIER_BARCODE_RULE_NOT_FOUND" | "SUPPLIER_BARCODE_RULE_NOT_PUBLISHED" | "SUPPLIER_BARCODE_FORMAT_INVALID" | "SUPPLIER_BARCODE_DUPLICATE" | "SUPPLIER_ASN_INPUT_INVALID" | "SUPPLIER_ASN_NOT_FOUND" | "SUPPLIER_ASN_STANDARD_REQUIRED" | "SUPPLIER_ASN_PPAP_REQUIRED" | "NEW_PRODUCT_INPUT_INVALID" | "NEW_PRODUCT_PROJECT_NOT_FOUND" | "NEW_PRODUCT_PROJECT_ARCHIVED" | "NEW_PRODUCT_TRIAL_BATCH_NOT_FOUND" | "NEW_PRODUCT_ISSUE_NOT_FOUND" | "NEW_PRODUCT_ISSUE_STATE_INVALID" | "NEW_PRODUCT_ISSUE_ASSIGNEE_INVALID" | "AUDIT_NC_WORKFLOW_NOT_CLOSED" | "NEW_PRODUCT_EVIDENCE_UNAVAILABLE" | "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "FILE_SCAN_RETRY_UNAVAILABLE" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "TASK_ASSIGNEE_NOT_ELIGIBLE" | "TASK_RETRY_UNAVAILABLE" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_PASSWORD_CHANGE_INVALID" | "ADMIN_BATCH_ROW_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "POSITION_GRANT_CEILING_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
+        PlatformErrorCode: "AI_CONNECTION_INVALID" | "AI_CONNECTION_NOT_FOUND" | "AI_CONNECTION_UNAVAILABLE" | "AI_CONNECTION_VERSION_CONFLICT" | "AI_APPLICATION_INVALID" | "AI_APPLICATION_NOT_FOUND" | "AI_APPLICATION_UNAVAILABLE" | "AI_APPLICATION_VERSION_CONFLICT" | "AI_CONNECTION_TARGET_DENIED" | "AI_CONNECTION_REQUEST_FAILED" | "AI_CONNECTION_TIMEOUT" | "AI_CONNECTION_RESPONSE_INVALID" | "AI_CONNECTION_RESPONSE_TOO_LARGE" | "INGESTION_RULE_INVALID" | "INGESTION_FIELD_MISSING" | "INGESTION_FIELD_TYPE" | "INGESTION_FIELD_INVALID" | "INGESTION_SOURCE_VERSION_INVALID" | "INGESTION_RULE_OVERLAP" | "INGESTION_NOT_FOUND" | "INGESTION_PREVIEW_EXPIRED" | "INGESTION_INPUT_PROTECTED" | "INGESTION_CAPACITY_UNAVAILABLE" | "INGESTION_HISTORY_LIMIT_EXCEEDED" | "INGESTION_PREVIEW_LIMIT_EXCEEDED" | "INGESTION_STALE_CONFIRMATION" | "INGESTION_QUEUE_BLOCKED" | "INGESTION_PROCESSING_FAILED" | "INGESTION_AUTHORIZATION_REVOKED" | "INTEGRATION_INPUT_INVALID" | "INTEGRATION_ENDPOINT_NOT_FOUND" | "INTEGRATION_CREDENTIAL_NOT_FOUND" | "INTEGRATION_CREDENTIAL_REQUIRED" | "INTEGRATION_CREDENTIAL_LIMIT" | "INTEGRATION_CREDENTIAL_SECRET_UNAVAILABLE" | "INTEGRATION_CAPACITY_CONFLICT" | "INTEGRATION_AUTH_INVALID" | "INTEGRATION_ACCESS_DENIED" | "INTEGRATION_MESSAGE_INVALID" | "INTEGRATION_MESSAGE_CONFLICT" | "INTEGRATION_BODY_TOO_LARGE" | "INTEGRATION_CONTENT_TYPE_UNSUPPORTED" | "INTEGRATION_RATE_LIMITED" | "INTEGRATION_RECEIPT_NOT_FOUND" | "INTEGRATION_PAYLOAD_EXPIRED" | "ORGANIZATION_DIRECTORY_QUERY_INVALID" | "SUPPLIER_EIGHT_D_DOCUMENT_INVALID" | "SUPPLIER_EIGHT_D_ANALYSIS_INCOMPLETE" | "SUPPLIER_EIGHT_D_SUBMISSION_INCOMPLETE" | "SUPPLIER_EIGHT_D_DUE_AT_INVALID" | "SUPPLIER_EIGHT_D_DUE_AT_REQUIRED" | "SUPPLIER_EIGHT_D_EVIDENCE_CHANGED" | "SUPPLIER_EIGHT_D_EVIDENCE_INVALID" | "SUPPLIER_EIGHT_D_EVIDENCE_NOT_CLEAN" | "SUPPLIER_EIGHT_D_EXTENSION_REQUIRED" | "SUPPLIER_EIGHT_D_REQUIRED" | "SUPPLIER_EIGHT_D_RESPONDER_INVALID" | "SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_REVISION_NOT_FOUND" | "SUPPLIER_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_VERSION_CONFLICT" | "SUPPLIER_EIGHT_D_REPORT_PRIVATE_SUPPLEMENT" | "SUPPLIER_EIGHT_D_REPORT_ACCESS_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_INVALID" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_PDF_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_OBJECT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_QUERY_INVALID" | "SUPPLIER_EIGHT_D_REPORT_RENDER_FAILED" | "SUPPLIER_EIGHT_D_REPORT_STORAGE_UNAVAILABLE" | "PROCESS_EIGHT_D_CONFIGURATION_REQUIRED" | "PROCESS_EIGHT_D_CONFIGURATION_INVALID" | "PROCESS_EIGHT_D_NOT_FOUND" | "PROCESS_EIGHT_D_APPROVAL_LOCKED" | "PROCESS_EIGHT_D_CANCEL_APPROVAL_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_CLOSED_SOURCES_APPEND_ONLY" | "PROCESS_EIGHT_D_ANALYSIS_INCOMPLETE" | "PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE" | "PROCESS_EIGHT_D_DOCUMENT_INVALID" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_INVALID" | "PROCESS_EIGHT_D_SOURCES_INVALID" | "PROCESS_EIGHT_D_OWNER_ASSIGNMENT_INVALID" | "PROCESS_EIGHT_D_COLLABORATOR_INVALID" | "PROCESS_EIGHT_D_COLLABORATORS_INVALID" | "PROCESS_EIGHT_D_ASSIGNMENT_QUERY_INVALID" | "PROCESS_EIGHT_D_DUE_AT_INVALID" | "PROCESS_EIGHT_D_DUE_AT_REQUIRED" | "PROCESS_EIGHT_D_EXTENSION_REQUIRED" | "PROCESS_EIGHT_D_EVIDENCE_NOT_CLEAN" | "PROCESS_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT" | "PROCESS_EIGHT_D_REPORT_QUERY_INVALID" | "PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "PROCESS_EIGHT_D_REPORT_IMAGE_INVALID" | "PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT" | "PROCESS_EIGHT_D_REPORT_OBJECT_INVALID" | "PROCESS_EIGHT_D_REPORT_RENDER_FAILED" | "PROCESS_PRODUCTION_QUANTITY_INCOMPLETE" | "PROCESS_DEFECT_INPUT_INVALID" | "PROCESS_DEFECT_REQUIRED_FACTS_MISSING" | "PROCESS_DEFECT_DERIVED_FIELD_READ_ONLY" | "PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT" | "PROCESS_DEFECT_MANUAL_CONFIRMATION_REQUIRED" | "PROCESS_OPERATION_SECTOR_INPUT_INVALID" | "PROCESS_OPERATION_SECTOR_NAME_CONFLICT" | "PROCESS_OPERATION_SECTOR_NOT_FOUND" | "PROCESS_DEFECT_NOT_FOUND" | "PROCESS_DEFECT_TYPE_NOT_FOUND" | "PROCESS_DEFECT_QUERY_INVALID" | "PROCESS_DEFECT_STATUS_CONFLICT" | "PROCESS_DEFECT_CLASSIFICATION_INVALID" | "PROCESS_DEFECT_MATERIAL_NOT_FOUND" | "PROCESS_DEFECT_MATERIALS_INVALID" | "PROCESS_DEFECT_MATERIAL_OWNERSHIP_CONFLICT" | "PROCESS_DEFECT_SQE_INVALID" | "PROCESS_DEFECT_SQE_REQUIRED" | "PROCESS_DEFECT_SUPPLIER_INVALID" | "PROCESS_DEFECT_VERIFICATION_INVALID" | "SUPPLIER_INPUT_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_REQUIRED" | "SUPPLIER_RECORD_NOT_FOUND" | "SUPPLIER_DRAFT_LOCKED" | "SUPPLIER_PROFILE_DUPLICATE" | "SUPPLIER_COLLABORATION_NOT_ENABLED" | "SUPPLIER_PPAP_INPUT_INVALID" | "SUPPLIER_PPAP_NOT_FOUND" | "SUPPLIER_PPAP_STATE_INVALID" | "SUPPLIER_PPAP_ITEM_EXISTS" | "SUPPLIER_PPAP_ITEMS_INCOMPLETE" | "SUPPLIER_PPAP_ITEMS_NOT_REVIEWED" | "SUPPLIER_PPAP_ITEM_EVIDENCE_REQUIRED" | "SUPPLIER_INSPECTION_STANDARD_INPUT_INVALID" | "SUPPLIER_INSPECTION_STANDARD_NOT_FOUND" | "SUPPLIER_INSPECTION_STANDARD_STATE_INVALID" | "SUPPLIER_INSPECTION_STANDARD_ITEM_EXISTS" | "SUPPLIER_INSPECTION_STANDARD_ITEMS_REQUIRED" | "SUPPLIER_BARCODE_INPUT_INVALID" | "SUPPLIER_BARCODE_RULE_NOT_FOUND" | "SUPPLIER_BARCODE_RULE_NOT_PUBLISHED" | "SUPPLIER_BARCODE_FORMAT_INVALID" | "SUPPLIER_BARCODE_DUPLICATE" | "SUPPLIER_ASN_INPUT_INVALID" | "SUPPLIER_ASN_NOT_FOUND" | "SUPPLIER_ASN_STANDARD_REQUIRED" | "SUPPLIER_ASN_PPAP_REQUIRED" | "NEW_PRODUCT_INPUT_INVALID" | "NEW_PRODUCT_PROJECT_NOT_FOUND" | "NEW_PRODUCT_PROJECT_ARCHIVED" | "NEW_PRODUCT_TRIAL_BATCH_NOT_FOUND" | "NEW_PRODUCT_ISSUE_NOT_FOUND" | "NEW_PRODUCT_ISSUE_STATE_INVALID" | "NEW_PRODUCT_ISSUE_ASSIGNEE_INVALID" | "AUDIT_NC_WORKFLOW_NOT_CLOSED" | "NEW_PRODUCT_EVIDENCE_UNAVAILABLE" | "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "FILE_SCAN_RETRY_UNAVAILABLE" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "TASK_ASSIGNEE_NOT_ELIGIBLE" | "TASK_RETRY_UNAVAILABLE" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_PASSWORD_CHANGE_INVALID" | "ADMIN_BATCH_ROW_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "POSITION_GRANT_CEILING_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
         PlatformTypesDto: {
             /**
              * @description Stable code owned by the domain service.
@@ -32059,6 +32265,262 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiConnectionTestDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AiApplicationController_list: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiApplicationPageDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AiApplicationController_create: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: number;
+                limit?: number;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiApplicationSettingsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiApplicationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AiApplicationController_read: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiApplicationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AiApplicationController_update: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: number;
+                limit?: number;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAiApplicationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiApplicationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AiApplicationController_readRevision: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+                publishedVersion: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiApplicationRevisionDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AiApplicationController_publish: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: number;
+                limit?: number;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiConnectionVersionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiApplicationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    AiApplicationController_test: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+                page?: number;
+                limit?: number;
+            };
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestAiApplicationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiApplicationTestResultDto"];
                 };
             };
             default: {

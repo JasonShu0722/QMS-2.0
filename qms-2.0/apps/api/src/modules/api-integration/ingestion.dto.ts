@@ -32,6 +32,11 @@ export class IngestionAiDescriptionDto {
   @ApiProperty({ type: [IngestionAiInputFieldDto], minItems: 1, maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionAiInputFieldDto) inputFields!: IngestionAiInputFieldDto[];
   @ApiProperty({ type: IngestionAiOutputDto }) @ValidateNested() @Type(() => IngestionAiOutputDto) output!: IngestionAiOutputDto;
 }
+export class IngestionAiApplicationBindingDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID() applicationId!: string;
+  @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) publishedVersion!: number;
+  @ApiProperty({ type: [IngestionAiInputFieldDto], minItems: 1, maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionAiInputFieldDto) inputFields!: IngestionAiInputFieldDto[];
+}
 export class SaveIngestionRuleDto extends IntegrationScopeDto {
   @ApiProperty({ maxLength: 120 }) @IsString() @MaxLength(120) name!: string;
   @ApiProperty({ format: 'uuid' }) @IsUUID() endpointId!: string;
@@ -46,11 +51,13 @@ export class SaveIngestionRuleDto extends IntegrationScopeDto {
   @ApiPropertyOptional({ maxLength: 100, description: '制程无时区时间的来源时区，默认Asia/Shanghai。' }) @IsOptional() @IsString() @MaxLength(100) sourceTimezone?: string;
   @ApiPropertyOptional({ type: IngestionDescriptionCompositionDto }) @IsOptional() @ValidateNested() @Type(() => IngestionDescriptionCompositionDto) descriptionComposition?: IngestionDescriptionCompositionDto;
   @ApiPropertyOptional({ type: IngestionAiDescriptionDto }) @IsOptional() @ValidateNested() @Type(() => IngestionAiDescriptionDto) aiDescription?: IngestionAiDescriptionDto;
+  @ApiPropertyOptional({ type: IngestionAiApplicationBindingDto }) @IsOptional() @ValidateNested() @Type(() => IngestionAiApplicationBindingDto) aiApplication?: IngestionAiApplicationBindingDto;
 }
 export class UpdateIngestionRuleDto extends SaveIngestionRuleDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;
 }
 export class IngestionRuleDto extends SaveIngestionRuleDto {
+  @ApiPropertyOptional({ type: Number, nullable: true, description: '可查看配置的账号可见，保存指定发布版本后才切换。' }) aiApplicationLatestVersion?: number | null;
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty() version!: number;
   @ApiProperty({ format: 'uuid' }) creatorId!: string;

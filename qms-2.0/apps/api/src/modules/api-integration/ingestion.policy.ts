@@ -3,13 +3,14 @@ import { isISO8601, isUUID } from 'class-validator';
 import type { IntegrationFields, IntegrationTarget, ProcessDefectIntegrationFields } from '../../common/integration-master-data.js';
 import type { AiDescriptionOutput } from '../../common/ai-description.js';
 import { normalizeAiOutput } from '../ai-configuration/ai-connection.policy.js';
+import type { AiApplicationBinding } from '../ai-configuration/ai-application.service.js';
 export { aiDescriptionDisposition } from '../../common/ai-description.js';
 
 export type IngestionTarget = IntegrationTarget;
 export type IngestionFields = IntegrationFields | Omit<ProcessDefectIntegrationFields, 'receiptId' | 'rowIndex'>;
 export type IngestionDescriptionComposition = { fields: { path: string; label?: string }[]; separator: string };
 export type IngestionCondition = { path: string; operator: 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'EMPTY' | 'NOT_EMPTY'; value?: string | number | boolean | null | (string | number | boolean)[] };
-export type IngestionRule = { name: string; endpointId: string; target: IngestionTarget; enabled: boolean; match: 'ALL' | 'ANY'; conditions: IngestionCondition[]; mapping: Record<string, string>; mode: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM'; updateFields: string[]; sourceUpdatedAtField?: string; sourceTimezone?: string; descriptionComposition?: IngestionDescriptionComposition; aiDescription?: { connectionId: string; model: string; prompt: string; inputFields: { path: string; label?: string; variable: string }[]; output: AiDescriptionOutput; connectionVersion?: number } };
+export type IngestionRule = { name: string; endpointId: string; target: IngestionTarget; enabled: boolean; match: 'ALL' | 'ANY'; conditions: IngestionCondition[]; mapping: Record<string, string>; mode: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM'; updateFields: string[]; sourceUpdatedAtField?: string; sourceTimezone?: string; descriptionComposition?: IngestionDescriptionComposition; aiApplication?: AiApplicationBinding; aiDescription?: { connectionId: string; model: string; prompt: string; inputFields: { path: string; label?: string; variable: string }[]; output: AiDescriptionOutput; connectionVersion?: number } };
 export const processDefectSourceFields = ['occurredAt', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey'];
 
 export function ingestionError(code: string, status = 400, field?: string): never { throw new HttpException({ code, message: code, ...(field ? { field } : {}) }, status); }
@@ -23,6 +24,14 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return ingestionError('INGESTION_RULE_INVALID');
   const rule = input as IngestionRule;
   const process = rule.target === 'PROCESS_DEFECT';
+  if (rule.aiApplication !== undefined) {
+    const binding = rule.aiApplication;
+    if (!process || !binding || !isUUID(binding.applicationId) || !Number.isSafeInteger(binding.publishedVersion) || binding.publishedVersion < 1 || binding.publishedVersion > 2147483647
+      || !Array.isArray(binding.inputFields) || !binding.inputFields.length || binding.inputFields.length > 20
+      || binding.inputFields.some(field => !field || !validPath(field.path) || typeof field.variable !== 'string' || !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(field.variable)
+        || field.label !== undefined && (typeof field.label !== 'string' || field.label.length > 100 || /[\u0000]/u.test(field.label)))
+      || new Set(binding.inputFields.map(field => field.variable)).size !== binding.inputFields.length) ingestionError('INGESTION_RULE_INVALID');
+  }
   const fields = process ? processDefectSourceFields : rule.target === 'SUPPLIER' ? ['code', 'name', 'contactName', 'contactEmail'] : ['code', 'name'];
   if (rule.aiDescription !== undefined && (!process || !rule.aiDescription || !isUUID(rule.aiDescription.connectionId)
     || typeof rule.aiDescription.prompt !== 'string' || !rule.aiDescription.prompt.trim() || rule.aiDescription.prompt.length > 4000
@@ -62,7 +71,7 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
     if (['IN', 'NOT_IN'].includes(condition.operator) && (!Array.isArray(condition.value) || condition.value.length === 0 || condition.value.length > 50 || condition.value.some(value => !scalar(value)) || new Set(condition.value.map(value => typeof value)).size > 1)) ingestionError('INGESTION_RULE_INVALID');
     if (['EMPTY', 'NOT_EMPTY'].includes(condition.operator) && condition.value !== undefined) ingestionError('INGESTION_RULE_INVALID');
   }
-  return { name: rule.name.trim(), endpointId: rule.endpointId, target: rule.target, enabled: rule.enabled, match: rule.match, conditions: rule.conditions, mapping: rule.mapping, mode: rule.mode, updateFields: rule.updateFields, ...(rule.sourceUpdatedAtField ? { sourceUpdatedAtField: rule.sourceUpdatedAtField } : {}), ...(process ? { sourceTimezone: rule.sourceTimezone ?? 'Asia/Shanghai' } : {}), ...(rule.descriptionComposition ? { descriptionComposition: rule.descriptionComposition } : {}), ...(rule.aiDescription ? { aiDescription: { connectionId: rule.aiDescription.connectionId, model: rule.aiDescription.model.trim(), prompt: rule.aiDescription.prompt.trim(), inputFields: rule.aiDescription.inputFields, output: rule.aiDescription.output } } : {}) };
+  return { name: rule.name.trim(), endpointId: rule.endpointId, target: rule.target, enabled: rule.enabled, match: rule.match, conditions: rule.conditions, mapping: rule.mapping, mode: rule.mode, updateFields: rule.updateFields, ...(rule.sourceUpdatedAtField ? { sourceUpdatedAtField: rule.sourceUpdatedAtField } : {}), ...(process ? { sourceTimezone: rule.sourceTimezone ?? 'Asia/Shanghai' } : {}), ...(rule.descriptionComposition ? { descriptionComposition: rule.descriptionComposition } : {}), ...(rule.aiApplication ? { aiApplication: { applicationId: rule.aiApplication.applicationId, publishedVersion: rule.aiApplication.publishedVersion, inputFields: rule.aiApplication.inputFields } } : {}), ...(rule.aiDescription ? { aiDescription: { connectionId: rule.aiDescription.connectionId, model: rule.aiDescription.model.trim(), prompt: rule.aiDescription.prompt.trim(), inputFields: rule.aiDescription.inputFields, output: rule.aiDescription.output } } : {}) };
 }
 
 export function selectedDescriptionInput(rule: IngestionRule, row: unknown): { path: string; label: string; variable?: string; value: string | number | boolean | null }[] {

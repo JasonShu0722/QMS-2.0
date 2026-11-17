@@ -9,6 +9,16 @@ import { problemCenterTranslations } from '../features/problem-center/problem-ce
 import { administrativeTranslations } from '../features/admin/administrative-translations';
 
 const translations: Record<string, string> = {
+  '渠道协议': 'Channel protocol', '更换渠道协议时请填写新密钥': 'Enter a new credential when changing the channel protocol',
+  '模型渠道': 'Model channels', '提示词应用': 'Prompt applications', '业务板块': 'Business area', '应用场景': 'Application scenario',
+  '全部场景': 'All scenarios', '不良描述整理': 'Defect description',
+  '新增应用': 'Add application', '应用名称': 'Application name', '草稿版本': 'Draft version', '发布版本': 'Publish version', '未发布': 'Unpublished',
+  '样本试运行': 'Sample trial', '运行样本': 'Run sample', '样本结果': 'Sample result', '试运行成功': 'Trial succeeded', '试运行失败，请检查应用和渠道': 'Trial failed. Check the application and channel.',
+  '发布应用版本': 'Publish application version', '确认发布': 'Confirm publication', '既有入库规则仍使用原绑定版本。': 'Existing ingestion rules retain their bound version.',
+  '请添加至少一个输入变量': 'Add at least one input variable', '变量名不能重复': 'Variable names must be unique', '变量名': 'Variable name', '变量标签': 'Variable label',
+  '使用字母开头的字母、数字或下划线': 'Start with a letter and use letters, digits or underscores', '移除变量': 'Remove variable', '添加输入变量': 'Add input variable',
+  '提示词': 'Prompt', '使用{{变量名}}引用输入变量': 'Use {{variable}} to reference input variables', '模型输出格式': 'Model output format', '纯文本': 'Plain text', 'JSON字段': 'JSON field', '提取输出字段': 'Output field',
+  '输出目标': 'Output target', '不良描述': 'Defect description', '失败处理': 'Failure handling', '使用直接组合描述': 'Use the directly composed description', '启用应用': 'Enable application', '保存草稿': 'Save draft',
   'AI连接': 'AI connections', '新增AI连接': 'Add AI connection', '刷新AI连接': 'Refresh AI connections',
   '连接名称': 'Connection name', '服务API地址': 'Service API URL', '可用模型': 'Allowed models', '默认模型': 'Default model',
   'API密钥': 'API key', '启用连接': 'Enable connection', '密钥状态': 'Credential status',

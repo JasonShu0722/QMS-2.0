@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { Activity, ArrowLeftRight, Building2, ClipboardList, ContactRound, Factory, GitBranch, History, KeyRound, LayoutDashboard, Link2, ListRestart, Package, Plug, Server, Settings, Users, type LucideIcon } from 'lucide-react';
+import { Activity, ArrowLeftRight, Bot, Building2, ClipboardList, ContactRound, Factory, GitBranch, History, KeyRound, LayoutDashboard, Link2, ListRestart, MessageSquareText, Package, Plug, Server, Settings, Users, type LucideIcon } from 'lucide-react';
 
 export type ConsoleContext = components['schemas']['ConsoleContextDto'];
 export type ConsoleModule = components['schemas']['ConsoleModuleDto'];
@@ -18,6 +18,8 @@ const items: (ConsoleNavigationItem & { permissions?: string[] })[] = [
   { path: '/console/master-data/materials', label: '物料主数据', english: 'Material master', group: 'configuration', icon: Package, module: 'master-data', permissions: ['material-master:read', 'material-master:write', 'material-master:import'] },
   { path: '/console/master-data/component-projects', label: '组件项目映射', english: 'Component project mapping', group: 'configuration', icon: Link2, module: 'master-data', permissions: ['component-project:read', 'component-project:manage'] },
   { path: '/console/configuration', label: '平台配置', english: 'Platform configuration', group: 'configuration', icon: Settings, module: 'configuration' },
+  { path: '/console/ai-connections', label: '模型渠道', english: 'Model channels', group: 'ai', icon: Bot, module: 'configuration', permissions: ['configuration:read'] },
+  { path: '/console/ai-applications', label: '提示词应用', english: 'Prompt applications', group: 'ai', icon: MessageSquareText, module: 'configuration', permissions: ['configuration:read'] },
   { path: '/console/workflows', label: '流程管理', english: 'Workflow management', group: 'configuration', icon: GitBranch, module: 'workflows' },
   { path: '/console/audit-log', label: '管理审计', english: 'Management audit', group: 'security', icon: ClipboardList, module: 'audit' },
   { path: '/console/outbox', label: '失败队列', english: 'Failed events', group: 'security', icon: ListRestart, module: 'outbox' },
