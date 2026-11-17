@@ -54,20 +54,20 @@ describe('administrator role HTTP contract', () => {
 
   it('returns ordered module groups with supplier-quality grantable codes', async () => {
     const response = await request(app.getHttpServer()).get('/api/v1/admin/permission-catalog').set('Cookie', cookies).expect(200);
-    expect(response.body.map((group: { key: string }) => group.key)).toEqual(['platform', 'supplier', 'process', 'customer', 'new-product', 'audit', 'quality-data', 'coordinate-inspection', 'e-signature', 'system']);
-    const supplier = response.body[1];
+    expect(response.body.map((group: { key: string }) => group.key)).toEqual(['ai', 'platform', 'supplier', 'process', 'customer', 'new-product', 'audit', 'quality-data', 'coordinate-inspection', 'e-signature', 'system']);
+    const supplier = response.body.find((group: { key: string }) => group.key === 'supplier');
     expect(supplier.status).toBe('active');
     expect(supplier.modules.find((module: { key: string }) => module.key === 'supplier-problems').operations.map((operation: { code: string }) => operation.code)).toEqual(['supplier-quality:problems:read', 'supplier-quality:problems:write']);
-    const process = response.body[2];
+    const process = response.body.find((group: { key: string }) => group.key === 'process');
     expect(process.status).toBe('active');
-    expect(process.modules.find((module: { key: string }) => module.key === 'process-defects').operations.map((operation: { code: string }) => operation.code)).toEqual(['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'process-quality:materials:review']);
-    const customer = response.body[3];
+    expect(process.modules.find((module: { key: string }) => module.key === 'process-defects').operations.map((operation: { code: string }) => operation.code)).toEqual(['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:delete', 'process-quality:defects:close', 'process-quality:materials:review']);
+    const customer = response.body.find((group: { key: string }) => group.key === 'customer');
     expect(customer.status).toBe('active');
     expect(customer.modules.find((module: { key: string }) => module.key === 'customer-complaints').operations.map((operation: { code: string }) => operation.code)).toEqual(['customer-quality:complaints:read', 'customer-quality:complaints:write', 'customer-quality:complaints:close', 'customer-quality:complaints:closed-edit', 'customer-quality:complaints:reassign', 'customer-quality:analyses:fae', 'customer-quality:analyses:supplier']);
-    const newProduct = response.body[4];
+    const newProduct = response.body.find((group: { key: string }) => group.key === 'new-product');
     expect(newProduct.status).toBe('active');
     expect(newProduct.modules.find((module: { key: string }) => module.key === 'new-product-quality').operations.map((operation: { code: string }) => operation.code)).toEqual(['new-product-quality:projects:read', 'new-product-quality:projects:write']);
-    const audit = response.body[5];
+    const audit = response.body.find((group: { key: string }) => group.key === 'audit');
     expect(audit.status).toBe('active');
     expect(audit.modules.find((module: { key: string }) => module.key === 'audit-core').operations.map((operation: { code: string }) => operation.code)).toEqual(['audit-management:read', 'audit-management:write']);
   });
