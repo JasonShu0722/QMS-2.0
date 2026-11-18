@@ -70,7 +70,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   const getColumn = (key: string) => configurable.find(column => columnKey(column) === key)!;
   const minimumFor = (key: string) => key === SELECTION_WIDTH_KEY ? MIN_SELECTION_WIDTH : boundedWidth(getColumn(key)?.minWidth, MIN_WIDTH);
   const clampWidth = (key: string, value: unknown, fallback = DEFAULT_WIDTH) => boundedWidth(value, fallback, minimumFor(key));
-  const widthFor = (key: string) => preview && preview.epoch === sessionEpoch && preview.scope === stateKey && preview.key === key ? preview.width : clampWidth(key, saved.widths[key], key === SELECTION_WIDTH_KEY ? clampWidth(key, rowSelection?.columnWidth, 44) : boundedWidth(getColumn(key)?.width, DEFAULT_WIDTH));
+  const widthFor = (key: string) => preview && preview.epoch === sessionEpoch && preview.scope === stateKey && preview.key === key ? preview.width : clampWidth(key, key === SELECTION_WIDTH_KEY && saved.widths[key] === 64 ? undefined : saved.widths[key], key === SELECTION_WIDTH_KEY ? clampWidth(key, rowSelection?.columnWidth, 40) : boundedWidth(getColumn(key)?.width, DEFAULT_WIDTH));
   const businessWidth = keys.filter(key => visible.includes(key) || required.includes(key)).reduce((total, key) => total + widthFor(key), 0);
   const fitSelection = Boolean(rowSelection && resizableSelection && businessWidth);
   const selectionWidth = widthFor(SELECTION_WIDTH_KEY);

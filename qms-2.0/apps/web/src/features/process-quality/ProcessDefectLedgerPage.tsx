@@ -283,7 +283,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     { title: '项目号', key: 'project', width: 130, align: 'center', render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
     { title: '细分类型', key: 'productSubcategory', dataIndex: 'productSubcategory', width: 120, align: 'center', render: value => value ?? '未确认' },
     { title: '项目状态', key: 'projectStage', dataIndex: 'projectStage', width: 105, align: 'center', render: value => value === 'NEW_PRODUCT' ? '新品' : value === 'MASS_PRODUCTION' ? '量产' : '未确认' },
-    { title: '不良描述', key: 'description', dataIndex: 'description', width: 260, align: 'left', ellipsis: true, render: (value: string, record) => <div className="process-quality-description-cell"><div className="process-quality-description-heading"><Button type="link" title={value || '查看待完善记录'} className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value || '查看待完善记录'}</Button><MappingHint record={record} /></div><CompletionStatus record={record} /></div> },
+    { title: '不良描述', key: 'description', dataIndex: 'description', width: 260, align: 'left', ellipsis: true, render: (value: string, record) => <div className="process-quality-description-cell"><div className="process-quality-description-heading"><Button type="link" title={value || '查看待完善记录'} className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value || '查看待完善记录'}</Button><MappingHint record={record} /></div></div> },
     { title: '追溯码', key: 'traceCode', dataIndex: 'traceCode', width: 180, align: 'center', ellipsis: true },
     { title: '生产线名称', key: 'lineName', dataIndex: 'lineName', width: 144, align: 'center', ellipsis: true },
     { title: '工序名称', key: 'operationName', dataIndex: 'operationName', width: 144, align: 'center', ellipsis: true },
@@ -307,17 +307,17 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   return <main className="process-quality-page">
     <header className="process-quality-heading">
       <h1 className="sr-only">不良品台账</h1>
-      <Space wrap>{canWrite ? <Button type="primary" onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}<Button disabled={locked} onClick={() => requestLeave(() => setRevision((value) => value + 1))} loading={loading}>刷新</Button></Space>
+      <Button disabled={locked} onClick={() => requestLeave(() => setRevision((value) => value + 1))} loading={loading}>刷新</Button>
     </header>
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${issued.problem.id}`}>查看问题</Link>} /> : null}
     <section className="process-quality-card">
-      <Space className="process-quality-toolbar" aria-label="台账筛选" wrap>
+      <div className="process-quality-toolbar process-quality-toolbar-main" aria-label="台账批量操作">
+        {canWrite ? <Button type="primary" onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
         <Input.Search aria-label="搜索制程不良" placeholder="搜索追溯码、成品编码、工单、不良描述或批次" value={searchInput} allowClear onChange={(event) => setSearchInput(event.target.value)} onSearch={(value) => { setPage(1); setSearch(value.trim()); }} />
         <Select aria-label="台账状态" placeholder="全部台账状态" allowClear value={ledgerStatus} options={[{ value: 'FOLLOWING', label: '跟进中' }, { value: 'CLOSED', label: '已关闭' }]} onChange={value => { setPage(1); setLedgerStatus(value); }} />
         <Checkbox checked={pendingCompletion} onChange={event => { setPage(1); setPendingCompletion(event.target.checked); }}>仅待完善</Checkbox>
         <Checkbox checked={pendingConfiguration} onChange={event => { setPage(1); setPendingConfiguration(event.target.checked); }}>仅待补配</Checkbox>
-      </Space>
-      <Space className="process-quality-toolbar process-quality-batch-toolbar" aria-label="台账批量操作" wrap>
+        <span className="process-quality-toolbar-divider" aria-hidden="true" />
         {canIssue ? <Button type="primary" disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起内部8D</Button> : null}
         {canCopy ? <Button disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setCopyOpen(true))}>复制为供应商草稿</Button> : null}
         {canWrite ? <Button type="primary" disabled={issuing || !Object.keys(selected).length || Boolean(listError)} onClick={() => { setIssueError(undefined); setIssueOpen(true); }}>发起问题</Button> : null}
@@ -326,14 +326,14 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
         {selectedCount ? <Button disabled={locked} onClick={() => requestLeave(() => setSelected({}))}>清空选择</Button> : null}
         {canWrite ? <><Select aria-label="批量责任分类" placeholder="批量分类" value={classification} options={categoryOptions} disabled={locked} onChange={setClassification} /><Button disabled={locked || !selectedCount || !classification || !!staleSelected.length} onClick={() => requestLeave(() => void classify())}>应用分类</Button></> : null}
         {canDelete ? <Button danger disabled={locked || !!deletionTargets || !selectedCount || loading || !!listError || !!staleSelected.length} onClick={() => openDeletion(Object.values(selected))}>删除所选</Button> : null}
-      </Space>
+      </div>
       {deletionTargets && !deletionOpen ? <Alert type="warning" title="删除结果尚待确认" action={<Button onClick={() => setDeletionOpen(true)}>恢复删除操作</Button>} /> : null}
       {staleSelected.length ? <Alert type="warning" title="所选来源版本已更新。" action={<Button disabled={locked} onClick={() => requestLeave(() => setSelected(current => ({ ...current, ...Object.fromEntries(staleSelected.map(item => [item.id, item])) })))}>更新所选版本</Button>} /> : null}
       <ProcessError cause={actionError} fallback="批量分类失败，保留选择，请重试。" />
       {batchWriter.uncertain ? <Alert type="warning" title="分类结果未知，选择已锁定；重试复用原请求。" action={<Button loading={batchWriter.busy} onClick={() => void classify()}>同请求重试分类</Button>} /> : null}
       <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
-      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={ledgerStatus ?? 'ALL'} requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} /> : null}
+      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={ledgerStatus ?? 'ALL'} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} /> : null}
     </section>
     <Drawer title="来源详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>
