@@ -1,14 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import type { components } from '@qms/contracts';
 import { Alert, Button, Card, Form, Input, Modal, Select, Space, Switch, Tag } from 'antd';
-import { Minus, Plus } from 'lucide-react';
 import { useLanguage } from '../../i18n/Language';
 import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { getLedgerSessionEpoch } from '../../ui/ledger/preferences';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { useScopedIntegrationRequests, type IntegrationScope } from '../../console/api-integrations/integration-ui';
-import { IngestionError, useIngestionMutation, useIngestionPage } from '../../console/api-ingestion/ingestion-ui';
+import { ingestionPath, IngestionError, useIngestionMutation, useIngestionPage, useIngestionText } from '../../console/api-ingestion/ingestion-ui';
 import type { AdminOrganization } from '../admin/admin';
 import '../../console/api-ingestion/api-ingestion.css';
 
@@ -16,7 +15,13 @@ type Application = components['schemas']['AiApplicationDto'];
 type Settings = components['schemas']['AiApplicationSettingsDto'];
 type Connection = components['schemas']['AiConnectionDto'];
 type Trial = components['schemas']['AiApplicationTestResultDto'];
+type Rule = components['schemas']['IngestionRuleDto'];
 const applicationsPath = '/api/v1/admin/ai-applications';
+function ruleVariables(rule: Rule): Settings['variables'] {
+  const fields: Array<{ label?: string; variable?: string }> = rule.descriptionComposition?.fields ?? [];
+  const variables = fields.flatMap(({ variable, label }) => variable ? [{ variable, label: label ?? '' }] : []);
+  return variables.length ? variables : (rule.aiApplication?.inputFields ?? rule.aiDescription?.inputFields ?? []).map(({ variable, label }) => ({ variable, label: label ?? '' }));
+}
 
 export function AiApplications({ organization }: { organization: AdminOrganization }) {
   return <ApplicationScope key={`${organization.id}:${organization.permissions.join(',')}`} organization={organization} />;
@@ -31,17 +36,24 @@ function ApplicationScope({ organization }: { organization: AdminOrganization })
   return <ApplicationContent organization={organization} scope={scope} />;
 }
 function ApplicationContent({ organization, scope }: { organization: AdminOrganization; scope: IntegrationScope }) {
-  const { t } = useLanguage(); const [form] = Form.useForm<Settings>(); const [sampleForm] = Form.useForm<components['schemas']['TestAiApplicationDto']>();
+  const { t } = useLanguage(); const text = useIngestionText(); const [form] = Form.useForm<Settings>(); const [sampleForm] = Form.useForm<components['schemas']['TestAiApplicationDto']>();
   const [editor, setEditor] = useState<{ record?: Application }>(); const [publishing, setPublishing] = useState<Application>(); const [trial, setTrial] = useState<Application>();
   const [trialResult, setTrialResult] = useState<Trial>(); const [dirty, setDirty] = useState(false); const [showMutationError, setShowMutationError] = useState(false);
   const [page, setPage] = useState(1); const [pageSize, setPageSize] = useLedgerPageSize('ai-applications', organization.id); const [revision, setRevision] = useState(0);
   const [domain, setDomain] = useState<string>(); const [scene, setScene] = useState<string>();
   const [connections, setConnections] = useState<Connection[]>([]); const [connectionsLoading, setConnectionsLoading] = useState(false); const [connectionError, setConnectionError] = useState<unknown>();
+  const [rules, setRules] = useState<Rule[]>([]); const [ruleSourceId, setRuleSourceId] = useState<string>();
+  const [rulesLoading, setRulesLoading] = useState(false); const [rulesError, setRulesError] = useState<unknown>(); const [rulesRevision, setRulesRevision] = useState(0);
   const requests = useScopedIntegrationRequests(scope); const mutation = useIngestionMutation(scope); const requestLeave = useNavigationGuard();
   const list = useIngestionPage<components['schemas']['AiApplicationPageDto']>(scope, applicationsPath, page, pageSize, revision);
   const manage = organization.permissions.includes('ai:applications:manage'); const canPublish = organization.permissions.includes('ai:applications:publish'); const canTest = organization.permissions.includes('ai:applications:test'); const readConnections = organization.permissions.includes('ai:connections:read'); const locked = mutation.locked;
   const connectionId = Form.useWatch('connectionId', form); const outputMode = Form.useWatch(['output', 'mode'], form) ?? 'TEXT';
   const selectedConnection = connections.find(item => item.id === connectionId);
+  const promptRef = useRef<ComponentRef<typeof Input.TextArea>>(null);
+  const sourceRule = rules.find(rule => rule.id === ruleSourceId);
+  const sourceVariables = sourceRule ? ruleVariables(sourceRule) : undefined;
+  const variables = sourceVariables ?? editor?.record?.variables ?? [];
+  const canReadRules = organization.permissions.includes('ingestion:read');
   useUnsavedChanges(dirty || mutation.unknown);
   useEffect(() => {
     if (!editor || !readConnections) return;
@@ -53,23 +65,50 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
     }).catch(cause => { if (active && requests.current()) setConnectionError(cause); }).finally(() => { if (active && requests.current()) setConnectionsLoading(false); });
     return () => { active = false; };
   }, [editor, requests.read, requests.current, scope.deny, organization.id, readConnections]);
+  useEffect(() => {
+    if (!editor || !canReadRules) return;
+    let active = true; setRulesLoading(true); setRulesError(undefined);
+    void (async () => {
+      const items: Rule[] = [];
+      for (let page = 1; active && requests.current(); page += 1) {
+        const result = await requests.read<components['schemas']['IngestionRulePageDto']>(`${ingestionPath}/rules`, { page: String(page), limit: '100' });
+        if (!active || !requests.current()) return;
+        if (!Array.isArray(result.items) || result.items.some(item => item.organizationId !== organization.id) || result.page !== page || result.limit !== 100 || !Number.isSafeInteger(result.total) || result.total < 0 || result.items.length === 0 && items.length < result.total) { scope.deny(); return; }
+        items.push(...result.items);
+        if (items.length >= result.total) break;
+      }
+      if (active && requests.current()) setRules(items.filter(item => item.target === 'PROCESS_DEFECT' && ruleVariables(item).length));
+    })().catch(cause => { if (active && requests.current()) setRulesError(cause); }).finally(() => { if (active && requests.current()) setRulesLoading(false); });
+    return () => { active = false; };
+  }, [editor, organization.id, canReadRules, requests.read, requests.current, scope.deny, rulesRevision]);
   function reset() { setEditor(undefined); setPublishing(undefined); setTrial(undefined); setTrialResult(undefined); setDirty(false); setShowMutationError(false); }
   function close() { if (!locked) requestLeave(reset, true); }
   function refresh() { if (!locked) requestLeave(() => { reset(); setRevision(value => value + 1); }, true); }
   function open(record?: Application) {
     if (!manage || locked) return;
     requestLeave(() => {
-      reset(); form.setFieldsValue(record ?? { name: '', domain: 'PROCESS_QUALITY', scene: 'PROCESS_DEFECT_DESCRIPTION', enabled: true, variables: [{ variable: 'fault', label: '' }], connectionId: '', model: '', prompt: '', output: { mode: 'TEXT', field: 'description', target: 'description' }, fallback: 'DIRECT' }); setEditor({ record });
+      reset(); setRuleSourceId(undefined); setRules([]); form.setFieldsValue(record ?? { name: '', domain: 'PROCESS_QUALITY', scene: 'PROCESS_DEFECT_DESCRIPTION', enabled: true, connectionId: '', model: '', prompt: '', output: { mode: 'TEXT', field: 'description', target: 'description' }, fallback: 'DIRECT' }); setEditor({ record });
     }, true);
   }
   function save(values: Settings) {
     if (!manage || locked || !editor) return;
     setShowMutationError(true);
-    const body: Settings = { name: values.name.trim(), domain: values.domain, scene: values.scene, enabled: values.enabled, variables: values.variables.map(item => ({ variable: item.variable.trim(), label: item.label ?? '' })), connectionId: values.connectionId, model: values.model.trim(), prompt: values.prompt.trim(), output: { mode: values.output.mode, field: values.output.mode === 'JSON' ? values.output.field.trim() : 'description', target: 'description' }, fallback: 'DIRECT' };
+    const body: Settings = { name: values.name.trim(), domain: values.domain, scene: values.scene, enabled: values.enabled, variables, connectionId: values.connectionId, model: values.model.trim(), prompt: values.prompt.trim(), output: { mode: values.output.mode, field: values.output.mode === 'JSON' ? values.output.field.trim() : 'description', target: 'description' }, fallback: 'DIRECT' };
     void mutation.execute<Application>(editor.record ? { path: scoped(`/${editor.record.id}`), method: 'PATCH', body: { ...body, expectedVersion: editor.record.version } } : { path: scoped(), method: 'POST', body }, result => {
       if (result.organizationId !== organization.id) { scope.deny(); return; }
       reset(); setRevision(value => value + 1);
     });
+  }
+  function insertVariable(variable: string) {
+    const prompt = String(form.getFieldValue('prompt') ?? '');
+    const textarea = promptRef.current?.resizableTextArea?.textArea;
+    const start = textarea?.selectionStart ?? prompt.length;
+    const end = textarea?.selectionEnd ?? start;
+    const insertion = `{{${variable}}}`;
+    if (prompt.length - (end - start) + insertion.length > 4000) return;
+    form.setFieldValue('prompt', `${prompt.slice(0, start)}${insertion}${prompt.slice(end)}`);
+    setDirty(true);
+    requestAnimationFrame(() => { textarea?.focus(); textarea?.setSelectionRange(start + insertion.length, start + insertion.length); });
   }
   function scoped(suffix = '') { return `${applicationsPath}${suffix}?organizationId=${encodeURIComponent(organization.id)}`; }
   function publish() {
@@ -94,7 +133,7 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
     <Space wrap>
       <Select aria-label={t('业务板块')} style={{ minWidth: 150 }} disabled={locked} allowClear placeholder={t('全部板块')} value={domain} options={[{ value: 'PROCESS_QUALITY', label: t('制程质量') }]} onChange={value => requestLeave(() => { setDomain(value); setPage(1); })} />
       <Select aria-label={t('应用场景')} style={{ minWidth: 180 }} disabled={locked} allowClear placeholder={t('全部场景')} value={scene} options={[{ value: 'PROCESS_DEFECT_DESCRIPTION', label: t('不良描述整理') }]} onChange={value => requestLeave(() => { setScene(value); setPage(1); })} />
-      <Button disabled={locked || list.loading} onClick={refresh}>{t('刷新')}</Button>{manage && readConnections ? <Button type="primary" disabled={locked} onClick={() => open()}>{t('新增应用')}</Button> : null}
+      <Button disabled={locked || list.loading} onClick={refresh}>{t('刷新')}</Button>{manage && readConnections && canReadRules ? <Button type="primary" disabled={locked} onClick={() => open()}>{t('新增应用')}</Button> : null}
     </Space>
     <IngestionError error={list.error} />{!editor && !publishing && !trial ? <>{feedback}{retry}</> : null}
     <LedgerTable<Application> ledgerId="ai-applications" organizationId={organization.id} requiredColumnKeys={['name', 'actions']} rowKey="id" loading={list.loading} dataSource={(list.data?.items ?? []).filter(item => (!domain || item.domain === domain) && (!scene || item.scene === scene))} scroll={{ x: 950 }} pagination={{ current: page, pageSize, total: list.data?.total ?? 0, disabled: locked, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} columns={[
@@ -112,18 +151,23 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
           <Form.Item name="domain" label={t('业务板块')} rules={[{ required: true }]}><Select options={[{ value: 'PROCESS_QUALITY', label: t('制程质量') }]} /></Form.Item>
           <Form.Item name="scene" label={t('应用场景')} rules={[{ required: true }]}><Select options={[{ value: 'PROCESS_DEFECT_DESCRIPTION', label: t('不良描述整理') }]} /></Form.Item>
         </div>
-        <Form.List name="variables" rules={[{ validator: async (_, fields: Settings['variables']) => { if (!fields?.length) throw new Error(t('请添加至少一个输入变量')); if (new Set(fields.map(field => field.variable?.trim())).size !== fields.length) throw new Error(t('变量名不能重复')); } }]}>{(fields, { add, remove }, { errors }) => <>
-          {fields.map(field => <div className="qms-ingestion-description-row" key={field.key}>
-            <Form.Item name={[field.name, 'variable']} label={t('变量名') + (field.name + 1)} rules={[{ required: true }, { pattern: /^[A-Za-z][A-Za-z0-9_]*$/, message: t('使用字母开头的字母、数字或下划线') }]}><Input maxLength={64} /></Form.Item>
-            <Form.Item name={[field.name, 'label']} label={t('变量标签') + (field.name + 1)}><Input maxLength={100} /></Form.Item>
-            <Button icon={<Minus size={14} />} aria-label={t('移除变量') + (field.name + 1)} onClick={() => remove(field.name)} />
-          </div>)}<Form.ErrorList errors={errors} /><Button icon={<Plus size={14} />} disabled={locked || fields.length >= 20} onClick={() => add({ variable: '', label: '' })}>{t('添加输入变量')}</Button>
-        </>}</Form.List>
+        {canReadRules ? <><IngestionError error={rulesError} />{rulesError ? <Button onClick={() => setRulesRevision(value => value + 1)}>{text('重试读取制程规则', 'Retry process rule load')}</Button> : null}
+          <Form.Item label={text('变量来源规则', 'Variable source rule')}><Select aria-label={text('变量来源规则', 'Variable source rule')} loading={rulesLoading} showSearch optionFilterProp="label" allowClear value={ruleSourceId} onChange={value => { setRuleSourceId(value); setDirty(true); }} options={rules.map(rule => ({ value: rule.id, label: rule.name }))} /></Form.Item>
+        </> : null}
+        {variables.map(({ variable, label }, index) => <div className="qms-ingestion-description-row" key={variable}>
+          <Form.Item label={t('变量名') + (index + 1)}><Input aria-label={t('变量名') + (index + 1)} readOnly value={variable} /></Form.Item>
+          <Form.Item label={t('变量标签') + (index + 1)}><Input aria-label={t('变量标签') + (index + 1)} readOnly value={label} /></Form.Item>
+          <Button onClick={() => insertVariable(variable)}>{text('插入', 'Insert')} {variable}</Button>
+        </div>)}
         <div className="qms-ingestion-grid qms-ingestion-actions">
           <Form.Item name="connectionId" label={t('模型渠道')} rules={[{ required: true }]}><Select disabled={locked || !readConnections} loading={connectionsLoading} options={connections.map(connection => ({ value: connection.id, label: connection.name, disabled: !connection.enabled || !connection.hasKey }))} onChange={value => form.setFieldValue('model', connections.find(connection => connection.id === value)?.defaultModel)} /></Form.Item>
           <Form.Item name="model" label={t('模型')} dependencies={['connectionId', 'enabled']} rules={[{ required: true }, { validator: async (_, value: string) => { const retainedDisabledReference = !!editor?.record && form.getFieldValue('enabled') === false && editor.record.connectionId === form.getFieldValue('connectionId') && editor.record.model === value; if (value && selectedConnection && !selectedConnection.models.includes(value) && !retainedDisabledReference) throw new Error(t('请选择可用模型')); } }]}><Select disabled={locked || !readConnections} showSearch options={(selectedConnection?.models ?? []).map(value => ({ value, label: value }))} /></Form.Item>
         </div>
-        <Form.Item name="prompt" label={t('提示词')} extra={t('使用{{变量名}}引用输入变量')} rules={[{ required: true, whitespace: true }]}><Input.TextArea autoSize={{ minRows: 4, maxRows: 10 }} maxLength={4000} /></Form.Item>
+        <Form.Item name="prompt" label={t('提示词')} extra={t('使用{{变量名}}引用输入变量')} rules={[{ required: true, whitespace: true }, { validator: async (_, value?: string) => {
+          if (!variables.length) throw new Error(text('请选择已配置变量的制程规则', 'Select a process rule with variables'));
+          const missing = [...new Set([...(value ?? '').matchAll(/\{\{\s*([^{}]*?)\s*\}\}/g)].map(match => match[1]!.trim()).filter(name => !variables.some(item => item.variable === name)))];
+          if (missing.length) throw new Error(text(`来源规则没有定义变量：${missing.join('、')}`, `Variables are missing from the source rule: ${missing.join(', ')}`));
+        } }]}><Input.TextArea ref={promptRef} autoSize={{ minRows: 4, maxRows: 10 }} maxLength={4000} /></Form.Item>
         <div className="qms-ingestion-grid">
           <Form.Item name={['output', 'mode']} label={t('模型输出格式')} rules={[{ required: true }]}><Select options={[{ value: 'TEXT', label: t('纯文本') }, { value: 'JSON', label: t('JSON字段') }]} /></Form.Item>
           {outputMode === 'JSON' ? <Form.Item name={['output', 'field']} label={t('提取输出字段')} rules={[{ required: true, whitespace: true }]}><Input maxLength={100} /></Form.Item> : null}

@@ -1,4 +1,5 @@
 import { HttpException, Injectable, Optional } from '@nestjs/common';
+import { isISO8601 } from 'class-validator';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type ProcessDefect } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
@@ -121,7 +122,33 @@ export interface ProcessDefectQuery {
   includeArchived?: boolean;
   pendingCompletion?: boolean;
   pendingConfiguration?: boolean;
+  filters?: string;
+  occurredFrom?: string;
+  occurredTo?: string;
 }
+
+export const PROCESS_FILTER_FIELDS = {
+  description: 'text', defectTypeCode: 'text', batchCode: 'text', workOrderCode: 'text', operationCode: 'text', lineCode: 'text',
+  projectCode: 'text', productCode: 'text', materialCode: 'text', traceCode: 'text', lineName: 'text', operationName: 'text',
+  operationSector: 'text', productSubcategory: 'text', occurredAt: 'date', defectQuantity: 'number', shift: 'enum', projectStage: 'enum',
+  ledgerStatus: 'enum', responsibilityCategory: 'enum', pendingCompletion: 'boolean', pendingConfiguration: 'boolean',
+} as const;
+type ProcessFilterField = keyof typeof PROCESS_FILTER_FIELDS;
+type ProcessFilterType = (typeof PROCESS_FILTER_FIELDS)[ProcessFilterField];
+type ProcessFilterOperator = 'CONTAINS' | 'NOT_CONTAINS' | 'EQ' | 'NE' | 'EMPTY' | 'NOT_EMPTY' | 'BEFORE' | 'AFTER' | 'GT' | 'GTE' | 'LT' | 'LTE';
+type ProcessFilter = { field: ProcessFilterField; operator: ProcessFilterOperator; value?: unknown };
+type ProcessFilterSet = { logic: 'ALL' | 'ANY'; items: ProcessFilter[] };
+export const PROCESS_FILTER_OPERATORS: Record<ProcessFilterType, readonly ProcessFilterOperator[]> = {
+  text: ['CONTAINS', 'NOT_CONTAINS', 'EQ', 'NE', 'EMPTY', 'NOT_EMPTY'],
+  date: ['EQ', 'NE', 'BEFORE', 'AFTER', 'EMPTY', 'NOT_EMPTY'],
+  enum: ['EQ', 'NE', 'EMPTY', 'NOT_EMPTY'],
+  number: ['EQ', 'NE', 'GT', 'GTE', 'LT', 'LTE', 'EMPTY', 'NOT_EMPTY'],
+  boolean: ['EQ'],
+};
+const PROCESS_FILTER_ENUMS: Partial<Record<ProcessFilterField, readonly string[]>> = {
+  shift: ['DAY', 'NIGHT'], projectStage: ['NEW_PRODUCT', 'MASS_PRODUCTION'], ledgerStatus: ['FOLLOWING', 'CLOSED'],
+  responsibilityCategory: PROCESS_RESPONSIBILITY_CATEGORIES,
+};
 
 function reject(code: string, status: number): never {
   throw new HttpException({ code, message: code }, status);
@@ -147,6 +174,98 @@ function uuid(value: string): string {
 function version(value: number) {
   if (!Number.isSafeInteger(value) || value < 1 || value > 2147483647) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
   return value;
+}
+
+export const PROCESS_FILTER_MAX_LENGTH = 12000;
+export const PROCESS_FILTER_MAX_ITEMS = 10;
+
+function parseProcessFilters(raw: string | undefined): ProcessFilterSet | undefined {
+  if (raw === undefined) return undefined;
+  if (typeof raw !== 'string' || raw.length > PROCESS_FILTER_MAX_LENGTH) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+  let parsed: unknown;
+  try { parsed = JSON.parse(raw); } catch { reject('PROCESS_DEFECT_FILTER_INVALID', 400); }
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+  const input = parsed as Record<string, unknown>;
+  if (Object.keys(input).some(key => !['logic', 'items'].includes(key))) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+  if ((input.logic !== 'ALL' && input.logic !== 'ANY') || !Array.isArray(input.items) || input.items.length < 1 || input.items.length > PROCESS_FILTER_MAX_ITEMS) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+  const items = input.items.map((value): ProcessFilter => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+    const item = value as Record<string, unknown>;
+    if (Object.keys(item).some(key => !['field', 'operator', 'value'].includes(key)) || typeof item.field !== 'string' || typeof item.operator !== 'string') reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+    const field = item.field as ProcessFilterField;
+    const operator = item.operator as ProcessFilterOperator;
+    if (!Object.hasOwn(PROCESS_FILTER_FIELDS, field)) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+    const type = PROCESS_FILTER_FIELDS[field];
+    if (!PROCESS_FILTER_OPERATORS[type].includes(operator)) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+    const hasValue = Object.hasOwn(item, 'value');
+    if (['EMPTY', 'NOT_EMPTY'].includes(operator) ? hasValue : !hasValue) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+    if (hasValue) {
+      const valueType = typeof item.value;
+      if (type === 'text' && (typeof item.value !== 'string' || !item.value.trim() || item.value.length > 200 || item.value.includes('\0'))) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+      if (type === 'number' && (valueType !== 'number' || !Number.isSafeInteger(item.value) || (item.value as number) < -2147483648 || (item.value as number) > 2147483647)) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+      if (type === 'boolean' && valueType !== 'boolean') reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+      if (type === 'enum' && (valueType !== 'string' || !PROCESS_FILTER_ENUMS[field]?.includes(item.value as string))) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+      if (type === 'date' && (valueType !== 'string' || !validProcessDate(item.value as string))) reject('PROCESS_DEFECT_FILTER_INVALID', 400);
+    }
+    return { field, operator, ...(hasValue ? { value: item.value } : {}) };
+  });
+  return { logic: input.logic, items };
+}
+
+function validProcessDate(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (/^\d{4}-\d\d-\d\d$/.test(value)) { const [year, month, day] = value.split('-').map(Number); const date = new Date(Date.UTC(year!, month! - 1, day!)); return date.getUTCFullYear() === year && date.getUTCMonth() === month! - 1 && date.getUTCDate() === day; }
+  return /^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-]\d\d:\d\d)$/.test(value)
+    && isISO8601(value, { strict: true }) && Number.isFinite(Date.parse(value));
+}
+
+function processDateValue(value: string, boundary: 'start' | 'end' = 'start') {
+  if (/^\d{4}-\d\d-\d\d$/.test(value)) return new Date(`${value}T${boundary === 'end' ? '23:59:59.999' : '00:00:00'}+08:00`);
+  return new Date(value);
+}
+
+const FILTER_COMPARISONS = { EQ: '=', NE: '<>', BEFORE: '<', AFTER: '>', GT: '>', GTE: '>=', LT: '<', LTE: '<=' } as const;
+
+function materialExists(predicate: Prisma.Sql) {
+  return Prisma.sql`EXISTS (SELECT 1 FROM process_defect_material_items mi WHERE mi.organization_id = d.organization_id AND mi.defect_id = d.id AND mi.removed_at IS NULL AND ${predicate})`;
+}
+
+function filterComparison(column: Prisma.Sql, type: ProcessFilterType, operator: ProcessFilterOperator, value: unknown): Prisma.Sql {
+  if (operator === 'EMPTY') return Prisma.sql`${column} IS NULL`;
+  if (operator === 'NOT_EMPTY') return Prisma.sql`${column} IS NOT NULL`;
+  if (operator === 'CONTAINS' || operator === 'NOT_CONTAINS') {
+    const pattern = `%${(value as string).replace(/[\\%_]/g, '\\$&')}%`;
+    return Prisma.sql`${column} ${Prisma.raw(operator === 'CONTAINS' ? 'ILIKE' : 'NOT ILIKE')} ${pattern} ESCAPE '\\'`;
+  }
+  const comparison = Prisma.raw(FILTER_COMPARISONS[operator]);
+  if (type === 'date' && /^\d{4}-\d\d-\d\d$/.test(value as string)) {
+    const start = processDateValue(value as string);
+    if (operator === 'EQ') return Prisma.sql`${column} >= ${start} AND ${column} < ${new Date(start.getTime() + 86400000)}`;
+    if (operator === 'NE') return Prisma.sql`(${column} < ${start} OR ${column} >= ${new Date(start.getTime() + 86400000)})`;
+    if (operator === 'BEFORE') return Prisma.sql`${column} < ${start}`;
+    if (operator === 'AFTER') return Prisma.sql`${column} >= ${new Date(start.getTime() + 86400000)}`;
+  }
+  if (type === 'text') return Prisma.sql`LOWER(${column}) ${comparison} LOWER(${value})`;
+  return Prisma.sql`${column} ${comparison} ${type === 'date' ? processDateValue(value as string) : value}`;
+}
+
+function processFilterPredicate({ field, operator, value }: ProcessFilter): Prisma.Sql {
+  if (field === 'materialCode') {
+    const material = Prisma.sql`NULLIF(mi.material_code, '')`;
+    const present = materialExists(Prisma.sql`${material} IS NOT NULL`);
+    if (operator === 'EMPTY') return Prisma.sql`NOT ${present}`;
+    if (operator === 'NOT_EMPTY') return present;
+    if (operator === 'NE' || operator === 'NOT_CONTAINS') {
+      const matching = materialExists(filterComparison(material, 'text', operator === 'NE' ? 'EQ' : 'CONTAINS', value));
+      return Prisma.sql`(${present} AND NOT ${matching})`;
+    }
+    return materialExists(filterComparison(material, 'text', operator, value));
+  }
+  const type = PROCESS_FILTER_FIELDS[field];
+  const column = field === 'projectStage' ? Prisma.sql`d.project_snapshot #>> '{project,stage}'`
+    : field === 'projectCode' ? Prisma.sql`d.project_snapshot #>> '{project,code}'`
+    : Prisma.sql`d.${Prisma.raw(field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`))}`;
+  return filterComparison(type === 'text' || type === 'enum' ? Prisma.sql`NULLIF(${column}, '')` : column, type, operator, value);
 }
 
 export function normalizeProcessDefectFacts(input: ProcessDefectInput, mode: 'MANUAL' | 'UPDATE' | 'IMS' = 'UPDATE') {
@@ -498,31 +617,42 @@ export class ProcessDefectLedgerService {
 
   async list(actor: AdminActor, query: ProcessDefectQuery) {
     const organizationId = this.scope(actor);
-    if (!Number.isSafeInteger(query.page) || query.page < 1 || !Number.isSafeInteger(query.pageSize) || query.pageSize < 1 || query.pageSize > 100) reject('PROCESS_DEFECT_QUERY_INVALID', 400);
+    const offset = (query.page - 1) * query.pageSize;
+    if (!Number.isSafeInteger(query.page) || query.page < 1 || !Number.isSafeInteger(query.pageSize) || query.pageSize < 1 || query.pageSize > 100 || !Number.isSafeInteger(offset)) reject('PROCESS_DEFECT_QUERY_INVALID', 400);
+    if ((query.occurredFrom !== undefined && !validProcessDate(query.occurredFrom)) || (query.occurredTo !== undefined && !validProcessDate(query.occurredTo))) reject('PROCESS_DEFECT_QUERY_INVALID', 400);
+    const from = query.occurredFrom === undefined ? null : new Date(query.occurredFrom);
+    const to = query.occurredTo === undefined ? null : new Date(query.occurredTo);
+    if (from && to && from >= to) reject('PROCESS_DEFECT_QUERY_INVALID', 400);
     const defectTypeCode = query.defectTypeCode?.trim().toUpperCase();
+    const filterSet = parseProcessFilters(query.filters);
     return this.prisma.$transaction(async (tx) => {
       await assertActiveAuthentication(tx, actor);
       await assertAdminAccess(tx, actor, organizationId, 'process-quality:defects:read');
-      const materialMatches = query.materialCode ? await tx.$queryRaw<{ defectId: string }[]>`SELECT DISTINCT defect_id AS "defectId" FROM process_defect_material_items WHERE organization_id = ${organizationId}::uuid AND removed_at IS NULL AND material_code = ${query.materialCode}` : null;
-      const where: Prisma.ProcessDefectWhereInput = {
-        organizationId, archivedAt: null,
-        ...(query.pendingCompletion === undefined ? {} : { pendingCompletion: query.pendingCompletion }),
-        ...(query.pendingConfiguration === undefined ? {} : { pendingConfiguration: query.pendingConfiguration }),
-        ...(defectTypeCode ? { defectTypeCode } : {}),
-        ...(query.batchCode ? { batchCode: query.batchCode } : {}),
-        ...(query.workOrderCode ? { workOrderCode: query.workOrderCode } : {}),
-        ...(query.operationCode ? { operationCode: query.operationCode } : {}),
-        ...(query.lineCode ? { lineCode: query.lineCode } : {}),
-        ...(query.projectCode ? { projectCode: query.projectCode } : {}),
-        ...(query.productCode ? { productCode: query.productCode } : {}),
-        ...(materialMatches ? { id: { in: materialMatches.map(item => item.defectId) } } : {}),
-        ...(query.responsibilityCategory ? { responsibilityCategory: query.responsibilityCategory } : {}),
-        ...(query.ledgerStatus ? { ledgerStatus: query.ledgerStatus } : {}),
-        ...(query.traceCode ? { traceCode: query.traceCode } : {}),
-        ...(query.search ? { OR: [{ description: { contains: query.search, mode: 'insensitive' } }, { batchCode: { contains: query.search, mode: 'insensitive' } }, { workOrderCode: { contains: query.search, mode: 'insensitive' } }, { traceCode: { contains: query.search, mode: 'insensitive' } }, { productCode: { contains: query.search, mode: 'insensitive' } }] } : {}),
-      };
-      const [items, total] = await Promise.all([tx.processDefect.findMany({ where, orderBy: [{ occurredAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }], skip: (query.page - 1) * query.pageSize, take: query.pageSize }), tx.processDefect.count({ where })]);
-      return { items: await Promise.all(items.map(item => this.view(tx, item))), total, page: query.page, pageSize: query.pageSize };
+      const search = `%${query.search ?? ''}%`;
+      const where = Prisma.sql`d.organization_id = ${organizationId}::uuid AND d.archived_at IS NULL
+        ${from ? Prisma.sql`AND d.occurred_at >= ${from}` : Prisma.empty}
+        ${to ? Prisma.sql`AND d.occurred_at < ${to}` : Prisma.empty}
+        ${query.pendingCompletion === undefined ? Prisma.empty : Prisma.sql`AND d.pending_completion = ${query.pendingCompletion}`}
+        ${query.pendingConfiguration === undefined ? Prisma.empty : Prisma.sql`AND d.pending_configuration = ${query.pendingConfiguration}`}
+        ${defectTypeCode ? Prisma.sql`AND d.defect_type_code = ${defectTypeCode}` : Prisma.empty}
+        ${query.batchCode ? Prisma.sql`AND d.batch_code = ${query.batchCode}` : Prisma.empty}
+        ${query.workOrderCode ? Prisma.sql`AND d.work_order_code = ${query.workOrderCode}` : Prisma.empty}
+        ${query.operationCode ? Prisma.sql`AND d.operation_code = ${query.operationCode}` : Prisma.empty}
+        ${query.lineCode ? Prisma.sql`AND d.line_code = ${query.lineCode}` : Prisma.empty}
+        ${query.projectCode ? Prisma.sql`AND d.project_code = ${query.projectCode}` : Prisma.empty}
+        ${query.productCode ? Prisma.sql`AND d.product_code = ${query.productCode}` : Prisma.empty}
+        ${query.materialCode ? Prisma.sql`AND ${materialExists(Prisma.sql`mi.material_code = ${query.materialCode}`)}` : Prisma.empty}
+        ${query.responsibilityCategory ? Prisma.sql`AND d.responsibility_category = ${query.responsibilityCategory}` : Prisma.empty}
+        ${query.ledgerStatus ? Prisma.sql`AND d.ledger_status = ${query.ledgerStatus}` : Prisma.empty}
+        ${query.traceCode ? Prisma.sql`AND d.trace_code = ${query.traceCode}` : Prisma.empty}
+        ${query.search ? Prisma.sql`AND (d.description ILIKE ${search} OR d.batch_code ILIKE ${search} OR d.work_order_code ILIKE ${search} OR d.trace_code ILIKE ${search} OR d.product_code ILIKE ${search})` : Prisma.empty}
+        ${filterSet ? Prisma.sql`AND (${Prisma.join(filterSet.items.map(processFilterPredicate), filterSet.logic === 'ALL' ? ' AND ' : ' OR ')})` : Prisma.empty}`;
+      const [pageIds, [count]] = await Promise.all([
+        tx.$queryRaw<{ id: string }[]>`SELECT d.id FROM process_defects d WHERE ${where} ORDER BY d.occurred_at DESC NULLS LAST, d.created_at DESC, d.id DESC LIMIT ${query.pageSize} OFFSET ${offset}`,
+        tx.$queryRaw<{ total: bigint }[]>`SELECT count(*) AS total FROM process_defects d WHERE ${where}`,
+      ]);
+      const items = await tx.processDefect.findMany({ where: { organizationId, id: { in: pageIds.map(item => item.id) } }, orderBy: [{ occurredAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }] });
+      return { items: await Promise.all(items.map(item => this.view(tx, item))), total: Number(count!.total), page: query.page, pageSize: query.pageSize };
     }, { isolationLevel: 'RepeatableRead' });
   }
 

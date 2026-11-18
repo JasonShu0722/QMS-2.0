@@ -127,15 +127,21 @@ export class AiApplicationService {
     if (!row.enabled) aiApplicationError('AI_APPLICATION_UNAVAILABLE', 409);
     const revision = await this.revision(tx, organizationId, binding.applicationId, binding.publishedVersion);
     const configuration = normalizeAiApplication(revision.configuration);
-    if (!Array.isArray(binding.inputFields) || binding.inputFields.length !== configuration.variables.length
+    if (!Array.isArray(binding.inputFields) || binding.inputFields.length < 1 || binding.inputFields.length > configuration.variables.length || binding.inputFields.some(field => !field)
       || new Set(binding.inputFields.map(field => field.variable)).size !== binding.inputFields.length) aiApplicationError('AI_APPLICATION_INVALID');
-    const inputFields = configuration.variables.map(variable => {
-      const field = binding.inputFields.find(field => field.variable === variable.variable);
-      if (!field || typeof field.path !== 'string' || field.path.length > 200 || field.path.split('.').length > 8
+    const referenced = new Set([...configuration.prompt.matchAll(/\{\{\s*([^{}]*?)\s*\}\}/g)].map(match => match[1]!.trim()));
+    const inputFields = configuration.variables.flatMap(variable => {
+      const field = binding.inputFields.find(input => input.variable === variable.variable);
+      if (!field) {
+        if (referenced.has(variable.variable)) aiApplicationError('AI_APPLICATION_INVALID');
+        return [];
+      }
+      if (typeof field.path !== 'string' || field.path.length > 200 || field.path.split('.').length > 8
         || field.path.split('.').some(part => !/^[A-Za-z0-9_-]{1,64}$/.test(part) || ['__proto__', 'constructor', 'prototype'].includes(part))
         || field.label !== undefined && (typeof field.label !== 'string' || field.label.length > 100 || /[\u0000]/u.test(field.label))) aiApplicationError('AI_APPLICATION_INVALID');
       return { path: field.path, variable: variable.variable, label: field.label ?? variable.label };
     });
+    if (inputFields.length !== binding.inputFields.length) aiApplicationError('AI_APPLICATION_INVALID');
     const connection = await this.connection(tx, organizationId, configuration);
     return { binding: { applicationId: row.id, publishedVersion: binding.publishedVersion, inputFields },
       aiDescription: { connectionId: configuration.connectionId, connectionVersion: connection.version, model: configuration.model, prompt: configuration.prompt, inputFields, output: configuration.output } };

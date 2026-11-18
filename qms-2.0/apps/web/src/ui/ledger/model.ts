@@ -17,12 +17,12 @@ export function columnKey(column: { key?: unknown; dataIndex?: unknown; title?: 
   }
   return undefined;
 }
-export function preferenceKey(scope: Scope, ledgerId: string, kind: 'columns' | 'pageSize', viewId = 'default'): string | undefined {
+export function preferenceKey(scope: Scope, ledgerId: string, kind: 'columns' | 'pageSize' | 'filters', viewId = 'default'): string | undefined {
   const session = scope.sessionScope?.split(':');
   if (!session || session.length !== 3 || !['INTERNAL', 'SUPPLIER'].includes(session[0]) || !session.every(validKey) || !validKey(ledgerId) || !validKey(viewId)) return undefined;
   const organization = scope.organizationId ?? session[1];
   if (!validKey(organization)) return undefined;
-  return `qms:ledger:v1:${JSON.stringify([scope.sessionScope, organization, scope.portal ?? (session[0] === 'SUPPLIER' ? 'supplier' : 'business'), ledgerId, kind, ...(kind === 'columns' ? [viewId] : [])])}`;
+  return `qms:ledger:v1:${JSON.stringify([scope.sessionScope, organization, scope.portal ?? (session[0] === 'SUPPLIER' ? 'supplier' : 'business'), ledgerId, kind, ...(['columns', 'filters'].includes(kind) ? [viewId] : [])])}`;
 }
 export function boundedWidth(value: unknown, fallback = DEFAULT_WIDTH, minimum = MIN_WIDTH) {
   const width = typeof value === 'number' && Number.isFinite(value) ? value : fallback;

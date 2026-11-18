@@ -1,31 +1,100 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Form, Input, List, Select, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
+import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Input, List, Popover, Select, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
+import { Eye, Filter, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { Eye, Trash2 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import './process-quality.css';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
+import { preferenceKey } from '../../ui/ledger/model';
+import { useLedgerScope, usePreference } from '../../ui/ledger/preferences';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { ProcessEightDIssueDrawer } from './ProcessEightDIssueDrawer';
 import { ProcessDefectEditor } from './ProcessDefectEditor';
 import { ProcessDefectDeletionDialog } from './ProcessDefectDeletionDialog';
 import { ProcessLedgerAction } from './ProcessLedgerAction';
 import { ProcessAiDescription } from './ProcessAiDescription';
-import { SupplierSourceCopyDialog } from '../supplier-eight-d-source/SupplierSourceCopyDialog';
 import { categoryLabels, categoryOptions, CompletionStatus, denied, MappingHint, ProcessError, useProcessWrite, verificationLabels } from './process-ledger';
 
 type Defect = components['schemas']['ProcessDefectDto'];
 type DefectPage = components['schemas']['ProcessDefectPageDto'];
-type IssueBody = components['schemas']['IssueProcessDefectsDto'];
 type IssueResult = components['schemas']['ProcessIssueResultDto'];
 type LinkedProblem = components['schemas']['ProcessIssueProblemDto'];
-type IssueValues = Pick<IssueBody, 'severity'> & IssueBody['workflowBinding'];
 
 const responsibility = (value: Defect['responsibilityCategory']) => value ? categoryLabels[value] : '待分析';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+type FilterLogic = 'ALL' | 'ANY';
+type FilterField = string;
+type FilterItem = { field: FilterField; operator: string; value?: string };
+type FilterState = { currentMonth: boolean; logic: FilterLogic; items: FilterItem[] };
+type FilterPreference = { search: string; filters: FilterState };
+const filterFields = [
+  ['occurredAt', '发生时间', 'Occurred at'], ['shift', '班次', 'Shift'], ['projectCode', '项目号', 'Project number'], ['projectStage', '项目状态', 'Project stage'], ['productSubcategory', '细分类型', 'Product subcategory'],
+  ['description', '不良描述', 'Defect description'], ['traceCode', '追溯码', 'Trace code'], ['lineName', '生产线名称', 'Line name'], ['operationName', '工序名称', 'Operation name'],
+  ['operationSector', '板块', 'Sector'], ['defectQuantity', '不良数量', 'Defect quantity'], ['ledgerStatus', '台账状态', 'Ledger status'], ['responsibilityCategory', '责任类别', 'Responsibility category'],
+  ['pendingCompletion', '完善情况', 'Completion pending'], ['pendingConfiguration', '配置情况', 'Configuration pending'],
+  ['defectTypeCode', '不良类型', 'Defect type'], ['productCode', '成品编码', 'Product code'], ['batchCode', '批次', 'Batch code'], ['workOrderCode', '工单号', 'Work order'],
+  ['lineCode', '生产线编码', 'Line code'], ['operationCode', '工序编码', 'Operation code'], ['materialCode', '物料编码', 'Material code'],
+] as const;
+const equals = [['EQ', '等于', 'Equals'], ['NE', '不等于', 'Does not equal']];
+const empty = [['EMPTY', '为空', 'Is empty'], ['NOT_EMPTY', '不为空', 'Is not empty']];
+const textOperators = [['CONTAINS', '包含', 'Contains'], ['NOT_CONTAINS', '不包含', 'Does not contain'], ...equals, ...empty];
+const dateOperators = [['AFTER', '晚于', 'After'], ['BEFORE', '早于', 'Before'], ...equals, ...empty];
+const numberOperators = [...equals, ['GT', '大于', 'Greater than'], ['GTE', '大于等于', 'At least'], ['LT', '小于', 'Less than'], ['LTE', '小于等于', 'At most'], ...empty];
+const enumOperators = [...equals, ...empty];
+const filterChoices: Partial<Record<FilterField, string[][]>> = {
+  shift: [['DAY', '白班', 'Day'], ['NIGHT', '夜班', 'Night']],
+  projectStage: [['NEW_PRODUCT', '新品', 'New product'], ['MASS_PRODUCTION', '量产', 'Mass production']],
+  ledgerStatus: [['FOLLOWING', '跟进中', 'Following'], ['CLOSED', '已关闭', 'Closed']],
+  responsibilityCategory: categoryOptions.map(({ value, label }) => [value, label, value]),
+  pendingCompletion: [['true', '待完善', 'Pending'], ['false', '已完善', 'Complete']],
+  pendingConfiguration: [['true', '待补配', 'Pending'], ['false', '已配置', 'Configured']],
+};
+const allowedFields = new Set<string>(filterFields.map(([field]) => field));
+const booleanField = (field: FilterField) => field === 'pendingCompletion' || field === 'pendingConfiguration';
+const emptyOperator = (operator: string) => operator === 'EMPTY' || operator === 'NOT_EMPTY';
+const defaultFilters: FilterState = { currentMonth: true, logic: 'ALL', items: [] };
+function operatorsFor(field: FilterField) {
+  return field === 'occurredAt' ? dateOperators : field === 'defectQuantity' ? numberOperators : booleanField(field) ? equals.slice(0, 1) : filterChoices[field] ? enumOperators : textOperators;
+}
+function filterItem(field: FilterField): FilterItem { return { field, operator: operatorsFor(field)[0][0], value: '' }; }
+function filterValue(item: FilterItem): string | number | boolean | undefined {
+  const value = item.value?.trim();
+  if (emptyOperator(item.operator) || !value) return undefined;
+  if (filterChoices[item.field] && !filterChoices[item.field]?.some(([choice]) => choice === value)) return undefined;
+  if (booleanField(item.field)) return value === 'true';
+  if (item.field === 'defectQuantity') {
+    const number = Number(value);
+    return Number.isInteger(number) && number >= -2147483648 && number <= 2147483647 ? number : undefined;
+  }
+  if (item.field === 'occurredAt') {
+    const date = new Date(`${value}T00:00:00Z`);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : undefined;
+  }
+  return value.length <= 200 ? value : undefined;
+}
+function serializeFilters({ logic, items }: FilterState) {
+  return items.length ? JSON.stringify({ logic, items: items.map(item => ({ field: item.field, operator: item.operator, value: filterValue(item) })) }) : '';
+}
+// Leave room for the search text and paging in the gateway's request line.
+const filtersTooLong = (serialized: string) => new URLSearchParams({ filters: serialized }).toString().length > 5500;
+function normalizeFilterPreference(input: unknown): FilterPreference {
+  if (!input || typeof input !== 'object') return { search: '', filters: defaultFilters };
+  const { search, filters } = input as Partial<FilterPreference>;
+  if (!Array.isArray(filters?.items) || filters.items.length > 10 || !['ALL', 'ANY'].includes(filters.logic)) return { search: '', filters: defaultFilters };
+  const items = filters.items.filter(item => item && allowedFields.has(item.field) && operatorsFor(item.field as FilterField).some(([operator]) => operator === item.operator) && (emptyOperator(item.operator) || typeof item.value === 'string' && filterValue(item as FilterItem) !== undefined)) as FilterItem[];
+  if (items.length !== filters.items.length) return { search: '', filters: defaultFilters };
+  const preference = { currentMonth: filters.currentMonth === true, logic: filters.logic, items };
+  return { search: typeof search === 'string' ? search.trim().slice(0, 200) : '', filters: filtersTooLong(serializeFilters(preference)) ? defaultFilters : preference };
+}
+function monthBounds() {
+  const parts = Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric' }).formatToParts(new Date());
+  const year = Number(parts.find(part => part.type === 'year')?.value);
+  const month = Number(parts.find(part => part.type === 'month')?.value);
+  return { occurredFrom: new Date(Date.UTC(year, month - 1, 1, -8)).toISOString(), occurredTo: new Date(Date.UTC(year, month, 1, -8)).toISOString() };
+}
 
 function isDenied(cause: unknown) {
   return cause instanceof ApiError && (cause.status === 403 || cause.code === 'FEATURE_PERMISSION_DENIED' || cause.code === 'ORGANIZATION_SCOPE_DENIED');
@@ -49,12 +118,19 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const sessionOrganizationId = useWorkTabsStore(state => state.sessionScope?.split(':')[1]);
   const targetOrganizationId = organizationId ?? sessionOrganizationId;
   const [pageSize, setPageSize] = useLedgerPageSize('process-defects', targetOrganizationId);
+  const ledgerScope = useLedgerScope(targetOrganizationId);
+  const viewId = 'ALL';
+  const filterPreferenceStorageKey = preferenceKey(ledgerScope, 'process-defects', 'filters', viewId);
+  const filterPreferenceStateKey = filterPreferenceStorageKey ?? JSON.stringify([ledgerScope, 'process-defects', 'filters', viewId]);
+  const [savedFilterPreference, saveFilterPreference] = usePreference<FilterPreference>(filterPreferenceStorageKey, ledgerScope.sessionScope, normalizeFilterPreference, filterPreferenceStateKey);
   const navigate = useNavigate();
   const completeSessionNavigation = useCompletedSessionNavigation();
-  const [form] = Form.useForm<IssueValues>();
   const [page, setPage] = useState(1);
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
+  const [searchInput, setSearchInput] = useState(savedFilterPreference.search);
+  const search = savedFilterPreference.search;
+  const [draftFilters, setDraftFilters] = useState<FilterState>(() => savedFilterPreference.filters);
+  const appliedFilters = savedFilterPreference.filters;
+  const [filterOpen, setFilterOpen] = useState(false);
   const [result, setResult] = useState<DefectPage>();
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<unknown>();
@@ -65,29 +141,25 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<unknown>();
   const [linked, setLinked] = useState<LinkedProblem[]>([]);
-  const [issueOpen, setIssueOpen] = useState(false);
-  const [issuing, setIssuing] = useState(false);
-  const [issueError, setIssueError] = useState<unknown>();
   const [issued, setIssued] = useState<IssueResult>();
-  const [issueDirty, setIssueDirty] = useState(false);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [permissionsChecked, setPermissionsChecked] = useState(false);
   const [accessLost, setAccessLost] = useState(false);
   const [unauthorized, setUnauthorized] = useState(false);
   const [formalOpen, setFormalOpen] = useState(false);
-  const [copyOpen, setCopyOpen] = useState(false);
   const [editor, setEditor] = useState<Defect | 'new'>();
   const [suppliers, setSuppliers] = useState<components['schemas']['SupplierProfileDto'][]>([]);
   const [supplierError, setSupplierError] = useState<unknown>();
   const [classification, setClassification] = useState<NonNullable<Defect['responsibilityCategory']>>();
   const [actionError, setActionError] = useState<unknown>();
   const [action, setAction] = useState<{ mode: 'close' | 'reopen' | 'verification'; record: Defect; materialId?: string }>();
-  const [ledgerStatus, setLedgerStatus] = useState<Defect['ledgerStatus']>();
-  const [pendingCompletion, setPendingCompletion] = useState(false);
-  const [pendingConfiguration, setPendingConfiguration] = useState(false);
   const [deletionTargets, setDeletionTargets] = useState<Defect[]>();
   const [deletionOpen, setDeletionOpen] = useState(false);
   const alive = useRef(true);
+  const filterAnchor = useRef<HTMLElement>(undefined);
+  const filterTrigger = useRef<HTMLButtonElement>(null);
+  const filterControl = useRef<HTMLSelectElement>(null);
+  const [filterRow, setFilterRow] = useState<number>();
   const detailRequest = useRef(0);
   const detailController = useRef<AbortController>(undefined);
   const listController = useRef<AbortController>(undefined);
@@ -99,31 +171,22 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const canClose = permissions.includes('process-quality:defects:close');
   const canReview = permissions.includes('process-quality:materials:review');
   const canIssue = permissions.includes('process-quality:issues:issue');
-  const canCopy = permissions.includes('supplier-quality:issues:copy');
   const canReadSuppliers = permissions.includes('supplier-quality:profiles:read');
   function revoke(cause?: unknown) {
     if (!alive.current) return;
     detailController.current?.abort(); listController.current?.abort();
     detailRequest.current += 1; setAccessLost(true); setResult(undefined); setSelected({}); setDetail(undefined); setLinked([]);
-    setDetailOpen(false); setIssueOpen(false); setFormalOpen(false); setCopyOpen(false); setEditor(undefined); setAction(undefined); setSuppliers([]);
+    setDetailOpen(false); setFormalOpen(false); setEditor(undefined); setAction(undefined); setSuppliers([]);
     setDeletionTargets(undefined); setDeletionOpen(false);
-    setIssueDirty(false); if (issueOpen || issueDirty) form.resetFields();
     if (cause instanceof ApiError && cause.status === 401) setUnauthorized(true);
   }
   useEffect(() => {
     if (unauthorized) completeSessionNavigation(() => { useWorkTabsStore.getState().reset(); navigate('/login', { replace: true }); });
   }, [unauthorized, completeSessionNavigation, navigate]);
   const batchWriter = useProcessWrite(revoke);
-  const legacyWriter = useProcessWrite(revoke);
   useNavigationBusy(batchWriter.busy);
   useUnsavedChanges(batchWriter.uncertain);
   const requestLeave = useNavigationGuard();
-  useUnsavedChanges(issueDirty || legacyWriter.uncertain);
-  useNavigationBusy(issuing);
-  function closeIssue() {
-    if (issuing) return;
-    requestLeave(() => { setIssueOpen(false); setIssueDirty(false); form.resetFields(); }, true);
-  }
 
   useEffect(() => {
     const controller = new AbortController();
@@ -133,6 +196,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   function scoped(path: string) {
     return organizationId ? `${path}${path.includes('?') ? '&' : '?'}organizationId=${encodeURIComponent(organizationId)}` : path;
   }
+  const serializedFilters = serializeFilters(appliedFilters);
   useEffect(() => {
     if (!canReadSuppliers || accessLost) { setSuppliers([]); return; }
     let active = true;
@@ -178,16 +242,15 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     setListError(undefined);
     const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
     if (search) query.set('search', search);
-    if (ledgerStatus) query.set('ledgerStatus', ledgerStatus);
-    if (pendingCompletion) query.set('pendingCompletion', 'true');
-    if (pendingConfiguration) query.set('pendingConfiguration', 'true');
+    if (appliedFilters.currentMonth) for (const [key, value] of Object.entries(monthBounds())) query.set(key, value);
+    if (serializedFilters) query.set('filters', serializedFilters);
     void apiRequest<DefectPage>(scoped(`/api/v1/process-quality/defects?${query}`), { signal: controller.signal }).then((value) => {
       if (!controller.signal.aborted) { setResult(value); const lastPage = Math.max(1, Math.ceil(value.total / pageSize)); if (page > lastPage) setPage(lastPage); }
     }).catch((cause) => {
       if (!controller.signal.aborted) { setResult(undefined); setListError(cause); if (denied(cause)) revoke(cause); }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [page, pageSize, search, revision, ledgerStatus, pendingCompletion, pendingConfiguration, accessLost, organizationId]);
+  }, [page, pageSize, search, revision, serializedFilters, appliedFilters.currentMonth, accessLost, organizationId]);
 
   async function openDetail(id: string) {
     detailController.current?.abort();
@@ -229,41 +292,14 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     });
   }
 
-  async function issue(values: IssueValues) {
-    if (issuing || !canWrite) return;
-    const sources = Object.values(selected).map((record) => ({ defectId: record.id, expectedVersion: record.version }));
-    if (!sources.length) return;
-    const body: IssueBody = {
-      sources, problemType: 'PROCESS_DEFECT', responseForm: 'BRIEF', responsibleScope: 'process-quality',
-      severity: values.severity, workflowBinding: {
-        workflowDefinitionId: values.workflowDefinitionId,
-        workflowVersionId: values.workflowVersionId,
-        instanceKey: values.instanceKey,
-      },
-    };
-    setIssuing(true);
-    setIssueError(undefined);
-    try {
-      const response = await legacyWriter.write<IssueResult>('/api/v1/process-quality/issues', body, 'POST');
-      if (!alive.current) return;
-      setIssued(response);
-      setIssueOpen(false);
-      setSelected({});
-      form.resetFields();
-      setIssueDirty(false);
-    } catch (cause) { if (alive.current) { setIssueError(cause); if (denied(cause)) revoke(cause); } }
-    finally { if (alive.current) setIssuing(false); }
-  }
-
   const selectedCount = Object.keys(selected).length;
   const staleSelected = (result?.items ?? []).filter(item => selected[item.id] && selected[item.id].version !== item.version);
-  const locked = issuing || legacyWriter.uncertain || batchWriter.busy || batchWriter.uncertain || formalOpen || deletionOpen;
+  const locked = batchWriter.busy || batchWriter.uncertain || formalOpen || deletionOpen;
   const selectablePage = (result?.items ?? []).filter(record => !record.archivedAt);
   const selectedOnPage = selectablePage.filter(record => selected[record.id]);
   function openDeletion(records: Defect[]) { requestLeave(() => { setDeletionTargets(records); setDeletionOpen(true); }); }
   function togglePage(checked: boolean) {
     requestLeave(() => {
-      if (issueDirty) { form.resetFields(); setIssueDirty(false); }
       setSelected(current => {
         const next = { ...current };
         for (const record of selectablePage) {
@@ -274,66 +310,116 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       });
     });
   }
+  const filterDirty = filterOpen && JSON.stringify(draftFilters) !== JSON.stringify(appliedFilters);
+  useUnsavedChanges(filterDirty);
+  useEffect(() => { if (filterOpen) filterControl.current?.focus(); }, [filterOpen, filterRow]);
+  function dismissFilters() { setFilterOpen(false); setDraftFilters(appliedFilters); filterAnchor.current?.focus(); }
+  function closeFilters() { if (filterDirty) requestLeave(dismissFilters, true); else dismissFilters(); }
+  function saveAppliedFilters(next: FilterState, nextSearch = search, reset = false) {
+    const nextFilters = serializeFilters(next);
+    if (locked || deletionTargets || filtersTooLong(nextFilters)) return;
+    const changed = nextSearch !== search || next.currentMonth !== appliedFilters.currentMonth || nextFilters !== serializedFilters;
+    if (changed) { setSelected({}); setPage(1); setResult(undefined); setLoading(true); setActionError(undefined); }
+    setSearchInput(nextSearch);
+    saveFilterPreference(reset ? undefined : { search: nextSearch, filters: next });
+    setFilterOpen(false);
+    setDraftFilters(next);
+    if (filterOpen) filterAnchor.current?.focus();
+  }
+  function openFilters(anchor: HTMLElement, field?: FilterField) {
+    filterAnchor.current = anchor;
+    const items = filterOpen ? draftFilters.items : appliedFilters.items;
+    const found = field ? items.findIndex(item => item.field === field) : -1;
+    const append = !!field && found < 0 && items.length < 10;
+    setFilterRow(found >= 0 ? found : append ? items.length : undefined);
+    setDraftFilters({ ...(filterOpen ? draftFilters : appliedFilters), items: append ? [...items, filterItem(field)] : items });
+    setFilterOpen(true);
+  }
+  function filterTitle(field: FilterField, label: string) {
+    return <span aria-label={label} className="process-quality-filter-title"><span>{label}</span><button type="button" aria-label={`按${label}筛选`} aria-pressed={appliedFilters.items.some(item => item.field === field) || field === 'occurredAt' && appliedFilters.currentMonth} disabled={locked || !!deletionTargets} onClick={event => { event.stopPropagation(); openFilters(event.currentTarget, field); }}><Filter size={13} aria-hidden="true" /></button></span>;
+  }
+  function updateFilterItem(index: number, next: FilterItem) {
+    setDraftFilters(current => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? next : item) }));
+  }
+  const draftTooLong = filtersTooLong(serializeFilters(draftFilters));
+  const filterPanel = <div role="dialog" className="process-quality-filter-panel" aria-label="筛选面板" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeFilters(); } }}>
+    <div className="process-quality-filter-heading"><strong>筛选条件</strong><Button type="text" aria-label="关闭筛选" icon={<X size={14} />} onClick={closeFilters} /></div>
+    <Checkbox checked={draftFilters.currentMonth} onChange={event => setDraftFilters(current => ({ ...current, currentMonth: event.target.checked }))}>仅当前自然月（北京时间）</Checkbox>
+    <label>满足条件
+      <select ref={filterRow === undefined ? filterControl : undefined} aria-label="筛选逻辑" value={draftFilters.logic} onChange={event => setDraftFilters(current => ({ ...current, logic: event.target.value as FilterLogic }))}><option value="ALL">全部条件</option><option value="ANY">任一条件</option></select>
+    </label>
+    <div className="process-quality-filter-rows">
+      {draftFilters.items.map((item, index) => <div className="process-quality-filter-row" key={index}>
+        <select ref={filterRow === index ? filterControl : undefined} aria-label={`筛选字段 ${index + 1}`} value={item.field} onChange={event => updateFilterItem(index, filterItem(event.target.value))}>{filterFields.map(([field, label]) => <option key={field} value={field}>{label}</option>)}</select>
+        <select aria-label={`筛选运算符 ${index + 1}`} value={item.operator} onChange={event => updateFilterItem(index, { ...item, operator: event.target.value })}>{operatorsFor(item.field).map(([operator, label]) => <option key={operator} value={operator}>{label}</option>)}</select>
+        {emptyOperator(item.operator) ? <span /> : filterChoices[item.field] ? <select aria-label={`筛选值 ${index + 1}`} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })}><option value="">请选择</option>{filterChoices[item.field]!.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : <input aria-label={`筛选值 ${index + 1}`} type={item.field === 'occurredAt' ? 'date' : item.field === 'defectQuantity' ? 'number' : 'text'} maxLength={200} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })} />}
+        <Button type="text" aria-label={`删除筛选条件 ${index + 1}`} icon={<X size={13} />} onClick={() => { setFilterRow(undefined); setDraftFilters(current => ({ ...current, items: current.items.filter((_, entryIndex) => entryIndex !== index) })); }} />
+      </div>)}
+    </div>
+    {draftTooLong ? <Alert type="warning" showIcon title="筛选内容过长，请缩短文字或减少条件。" /> : null}
+    <Space wrap>
+      <Button disabled={draftFilters.items.length >= 10} onClick={() => { setFilterRow(draftFilters.items.length); setDraftFilters(current => ({ ...current, items: [...current.items, filterItem('description')] })); }}>添加筛选条件</Button>
+      <Button onClick={() => saveAppliedFilters(defaultFilters, '', true)}>恢复系统默认筛选</Button>
+      <Button aria-label="清空" onClick={() => setDraftFilters({ currentMonth: false, logic: 'ALL', items: [] })}>清空</Button>
+      <Button type="primary" disabled={draftTooLong || draftFilters.items.some(item => !emptyOperator(item.operator) && filterValue(item) === undefined)} onClick={() => saveAppliedFilters(draftFilters)}>应用筛选</Button>
+    </Space>
+  </div>;
   if (accessLost) return <main className="process-quality-page"><Alert type="warning" showIcon title="暂无制程不良访问权限" description="当前会话或权限已变化，已清除来源、选择与草稿；请重新进入。" /></main>;
 
-  const columns: TableColumnsType<Defect> = [
-    { title: <span aria-label="选择"><Checkbox aria-label="选择当前页制程不良" checked={!!selectablePage.length && selectedOnPage.length === selectablePage.length} indeterminate={!!selectedOnPage.length && selectedOnPage.length < selectablePage.length} disabled={locked || loading || !selectablePage.length || !selectedOnPage.length && selectedCount >= 100} onChange={event => togglePage(selectedCount >= 100 && selectedOnPage.length > 0 ? false : event.target.checked)} /></span>, onHeaderCell: () => ({ 'aria-label': '选择' }), key: 'select', width: 40, align: 'center', render: (_, record) => <Checkbox aria-label={`选择制程不良 ${record.description}`} disabled={locked || (!selected[record.id] && selectedCount >= 100) || !!record.archivedAt} checked={Boolean(selected[record.id])} onChange={(event) => { const checked = event.target.checked; if (issueDirty) requestLeave(() => { form.resetFields(); setIssueDirty(false); toggle(record, checked); }); else toggle(record, checked); }} /> },
-    { title: '发生时间', key: 'occurredAt', dataIndex: 'occurredAt', width: 165, align: 'center', render: (value: string | null) => value ? new Date(value).toLocaleString('zh-CN') : '—' },
-    { title: '班次', key: 'shift', dataIndex: 'shift', width: 80, align: 'center', render: value => value === 'DAY' ? '白班' : value === 'NIGHT' ? '夜班' : '未知' },
-    { title: '项目号', key: 'project', width: 130, align: 'center', render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
-    { title: '细分类型', key: 'productSubcategory', dataIndex: 'productSubcategory', width: 120, align: 'center', render: value => value ?? '未确认' },
-    { title: '项目状态', key: 'projectStage', dataIndex: 'projectStage', width: 105, align: 'center', render: value => value === 'NEW_PRODUCT' ? '新品' : value === 'MASS_PRODUCTION' ? '量产' : '未确认' },
-    { title: '不良描述', key: 'description', dataIndex: 'description', width: 260, align: 'left', ellipsis: true, render: (value: string, record) => <div className="process-quality-description-cell"><div className="process-quality-description-heading"><Button type="link" title={value || '查看待完善记录'} className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value || '查看待完善记录'}</Button><MappingHint record={record} /></div></div> },
-    { title: '追溯码', key: 'traceCode', dataIndex: 'traceCode', width: 180, align: 'center', ellipsis: true },
-    { title: '生产线名称', key: 'lineName', dataIndex: 'lineName', width: 144, align: 'center', ellipsis: true },
-    { title: '工序名称', key: 'operationName', dataIndex: 'operationName', width: 144, align: 'center', ellipsis: true },
-    { title: '板块', key: 'operationSector', dataIndex: 'operationSector', width: 96, align: 'center', render: value => value ?? '未确认' },
+  const columns: TableColumnsType<Defect> = ([
+    { title: <span aria-label="选择"><Checkbox aria-label="选择当前页制程不良" checked={!!selectablePage.length && selectedOnPage.length === selectablePage.length} indeterminate={!!selectedOnPage.length && selectedOnPage.length < selectablePage.length} disabled={locked || loading || !selectablePage.length || !selectedOnPage.length && selectedCount >= 100} onChange={event => togglePage(selectedCount >= 100 && selectedOnPage.length > 0 ? false : event.target.checked)} /></span>, onHeaderCell: () => ({ 'aria-label': '选择' }), key: 'select', width: 40, align: 'center', render: (_, record) => <Checkbox aria-label={`选择制程不良 ${record.description}`} disabled={locked || loading || (!selected[record.id] && selectedCount >= 100) || !!record.archivedAt} checked={Boolean(selected[record.id])} onChange={event => toggle(record, event.target.checked)} /> },
+    { title: filterTitle('occurredAt', '发生时间'), key: 'occurredAt', dataIndex: 'occurredAt', width: 165, align: 'center', render: (value: string | null) => value ? new Date(value).toLocaleString('zh-CN') : '—' },
+    { title: filterTitle('shift', '班次'), key: 'shift', dataIndex: 'shift', width: 80, align: 'center', render: value => value === 'DAY' ? '白班' : value === 'NIGHT' ? '夜班' : '未知' },
+    { title: filterTitle('projectCode', '项目号'), key: 'project', width: 130, align: 'center', render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
+    { title: filterTitle('productSubcategory', '细分类型'), key: 'productSubcategory', dataIndex: 'productSubcategory', width: 120, align: 'center', render: value => value ?? '未确认' },
+    { title: filterTitle('projectStage', '项目状态'), key: 'projectStage', dataIndex: 'projectStage', width: 105, align: 'center', render: value => value === 'NEW_PRODUCT' ? '新品' : value === 'MASS_PRODUCTION' ? '量产' : '未确认' },
+    { title: filterTitle('description', '不良描述'), key: 'description', dataIndex: 'description', width: 260, align: 'left', ellipsis: true, render: (value: string, record) => <div className="process-quality-description-cell"><div className="process-quality-description-heading"><Button type="link" title={value || '查看待完善记录'} className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value || '查看待完善记录'}</Button><MappingHint record={record} /></div></div> },
+    { title: filterTitle('traceCode', '追溯码'), key: 'traceCode', dataIndex: 'traceCode', width: 180, align: 'center', ellipsis: true },
+    { title: filterTitle('lineName', '生产线名称'), key: 'lineName', dataIndex: 'lineName', width: 144, align: 'center', ellipsis: true },
+    { title: filterTitle('operationName', '工序名称'), key: 'operationName', dataIndex: 'operationName', width: 144, align: 'center', ellipsis: true },
+    { title: filterTitle('operationSector', '板块'), key: 'operationSector', dataIndex: 'operationSector', width: 96, align: 'center', render: value => value ?? '未确认' },
     { title: '类型', key: 'defectTypeCode', dataIndex: 'defectTypeCode', width: 115, align: 'center' },
-    { title: '不良数量', key: 'defectQuantity', dataIndex: 'defectQuantity', width: 100, align: 'center' },
+    { title: filterTitle('defectQuantity', '不良数量'), key: 'defectQuantity', dataIndex: 'defectQuantity', width: 100, align: 'center' },
     { title: '成品编码', key: 'productCode', dataIndex: 'productCode', width: 150 },
     { title: '工单号', key: 'workOrderCode', dataIndex: 'workOrderCode', width: 150 },
     { title: '生产线编码', key: 'lineCode', dataIndex: 'lineCode', width: 130 },
     { title: '工序编码', key: 'operationCode', dataIndex: 'operationCode', width: 130 },
     { title: '登记人', key: 'registeredByName', width: 120, render: (_, record) => record.sourceKind === 'IMS' ? '自动' : record.registeredByName ?? '—' },
     { title: '完善情况', key: 'completion', width: 170, render: (_, record) => <CompletionStatus record={record} /> },
-    { title: '责任类别', key: 'responsibilityCategory', dataIndex: 'responsibilityCategory', width: 105, render: responsibility },
-    { title: '状态', key: 'ledgerStatus', dataIndex: 'ledgerStatus', width: 100, render: value => <Tag>{value === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
+    { title: filterTitle('responsibilityCategory', '责任类别'), key: 'responsibilityCategory', dataIndex: 'responsibilityCategory', width: 105, render: responsibility },
+    { title: filterTitle('ledgerStatus', '状态'), key: 'ledgerStatus', dataIndex: 'ledgerStatus', width: 100, render: value => <Tag>{value === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
     { title: '首条物料 / 供应商', key: 'material', width: 190, render: (_, record) => record.materials?.length ? <span>{record.materials[0].materialCode ?? '—'} / {supplierName(record.materials[0])}{record.materials.length > 1 ? `（共${record.materials.length}项）` : ''}</span> : '—' },
     { title: '人工项目 / 映射', key: 'mapping', width: 150, render: (_, record) => <Space>{record.projectCode ?? '—'}<MappingHint record={record} /></Space> },
     { title: '批次 / 工单', key: 'source', width: 175, render: (_, record) => `${record.batchCode ?? '—'} / ${record.workOrderCode ?? '—'}` },
     { title: '操作', key: 'actions', width: canDelete ? 112 : 64, align: 'center', render: (_, record) => <div className="process-quality-row-actions"><Button type="text" aria-label="查看详情" title="查看详情" icon={<Eye size={16} aria-hidden="true" />} onClick={() => void openDetail(record.id)} />{canDelete && !record.archivedAt ? <Button type="text" danger aria-label="删除台账" title="删除台账" icon={<Trash2 size={16} aria-hidden="true" />} disabled={locked || !!deletionTargets} onClick={() => openDeletion([record])} /> : null}</div> },
-  ];
+  ] satisfies TableColumnsType<Defect>).map(column => 'onHeaderCell' in column ? column : { ...column, onHeaderCell: () => ({ 'aria-label': typeof column.title === 'string' ? column.title : column.title.props['aria-label'] }) });
+
+  const toolbar = <div className="process-quality-toolbar-main" role="group" aria-label="台账工具栏">
+    <Input.Search aria-label="搜索制程不良" placeholder="搜索追溯码、成品编码、工单、不良描述或批次" value={searchInput} allowClear maxLength={200} disabled={locked || !!deletionTargets} onChange={event => setSearchInput(event.target.value)} onSearch={value => requestLeave(() => saveAppliedFilters(appliedFilters, value.trim()))} />
+    {canWrite ? <Button type="primary" disabled={locked} onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
+    <Popover open={filterOpen} onOpenChange={open => { if (open && filterTrigger.current) openFilters(filterTrigger.current); else if (!open && filterOpen) closeFilters(); }} afterOpenChange={open => { if (open) filterControl.current?.focus(); }} content={filterPanel} trigger="click" placement="bottomLeft" align={{ overflow: { shiftX: true } }} destroyOnHidden><Button ref={filterTrigger} aria-label="筛选条件" aria-haspopup="dialog" aria-expanded={filterOpen} disabled={locked || !!deletionTargets} icon={<Filter size={14} />}>筛选条件{appliedFilters.items.length || appliedFilters.currentMonth ? ` ${appliedFilters.items.length + Number(appliedFilters.currentMonth)}` : ''}</Button></Popover>
+    {canIssue ? <Button aria-label="发起 8D" disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起 8D</Button> : null}
+    <Button aria-label="刷新" disabled={locked} onClick={() => requestLeave(() => { if (filterOpen) dismissFilters(); setRevision(value => value + 1); })} loading={loading}>刷新</Button>
+  </div>;
 
   return <main className="process-quality-page">
-    <header className="process-quality-heading">
-      <h1 className="sr-only">不良品台账</h1>
-      {canWrite ? <Button type="primary" onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
-      <Button disabled={locked} onClick={() => requestLeave(() => setRevision((value) => value + 1))} loading={loading}>刷新</Button>
-    </header>
+    <h1 className="sr-only">不良品台账</h1>
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${issued.problem.id}`}>查看问题</Link>} /> : null}
-    <section className="process-quality-card">
-      <div className="process-quality-toolbar process-quality-toolbar-main" aria-label="台账批量操作">
-        <Input.Search aria-label="搜索制程不良" placeholder="搜索追溯码、成品编码、工单、不良描述或批次" value={searchInput} allowClear onChange={(event) => setSearchInput(event.target.value)} onSearch={(value) => { setPage(1); setSearch(value.trim()); }} />
-        <Select aria-label="台账状态" placeholder="全部台账状态" allowClear value={ledgerStatus} options={[{ value: 'FOLLOWING', label: '跟进中' }, { value: 'CLOSED', label: '已关闭' }]} onChange={value => { setPage(1); setLedgerStatus(value); }} />
-        <Checkbox checked={pendingCompletion} onChange={event => { setPage(1); setPendingCompletion(event.target.checked); }}>仅待完善</Checkbox>
-        <Checkbox checked={pendingConfiguration} onChange={event => { setPage(1); setPendingConfiguration(event.target.checked); }}>仅待补配</Checkbox>
-        <span className="process-quality-toolbar-divider" aria-hidden="true" />
-        {canIssue ? <Button type="primary" disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起内部8D</Button> : null}
-        {canCopy ? <Button disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setCopyOpen(true))}>复制为供应商草稿</Button> : null}
-        {canWrite ? <Button type="primary" disabled={issuing || !Object.keys(selected).length || Boolean(listError)} onClick={() => { setIssueError(undefined); setIssueOpen(true); }}>发起问题</Button> : null}
+    <section className="process-quality-card process-quality-compact-ledger">
+      {selectedCount ? <div className="process-quality-batch-toolbar" role="group" aria-label="台账批量操作">
         <Typography.Text type="secondary">已选择 {Object.keys(selected).length} 条来源</Typography.Text>
         <Typography.Text type="secondary">跨页保留，最多100条</Typography.Text>
         {selectedCount ? <Button disabled={locked} onClick={() => requestLeave(() => setSelected({}))}>清空选择</Button> : null}
         {canWrite ? <><Select aria-label="批量责任分类" placeholder="批量分类" value={classification} options={categoryOptions} disabled={locked} onChange={setClassification} /><Button disabled={locked || !selectedCount || !classification || !!staleSelected.length} onClick={() => requestLeave(() => void classify())}>应用分类</Button></> : null}
         {canDelete ? <Button danger disabled={locked || !!deletionTargets || !selectedCount || loading || !!listError || !!staleSelected.length} onClick={() => openDeletion(Object.values(selected))}>删除所选</Button> : null}
-      </div>
+      </div> : <span className="sr-only" role="status">已选择 0 条来源</span>}
       {deletionTargets && !deletionOpen ? <Alert type="warning" title="删除结果尚待确认" action={<Button onClick={() => setDeletionOpen(true)}>恢复删除操作</Button>} /> : null}
       {staleSelected.length ? <Alert type="warning" title="所选来源版本已更新。" action={<Button disabled={locked} onClick={() => requestLeave(() => setSelected(current => ({ ...current, ...Object.fromEntries(staleSelected.map(item => [item.id, item])) })))}>更新所选版本</Button>} /> : null}
       <ProcessError cause={actionError} fallback="批量分类失败，保留选择，请重试。" />
       {batchWriter.uncertain ? <Alert type="warning" title="分类结果未知，选择已锁定；重试复用原请求。" action={<Button loading={batchWriter.busy} onClick={() => void classify()}>同请求重试分类</Button>} /> : null}
       <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
-      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={ledgerStatus ?? 'ALL'} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} /> : null}
+      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={viewId} toolbarContent={toolbar} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search || appliedFilters.currentMonth || appliedFilters.items.length ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { if (filterOpen) dismissFilters(); setPage(size === pageSize ? next : 1); setPageSize(size); }); }, placement: ['bottomStart'] }} /> : toolbar}
     </section>
     <Drawer title="来源详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>
@@ -371,7 +457,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
         <MaterialDetails record={detail} supplierName={supplierName} onReview={canReview && !detail.archivedAt ? materialId => setAction({ mode: 'verification', record: detail, materialId }) : undefined} />
         <Space wrap>{canWrite && !detail.archivedAt ? <Button onClick={() => requestLeave(() => setEditor(detail))}>维护台账</Button> : null}{canClose && !detail.archivedAt ? <Button onClick={() => setAction({ mode: detail.ledgerStatus === 'CLOSED' ? 'reopen' : 'close', record: detail })}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}{canDelete && !detail.archivedAt ? <Button danger disabled={locked || !!deletionTargets} onClick={() => openDeletion([detail])}>删除台账</Button> : null}</Space>
         {!selected[detail.id] && selectedCount >= 100 ? <Alert type="warning" showIcon title="已选满100条来源，请先取消一条已选来源，再选择此条。" /> : null}
-        {canWrite && !detail.archivedAt ? <Button type="primary" disabled={locked || (!selected[detail.id] && selectedCount >= 100)} onClick={() => requestLeave(() => { form.resetFields(); setIssueDirty(false); toggle(detail, true); setDetailOpen(false); setIssueError(undefined); setIssueOpen(true); })}>选择此条并发起问题</Button> : null}
+        {canIssue && !detail.archivedAt ? <Button disabled={locked || (!selected[detail.id] && selectedCount >= 100)} onClick={() => requestLeave(() => { toggle(detail, true); setDetailOpen(false); })}>选择此条并返回台账</Button> : null}
       </> : null}
     </Drawer>
     {deletionTargets ? <ProcessDefectDeletionDialog sources={deletionTargets} organizationId={organizationId} open={deletionOpen} onClose={uncertain => { setDeletionOpen(false); if (!uncertain) setDeletionTargets(undefined); }} onDenied={revoke} onDeleted={response => {
@@ -381,22 +467,8 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       setDeletionOpen(false); setDeletionTargets(undefined); setRevision(value => value + 1);
     }} /> : null}
     {formalOpen ? <ProcessEightDIssueDrawer sources={Object.values(selected)} onClose={() => setFormalOpen(false)} onDenied={revoke} onIssued={response => { setIssued(response); setFormalOpen(false); setSelected({}); setRevision(value => value + 1); }} /> : null}
-    {canCopy && copyOpen ? <SupplierSourceCopyDialog organizationId={Object.values(selected)[0]?.organizationId} sources={Object.values(selected).map(row => ({ kind: 'PROCESS_LEDGER', sourceId: row.id, sourceVersion: row.version }))} onClose={() => setCopyOpen(false)} onDenied={revoke} /> : null}
     {editor ? <ProcessDefectEditor key={editor === 'new' ? 'new' : editor.id} record={editor === 'new' ? undefined : editor} suppliers={suppliers} canReadSuppliers={canReadSuppliers} onClose={() => setEditor(undefined)} onSaved={saved} onDenied={revoke} /> : null}
     {action ? <ProcessLedgerAction {...action} onClose={() => setAction(undefined)} onSaved={record => { saved(record); setAction(undefined); }} onDenied={revoke} /> : null}
-    <Drawer title="发起制程问题" open={issueOpen} onClose={closeIssue} closable={!issuing} keyboard={!issuing} mask={{ closable: !issuing }} size="min(620px, 100vw)" destroyOnHidden={false}>
-      <Typography.Paragraph>已选择 {Object.keys(selected).length} 条来源。</Typography.Paragraph>
-      {issueError ? <Alert className="process-quality-issue-error" type={isDenied(issueError) ? 'warning' : 'error'} showIcon title={isDenied(issueError) ? '暂无发单权限' : errorText(issueError, '发单失败，请重试。')} /> : null}
-      {legacyWriter.uncertain ? <Alert type="warning" title="简报发单结果未知，重试仅复用原请求和同一幂等键。" /> : null}
-      <Form<IssueValues> form={form} layout="vertical" disabled={issuing || legacyWriter.uncertain} onValuesChange={() => setIssueDirty(true)} initialValues={{ severity: 'MEDIUM' }} onFinish={(values) => void issue(values)}>
-        <Form.Item name="severity" label="严重度" rules={[{ required: true, message: '请选择严重度' }, { pattern: /^(LOW|MEDIUM|HIGH|CRITICAL)$/, message: '使用 LOW、MEDIUM、HIGH 或 CRITICAL' }]}><Input list="process-severity-options" /></Form.Item>
-        <datalist id="process-severity-options"><option value="LOW" /><option value="MEDIUM" /><option value="HIGH" /><option value="CRITICAL" /></datalist>
-        <Form.Item name="workflowDefinitionId" label="流程定义 ID" rules={[{ required: true, message: '请输入流程定义 ID' }, { pattern: uuidPattern, message: '请输入有效的 UUID' }]}><Input /></Form.Item>
-        <Form.Item name="workflowVersionId" label="流程版本 ID" rules={[{ required: true, message: '请输入流程版本 ID' }, { pattern: uuidPattern, message: '请输入有效的 UUID' }]}><Input /></Form.Item>
-        <Form.Item name="instanceKey" label="实例标识" rules={[{ required: true, whitespace: true, message: '请输入实例标识' }, { max: 128, message: '最多 128 个字符' }]}><Input /></Form.Item>
-        <div className="qms-dialog-actions" role="group" aria-label="发起制程问题"><Button type="primary" htmlType="submit" loading={issuing} disabled={!Object.keys(selected).length}>确认发单</Button></div>
-      </Form>
-    </Drawer>
   </main>;
 }
 

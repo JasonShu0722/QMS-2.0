@@ -80,12 +80,15 @@ it('edits process source fields and ordered description composition without expo
   expect(dialog.queryByLabelText('编码来源字段')).not.toBeInTheDocument();
   expect(dialog.getByLabelText('描述来源字段1')).toHaveValue('fault');
   expect(dialog.getByLabelText('描述标签2')).toHaveValue('位置');
+  expect(dialog.getByRole('switch', { name: 'AI整理' })).not.toBeChecked();
+  fireEvent.change(dialog.getByLabelText('提示词变量2'), { target: { value: 'position' } });
   expect(dialog.queryByLabelText('班次')).not.toBeInTheDocument();
   fireEvent.click(dialog.getByRole('button', { name: '下移描述字段1' }));
   fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
   await waitFor(() => expect(mocks.mutate).toHaveBeenCalled());
-  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ target: 'PROCESS_DEFECT', mapping: { productCode: 'product', traceCode: 'barcode' }, descriptionComposition: { fields: [{ path: 'position', label: '位置' }, { path: 'fault', label: '现象' }], separator: '\n' }, sourceTimezone: 'Asia/Shanghai' });
+  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ target: 'PROCESS_DEFECT', mapping: { productCode: 'product', traceCode: 'barcode' }, descriptionComposition: { fields: [{ path: 'position', label: '位置', variable: 'position' }, { path: 'fault', label: '现象' }], separator: '\n' }, sourceTimezone: 'Asia/Shanghai' });
   expect(mocks.mutate.mock.calls[0][2].mapping).not.toHaveProperty('code');
+  expect(mocks.mutate.mock.calls[0][2]).not.toHaveProperty('aiApplication');
 });
 it('configures component names from the internal material master snapshot', async () => {
   mocks.mutate.mockResolvedValue({});

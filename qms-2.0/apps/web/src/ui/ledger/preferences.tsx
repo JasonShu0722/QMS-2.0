@@ -31,12 +31,12 @@ function readPreference(key?: string): unknown {
 function writePreference(key: string, value: unknown) {
   const serialized = JSON.stringify({ schema: 1, value });
   if (serialized.length > 64000) return;
-  try { localStorage.setItem(key, serialized); memory.delete(key); } catch {
+  try { if (value === undefined) localStorage.removeItem(key); else localStorage.setItem(key, serialized); memory.delete(key); } catch {
     memory.delete(key); memory.set(key, serialized);
     if (memory.size > 64) memory.delete(memory.keys().next().value!);
   }
 }
-export function usePreference<Value>(key: string | undefined, sessionScope: string | undefined, normalize: (input: unknown) => Value, stateKey = key): readonly [Value, (value: Value) => void] {
+export function usePreference<Value>(key: string | undefined, sessionScope: string | undefined, normalize: (input: unknown) => Value, stateKey = key): readonly [Value, (value: Value | undefined) => void] {
   const sessionEpoch = useLedgerSessionEpoch();
   const active = useRef({ stateKey, sessionScope, generation: 0 });
   if (active.current.stateKey !== stateKey || active.current.sessionScope !== sessionScope) active.current = { stateKey, sessionScope, generation: active.current.generation + 1 };
@@ -47,11 +47,11 @@ export function usePreference<Value>(key: string | undefined, sessionScope: stri
     current = { key: stateKey, value: normalize(readPreference(key)) };
     setStored(current);
   }
-  const setValue = (value: Value) => {
+  const setValue = (value: Value | undefined) => {
     if (sessionEpoch !== sessionGeneration || active.current.generation !== generation || useWorkTabsStore.getState().sessionScope !== sessionScope) return;
     const normalized = normalize(value);
     setStored({ key: stateKey, value: normalized });
-    if (key) writePreference(key, normalized);
+    if (key) writePreference(key, value === undefined ? undefined : normalized);
   };
   return [normalize(current.value), setValue];
 }

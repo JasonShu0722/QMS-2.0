@@ -140,6 +140,7 @@ it('keeps current-page selection separate from preserved pages and previews the 
 it.each(['delete', 'read'])('requires %s permission without granting deletion through ordinary write', async missing => {
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/my-permissions') ? { permissions: permissions.filter(permission => !permission.endsWith(`:${missing}`)) } : response(path));
   mount(); const selection = await screen.findByLabelText(`选择制程不良 ${record.description}`);
+  fireEvent.click(selection);
   expect(within(screen.getByLabelText('台账批量操作')).queryByRole('button', { name: '删除所选' })).not.toBeInTheDocument();
   expect(within(selection.closest('tr')!).queryByRole('button', { name: '删除台账' })).not.toBeInTheDocument();
 });
@@ -192,9 +193,9 @@ it('submits a trimmed reason with CAS versions then clears deleted selection and
   const dialog = await deletionDialog();
   fireEvent.change(within(dialog).getByLabelText('删除原因'), { target: { value: '  重复录入  ' } });
   fireEvent.click(within(dialog).getByRole('button', { name: '确认删除' }));
-  await screen.findByText('暂无不良记录');
+  await screen.findByText('没有匹配的不良记录');
   expect(screen.queryByRole('dialog', { name: '来源详情' })).not.toBeInTheDocument();
-  expect(screen.getByText('已选择 0 条来源')).toBeVisible();
+  expect(screen.queryByLabelText('台账批量操作')).not.toBeInTheDocument();
   const call = vi.mocked(apiRequest).mock.calls.find(([path]) => path.endsWith('/deletion'));
   expect(JSON.parse(String(call?.[1]?.body))).toEqual({ sources: [{ defectId: record.id, expectedVersion: 2 }], reason: '重复录入' });
 });

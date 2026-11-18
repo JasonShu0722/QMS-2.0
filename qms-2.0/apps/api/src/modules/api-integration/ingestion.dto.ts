@@ -12,12 +12,15 @@ export class IngestionConditionDto {
 export class IngestionDescriptionFieldDto {
   @ApiProperty({ maxLength: 200 }) @IsString() @MaxLength(200) path!: string;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) label?: string;
+  @ApiPropertyOptional({ maxLength: 64 }) @IsOptional() @IsString() @MaxLength(64) variable?: string;
 }
 export class IngestionDescriptionCompositionDto {
   @ApiProperty({ type: [IngestionDescriptionFieldDto], minItems: 1, maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionDescriptionFieldDto) fields!: IngestionDescriptionFieldDto[];
   @ApiProperty({ maxLength: 10 }) @IsString() @MaxLength(10) separator!: string;
 }
-export class IngestionAiInputFieldDto extends IngestionDescriptionFieldDto {
+export class IngestionAiInputFieldDto {
+  @ApiProperty({ maxLength: 200 }) @IsString() @MaxLength(200) path!: string;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) label?: string;
   @ApiProperty({ maxLength: 64 }) @IsString() @MaxLength(64) variable!: string;
 }
 export class IngestionAiOutputDto {

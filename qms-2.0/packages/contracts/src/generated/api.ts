@@ -11252,6 +11252,7 @@ export interface components {
         IngestionDescriptionFieldDto: {
             path: string;
             label?: string;
+            variable?: string;
         };
         IngestionDescriptionCompositionDto: {
             fields: components["schemas"]["IngestionDescriptionFieldDto"][];
@@ -14347,6 +14348,18 @@ export interface components {
             analysisDueAt?: string;
             /** Format: date-time */
             closureDueAt?: string;
+        };
+        ProcessDefectFilterDto: {
+            /** @enum {string} */
+            field: "description" | "defectTypeCode" | "batchCode" | "workOrderCode" | "operationCode" | "lineCode" | "projectCode" | "productCode" | "materialCode" | "traceCode" | "lineName" | "operationName" | "operationSector" | "productSubcategory" | "occurredAt" | "defectQuantity" | "shift" | "projectStage" | "ledgerStatus" | "responsibilityCategory" | "pendingCompletion" | "pendingConfiguration";
+            /** @enum {string} */
+            operator: "CONTAINS" | "NOT_CONTAINS" | "EQ" | "NE" | "EMPTY" | "NOT_EMPTY" | "BEFORE" | "AFTER" | "GT" | "GTE" | "LT" | "LTE";
+            value?: string | number | boolean;
+        };
+        ProcessDefectFiltersDto: {
+            /** @enum {string} */
+            logic: "ALL" | "ANY";
+            items: components["schemas"]["ProcessDefectFilterDto"][];
         };
         CreateProcessProductionDto: {
             /** Format: uuid */
@@ -30938,6 +30951,12 @@ export interface operations {
                 includeArchived?: boolean;
                 pendingCompletion?: boolean;
                 pendingConfiguration?: boolean;
+                /** @description ProcessDefectFiltersDto 的 JSON 字符串；EMPTY、NOT_EMPTY 省略 value。 */
+                filters?: string;
+                /** @description 带明确时区的发生时间起点（含），独立于条件组。 */
+                occurredFrom?: string;
+                /** @description 带明确时区的发生时间终点（不含），独立于条件组。 */
+                occurredTo?: string;
             };
             header?: never;
             path?: never;

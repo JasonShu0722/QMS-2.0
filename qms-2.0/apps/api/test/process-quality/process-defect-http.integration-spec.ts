@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
@@ -42,6 +43,110 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
   function send(method: 'post' | 'put', path: string, body: object) {
     return request(app.getHttpServer())[method](`/api/v1/process-quality/${path}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send(body);
   }
+
+  function list(query: Record<string, string | number>) {
+    return request(app.getHttpServer()).get('/api/v1/process-quality/defects').set('Cookie', cookie).query(query);
+  }
+
+  it('documents the encoded filter and the typed model without changing the list route', () => {
+    const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+    const parameters = document.paths['/api/v1/process-quality/defects']!.get!.parameters;
+    expect(parameters).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: 'filters', in: 'query', required: false, schema: expect.objectContaining({ type: 'string' }) }),
+      expect.objectContaining({ name: 'occurredFrom', schema: { type: 'string', format: 'date-time' } }),
+      expect.objectContaining({ name: 'occurredTo', schema: { type: 'string', format: 'date-time' } }),
+    ]));
+    expect(document.components!.schemas!.ProcessDefectFiltersDto).toMatchObject({ properties: { logic: { enum: ['ALL', 'ANY'] }, items: { minItems: 1, maxItems: 10 } } });
+    expect(document.components!.schemas!.ProcessDefectFilterDto).toMatchObject({ properties: {
+      field: { enum: expect.arrayContaining(['projectCode', 'projectStage', 'defectQuantity', 'pendingCompletion']) },
+      operator: { enum: expect.arrayContaining(['NE', 'NOT_CONTAINS', 'BEFORE', 'LTE', 'EMPTY']) },
+      value: { oneOf: [{ type: 'string' }, { type: 'integer' }, { type: 'boolean' }] },
+    } });
+  });
+
+  it('uses one scoped predicate for the persisted project stage, combined conditions, rows and total', async () => {
+    const project = { id: randomUUID(), version: 1, code: 'FILTER-PROJECT', name: '历史项目', status: 'ACTIVE' };
+    const snapshot = (stage: string) => ({ componentCode: 'COMP', associatedAt: '2026-11-01T00:00:00Z', mapping: { id: randomUUID(), version: 1 }, project: { ...project, stage } });
+    const other = await prisma.organization.create({ data: { code: `OTHER-${randomUUID()}`, name: 'Other', type: 'INTERNAL' } });
+    const [recent, boundary, older, mass, blank] = Array.from({ length: 5 }, () => randomUUID());
+    const base = { organizationId, createdById: userId, updatedById: userId, ledgerStatus: 'FOLLOWING', productCode: 'COMP', description: 'FilterScope 100%_A' };
+    const at = (value: string) => new Date(value);
+    await prisma.processDefect.createMany({ data: [
+      { ...base, id: recent, projectCode: 'MANUAL-PROJECT', projectSnapshot: snapshot('NEW_PRODUCT'), occurredAt: at('2026-11-01T00:00:00.001+08:00'), defectQuantity: 7, lineName: '' },
+      { ...base, id: boundary, projectSnapshot: snapshot('NEW_PRODUCT'), occurredAt: at('2026-11-01T00:00:00+08:00'), defectQuantity: 2, lineName: 'Line A' },
+      { ...base, id: older, projectSnapshot: snapshot('NEW_PRODUCT'), occurredAt: at('2026-10-31T23:59:59.999+08:00'), defectQuantity: 1, description: 'OtherScope 100xxA' },
+      { ...base, id: mass, projectSnapshot: snapshot('MASS_PRODUCTION'), occurredAt: at('2026-11-05T00:00:00+08:00'), defectQuantity: 8, description: 'FilterScope 100XYA', responsibilityCategory: 'MATERIAL' },
+      { ...base, id: blank, description: 'FilterScope', pendingCompletion: true },
+      { ...base, organizationId: other.id, projectSnapshot: snapshot('NEW_PRODUCT'), occurredAt: at('2026-11-01T00:00:00Z'), defectQuantity: 7 },
+      { ...base, archivedAt: new Date(), projectSnapshot: snapshot('NEW_PRODUCT'), occurredAt: at('2026-11-01T00:00:00Z'), defectQuantity: 7 },
+      { ...base, occurredAt: at('2026-12-01T00:00:00+08:00'), description: 'MonthScope', pendingCompletion: true },
+    ] });
+    await prisma.$executeRaw`INSERT INTO process_defect_material_items (id, organization_id, defect_id, position, material_code, created_by_id, updated_by_id)
+      VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${boundary}::uuid, 0, 'MAT-A', ${userId}::uuid, ${userId}::uuid),
+             (${randomUUID()}::uuid, ${organizationId}::uuid, ${boundary}::uuid, 1, 'MAT-B', ${userId}::uuid, ${userId}::uuid),
+             (${randomUUID()}::uuid, ${organizationId}::uuid, ${mass}::uuid, 0, 'MAT-B', ${userId}::uuid, ${userId}::uuid)`;
+    const condition = (field: string, operator: string, value?: string | number | boolean) => ({ field, operator, value });
+    const filters = (logic: string, ...items: ReturnType<typeof condition>[]) => JSON.stringify({ logic, items });
+    const results = async (logic: string, ...items: ReturnType<typeof condition>[]) => {
+      const result = await list({ search: 'FilterScope', filters: filters(logic, ...items) }).expect(200);
+      expect(result.body.total).toBe(result.body.items.length);
+      return result.body.items.map((row: { id: string }) => row.id);
+    };
+    const after = '2026-11-01T00:00:00+08:00';
+    const stage = condition('projectStage', 'EQ', 'NEW_PRODUCT');
+    for (const [page, ids] of [[1, [recent]], [2, [boundary]], [3, []]] as const) {
+      const response = await list({ page, pageSize: 1, search: 'FilterScope', filters: filters('ALL', stage, condition('defectQuantity', 'GTE', 2)) }).expect(200);
+      expect(response.body).toMatchObject({ page, pageSize: 1, total: 2, items: ids.map(id => ({ id, projectStage: 'NEW_PRODUCT' })) });
+      expect(response.body.items).toHaveLength(ids.length);
+    }
+    expect(await results('ANY', stage, condition('pendingCompletion', 'EQ', true))).toEqual([recent, boundary, blank]);
+    expect(await results('ALL', stage, condition('projectCode', 'EQ', 'FILTER-PROJECT'))).toEqual([recent, boundary]);
+    const manualProject = await list({ projectCode: 'MANUAL-PROJECT', search: 'FilterScope' }).expect(200);
+    expect(manualProject.body).toMatchObject({ total: 1, items: [{ id: recent }] });
+    expect(await results('ALL', condition('description', 'CONTAINS', '100%_a'), condition('occurredAt', 'AFTER', after))).toEqual([recent]);
+    expect(await results('ALL', condition('description', 'NOT_CONTAINS', '%_'), condition('projectStage', 'NE', 'NEW_PRODUCT'))).toEqual([mass]);
+    expect(await results('ALL', condition('description', 'EQ', 'filterscope 100%_a'), condition('occurredAt', 'EQ', after))).toEqual([boundary]);
+    expect(await results('ALL', condition('description', 'NE', 'FilterScope'), condition('occurredAt', 'NE', after))).toEqual([mass, recent]);
+    expect(await results('ALL', condition('occurredAt', 'BEFORE', '2026-10-31T16:00:00.001Z'))).toEqual([boundary]);
+    expect(await results('ALL', condition('occurredAt', 'EQ', '2026-11-01'))).toEqual([recent, boundary]);
+    expect(await results('ALL', condition('occurredAt', 'NE', '2026-11-01'))).toEqual([mass]);
+    expect(await results('ALL', condition('occurredAt', 'AFTER', '2026-11-01'))).toEqual([mass]);
+    expect(await results('ALL', condition('occurredAt', 'BEFORE', '2026-11-01'))).toEqual([]);
+    expect(await results('ALL', condition('occurredAt', 'EMPTY'), condition('defectQuantity', 'EMPTY'), condition('projectStage', 'EMPTY'))).toEqual([blank]);
+    expect(await results('ALL', condition('occurredAt', 'NOT_EMPTY'), condition('lineName', 'NOT_EMPTY'), condition('projectStage', 'NOT_EMPTY'))).toEqual([boundary]);
+    expect(await results('ALL', condition('lineName', 'EMPTY'), condition('defectQuantity', 'GT', 0), condition('defectQuantity', 'LT', 8))).toEqual([recent]);
+    expect(await results('ALL', condition('responsibilityCategory', 'NOT_EMPTY'), condition('defectQuantity', 'NE', 0), condition('defectQuantity', 'LTE', 8))).toEqual([mass]);
+    expect(await results('ALL', condition('responsibilityCategory', 'EMPTY'), condition('defectQuantity', 'NOT_EMPTY'), condition('defectQuantity', 'EQ', 2))).toEqual([boundary]);
+    expect(await results('ALL', condition('materialCode', 'EQ', 'mat-b'))).toEqual([mass, boundary]);
+    expect(await results('ALL', condition('materialCode', 'NE', 'mat-b'))).toEqual([]);
+    expect(await results('ALL', condition('materialCode', 'EMPTY'))).toEqual([recent, blank]);
+    const withLegacyMaterial = await list({ materialCode: 'MAT-B', search: 'FilterScope', filters: filters('ALL', stage) }).expect(200);
+    expect(withLegacyMaterial.body).toMatchObject({ total: 1, items: [{ id: boundary }] });
+    const month = await list({ occurredFrom: after, occurredTo: '2026-12-01T00:00:00+08:00', filters: filters('ANY', stage, condition('pendingCompletion', 'EQ', true)) }).expect(200);
+    expect(month.body).toMatchObject({ total: 2, items: [{ id: recent }, { id: boundary }] });
+    const legacy = await list({ page: 2, pageSize: 2, search: 'FilterScope', ledgerStatus: 'FOLLOWING' }).expect(200);
+    expect(legacy.body).toMatchObject({ page: 2, pageSize: 2, total: 4, items: [{ id: boundary }, { id: blank }] });
+  });
+
+  it('rejects malformed filters, unknown properties and invalid field/operator/value combinations', async () => {
+    const valid = { field: 'projectStage', operator: 'EQ', value: 'NEW_PRODUCT' };
+    for (const filters of [
+      '{', JSON.stringify({ logic: 'ALL', items: [valid] }).repeat(100),
+      ...[null, [], { logic: 'SOME', items: [valid] }, { logic: ['ALL'], items: [valid] }, { logic: 'ALL', items: [valid], extra: true }, { logic: 'ALL', items: [] }, { logic: 'ALL', items: Array(11).fill(valid) },
+        ...[
+          null, { ...valid, field: 'projectSnapshot.project.stage' }, { ...valid, field: '__proto__' }, { ...valid, field: 'constructor' }, { ...valid, operator: 'CONTAINS' }, { ...valid, value: 'ACTIVE' },
+          { ...valid, operator: 'EMPTY' }, { ...valid, extra: true }, { field: 'occurredAt', operator: 'EQ', value: '2026-11-01T00:00:00' },
+          { field: 'occurredAt', operator: 'EQ', value: '2026-02-30T00:00:00Z' }, { field: 'defectQuantity', operator: 'EQ', value: '0' },
+          { field: 'defectQuantity', operator: 'GT', value: 2_147_483_648 }, { field: 'description', operator: 'CONTAINS', value: ' ' },
+          { field: 'description', operator: 'CONTAINS', value: 'x\u0000y' },
+        ].map(item => ({ logic: 'ALL', items: [item] })),
+      ].map(item => JSON.stringify(item)),
+    ]) await list({ filters }).expect(400);
+    await request(app.getHttpServer()).get('/api/v1/process-quality/defects').set('Cookie', cookie)
+      .query({ filters: [JSON.stringify({ logic: 'ALL', items: [valid] }), JSON.stringify({ logic: 'ANY', items: [valid] })] }).expect(400);
+    await list({ occurredFrom: '2026-11-01T00:00:00' }).expect(400);
+    await list({ occurredFrom: '2026-12-01T00:00:00Z', occurredTo: '2026-11-01T00:00:00Z' }).expect(400);
+  });
 
   it('creates, queries, updates and archives a manual defect through protected routes', async () => {
     await send('post', 'defect-types', { code: 'BURR', name: '毛刺' }).expect(201);

@@ -702,11 +702,11 @@
           },
           {
             "path": "apps/web/src/ui/ledger/model.ts",
-            "sha256": "461fac7c6299412a48b173ca6abb71700e18d23064558b748eb03fe4ed85b6a6"
+            "sha256": "ba6283200c85f4251324f3a61dbd3a34342b2c36e75048c4e31642e0f5e53b3c"
           },
           {
             "path": "apps/web/src/ui/ledger/preferences.tsx",
-            "sha256": "9bc2a6c1bcc30687a03c24408d4562424d88de420c20f362ca3b3e3b92e765b8"
+            "sha256": "44b59f88e3a561f17132592b119039f5eb67a2d85accd5e03440f82e5f36e7a1"
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.css",

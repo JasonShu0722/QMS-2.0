@@ -128,7 +128,7 @@ curl --request POST "https://<qms-host>/api/v1/integrations/inbound/test/message
 
 REQ-0038 / V0.0.55沿用本页接收与有序入库，新增目标`PROCESS_DEFECT`。字段、手工必填、数量1、缺项入账、关联快照及自动只补待补项遵循[第二阶段需求](../../docs/superpowers/specs/2026-11-16-qms-api-ingestion-phase-2-stage-2-requirements.md)。收件200/true只表示原始保存与入队，不表示制程或AI已经处理完成。
 
-AI为规则可选项，在独立“AI管理”的“模型渠道”维护具名渠道、允许模型列表及默认模型；支持OpenAI Chat Completions、OpenAI Responses、Anthropic Messages和Gemini GenerateContent四种协议，旧渠道默认Chat Completions。“提示词应用”按业务板块和场景维护变量、渠道/模型、提示词及文本或JSON字段输出，本批实际接入制程质量的不良描述整理。应用先保存草稿、再发布不可变版本，入库规则显式选择应用版本并映射IMS来源路径；发布新版本不自动切换既有绑定。旧内嵌配置归入同组织中心，原配置快照及历史任务保持，后续业务继续受中心停用控制。只向模型发送选定字段；本阶段输出目标为现有“不良描述”，编码、数量、项目及人员继续由原领域规则管理。详细边界见[AI配置中心专项设计](../../docs/superpowers/specs/2026-11-17-qms-configuration-groups-design.md)和[AI补充方案](../../docs/superpowers/specs/2026-11-16-qms-process-defect-ai-description-supplement.md)。
+AI为规则可选项，在独立“AI管理”的“模型渠道”维护具名渠道、允许模型列表及默认模型；支持OpenAI Chat Completions、OpenAI Responses、Anthropic Messages和Gemini GenerateContent四种协议，旧渠道默认Chat Completions。“提示词应用”按业务板块和场景维护变量、渠道/模型、提示词及文本或JSON字段输出，本批实际接入制程质量的不良描述整理。应用先保存草稿、再发布不可变版本；制程 API 入库规则选择应用版本，并在“不良描述来源=多字段组合”的行中把 API 来源字段绑定到应用变量，提示词只消费这些变量，不重复配置 IMS 来源路径。发布新版本不自动切换既有绑定。旧内嵌配置归入同组织中心，原配置快照及历史任务保持，后续业务继续受中心停用控制。只向模型发送选定字段；本阶段输出目标为现有“不良描述”，编码、数量、项目及人员继续由原领域规则管理。详细边界见[AI配置中心专项设计](../../docs/superpowers/specs/2026-11-17-qms-configuration-groups-design.md)和[AI补充方案](../../docs/superpowers/specs/2026-11-16-qms-process-defect-ai-description-supplement.md)。
 
 先保存直接组合描述，再异步整理；AI成功采用生成文本，失败、超时或无效输出继续保底。人工修订优先，迟到结果只作建议，由用户明确采用。规则和输入版本隔离旧结果，项目/板块补配不应造成重复生成。预览试运行仅在明确点击时调用，不自动外发每次预览。
 
@@ -137,3 +137,13 @@ AI为规则可选项，在独立“AI管理”的“模型渠道”维护具名�
 REQ-0039拆分配置职责：渠道查看、维护、测试及凭据管理使用`ai:connections:read/manage/test`和`ai:credentials:manage`；应用查看、维护、发布和测试使用`ai:applications:read/manage/publish/test`；工序板块映射使用`process-quality:configuration:read/manage`，保留原平台配置入口。165迁移只把旧配置权限对应的既有能力等价迁入普通岗位；管理员沿动态投影默认可用。业务执行仍检查入库执行及目标写权限，规则绑定另需应用查看权。
 
 制程不良台账支持单条及沿现有跨页选择的批量软删除，独立`process-quality:defects:delete`不从普通写权限自动授予。正式引用阻断整批删除，预览后提交重验版本和引用；已删除来源身份及历史保留，原接收行或来源编号重投跳过，不复活或新建替身，AI和自动补配不再更新。详见[本轮删除及权限规格](../../docs/superpowers/specs/2026-11-17-qms-ledger-permissions-user-management.md)。
+
+### 台账查询标准（2026-11-18，制程不良本地化方案）
+
+多维表格参考项目只提供交互启发，不改变 API 入库的事实边界。制程不良台账的搜索、状态/分类/待办筛选、表头快捷筛选和分页必须使用同一服务端查询口径；`items`、`total`、页码和空态不能由前端当前页数组推导。顶部筛选按钮与表头筛选入口共享一套受限筛选模型，字段和运算符由领域白名单验证，服务端不能接受任意数据库字段、SQL、JSON 路径或脚本。
+
+首版筛选模型只支持有限条件组：文本、日期时间、枚举和数值各自使用匹配的运算符，逻辑为“全部条件/任一条件”，条件数量有界。项目状态必须从已保存项目快照查询，不能在 `view()` 后按当前页派生值过滤；日期按明确来源时区转换后比较，空值、零值和“未确认”保持不同含义。未传筛选参数时继续兼容现有 `page/pageSize/search` 和既有状态参数。
+
+筛选或分页变化时，前端清理不再适用的当前页选择；跨页选择上限、删除预览/引用阻断、版本校验、未知结果重试、AI/补配排除和归档排除继续由原 API/领域服务负责。该标准不新增台账表、视图引擎或全文检索依赖；只有真实查询计划证明需要时才增加索引或高性能表格依赖。具体制程不良台账改造见[筛选聚合设计](../../docs/superpowers/specs/2026-11-18-qms-process-defect-ledger-filter-compact-design.md)和[实施计划](../../docs/superpowers/plans/2026-11-18-qms-process-defect-ledger-filter-compact.md)。
+
+多维表格参考仓库长期索引统一维护在[前端设计参考仓库索引](FRONTEND-DESIGN.md#参考仓库索引)，API 入库相关页面只复用其中的筛选交互原则，不复制外部项目实现。
