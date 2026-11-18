@@ -307,12 +307,12 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   return <main className="process-quality-page">
     <header className="process-quality-heading">
       <h1 className="sr-only">不良品台账</h1>
+      {canWrite ? <Button type="primary" onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
       <Button disabled={locked} onClick={() => requestLeave(() => setRevision((value) => value + 1))} loading={loading}>刷新</Button>
     </header>
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${issued.problem.id}`}>查看问题</Link>} /> : null}
     <section className="process-quality-card">
       <div className="process-quality-toolbar process-quality-toolbar-main" aria-label="台账批量操作">
-        {canWrite ? <Button type="primary" onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
         <Input.Search aria-label="搜索制程不良" placeholder="搜索追溯码、成品编码、工单、不良描述或批次" value={searchInput} allowClear onChange={(event) => setSearchInput(event.target.value)} onSearch={(value) => { setPage(1); setSearch(value.trim()); }} />
         <Select aria-label="台账状态" placeholder="全部台账状态" allowClear value={ledgerStatus} options={[{ value: 'FOLLOWING', label: '跟进中' }, { value: 'CLOSED', label: '已关闭' }]} onChange={value => { setPage(1); setLedgerStatus(value); }} />
         <Checkbox checked={pendingCompletion} onChange={event => { setPage(1); setPendingCompletion(event.target.checked); }}>仅待完善</Checkbox>
