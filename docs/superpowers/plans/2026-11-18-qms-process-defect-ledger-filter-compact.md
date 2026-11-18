@@ -4,7 +4,9 @@
 
 2026-11-19：负责人已确认本计划全部业务口径并授权持续至整体实现、PR 检查验收、合并部署。目标分支 `codex/process-defect-ledger-ai-filter`，基于已发布主干 `7bb6860`；本轮同时接续 API 多字段变量绑定和台账服务端筛选/个人记忆。
 
-飞书需求清单已提交并回读：[REQ-0041 制程不良台账筛选聚合与 AI 变量绑定](https://larkcommunity.feishu.cn/base/B12bbPj4Ta9Usos1Y4xcbTiFnue?table=tbl4mISZxWdE2bG7&record=reczz28bDAnPi2sM)，回读版本 383。进度状态为系统初始的“待评估”；负责人留待自行更新，本次未写入进度、紧急程度或完成时间。当前开发依据本会话直接授权接续，不等待状态变更。
+飞书需求清单已提交并回读：[REQ-0041 制程不良台账筛选聚合与 AI 变量绑定](https://larkcommunity.feishu.cn/base/B12bbPj4Ta9Usos1Y4xcbTiFnue?table=tbl4mISZxWdE2bG7&record=reczz28bDAnPi2sM)。创建后版本 383 回读为“待评估”；关联 [Issue #140](https://github.com/JasonShu0722/QMS-2.0/issues/140) 后版本 387 回读为“开发中”。本轮仅创建需求并补 Issue 链接，未写入进度、紧急程度或完成时间。以记录 ID 区分历史 PR 对相同需求编号的引用；本轮预留 V0.0.59。
+
+本地整合中：服务端筛选的 4 份 HTTP/PG 集成测试共 37 项通过，最终 HTTP 文件 7 项通过；入库策略、提示词应用及 AI 描述队列 3 份文件共 66 项通过（新增全链路变量用例另验）。API/Web 类型与生成契约检查通过。原错误测试库启动失败及 DTO 继承编译失败保留，分别改用已核验的 165 迁移一次性库及独立 DTO 后消除。Web 相邻集合尚在验证，未创建 PR 或发布。
 
 ## 已核对的现状
 

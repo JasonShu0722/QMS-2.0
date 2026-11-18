@@ -49,18 +49,19 @@ it('retains a new shipment report when closing is declined', async () => {
   expect(screen.getByLabelText('报告编号', { selector: 'input' })).toHaveValue('SHIP-DRAFT');
 });
 
-it('retains a process issue form when closing is declined', async () => {
+it('retains the selected process source and formal 8D draft when closing is declined', async () => {
   const defect = { id: 'defect-1', description: '表面划伤', defectTypeCode: 'SCRATCH', defectQuantity: 1, responsibilityCategory: 'PROCESS', occurredAt: '2026-10-01', version: 1 };
-  vi.mocked(apiRequest).mockImplementation(async (url) => url.includes('/defects?') ? { items: [defect], total: 1 } : url.includes('/my-permissions') ? { permissions: ['process-quality:defects:read', 'process-quality:defects:write'] } : { items: [], total: 0 });
+  vi.mocked(apiRequest).mockImplementation(async (url) => url.includes('/defects?') ? { items: [defect], total: 1 } : url.includes('/my-permissions') ? { permissions: ['process-quality:defects:read', 'process-quality:issues:issue'] } : url.endsWith('/sources/preview') ? [{ defectId: defect.id, relatedProblems: [], hasHiddenRelations: false, relatedSetToken: 'token' }] : { departments: [], users: [], departmentTotal: 0, userTotal: 0 });
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectLedgerPage /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
-  fireEvent.click(screen.getByText('发起问题'));
-  fireEvent.change(screen.getByLabelText('实例标识'), { target: { value: 'issue-draft' } });
-  fireEvent.click(within(screen.getByLabelText('实例标识').closest('[role="dialog"]') as HTMLElement).getByLabelText('关闭'));
+  fireEvent.click(screen.getByRole('button', { name: '发起 8D' }));
+  fireEvent.change(await screen.findByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
+  fireEvent.click(within(screen.getByRole('dialog', { name: '发起正式内部8D' })).getByLabelText('关闭'));
   const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });
   await waitFor(() => expect(title).toBeVisible());
   fireEvent.click(within(title.closest('[role="dialog"]') as HTMLElement).getByText('继续编辑'));
-  expect(screen.getByLabelText('实例标识')).toHaveValue('issue-draft');
+  expect(screen.getByLabelText('分析/对策期限')).toHaveValue('2026-11-10');
+  expect(screen.getByLabelText('选择制程不良 表面划伤')).toBeChecked();
 });
 
 beforeEach(() => { localStorage.clear(); vi.stubEnv('NODE_ENV', 'development'); });

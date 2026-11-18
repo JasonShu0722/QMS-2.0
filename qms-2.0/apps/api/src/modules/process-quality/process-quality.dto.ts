@@ -1,8 +1,8 @@
 import { ApiProperty, ApiPropertyOptional, PickType } from '@nestjs/swagger';
 import { AiDescriptionInputSnapshotDto } from '../../common/contracts/ai-description.dto.js';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
-import { PROCESS_MATERIAL_VERIFICATIONS, PROCESS_RESPONSIBILITY_CATEGORIES, type ProcessMaterialVerification, type ProcessResponsibilityCategory } from './process-defect-ledger.service.js';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { PROCESS_FILTER_FIELDS, PROCESS_FILTER_MAX_ITEMS, PROCESS_FILTER_MAX_LENGTH, PROCESS_FILTER_OPERATORS, PROCESS_MATERIAL_VERIFICATIONS, PROCESS_RESPONSIBILITY_CATEGORIES, type ProcessMaterialVerification, type ProcessResponsibilityCategory } from './process-defect-ledger.service.js';
 
 import { ComponentProjectMappingDto, ComponentProjectRecordDto } from '../platform-configuration/component-project.dto.js';
 
@@ -198,6 +198,17 @@ export class ProcessMaterialSqePageDto {
   @ApiProperty() pageSize!: number;
 }
 
+export class ProcessDefectFilterDto {
+  @ApiProperty({ enum: Object.keys(PROCESS_FILTER_FIELDS) }) field!: keyof typeof PROCESS_FILTER_FIELDS;
+  @ApiProperty({ enum: [...new Set(Object.values(PROCESS_FILTER_OPERATORS).flat())] }) operator!: (typeof PROCESS_FILTER_OPERATORS)[keyof typeof PROCESS_FILTER_OPERATORS][number];
+  @ApiPropertyOptional({ oneOf: [{ type: 'string' }, { type: 'integer' }, { type: 'boolean' }] }) value?: string | number | boolean;
+}
+
+export class ProcessDefectFiltersDto {
+  @ApiProperty({ enum: ['ALL', 'ANY'] }) logic!: 'ALL' | 'ANY';
+  @ApiProperty({ type: [ProcessDefectFilterDto], minItems: 1, maxItems: PROCESS_FILTER_MAX_ITEMS }) items!: ProcessDefectFilterDto[];
+}
+
 export class ProcessDefectQueryDto extends ProcessScopeDto {
   @ApiPropertyOptional({ default: 1, minimum: 1 }) @Type(() => Number) @IsInt() @Min(1) page = 1;
   @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 }) @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
@@ -216,6 +227,9 @@ export class ProcessDefectQueryDto extends ProcessScopeDto {
   @ApiPropertyOptional({ default: false }) @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value) @IsOptional() @IsBoolean() includeArchived?: boolean;
   @ApiPropertyOptional() @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value) @IsOptional() @IsBoolean() pendingCompletion?: boolean;
   @ApiPropertyOptional() @Transform(({ value }) => value === 'true' ? true : value === 'false' ? false : value) @IsOptional() @IsBoolean() pendingConfiguration?: boolean;
+  @ApiPropertyOptional({ type: String, maxLength: PROCESS_FILTER_MAX_LENGTH, description: 'ProcessDefectFiltersDto 的 JSON 字符串；EMPTY、NOT_EMPTY 省略 value。', example: '{"logic":"ALL","items":[{"field":"projectStage","operator":"EQ","value":"NEW_PRODUCT"}]}' }) @IsOptional() @IsString() @MaxLength(PROCESS_FILTER_MAX_LENGTH) filters?: string;
+  @ApiPropertyOptional({ format: 'date-time', description: '带明确时区的发生时间起点（含），独立于条件组。' }) @IsOptional() @IsISO8601({ strict: true }) occurredFrom?: string;
+  @ApiPropertyOptional({ format: 'date-time', description: '带明确时区的发生时间终点（不含），独立于条件组。' }) @IsOptional() @IsISO8601({ strict: true }) occurredTo?: string;
 }
 
 export class ProcessDefectEvidenceDto {

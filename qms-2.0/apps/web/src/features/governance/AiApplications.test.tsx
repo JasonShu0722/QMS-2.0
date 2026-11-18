@@ -11,11 +11,12 @@ const mutate = vi.fn();
 vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn(), createAdminMutation: vi.fn() }));
 const organization = { id: 'org', code: 'ORG', name: '当前组织', type: 'INTERNAL' as const, permissions: ['ai:applications:read', 'ai:applications:manage', 'ai:applications:publish', 'ai:applications:test', 'ai:connections:read'] };
 const application = { id: 'application-1', organizationId: 'org', name: '不良现象整理', domain: 'PROCESS_QUALITY', scene: 'PROCESS_DEFECT_DESCRIPTION', enabled: true, variables: [{ variable: 'fault', label: '异常现象' }], connectionId: 'channel-1', model: 'quality-model', prompt: '整理{{fault}}', output: { mode: 'TEXT', field: 'description', target: 'description' }, fallback: 'DIRECT', version: 2, publishedVersion: 1, createdAt: '2026-11-17T00:00:00Z', updatedAt: '2026-11-17T00:00:00Z' };
+const sourceRule = { id: 'rule-1', organizationId: 'org', name: '制程不良规则', target: 'PROCESS_DEFECT', descriptionComposition: { fields: [{ path: 'faultText', variable: 'fault', label: '接收现象' }], separator: '\n' } };
 beforeEach(() => {
   localStorage.clear(); vi.stubEnv('NODE_ENV', 'development');
   useWorkTabsStore.getState().bindSession('INTERNAL:org:user');
   vi.mocked(createAdminMutation).mockReturnValue(mutate);
-  vi.mocked(apiRequest).mockReset().mockImplementation(async path => path.includes('/ai-connections') ? [{ id: 'channel-1', organizationId: 'org', name: '质量模型', enabled: true, hasKey: true, models: ['quality-model'], defaultModel: 'quality-model' }] as never : { items: [application], total: 1, page: 1, limit: 20 } as never);
+  vi.mocked(apiRequest).mockReset().mockImplementation(async path => path.includes('/ai-connections') ? [{ id: 'channel-1', organizationId: 'org', name: '质量模型', enabled: true, hasKey: true, models: ['quality-model'], defaultModel: 'quality-model' }] as never : path.includes('/integrations/ingestion/rules') ? { items: [sourceRule], total: 1, page: 1, limit: 100 } as never : { items: [application], total: 1, page: 1, limit: 20 } as never);
   mutate.mockReset().mockResolvedValue({ ...application, version: 3 });
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -34,6 +35,21 @@ it('edits an application draft with scene variables and keeps publication a sepa
   await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
   expect(mutate.mock.calls[0].slice(0, 3)).toEqual(['/api/v1/admin/ai-applications/application-1?organizationId=org', 'PATCH', { ...Object.fromEntries(Object.entries(application).filter(([key]) => !['id', 'organizationId', 'createdAt', 'updatedAt', 'version', 'publishedVersion'].includes(key))), prompt: '仅整理{{fault}}', expectedVersion: 2 }]);
   expect(mutate.mock.calls[0][0]).not.toContain('/publish');
+});
+it('takes prompt variable candidates from one saved process rule and inserts the selected variable', async () => {
+  const permissions = [...organization.permissions, 'ingestion:read']; mount(permissions); const dialog = await edit();
+  await waitFor(() => expect(dialog.getByLabelText('变量来源规则')).toBeInTheDocument());
+  fireEvent.mouseDown(dialog.getByLabelText('变量来源规则')); fireEvent.click(await screen.findByText('制程不良规则', { selector: '.ant-select-item-option-content' }));
+  expect(dialog.getByLabelText('变量名1')).toHaveValue('fault');
+  expect(dialog.getByLabelText('变量标签1')).toHaveValue('接收现象');
+  const prompt = dialog.getByLabelText<HTMLTextAreaElement>('提示词');
+  fireEvent.change(prompt, { target: { value: '整理现象。' } });
+  prompt.setSelectionRange(2, 4);
+  fireEvent.click(dialog.getByRole('button', { name: '插入 fault' }));
+  expect(prompt).toHaveValue('整理{{fault}}。');
+  fireEvent.click(dialog.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => expect(mutate).toHaveBeenCalledTimes(1));
+  expect(mutate.mock.calls[0][2]).toMatchObject({ variables: [{ variable: 'fault', label: '接收现象' }], prompt: '整理{{fault}}。', expectedVersion: 2 });
 });
 it('preserves a migrated variable label with newline and tab when only renaming an application', async () => {
   const legacy = { ...application, variables: [{ variable: 'fault', label: '现象：\n\t' }] };

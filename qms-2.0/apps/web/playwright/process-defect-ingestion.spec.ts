@@ -242,7 +242,8 @@ test('AI channels keep credentials private and real Worker applies structured de
     await page.getByRole('row').filter({ hasText: `AI描述规则${suffix}` }).getByRole('button', { name: `编辑AI描述规则${suffix}`, exact: true }).click();
     const ruleEditor = page.getByRole('dialog', { name: '编辑入库规则', exact: true });
     await expect(ruleEditor.getByLabel('已发布版本', { exact: true })).toHaveValue('1');
-    await expect(ruleEditor.getByLabel('IMS来源路径1', { exact: true })).toHaveValue('FAULT');
+    await expect(ruleEditor.getByLabel('描述来源字段1', { exact: true })).toHaveValue('FAULT');
+    await expect(ruleEditor.getByLabel('提示词变量1', { exact: true })).toHaveValue('fault');
     await expect(ruleEditor.getByLabel('有效提示词', { exact: true })).toHaveValue('整理{{fault}}，仅保留已给事实。');
     await expect(ruleEditor.getByLabel('有效输出字段', { exact: true })).toHaveValue('defectSummary');
     for (const width of [1440, 390, 320]) {
@@ -340,6 +341,14 @@ test('AI management separates configuration and publishes prompt applications ac
       channels.push(channel);
     }
     const organizationId = channels[0]!.organizationId;
+    const endpoint = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, '/api/v1/admin/integrations/endpoints', 'POST', {
+      code: `VAR_${suffix}`, name: `变量来源${suffix}`, sourceCode: 'IMS', sourceName: 'IMS一次性AI验收', returnReceipt: true,
+    }, 201);
+    const sourceRule = await positionWrite<Schema['IngestionRuleDto']>(page.request, `${ingestion}/rules`, 'POST', {
+      name: `API变量规则${suffix}`, target: 'PROCESS_DEFECT', endpointId: endpoint.id, enabled: false, match: 'ALL', conditions: [], mapping: {}, mode: 'INSERT_ONLY', updateFields: [],
+      descriptionComposition: { fields: [{ path: 'FAULT', variable: 'fault', label: '现象样本' }], separator: '\n' },
+    }, 201);
+    expect(sourceRule.descriptionComposition?.fields).toEqual([{ path: 'FAULT', variable: 'fault', label: '现象样本' }]);
     await page.goto(`/console/ai-applications?organizationId=${organizationId}`);
     await expect(page.getByRole('button', { name: '新增应用', exact: true })).toBeVisible();
     await expect(page.getByText('AI管理', { exact: true })).toBeVisible();
@@ -347,10 +356,13 @@ test('AI management separates configuration and publishes prompt applications ac
     const editor = page.getByRole('dialog', { name: '提示词应用', exact: true });
     const name = `中心应用${suffix}`;
     await editor.getByLabel('应用名称', { exact: true }).fill(name);
-    await editor.getByLabel('变量标签1', { exact: true }).fill('现象样本');
+    await editor.getByLabel('变量来源规则', { exact: true }).press('ArrowDown');
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: sourceRule.name }).click();
     await editor.getByLabel('模型渠道', { exact: true }).press('ArrowDown');
     await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: channels[0]!.name }).click();
-    await editor.getByLabel('提示词', { exact: true }).fill('整理{{fault}}，只使用给定事实');
+    await editor.getByLabel('提示词', { exact: true }).fill('整理');
+    await editor.getByRole('button', { name: '插入 fault', exact: true }).click();
+    await expect(editor.getByLabel('提示词', { exact: true })).toHaveValue('整理{{fault}}');
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: 900 });
       await expect.poll(() => editor.locator('.ant-modal-body').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);

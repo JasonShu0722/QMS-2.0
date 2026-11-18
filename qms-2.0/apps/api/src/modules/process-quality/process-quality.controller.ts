@@ -1,5 +1,5 @@
 import { Body, Controller, Get, Headers, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
-import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
+import { ApiCookieAuth, ApiCreatedResponse, ApiExtraModels, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
@@ -11,7 +11,7 @@ import { ProcessProductionService } from './process-production.service.js';
 import { ProcessShipmentReportService } from './process-shipment-report.service.js';
 import { DeleteProcessDefectsDto, DeleteLegacyProcessDefectDto, PreviewProcessDefectDeletionDto, ProcessDefectDeletionPreviewDto, ProcessDefectDeletionResultDto } from './process-quality.dto.js';
 import { ClassifyProcessDefectDto, ClassifyProcessDefectsDto, CloseProcessDefectDto, ReopenProcessDefectDto, VerifyProcessDefectMaterialDto, ProcessDefectClassificationResultDto, ProcessMaterialSqePageDto, ProcessMaterialSqeQueryDto } from './process-quality.dto.js';
-import { ArchiveProcessShipmentReportDto, AssociateProcessShipmentReportCustomerDto, CorrectProcessProductionDto, CreateProcessDefectDto, CreateProcessDefectTypeDto, CreateProcessProductionDto, CreateProcessShipmentReportDto, IssueProcessDefectsDto, LinkProcessShipmentReportIssueDto, ProcessDefectDto, ProcessDefectPageDto, ProcessDefectQueryDto, ProcessDefectTypeDto, ProcessIssueProblemDto, ProcessIssueResultDto, ProcessProductionDetailDto, ProcessProductionDto, ProcessProductionPageDto, ProcessProductionPeriodQueryDto, ProcessProductionQueryDto, ProcessProductionSummaryDto, ProcessScopeDto, ProcessShipmentReportDto, ProcessShipmentReportPageDto, ProcessShipmentReportQueryDto, UpdateProcessDefectDto, UpdateProcessDefectTypeDto, UpdateProcessShipmentReportEvidenceDto } from './process-quality.dto.js';
+import { ArchiveProcessShipmentReportDto, AssociateProcessShipmentReportCustomerDto, CorrectProcessProductionDto, CreateProcessDefectDto, CreateProcessDefectTypeDto, CreateProcessProductionDto, CreateProcessShipmentReportDto, IssueProcessDefectsDto, LinkProcessShipmentReportIssueDto, ProcessDefectDto, ProcessDefectFiltersDto, ProcessDefectFilterDto, ProcessDefectPageDto, ProcessDefectQueryDto, ProcessDefectTypeDto, ProcessIssueProblemDto, ProcessIssueResultDto, ProcessProductionDetailDto, ProcessProductionDto, ProcessProductionPageDto, ProcessProductionPeriodQueryDto, ProcessProductionQueryDto, ProcessProductionSummaryDto, ProcessScopeDto, ProcessShipmentReportDto, ProcessShipmentReportPageDto, ProcessShipmentReportQueryDto, UpdateProcessDefectDto, UpdateProcessDefectTypeDto, UpdateProcessShipmentReportEvidenceDto } from './process-quality.dto.js';
 
 function actor(request: Request) {
   const authorized = request as AuthorizedRequest;
@@ -23,6 +23,7 @@ const queryScope = { source: 'query', field: 'organizationId', optional: true } 
 const bodyScope = { source: 'body', field: 'organizationId', optional: true } as const;
 
 @Controller('api/v1/process-quality')
+@ApiExtraModels(ProcessDefectFiltersDto, ProcessDefectFilterDto)
 @ApiCookieAuth('qms_session')
 @ApiResponse({ status: 'default', type: ErrorResponse })
 export class ProcessQualityController {

@@ -103,6 +103,32 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     return { fields, defect, input, enqueue };
   }
 
+  it('uses the saved composition variable without sending unused fields, and keeps the fallback when it is blank', async () => {
+    mode = 'SUCCESS';
+    const value = await engineSource();
+    const applications = new AiApplicationService(fixture.prisma, new AdminMutationService(fixture.prisma, fixture.audit), connections, fixture.audit);
+    const organizationId = fixture.actor.organizationId;
+    const output = { mode: 'TEXT', field: 'description', target: 'description' } as const;
+    const application = await applications.create(fixture.actor, organizationId, { name: '组合字段', domain: 'PROCESS_QUALITY', scene: 'PROCESS_DEFECT_DESCRIPTION', enabled: true, fallback: 'DIRECT', connectionId: connection.id, model: 'model-a', output,
+      prompt: '整理{{fact}}', variables: [{ variable: 'fact', label: '现象' }, { variable: 'unused', label: '保底资料' }] }, randomUUID(), randomUUID());
+    await applications.publish(fixture.actor, organizationId, application.id, { expectedVersion: application.version }, randomUUID(), randomUUID());
+    const { description: _description, ...mapping } = value.configuration.mapping;
+    const rule = await engine.saveRule(fixture.actor, { ...value.configuration, mapping, aiDescription: undefined, expectedVersion: value.configuration.version,
+      descriptionComposition: { fields: [{ path: 'fact', variable: 'fact' }, { path: 'direct', variable: 'unused' }], separator: '\n' },
+      aiApplication: { applicationId: application.id, publishedVersion: 1, inputFields: [{ path: 'fact', variable: 'fact' }] } }, randomUUID(), randomUUID(), value.configuration.id);
+    const before = requests.length;
+    const first = await value.ingest(rule);
+    await service.processDue();
+    expect(requests).toHaveLength(before + 1);
+    expect(JSON.stringify(requests.at(-1))).toContain('毛刺');
+    expect(JSON.stringify(requests.at(-1))).not.toContain('直接组合事实');
+    expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: first.row.id } })).toMatchObject({ description: '已选事实的整理结果' });
+    const blank = await value.ingest(rule, { ...value.raw, id: randomUUID(), trace: randomUUID(), fact: '  ' });
+    await service.processDue();
+    expect(requests).toHaveLength(before + 1);
+    expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: blank.row.id } })).toMatchObject({ description: '直接组合事实' });
+  });
+
   it.each(['INSERT_ONLY', 'UPDATE', 'CONFIRM'] as const)('gates independent AI-only input changes through the %s strategy and preserves current-input deduplication', async strategy => {
     mode = 'SUCCESS'; const value = await engineSource('直接组合事实', ['description'], strategy);
     const initial = await value.ingest(); await service.processDue();

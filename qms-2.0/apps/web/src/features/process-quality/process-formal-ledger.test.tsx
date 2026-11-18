@@ -39,15 +39,21 @@ const preview = [{ defectId: defect.id, relatedProblems: [{ problemId: 'old', re
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close', 'process-quality:materials:review', 'process-quality:issues:issue', 'process-quality:issues:read'];
 const list = { items: [defect], total: 1, page: 1, pageSize: 20 };
 
-it('shows the approved default columns and filters incomplete and unconfigured rows independently', async () => {
+it('shows the approved default columns and applies incomplete and unconfigured conditions together', async () => {
   mount();
   await screen.findByLabelText(`选择制程不良 ${defect.description}`);
   for (const title of ['发生时间', '班次', '项目号', '细分类型', '项目状态', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']) expect(screen.getByRole('columnheader', { name: title })).toBeVisible();
   expect(screen.queryByRole('columnheader', { name: '成品编码' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByLabelText('仅待完善'));
-  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/defects?') && new URL(path, 'http://localhost').searchParams.get('pendingCompletion') === 'true')).toBe(true));
-  fireEvent.click(screen.getByLabelText('仅待补配'));
-  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/defects?') && new URL(path, 'http://localhost').searchParams.get('pendingCompletion') === 'true' && new URL(path, 'http://localhost').searchParams.get('pendingConfiguration') === 'true')).toBe(true));
+  fireEvent.click(screen.getByRole('button', { name: '筛选条件' }));
+  const panel = within(await screen.findByRole('dialog', { name: '筛选面板' }));
+  for (const [index, field] of ['pendingCompletion', 'pendingConfiguration'].entries()) {
+    fireEvent.click(panel.getByRole('button', { name: '添加筛选条件' }));
+    fireEvent.change(panel.getByLabelText(`筛选字段 ${index + 1}`), { target: { value: field } });
+    fireEvent.change(panel.getByLabelText(`筛选值 ${index + 1}`), { target: { value: 'true' } });
+  }
+  fireEvent.click(panel.getByRole('button', { name: '应用筛选' }));
+  const request = vi.mocked(apiRequest).mock.calls.filter(([path]) => path.includes('/defects?')).at(-1)![0];
+  expect(JSON.parse(new URL(request, 'http://localhost').searchParams.get('filters')!)).toEqual({ logic: 'ALL', items: [{ field: 'pendingCompletion', operator: 'EQ', value: true }, { field: 'pendingConfiguration', operator: 'EQ', value: true }] });
 });
 
 it('starts the real material-free ledger with selection instead of an empty expand column', async () => {
@@ -104,29 +110,17 @@ it('resets real server pagination on page-size changes without discarding select
   expect(screen.getByText('已选择 1 条来源')).toBeVisible();
 });
 
-it('opens supplier copy from selected process facts without enabling internal issue for copy-only access', async () => {
+it('keeps legacy copy and issue actions out of the ledger even with copy-only access', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => {
     if (path.includes('/my-permissions')) return { permissions: ['process-quality:defects:read', 'supplier-quality:issues:copy'] };
-    if (path.includes('/reference-options')) return { items: [{ id: section.id, label: '复制目标档案' }], total: 1 };
-    if (path.endsWith('/source-copies/preview')) return { token: owner.id, expiresAt: '2099-01-01T00:00:00Z', facts: [] };
     return baseResponse(path);
   });
   mount();
-  await screen.findByLabelText('搜索制程不良');
-  const toolbar = within(screen.getByLabelText('台账批量操作'));
-  const copy = await toolbar.findByRole('button', { name: '复制为供应商草稿' });
-  expect(copy).toBeDisabled();
   fireEvent.click(await screen.findByLabelText(`选择制程不良 ${defect.description}`));
-  await waitFor(() => expect(copy).toBeEnabled());
-  fireEvent.click(copy);
-  await waitFor(() => expect(screen.getByText('受控复制为供应商草稿').closest('[role="dialog"]')).toBeVisible());
-  const dialog = within(screen.getByText('受控复制为供应商草稿').closest('[role="dialog"]') as HTMLElement);
-  expect(toolbar.queryByRole('button', { name: '发起内部8D' })).not.toBeInTheDocument();
-  expect(toolbar.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
-  await selectOption('目标供应商档案', '复制目标档案');
-  fireEvent.click(dialog.getByRole('button', { name: '读取受控预览' }));
-  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-quality/source-copies/preview', expect.objectContaining({ body: JSON.stringify({ organizationId, supplierProfileId: section.id, sources: [{ kind: 'PROCESS_LEDGER', sourceId: defect.id, sourceVersion: defect.version }] }) }), { replayAfterReauthentication: false }));
-  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/source-copies/drafts'))).toBe(false);
+  expect(screen.queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '发起 8D' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/source-copies/'))).toBe(false);
 });
 
 it('hides supplier copy without its real copy permission', async () => {
@@ -147,6 +141,7 @@ function baseResponse(path: string) {
 }
 beforeEach(() => {
   compactTable.enabled = false;
+  localStorage.clear();
   useWorkTabsStore.getState().reset();
   vi.mocked(getSession).mockResolvedValue({ userId: owner.id, organizationId, accountType: 'INTERNAL', landingPath: '/app/workbench' });
   vi.mocked(csrfToken).mockResolvedValue('csrf');
@@ -185,8 +180,7 @@ it('opens a source deep-link only after scoped READ authorization, without selec
   const drawer = screen.getByText('来源详情').closest('[role="dialog"]') as HTMLElement;
   fireEvent.click(within(drawer).getByRole('button', { name: /^(close|关闭)$/i }));
   await waitFor(() => expect(screen.queryByText('来源详情')).not.toBeInTheDocument(), { timeout: 5000 });
-  const heading = within(screen.getByText('不良品台账', { selector: 'h1' }).closest('header')!);
-  fireEvent.click(heading.getByRole('button', { name: /^刷\s*新$/ }));
+  fireEvent.click(within(screen.getByLabelText('台账工具栏')).getByRole('button', { name: '刷新' }));
   await waitFor(() => expect(permissionReads).toBeGreaterThan(1));
   expect(sourceDetailCalls()).toHaveLength(1);
   expect(screen.queryByText('来源详情')).not.toBeInTheDocument();
@@ -264,11 +258,11 @@ it('aborts a replaced source deep-link and identity, ignores late data, and pres
   expect(vi.mocked(apiRequest).mock.calls.some(([, options]) => options?.method)).toBe(false);
 });
 
-it('preserves legacy BRIEF issue permission independently from formal 8D issue permission', async () => {
+it('does not give formal 8D access through ledger write permission', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/my-permissions') ? { permissions: ['process-quality:defects:read', 'process-quality:defects:write'] } : baseResponse(path));
   mount(); await screen.findByLabelText('选择制程不良 表面划伤');
-  expect(screen.getByRole('button', { name: '发起问题' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '发起内部8D' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '发起 8D' })).not.toBeInTheDocument();
 });
 async function selectOption(label: string, text: string, queries: Pick<typeof screen, 'getByLabelText'> = screen) {
   const control = queries.getByLabelText(label);
@@ -378,7 +372,7 @@ it.each([401, 403])('clears parent sources, relations and draft when the preflig
   useWorkTabsStore.getState().bindSession(`INTERNAL:${organizationId}:${owner.id}`);
   mount();
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
-  fireEvent.click(await screen.findByText('发起内部8D'));
+  fireEvent.click(await screen.findByRole('button', { name: '发起 8D' }));
   await screen.findByText('PQ-OLD');
   await fillIssue();
   fireEvent.change(screen.getByLabelText(`判定说明 ${defect.id}`), { target: { value: '敏感判定草稿' } });
@@ -581,18 +575,18 @@ it.each(['selected', 'new'] as const)('keeps the 100-source limit consistent for
     expect(await screen.findByLabelText('选择制程不良 边界来源 100')).toBeDisabled();
   }
   fireEvent.click(screen.getByText(entry === 'selected' ? '边界来源 80' : '边界来源 100', { selector: 'button span' }));
-  const button = (await screen.findByText('选择此条并发起问题')).closest('button')!;
+  const button = await screen.findByRole('button', { name: '选择此条并返回台账' });
   if (entry === 'selected') {
     fireEvent.click(button);
-    expect(await screen.findByText('发起制程问题', { selector: '.ant-drawer-title' })).toBeVisible();
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: '来源详情' })).not.toBeInTheDocument());
     expect(screen.getByLabelText('选择制程不良 边界来源 80')).toBeChecked();
   } else {
     expect(button).toBeDisabled();
     expect(screen.getByText('已选满100条来源，请先取消一条已选来源，再选择此条。')).toBeVisible();
     fireEvent.click(button);
-    expect(screen.queryByText('发起制程问题', { selector: '.ant-drawer-title' })).not.toBeInTheDocument();
   }
   expect(screen.getByText('已选择 100 条来源')).toBeVisible();
+  expect(screen.queryByRole('dialog', { name: '发起正式内部8D' })).not.toBeInTheDocument();
 });
 
 it('retries an unknown formal issue result without re-previewing or changing the original payload', async () => {
@@ -644,7 +638,7 @@ it('discards prior identity rows, selections and a late source-detail response o
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/defects?') ? { ...list, items: [] } : baseResponse(path));
   useWorkTabsStore.getState().bindSession('INTERNAL:new-org:new-user');
   resolve({ ...defect, description: '迟到的旧账号敏感详情' });
-  await screen.findByText('暂无不良记录');
+  await screen.findByText('没有匹配的不良记录');
   expect(screen.queryByText('迟到的旧账号敏感详情')).not.toBeInTheDocument();
   expect(screen.queryByText('表面划伤')).not.toBeInTheDocument();
   expect(screen.getByText('已选择 0 条来源')).toBeVisible();

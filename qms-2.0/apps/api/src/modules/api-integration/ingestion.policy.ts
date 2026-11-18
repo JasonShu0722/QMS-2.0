@@ -8,7 +8,7 @@ export { aiDescriptionDisposition } from '../../common/ai-description.js';
 
 export type IngestionTarget = IntegrationTarget;
 export type IngestionFields = IntegrationFields | Omit<ProcessDefectIntegrationFields, 'receiptId' | 'rowIndex'>;
-export type IngestionDescriptionComposition = { fields: { path: string; label?: string }[]; separator: string };
+export type IngestionDescriptionComposition = { fields: { path: string; label?: string; variable?: string }[]; separator: string };
 export type ComponentNameLookup = { source: 'MATERIAL'; field: 'materialName' };
 export type IngestionCondition = { path: string; operator: 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'EMPTY' | 'NOT_EMPTY'; value?: string | number | boolean | null | (string | number | boolean)[] };
 export type IngestionRule = { name: string; endpointId: string; target: IngestionTarget; enabled: boolean; match: 'ALL' | 'ANY'; conditions: IngestionCondition[]; mapping: Record<string, string>; componentNameLookup?: ComponentNameLookup; mode: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM'; updateFields: string[]; sourceUpdatedAtField?: string; sourceTimezone?: string; descriptionComposition?: IngestionDescriptionComposition; aiApplication?: AiApplicationBinding; aiDescription?: { connectionId: string; model: string; prompt: string; inputFields: { path: string; label?: string; variable: string }[]; output: AiDescriptionOutput; connectionVersion?: number } };
@@ -67,7 +67,10 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
     const composition = rule.descriptionComposition;
     if (!composition || typeof composition !== 'object' || Array.isArray(composition) || rule.mapping.description !== undefined || !Array.isArray(composition.fields) || !composition.fields.length || composition.fields.length > 20
       || typeof composition.separator !== 'string' || !/^[\n ,，;；:：、|/。.-]{0,10}$/.test(composition.separator)
-      || composition.fields.some(field => !field || !validPath(field.path) || field.label !== undefined && (typeof field.label !== 'string' || field.label.length > 100 || /[\u0000\uD800-\uDFFF]/u.test(field.label)))) ingestionError('INGESTION_RULE_INVALID');
+      || composition.fields.some(field => !field || !validPath(field.path) || field.variable !== undefined && (typeof field.variable !== 'string' || !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(field.variable)) || field.label !== undefined && (typeof field.label !== 'string' || field.label.length > 100 || /[\u0000\uD800-\uDFFF]/u.test(field.label)))
+      || new Set(composition.fields.flatMap(field => field.variable ? [field.variable] : [])).size !== composition.fields.filter(field => field.variable).length) ingestionError('INGESTION_RULE_INVALID');
+    const inputs = rule.aiApplication?.inputFields ?? rule.aiDescription?.inputFields;
+    if (composition.fields.some(field => field.variable !== undefined) && inputs?.some(input => !composition.fields.some(field => field.variable === input.variable && field.path === input.path))) ingestionError('INGESTION_RULE_INVALID');
   }
   for (const condition of rule.conditions) {
     if (!condition || !validPath(condition.path) || !['EQ', 'NE', 'IN', 'NOT_IN', 'EMPTY', 'NOT_EMPTY'].includes(condition.operator)) ingestionError('INGESTION_RULE_INVALID');
@@ -75,12 +78,14 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
     if (['IN', 'NOT_IN'].includes(condition.operator) && (!Array.isArray(condition.value) || condition.value.length === 0 || condition.value.length > 50 || condition.value.some(value => !scalar(value)) || new Set(condition.value.map(value => typeof value)).size > 1)) ingestionError('INGESTION_RULE_INVALID');
     if (['EMPTY', 'NOT_EMPTY'].includes(condition.operator) && condition.value !== undefined) ingestionError('INGESTION_RULE_INVALID');
   }
-  return { name: rule.name.trim(), endpointId: rule.endpointId, target: rule.target, enabled: rule.enabled, match: rule.match, conditions: rule.conditions, mapping: rule.mapping, ...(componentLookup ? { componentNameLookup: componentLookup } : {}), mode: rule.mode, updateFields: rule.updateFields, ...(rule.sourceUpdatedAtField ? { sourceUpdatedAtField: rule.sourceUpdatedAtField } : {}), ...(process ? { sourceTimezone: rule.sourceTimezone ?? 'Asia/Shanghai' } : {}), ...(rule.descriptionComposition ? { descriptionComposition: rule.descriptionComposition } : {}), ...(rule.aiApplication ? { aiApplication: { applicationId: rule.aiApplication.applicationId, publishedVersion: rule.aiApplication.publishedVersion, inputFields: rule.aiApplication.inputFields } } : {}), ...(rule.aiDescription ? { aiDescription: { connectionId: rule.aiDescription.connectionId, model: rule.aiDescription.model.trim(), prompt: rule.aiDescription.prompt.trim(), inputFields: rule.aiDescription.inputFields, output: rule.aiDescription.output } } : {}) };
+  return { name: rule.name.trim(), endpointId: rule.endpointId, target: rule.target, enabled: rule.enabled, match: rule.match, conditions: rule.conditions, mapping: rule.mapping, ...(componentLookup ? { componentNameLookup: componentLookup } : {}), mode: rule.mode, updateFields: rule.updateFields, ...(rule.sourceUpdatedAtField ? { sourceUpdatedAtField: rule.sourceUpdatedAtField } : {}), ...(process ? { sourceTimezone: rule.sourceTimezone ?? 'Asia/Shanghai' } : {}), ...(rule.descriptionComposition ? { descriptionComposition: { ...rule.descriptionComposition, fields: rule.descriptionComposition.fields.map(field => ({ path: field.path, ...(field.label !== undefined ? { label: field.label } : {}), ...(field.variable !== undefined ? { variable: field.variable } : {}) })) } } : {}), ...(rule.aiApplication ? { aiApplication: { applicationId: rule.aiApplication.applicationId, publishedVersion: rule.aiApplication.publishedVersion, inputFields: rule.aiApplication.inputFields } } : {}), ...(rule.aiDescription ? { aiDescription: { connectionId: rule.aiDescription.connectionId, model: rule.aiDescription.model.trim(), prompt: rule.aiDescription.prompt.trim(), inputFields: rule.aiDescription.inputFields, output: rule.aiDescription.output } } : {}) };
 }
 
 export function selectedDescriptionInput(rule: IngestionRule, row: unknown): { path: string; label: string; variable?: string; value: string | number | boolean | null }[] {
+  const usesCompositionVariables = rule.descriptionComposition?.fields.some(field => field.variable !== undefined);
   return (rule.aiDescription?.inputFields ?? []).flatMap(field => {
     const value = pathValue(row, field.path);
+    if (usesCompositionVariables && (value === null || typeof value === 'string' && !value.trim())) return [];
     return value !== undefined && scalar(value) ? [{ path: field.path, label: field.label ?? '', variable: field.variable, value: value as string | number | boolean | null }] : [];
   });
 }
