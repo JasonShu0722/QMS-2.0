@@ -42,7 +42,7 @@ const list = { items: [defect], total: 1, page: 1, pageSize: 20 };
 it('shows the approved default columns and filters incomplete and unconfigured rows independently', async () => {
   mount();
   await screen.findByLabelText(`选择制程不良 ${defect.description}`);
-  for (const title of ['发生时间', '班次', '项目号', '细分类型', '新品/量产', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']) expect(screen.getByRole('columnheader', { name: title })).toBeVisible();
+  for (const title of ['发生时间', '班次', '项目号', '细分类型', '项目状态', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']) expect(screen.getByRole('columnheader', { name: title })).toBeVisible();
   expect(screen.queryByRole('columnheader', { name: '成品编码' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByLabelText('仅待完善'));
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/defects?') && new URL(path, 'http://localhost').searchParams.get('pendingCompletion') === 'true')).toBe(true));

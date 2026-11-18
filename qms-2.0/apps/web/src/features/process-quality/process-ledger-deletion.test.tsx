@@ -56,7 +56,7 @@ it('orders the default recording columns and keeps optional facts recoverable wi
   const { container } = mount();
   await screen.findByLabelText(`选择制程不良 ${record.description}`);
   const headers = within(container.querySelector<HTMLElement>('.qms-ledger thead')!);
-  const titles = ['选择', '发生时间', '班次', '项目号', '细分类型', '新品/量产', '不良描述', '追溯码', '生产线名称', '工序名称', '板块', '不良数量', '操作'];
+  const titles = ['选择', '发生时间', '班次', '项目号', '细分类型', '项目状态', '不良描述', '追溯码', '生产线名称', '工序名称', '板块', '不良数量', '操作'];
   const defaultTitles = headers.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'));
   expect(defaultTitles).toEqual(titles);
   fireEvent.click(within(container.querySelector<HTMLElement>('.qms-ledger__tools')!).getByRole('button', { name: '列设置' }));
