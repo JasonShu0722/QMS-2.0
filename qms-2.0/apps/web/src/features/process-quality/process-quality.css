@@ -37,8 +37,8 @@
 .process-quality-completion { display: grid; gap: 2px; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
 .process-quality-completion > span { color: var(--qms-muted); }
 .process-quality-batch-toolbar { display: flex; padding-block: 8px; border-block-start: 1px solid var(--qms-border); }
-.process-quality-ledger .ant-table-tbody > tr > td { height: 48px; max-height: 48px; white-space: nowrap; overflow: hidden; }
-.process-quality-ledger .ant-table-tbody > tr > td > * { max-height: 40px; overflow: hidden; }
+.process-quality-ledger > .ant-table-tbody > tr:not(.ant-table-expanded-row) > td { height: 48px; max-height: 48px; white-space: nowrap; overflow: hidden; }
+.process-quality-ledger > .ant-table-tbody > tr:not(.ant-table-expanded-row) > td > * { max-height: 40px; overflow: hidden; }
 .process-quality-ledger .ant-table-selection-column, .process-quality-ledger .ant-table-selection-col { width: 40px !important; min-width: 40px !important; max-width: 40px !important; }
 .process-quality-loading { min-height: 180px; display: grid; place-items: center; }
 .process-quality-issue-error { margin-bottom: var(--qms-section-gap); }
