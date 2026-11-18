@@ -73,7 +73,7 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
           setEdit((current) => {
             if (!current || current.item.id !== editedId) return current;
             const item = result.items.find((row) => row.id === current.item.id);
-            return item ? { ...current, item } : undefined;
+            return item ? { ...current, item } : current;
           });
           pending.current = undefined;
         }

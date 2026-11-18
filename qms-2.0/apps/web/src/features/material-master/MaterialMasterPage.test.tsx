@@ -159,6 +159,17 @@ it('explicitly reloads the current version without losing the name draft and sav
   expect(requests[0]?.[1]?.headers).not.toEqual(requests[1]?.[1]?.headers);
 });
 
+it('keeps the edit draft when a filtered reload no longer returns the material', async () => {
+  render(<MaterialMasterPage organizationPermissions={permissions} />);
+  await screen.findByText('原物料'); fireEvent.click(screen.getByRole('button', { name: /改\s*名/ }));
+  const editor = within(screen.getByRole('dialog', { name: '修改物料名称' }));
+  fireEvent.change(editor.getByLabelText('编辑物料名称'), { target: { value: '保留草稿' } });
+  vi.mocked(apiRequest).mockResolvedValueOnce(materialPage([], 0));
+  fireEvent.click(editor.getByRole('button', { name: '重新加载物料版本' }));
+  await waitFor(() => expect(editor.getByLabelText('编辑物料名称')).toHaveValue('保留草稿'));
+  expect(editor.getByRole('button', { name: /保\s*存/ })).toBeEnabled();
+});
+
 it('renders the real English page and creation dialog through LanguageProvider', async () => {
   localStorage.setItem('qms:locale:v1', 'en-US');
   try {
