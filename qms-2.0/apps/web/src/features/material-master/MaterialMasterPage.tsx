@@ -66,7 +66,8 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
     const editedId = reloadEdit ? edit?.item.id : undefined;
     setLoading(true);
     try {
-      const result = await apiRequest<MaterialPage>(listPath());
+      const response = await apiRequest<MaterialPage | Material[]>(listPath());
+      const result: MaterialPage = Array.isArray(response) ? { items: response, total: response.length, page, pageSize } : response;
       if (mounted.current && sequence.current === request) {
         setMaterials(result.items); setTotal(result.total); setError(undefined); setDenied(false); setPage(current => Math.min(current, Math.max(1, Math.ceil(result.total / pageSize))));
         if (reloadEdit) {
