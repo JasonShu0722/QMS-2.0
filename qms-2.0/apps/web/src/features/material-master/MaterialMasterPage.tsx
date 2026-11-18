@@ -10,6 +10,7 @@ import { useMasterDataBulkDelete } from '../imports/MasterDataBulkDelete';
 import { useLedgerSessionEpoch } from '../../ui/ledger/preferences';
 
 type Material = components['schemas']['MaterialMasterDto'];
+type MaterialPage = components['schemas']['MaterialMasterPageDto'];
 type Create = components['schemas']['CreateMaterialMasterDto'];
 type Update = components['schemas']['UpdateMaterialMasterDto'];
 type Permissions = components['schemas']['PermissionsResponseDto'];
@@ -23,9 +24,12 @@ export function MaterialMasterPage(props: Props = {}) {
 
 function MaterialMasterContent({ organizationId, organizationPermissions }: Props) {
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useLedgerPageSize('material-master', organizationId, 1000);
+  const [pageSize, setPageSize] = useLedgerPageSize('material-master', organizationId, 20);
+  const [searchDraft, setSearchDraft] = useState('');
+  const [search, setSearch] = useState('');
   const { t } = useLanguage();
   const [materials, setMaterials] = useState<Material[]>([]);
+  const [total, setTotal] = useState(0);
   const [permissions, setPermissions] = useState<string[]>([]);
   const [error, setError] = useState<unknown>();
   const [denied, setDenied] = useState(false);
@@ -50,19 +54,25 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
   const busy = saving || deletion.busy;
   useUnsavedChanges(busy || dirty || Boolean(edit && edit.materialName !== edit.item.materialName));
   const scoped = (path: string) => organizationId ? `${path}?organizationId=${encodeURIComponent(organizationId)}` : path;
+  const listPath = (targetPage = page, size = pageSize, targetSearch = search) => {
+    const query = new URLSearchParams(organizationId ? { organizationId } : {});
+    query.set('page', String(targetPage)); query.set('pageSize', String(size));
+    if (targetSearch) query.set('search', targetSearch);
+    return `${base}?${query}`;
+  };
 
   async function refresh(reloadEdit = false, reportFailure = false) {
     const request = ++sequence.current;
     const editedId = reloadEdit ? edit?.item.id : undefined;
     setLoading(true);
     try {
-      const result = await apiRequest<Material[]>(scoped(base));
+      const result = await apiRequest<MaterialPage>(listPath());
       if (mounted.current && sequence.current === request) {
-        setMaterials(result); setError(undefined); setDenied(false); setPage(current => Math.min(current, Math.max(1, Math.ceil(result.length / pageSize))));
+        setMaterials(result.items); setTotal(result.total); setError(undefined); setDenied(false); setPage(current => Math.min(current, Math.max(1, Math.ceil(result.total / pageSize))));
         if (reloadEdit) {
           setEdit((current) => {
             if (!current || current.item.id !== editedId) return current;
-            const item = result.find((row) => row.id === current.item.id);
+            const item = result.items.find((row) => row.id === current.item.id);
             return item ? { ...current, item } : undefined;
           });
           pending.current = undefined;
@@ -70,7 +80,7 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
       }
     } catch (cause) {
       if (!mounted.current || sequence.current !== request) return;
-      setMaterials([]); setError(cause);
+      setMaterials([]); setTotal(0); setError(cause);
       if (cause instanceof ApiError && [401, 403].includes(cause.status ?? 0)) { setDenied(true); setEdit(undefined); }
       else if (cause instanceof ApiError && cause.status === 404) setEdit(undefined);
       if (reportFailure) throw cause;
@@ -78,13 +88,12 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
   }
   useEffect(() => {
     mounted.current = true;
-    if (organizationPermissions) { if (organizationPermissions.includes('material-master:read')) void refresh(); }
-    else void apiRequest<Permissions>(scoped('/api/v1/system/my-permissions')).then((result) => {
+    if (!organizationPermissions) void apiRequest<Permissions>(scoped('/api/v1/system/my-permissions')).then((result) => {
       if (!mounted.current) return; setPermissions(result.permissions);
-      if (result.permissions.includes('material-master:read')) void refresh();
     }, (cause) => { if (mounted.current) { setPermissions([]); setMaterials([]); setError(cause); } });
     return () => { mounted.current = false; sequence.current++; };
   }, []);
+  useEffect(() => { if (canRead) void refresh(); }, [canRead, page, pageSize, search]);
   useEffect(() => {
     if (!dirty && (!edit || edit.materialName === edit.item.materialName)) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
@@ -126,11 +135,18 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
     if (!canRead || loading || exporting || !materials.length) return;
     setExporting(true); setError(undefined);
     try {
+      const exported: Material[] = [];
+      for (let next = 1; ; next++) {
+        const result = await apiRequest<MaterialPage>(listPath(next, 1000));
+        if (!mounted.current) return;
+        exported.push(...result.items);
+        if (exported.length >= result.total || !result.items.length) break;
+      }
       const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
       const sheet = workbook.addWorksheet(t('物料'));
       sheet.addRow([t('物料编码'), t('物料名称')]);
-      materials.forEach((item) => sheet.addRow([item.materialCode, item.materialName]));
+      exported.forEach((item) => sheet.addRow([item.materialCode, item.materialName]));
       sheet.columns.forEach((column) => { column.width = 30; column.numFmt = '@'; });
       const bytes = await workbook.xlsx.writeBuffer();
       if (!mounted.current) return;
@@ -145,7 +161,7 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
     {deletion.feedback}{deletion.controls}
 
     {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} action={canRead ? <Button disabled={busy} onClick={() => { setSelection({}); void refresh(true); }}>{t('重试')}</Button> : undefined} /> : null}
-    {canRead ? <Space wrap><Button onClick={() => { setSelection({}); void refresh(true); }} loading={loading} disabled={busy}>{t('刷新物料')}</Button><Button onClick={() => void exportCurrent()} loading={exporting} disabled={loading || busy || !materials.length}>{t('导出当前物料清单')}</Button></Space> : <Alert type="info" title={t('没有物料查看权限')} />}
+    {canRead ? <Space wrap><Input.Search aria-label={`${t('物料编码')} / ${t('物料名称')}`} placeholder={`${t('物料编码')} / ${t('物料名称')}`} maxLength={200} allowClear value={searchDraft} disabled={busy} onChange={event => setSearchDraft(event.target.value)} onSearch={value => { setSelection({}); setPage(1); setSearch(value.trim()); }} /><Button onClick={() => { setSelection({}); void refresh(true); }} loading={loading} disabled={busy}>{t('刷新物料')}</Button><Button onClick={() => void exportCurrent()} loading={exporting} disabled={loading || busy || !materials.length}>{t('导出当前物料清单')}</Button></Space> : <Alert type="info" title={t('没有物料查看权限')} />}
     <Space wrap>{canWrite ? <Button disabled={busy} onClick={() => setCreating(true)}>{t('新增物料')}</Button> : null}{canImport ? <Form component={false} disabled={busy}><MaterialMasterImport organizationId={organizationId} onImported={canRead ? () => refresh(false, true) : () => undefined} /></Form> : null}</Space>
     {canWrite ? <Modal title={t('新增物料')} open={creating} footer={null} onCancel={cancelCreate} closable={!busy} keyboard={!busy} mask={{ closable: false }}><Form form={form} layout="vertical" onValuesChange={() => setDirty(true)} onFinish={(values: Create) => void save(values)}>
       <Form.Item name="materialCode" extra={t('区分大小写，保留前导 0')} rules={[{ required: true, whitespace: true }]}><Input aria-label={t('物料编码')} placeholder={t('物料编码')} maxLength={100} disabled={busy} /></Form.Item>
@@ -153,7 +169,7 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
       {error ? <Alert showIcon type="error" title={t(safeAccountError(error))} /> : null}
       <div className="qms-dialog-actions" role="group" aria-label={t('新增物料')}><Button htmlType="submit" loading={busy}>{t('保存')}</Button></div>
     </Form></Modal> : null}
-    {canRead ? <LedgerTable<Material> ledgerId="material-master" organizationId={organizationId} requiredColumnKeys={['materialCode', 'actions']} loading={loading} rowKey="id" size="small" scroll={{ x: true }} dataSource={materials} rowSelection={deletion.rowSelection(materials.slice((page - 1) * pageSize, page * pageSize))} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100, 500, 1000], disabled: busy, onChange: (next, size) => { if (!busy) { setSelection({}); setPage(size === pageSize ? next : 1); setPageSize(size); } } }} columns={[{ key: 'materialCode', title: t('物料编码'), dataIndex: 'materialCode' }, { key: 'materialName', title: t('物料名称'), dataIndex: 'materialName' }, ...(canWrite ? [{ key: 'actions', title: t('操作'), render: (_: unknown, item: Material) => <Button disabled={busy} onClick={() => setEdit({ item, materialName: item.materialName })}>{t('改名')}</Button> }] : [])]} /> : null}
+    {canRead ? <LedgerTable<Material> ledgerId="material-master" organizationId={organizationId} requiredColumnKeys={['materialCode', 'actions']} loading={loading} rowKey="id" size="small" scroll={{ x: true }} dataSource={materials} rowSelection={deletion.rowSelection(materials)} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100, 500, 1000], disabled: busy, onChange: (next, size) => { if (!busy) { setSelection({}); setPage(size === pageSize ? next : 1); setPageSize(size); } } }} columns={[{ key: 'materialCode', title: t('物料编码'), dataIndex: 'materialCode' }, { key: 'materialName', title: t('物料名称'), dataIndex: 'materialName' }, ...(canWrite ? [{ key: 'actions', title: t('操作'), render: (_: unknown, item: Material) => <Button disabled={busy} onClick={() => setEdit({ item, materialName: item.materialName })}>{t('改名')}</Button> }] : [])]} /> : null}
     <Modal title={t('修改物料名称')} open={Boolean(edit)} onCancel={cancelEdit} footer={null} destroyOnHidden>
       <Typography.Paragraph>{edit?.item.materialCode}</Typography.Paragraph>
       <Input aria-label={t('编辑物料名称')} maxLength={200} disabled={busy || loading} value={edit?.materialName ?? ''} onChange={(event) => setEdit((current) => current ? { ...current, materialName: event.target.value } : current)} />

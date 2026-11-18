@@ -23,9 +23,10 @@ vi.mock('exceljs', () => ({ default: { Workbook: class {
 } } }));
 const permissions = ['material-master:read', 'material-master:write', 'material-master:import'];
 const material = { id: 'material-1', materialCode: '00042', materialName: '原物料', version: 4 };
+const materialPage = (items = [material], total = items.length, page = 1, pageSize = 20) => ({ items, total, page, pageSize });
 beforeEach(() => {
   vi.mocked(csrfToken).mockResolvedValue('csrf');
-  vi.mocked(apiRequest).mockReset().mockImplementation(async (path) => path === '/api/v1/material-masters' ? [material] : {});
+  vi.mocked(apiRequest).mockReset().mockImplementation(async (path) => path.startsWith('/api/v1/material-masters?') ? materialPage() : {});
   vi.mocked(readXlsxFile).mockReset().mockResolvedValue([['物料编码', '物料名称'], ['00042', '中文物料'], ['00042', '不同名称']]);
   spreadsheet.rows = []; spreadsheet.writeBuffer.mockClear();
 });
@@ -35,7 +36,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 it('selects only the current material page for deletion and confirms the captured versions', async () => {
   vi.stubEnv('NODE_ENV', 'development');
   const rows = Array.from({ length: 25 }, (_, index) => ({ ...material, id: `m-${index}`, materialCode: `M-${index}`, materialName: `物料-${index}` }));
-  vi.mocked(apiRequest).mockResolvedValue(rows);
+  vi.mocked(apiRequest).mockResolvedValue(materialPage(rows.slice(0, 20), rows.length));
   const fetcher = vi.fn(async (path: string) => new Response(JSON.stringify(path.endsWith('/csrf') ? { csrfToken: 'token' } : { items: rows.slice(0, 20).map(row => ({ id: row.id, status: 'DELETED' })), deleted: 20, referenced: 0, conflicted: 0, notFound: 0 }), { headers: { 'content-type': 'application/json' } }));
   vi.stubGlobal('fetch', fetcher);
   render(<MaterialMasterPage organizationId="org-a" organizationPermissions={permissions} />);
@@ -51,17 +52,41 @@ it('selects only the current material page for deletion and confirms the capture
   await waitFor(() => expect(screen.queryByRole('toolbar', { name: '已选物料' })).not.toBeInTheDocument());
 });
 
-it('paginates the complete material array locally without a new request', async () => {
-  vi.mocked(apiRequest).mockResolvedValue(Array.from({ length: 25 }, (_, index) => ({ ...material, id: `m-${index}`, materialCode: `M-${index}`, materialName: `物料-${index}` })));
+it('loads material pages from the server with the default size and selected page size', async () => {
+  const rows = Array.from({ length: 25 }, (_, index) => ({ ...material, id: `m-${index}`, materialCode: `M-${index}`, materialName: `物料-${index}` }));
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    const query = new URL(path, 'http://localhost').searchParams;
+    const page = Number(query.get('page')); const size = Number(query.get('pageSize'));
+    const found = query.get('search') ? rows.slice(24) : rows;
+    return materialPage(found.slice((page - 1) * size, page * size), found.length, page, size);
+  });
   render(<MaterialMasterPage organizationId="target-org" organizationPermissions={permissions} />);
   await screen.findByText('物料-0');
   expect(screen.queryByText('物料-24')).not.toBeInTheDocument();
+  expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=target-org&page=1&pageSize=20');
+  fireEvent.click(screen.getByTitle('2'));
+  await screen.findByText('物料-24');
+  expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=target-org&page=2&pageSize=20');
   expect(screen.getByRole('button', { name: '列设置' })).toBeEnabled();
   await userEvent.click(screen.getByRole('combobox'));
   await userEvent.click(await screen.findByRole('option', { name: '50 / page' }));
   expect(await screen.findByText('物料-24')).toBeInTheDocument();
+  expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=target-org&page=1&pageSize=50');
+});
+
+it('searches material code or name on Enter and clear without requesting on each keystroke', async () => {
+  vi.mocked(apiRequest).mockImplementation(async path => materialPage([{ ...material, materialName: path.includes('search=') ? '搜索结果' : '原物料' }]));
+  render(<MaterialMasterPage organizationId="target-org" organizationPermissions={permissions} />);
+  await screen.findByText('原物料');
+  const search = screen.getByRole('searchbox', { name: '物料编码 / 物料名称' });
+  fireEvent.change(search, { target: { value: '  M-24  ' } });
   expect(apiRequest).toHaveBeenCalledTimes(1);
-  expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=target-org');
+  fireEvent.keyDown(search, { key: 'Enter', code: 'Enter', charCode: 13 });
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=target-org&page=1&pageSize=20&search=M-24'));
+  await screen.findByText('搜索结果');
+  fireEvent.click(search.parentElement!.querySelector('.ant-input-clear-icon')!);
+  await screen.findByText('原物料');
+  expect(apiRequest).toHaveBeenCalledTimes(3);
 });
 
 it('keeps the material section heading accessible without a duplicate visible title', async () => {
@@ -117,23 +142,24 @@ it('renames using the selected version and retains the draft on a stale version 
 it('explicitly reloads the current version without losing the name draft and saves only on a second user action', async () => {
   render(<MaterialMasterPage organizationPermissions={permissions} />);
   await screen.findByText('原物料'); fireEvent.click(screen.getByRole('button', { name: /改\s*名/ }));
-  fireEvent.change(screen.getByLabelText('编辑物料名称'), { target: { value: '我的草稿' } });
+  const editor = within(screen.getByRole('dialog', { name: '修改物料名称' }));
+  fireEvent.change(editor.getByLabelText('编辑物料名称'), { target: { value: '我的草稿' } });
   vi.mocked(apiRequest).mockRejectedValueOnce(new ApiError({ code: 'CONCURRENCY_CONFLICT', message: 'conflict' }, 409));
-  fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+  fireEvent.click(editor.getByRole('button', { name: /保\s*存/ }));
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1));
-  vi.mocked(apiRequest).mockResolvedValueOnce([{ ...material, materialName: '其他人修改', version: 5 }]);
-  fireEvent.click(screen.getByRole('button', { name: '重新加载物料版本' }));
+  vi.mocked(apiRequest).mockResolvedValueOnce(materialPage([{ ...material, materialName: '其他人修改', version: 5 }]));
+  fireEvent.click(editor.getByRole('button', { name: '重新加载物料版本' }));
   await screen.findByText('其他人修改');
-  expect(screen.getByLabelText('编辑物料名称')).toHaveValue('我的草稿');
+  expect(editor.getByLabelText('编辑物料名称')).toHaveValue('我的草稿');
   expect(vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: /保\s*存/ }));
+  fireEvent.click(editor.getByRole('button', { name: /保\s*存/ }));
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(2));
   const requests = vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method === 'PATCH');
   expect(requests[1]?.[1]?.body).toBe(JSON.stringify({ materialName: '我的草稿', expectedVersion: 5 }));
   expect(requests[0]?.[1]?.headers).not.toEqual(requests[1]?.[1]?.headers);
 });
 
-it('renders the real English page and import outcomes through LanguageProvider', async () => {
+it('renders the real English page and creation dialog through LanguageProvider', async () => {
   localStorage.setItem('qms:locale:v1', 'en-US');
   try {
     const view = render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MaterialMasterPage organizationPermissions={permissions} /></LanguageProvider></ConfigProvider>);
@@ -146,6 +172,16 @@ it('renders the real English page and import outcomes through LanguageProvider',
     expect(within(createDialog).getByLabelText('Material code')).toBeInTheDocument();
     fireEvent.click(within(createDialog).getByRole('button', { name: 'Close' }));
     await waitFor(() => expect(createDialog).not.toBeVisible());
+    expect(screen.queryByText('物料主数据')).not.toBeInTheDocument();
+  } finally { localStorage.removeItem('qms:locale:v1'); }
+});
+
+it('renders real English material import outcomes through LanguageProvider', async () => {
+  localStorage.setItem('qms:locale:v1', 'en-US');
+  try {
+    const view = render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MaterialMasterPage organizationPermissions={permissions} /></LanguageProvider></ConfigProvider>);
+    await screen.findByRole('heading', { name: 'Material masters' });
+    const page = within(view.container);
     fireEvent.click(page.getByRole('button', { name: /批量导入物料|Batch import materials/ }));
     const importer = within(screen.getByRole('dialog'));
     expect(importer.getByRole('button', { name: 'Download material template' })).toBeInTheDocument();
@@ -172,11 +208,11 @@ it('keeps import separate from manual-write permission and hides inaccessible da
 
 it('discards late list responses and edit drafts after switching organization', async () => {
   let resolve!: (value: unknown) => void;
-  vi.mocked(apiRequest).mockImplementation((path) => path.endsWith('org-a') ? new Promise((done) => { resolve = done; }) : Promise.resolve([{ ...material, id: 'other', materialName: '新组织物料' }]));
+  vi.mocked(apiRequest).mockImplementation((path) => path.includes('organizationId=org-a') ? new Promise((done) => { resolve = done; }) : Promise.resolve(materialPage([{ ...material, id: 'other', materialName: '新组织物料' }])));
   const view = render(<MaterialMasterPage organizationId="org-a" organizationPermissions={permissions} />);
   view.rerender(<MaterialMasterPage organizationId="org-b" organizationPermissions={permissions} />);
   await screen.findByText('新组织物料');
-  await act(async () => { resolve([{ ...material, materialName: '旧组织物料' }]); });
+  await act(async () => { resolve(materialPage([{ ...material, materialName: '旧组织物料' }])); });
   expect(screen.queryByText('旧组织物料')).not.toBeInTheDocument();
 });
 
@@ -208,7 +244,7 @@ it('retains the edit draft when explicit version reload fails over the network',
 });
 
 it('guards organization changes while a closed import modal retains unsubmitted rows', async () => {
-  vi.mocked(apiRequest).mockResolvedValue([material]);
+  vi.mocked(apiRequest).mockResolvedValue(materialPage());
   const organizations = ['a', 'b'].map((id) => ({ id: `org-${id}`, code: id, name: `组织${id}`, type: 'INTERNAL' as const, permissions }));
   render(<MemoryRouter initialEntries={['/app/admin']}><LanguageProvider><UnsavedChangesProvider><AdminPage organizations={organizations} /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
   await screen.findByText('原物料');
@@ -223,14 +259,14 @@ it('guards organization changes while a closed import modal retains unsubmitted 
   await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
   fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(apiRequest).not.toHaveBeenCalledWith('/api/v1/material-masters?organizationId=org-b');
+  expect(apiRequest).not.toHaveBeenCalledWith('/api/v1/material-masters?organizationId=org-b&page=1&pageSize=20');
   fireEvent.click(screen.getByRole('button', { name: '批量导入物料' }));
   expect(screen.getByText('中文物料')).toBeInTheDocument();
   await closeImport();
   fireEvent.mouseDown(screen.getByRole('combobox', { name: '管理组织' }));
   fireEvent.click(screen.getByText('组织b · b', { selector: '.ant-select-item-option-content' }));
   fireEvent.click(screen.getByRole('button', { name: '放弃修改' }));
-  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=org-b'));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=org-b&page=1&pageSize=20'));
   fireEvent.click(screen.getByRole('button', { name: '批量导入物料' }));
   expect(screen.getByRole('button', { name: '导入物料' })).toBeDisabled();
   expect(screen.queryByText('中文物料')).not.toBeInTheDocument();
@@ -267,8 +303,8 @@ it('clears import preview and discards late parsing on organization switch', asy
   expect(screen.getByRole('button', { name: '导入物料' })).toBeDisabled();
 });
 
-it('exports only the loaded organization list as two text columns without interpreting formula-looking names', async () => {
-  vi.mocked(apiRequest).mockResolvedValue([{ ...material, materialName: '=1+1' }]);
+it('exports every filtered material page as two text columns without interpreting formula-looking names', async () => {
+  vi.mocked(apiRequest).mockResolvedValueOnce(materialPage([{ ...material, materialName: '=1+1' }], 2)).mockResolvedValueOnce(materialPage([{ ...material, materialName: '=1+1' }, { ...material, id: 'second', materialCode: '00043', materialName: '第二物料' }], 2, 1, 1000));
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:test') });
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
@@ -277,10 +313,10 @@ it('exports only the loaded organization list as two text columns without interp
     await screen.findByText('=1+1');
     fireEvent.click(screen.getByRole('button', { name: '导出当前物料清单' }));
     await waitFor(() => expect(click).toHaveBeenCalledOnce());
-    expect(spreadsheet.rows).toEqual([['物料编码', '物料名称'], ['00042', '=1+1']]);
+    expect(spreadsheet.rows).toEqual([['物料编码', '物料名称'], ['00042', '=1+1'], ['00043', '第二物料']]);
     expect(spreadsheet.columns.every((column) => column.numFmt === '@')).toBe(true);
-    expect(apiRequest).toHaveBeenCalledTimes(1);
-    expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=org-a');
+    expect(apiRequest).toHaveBeenCalledTimes(2);
+    expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=org-a&page=1&pageSize=1000');
   } finally { click.mockRestore(); }
 });
 it('REQ0019 opens material creation and import separately according to permission', async () => {

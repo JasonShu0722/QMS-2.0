@@ -52,6 +52,47 @@ async function openDelete() {
 async function deletionDialog() { return (await screen.findByText('删除制程不良台账', { selector: '.ant-modal-title' })).closest('[role="dialog"]') as HTMLElement; }
 const pageSelection = () => within(document.querySelector<HTMLElement>('.qms-ledger thead')!).getByLabelText('选择当前页制程不良');
 
+it('orders the default recording columns and keeps optional facts recoverable without unlocking selection', async () => {
+  const { container } = mount();
+  await screen.findByLabelText(`选择制程不良 ${record.description}`);
+  const headers = within(container.querySelector<HTMLElement>('.qms-ledger thead')!);
+  const titles = ['选择', '发生时间', '班次', '项目号', '细分类型', '新品/量产', '不良描述', '追溯码', '生产线名称', '工序名称', '板块', '不良数量', '操作'];
+  const defaultTitles = headers.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'));
+  expect(defaultTitles).toEqual(titles);
+  fireEvent.click(within(container.querySelector<HTMLElement>('.qms-ledger__tools')!).getByRole('button', { name: '列设置' }));
+  expect(await screen.findByLabelText('显示 选择')).toBeDisabled();
+  expect(screen.getByLabelText('固定 选择')).toBeDisabled();
+  expect(screen.getByLabelText('下移 选择', { selector: 'button' })).toBeDisabled();
+  for (const title of ['类型', '成品编码', '工单号', '生产线编码', '工序编码', '登记人', '完善情况', '责任类别', '状态', '首条物料 / 供应商', '人工项目 / 映射', '批次 / 工单']) {
+    expect(defaultTitles).not.toContain(title);
+    expect(screen.getByLabelText(`显示 ${title}`)).not.toBeChecked();
+  }
+  fireEvent.click(screen.getByLabelText('显示 成品编码'));
+  expect(headers.getByRole('columnheader', { name: '成品编码' })).toBeVisible();
+  fireEvent.click(screen.getByText('恢复录单默认列', { selector: 'button span' }));
+  expect(headers.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'))).toEqual(titles);
+});
+
+it('keeps row actions as accessible icons and previews the same source before deletion', async () => {
+  mount();
+  const selection = await screen.findByLabelText(`选择制程不良 ${record.description}`);
+  const row = within(selection.closest('tr')!);
+  const view = row.getByRole('button', { name: '查看详情' });
+  const remove = row.getByRole('button', { name: '删除台账' });
+  expect(view.textContent).toBe('');
+  expect(remove.textContent).toBe('');
+  expect(view.querySelector('svg.lucide-eye')).not.toBeNull();
+  expect(remove.querySelector('svg.lucide-trash2')).not.toBeNull();
+  fireEvent.click(view);
+  const detail = (await screen.findByText('来源详情', { selector: '.ant-drawer-title' })).closest<HTMLElement>('[role="dialog"]')!;
+  await waitFor(() => expect(within(detail).getByText(record.traceCode!)).toBeVisible());
+  fireEvent.click(within(detail).getByLabelText('关闭', { selector: 'button' }));
+  fireEvent.click(remove);
+  await deletionDialog();
+  const call = vi.mocked(apiRequest).mock.calls.find(([path]) => path.endsWith('/deletion-preview'));
+  expect(JSON.parse(String(call?.[1]?.body))).toEqual({ sources: [{ defectId: record.id, expectedVersion: record.version }] });
+});
+
 it('caps header selection at 100 and allows a partially selected capped page to cancel', async () => {
   compact.enabled = true;
   const sources = Array.from({ length: 102 }, (_, index) => ({ ...record, id: `source-${index}`, description: `来源 ${index}` }));
@@ -144,7 +185,7 @@ it('submits a trimmed reason with CAS versions then clears deleted selection and
     if (deleted && path.includes('/defects?')) return { items: [], total: 0, page: 1, pageSize: 20 };
     return response(path);
   });
-  mount(); fireEvent.click(await screen.findByText('查看详情'));
+  mount(); fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
   await screen.findByText('维护台账');
   const detail = screen.getByText('来源详情', { selector: '.ant-drawer-title' }).closest('[role="dialog"]') as HTMLElement;
   fireEvent.click(within(detail).getByRole('button', { name: '删除台账' }));

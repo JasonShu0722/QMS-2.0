@@ -1,6 +1,7 @@
 import type { components } from '@qms/contracts';
 import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Form, Input, List, Select, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
 import { useEffect, useRef, useState } from 'react';
+import { Eye, Trash2 } from 'lucide-react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import './process-quality.css';
@@ -282,11 +283,11 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     { title: '项目号', key: 'project', width: 130, render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
     { title: '细分类型', key: 'productSubcategory', dataIndex: 'productSubcategory', width: 120, render: value => value ?? '未确认' },
     { title: '新品/量产', key: 'projectStage', dataIndex: 'projectStage', width: 105, render: value => value === 'NEW_PRODUCT' ? '新品' : value === 'MASS_PRODUCTION' ? '量产' : '未确认' },
-    { title: '生产线名称', key: 'lineName', dataIndex: 'lineName', width: 150, ellipsis: true },
-    { title: '工序名称', key: 'operationName', dataIndex: 'operationName', width: 150, ellipsis: true },
-    { title: '板块', key: 'operationSector', dataIndex: 'operationSector', width: 120, render: value => value ?? '未确认' },
-    { title: '追溯码', key: 'traceCode', dataIndex: 'traceCode', width: 170, ellipsis: true },
     { title: '不良描述', key: 'description', dataIndex: 'description', width: 260, ellipsis: true, render: (value: string, record) => <div className="process-quality-description-cell"><div className="process-quality-description-heading"><Button type="link" title={value || '查看待完善记录'} className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value || '查看待完善记录'}</Button><MappingHint record={record} /></div><CompletionStatus record={record} /></div> },
+    { title: '追溯码', key: 'traceCode', dataIndex: 'traceCode', width: 180, ellipsis: true },
+    { title: '生产线名称', key: 'lineName', dataIndex: 'lineName', width: 144, ellipsis: true },
+    { title: '工序名称', key: 'operationName', dataIndex: 'operationName', width: 144, ellipsis: true },
+    { title: '板块', key: 'operationSector', dataIndex: 'operationSector', width: 96, render: value => value ?? '未确认' },
     { title: '类型', key: 'defectTypeCode', dataIndex: 'defectTypeCode', width: 115 },
     { title: '不良数量', key: 'defectQuantity', dataIndex: 'defectQuantity', width: 100 },
     { title: '成品编码', key: 'productCode', dataIndex: 'productCode', width: 150 },
@@ -300,7 +301,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     { title: '首条物料 / 供应商', key: 'material', width: 190, render: (_, record) => record.materials?.length ? <span>{record.materials[0].materialCode ?? '—'} / {supplierName(record.materials[0])}{record.materials.length > 1 ? `（共${record.materials.length}项）` : ''}</span> : '—' },
     { title: '人工项目 / 映射', key: 'mapping', width: 150, render: (_, record) => <Space>{record.projectCode ?? '—'}<MappingHint record={record} /></Space> },
     { title: '批次 / 工单', key: 'source', width: 175, render: (_, record) => `${record.batchCode ?? '—'} / ${record.workOrderCode ?? '—'}` },
-    { title: '操作', key: 'actions', width: canDelete ? 190 : 100, render: (_, record) => <Space wrap><Button onClick={() => void openDetail(record.id)}>查看详情</Button>{canDelete && !record.archivedAt ? <Button danger disabled={locked || !!deletionTargets} onClick={() => openDeletion([record])}>删除台账</Button> : null}</Space> },
+    { title: '操作', key: 'actions', width: canDelete ? 112 : 64, render: (_, record) => <div className="process-quality-row-actions"><Button type="text" aria-label="查看详情" title="查看详情" icon={<Eye size={16} aria-hidden="true" />} onClick={() => void openDetail(record.id)} />{canDelete && !record.archivedAt ? <Button type="text" danger aria-label="删除台账" title="删除台账" icon={<Trash2 size={16} aria-hidden="true" />} disabled={locked || !!deletionTargets} onClick={() => openDeletion([record])} /> : null}</div> },
   ];
 
   return <main className="process-quality-page">
@@ -332,7 +333,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       {batchWriter.uncertain ? <Alert type="warning" title="分类结果未知，选择已锁定；重试复用原请求。" action={<Button loading={batchWriter.busy} onClick={() => void classify()}>同请求重试分类</Button>} /> : null}
       <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
-      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={ledgerStatus ?? 'ALL'} requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productSubcategory', 'projectStage', 'lineName', 'operationName', 'operationSector', 'traceCode', 'description', 'defectQuantity', 'actions']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} /> : null}
+      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={ledgerStatus ?? 'ALL'} requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} /> : null}
     </section>
     <Drawer title="来源详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>

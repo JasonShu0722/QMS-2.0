@@ -11595,6 +11595,12 @@ export interface components {
             materialName: string;
             version: number;
         };
+        MaterialMasterPageDto: {
+            items: components["schemas"]["MaterialMasterDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
         CreateMaterialMasterDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -24708,6 +24714,9 @@ export interface operations {
         parameters: {
             query?: {
                 organizationId?: string;
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
             };
             header?: never;
             path?: never;
@@ -24720,7 +24729,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MaterialMasterDto"][];
+                    "application/json": components["schemas"]["MaterialMasterPageDto"];
                 };
             };
             default: {
