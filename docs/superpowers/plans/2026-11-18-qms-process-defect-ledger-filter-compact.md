@@ -4,6 +4,8 @@
 
 2026-11-19：负责人已确认本计划全部业务口径并授权持续至整体实现、PR 检查验收、合并部署。目标分支 `codex/process-defect-ledger-ai-filter`，基于已发布主干 `7bb6860`；本轮同时接续 API 多字段变量绑定和台账服务端筛选/个人记忆。
 
+飞书需求清单已提交并回读：[REQ-0041 制程不良台账筛选聚合与 AI 变量绑定](https://larkcommunity.feishu.cn/base/B12bbPj4Ta9Usos1Y4xcbTiFnue?table=tbl4mISZxWdE2bG7&record=reczz28bDAnPi2sM)，回读版本 383。进度状态为系统初始的“待评估”；负责人留待自行更新，本次未写入进度、紧急程度或完成时间。当前开发依据本会话直接授权接续，不等待状态变更。
+
 ## 已核对的现状
 
 - 前端入口：`apps/web/src/features/process-quality/ProcessDefectLedgerPage.tsx`。
