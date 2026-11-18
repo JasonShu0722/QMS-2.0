@@ -58,13 +58,13 @@
 .process-quality-filter-title > button:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 1px; }
 .process-quality-filter-title > button[aria-pressed='true'] { color: var(--qms-accent); }
 .process-quality-filter-title > button:disabled { cursor: default; opacity: .6; }
-.process-quality-filter-panel { display: grid; gap: 8px; min-width: min(640px, calc(100vw - 32px)); max-width: calc(100vw - 32px); }
+.process-quality-filter-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(640px, calc(100vw - 48px)); }
 .process-quality-filter-heading { display: flex; align-items: center; justify-content: space-between; }
 .process-quality-filter-heading > strong { font-size: 15px; }
 .process-quality-filter-panel > label { display: flex; align-items: center; gap: 8px; }
 .process-quality-filter-panel select, .process-quality-filter-panel input { min-height: 32px; min-width: 0; border: 1px solid var(--qms-border); border-radius: 6px; background: var(--qms-surface); color: var(--qms-text); padding-inline: 6px; }
 .process-quality-filter-rows { display: grid; gap: 6px; }
 .process-quality-filter-row { display: grid; grid-template-columns: minmax(130px, 1fr) minmax(100px, .8fr) minmax(150px, 1fr) auto; gap: 6px; align-items: center; }
-@media (max-width: 720px) { .process-quality-filter-panel { min-width: min(100%, 420px); } .process-quality-filter-row { grid-template-columns: 1fr 1fr; } .process-quality-filter-row input { grid-column: 1 / 2; } }
+@media (max-width: 720px) { .process-quality-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .process-quality-filter-row input { grid-column: 1 / 2; } }
 @media (max-width: 600px) { .process-quality-warning { width: 44px; height: 44px; } }
 @media (max-width: 720px) { .process-quality-page { padding: 0; min-width: 0; } .process-quality-heading { flex-direction: column; } .process-quality-heading > div:first-child { flex: 1 1 auto; } .process-quality-card { padding: var(--qms-card-padding); } .process-quality-toolbar-main { flex-basis: 100%; } .process-quality-toolbar-main > .ant-input-search { flex-basis: 100%; max-width: 100%; } }

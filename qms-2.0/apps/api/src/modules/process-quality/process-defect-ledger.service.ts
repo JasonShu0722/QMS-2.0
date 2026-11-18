@@ -263,6 +263,7 @@ function processFilterPredicate({ field, operator, value }: ProcessFilter): Pris
   }
   const type = PROCESS_FILTER_FIELDS[field];
   const column = field === 'projectStage' ? Prisma.sql`d.project_snapshot #>> '{project,stage}'`
+    : field === 'projectCode' ? Prisma.sql`d.project_snapshot #>> '{project,code}'`
     : Prisma.sql`d.${Prisma.raw(field.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`))}`;
   return filterComparison(type === 'text' || type === 'enum' ? Prisma.sql`NULLIF(${column}, '')` : column, type, operator, value);
 }

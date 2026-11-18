@@ -111,8 +111,9 @@ test('administrator imports incomplete IMS rows and real Worker fills only missi
     expect(await response.json()).toBe(true);
   }
   const productCode = `CMP_${suffix}`;
+  const month = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit' }).format(new Date());
   await send([
-    { ID: `FIRST_${suffix}`, TIME: '2026-11-16T08:30:00+08:00', PRODUCT: productCode, TRACE: `T_${suffix}`, OPERATION: `焊接${suffix}`, FAULT: suffix, NOTE: '完整行' },
+    { ID: `FIRST_${suffix}`, TIME: `${month}-01T08:30:00+08:00`, PRODUCT: productCode, TRACE: `T_${suffix}`, OPERATION: `焊接${suffix}`, FAULT: suffix, NOTE: '完整行' },
     { ID: `SECOND_${suffix}`, PRODUCT: productCode, OPERATION: `焊接${suffix}`, FAULT: suffix },
   ]);
   await worker();
@@ -138,12 +139,52 @@ test('administrator imports incomplete IMS rows and real Worker fills only missi
   await worker();
   expect(await positionRead<Schema['ProcessDefectDto']>(page.request, `/api/v1/process-quality/defects/${first.id}`)).toMatchObject({ projectStage: 'NEW_PRODUCT' });
   await page.goto('/app/process-quality');
-  await expect(page.getByRole('button', { name: '登记不良', exact: true })).toBeVisible();
-  for (const width of [1440, 390, 320]) {
+  const toolbar = page.getByRole('group', { name: '台账工具栏' });
+  await expect(toolbar.getByRole('button', { name: '登记不良', exact: true })).toBeVisible();
+  await expect(toolbar.getByRole('button', { name: '发起 8D', exact: true })).toHaveCount(1);
+  const search = toolbar.getByLabel('搜索制程不良');
+  await search.fill(suffix);
+  await search.press('Enter');
+  const selected = page.getByRole('checkbox', { name: `选择制程不良 现象：${suffix} 说明：完整行` });
+  await expect(selected).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: `选择制程不良 现象：${suffix}`, exact: true })).toHaveCount(0);
+  await selected.check();
+  await expect(page.getByRole('group', { name: '台账批量操作' }).getByRole('button', { name: '删除所选' })).toBeVisible();
+  await page.getByRole('button', { name: '按发生时间筛选' }).click();
+  const filter = page.getByRole('dialog', { name: '筛选面板' });
+  await expect(filter.getByLabel('筛选字段 1')).toBeFocused();
+  await filter.getByLabel('筛选运算符 1').selectOption('EQ');
+  await filter.getByLabel('筛选值 1').fill(`${month}-01`);
+  await filter.getByRole('button', { name: '添加筛选条件' }).click();
+  await filter.getByLabel('筛选值 2').fill('完整行');
+  await filter.getByRole('button', { name: '应用筛选' }).click();
+  await expect(selected).toBeVisible();
+  await expect(page.getByRole('group', { name: '台账批量操作' })).toHaveCount(0);
+  await page.reload();
+  await expect(search).toHaveValue(suffix);
+  await toolbar.getByRole('button', { name: '筛选条件' }).click();
+  await expect(filter.getByLabel('筛选值 1')).toHaveValue(`${month}-01`);
+  await expect(filter.getByLabel('筛选值 2')).toHaveValue('完整行');
+  for (const width of [1440, 1024, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+    await expect.poll(() => page.evaluate(() => {
+      const { clientWidth, scrollWidth } = document.documentElement;
+      return scrollWidth <= clientWidth + 1 ? [] : [{ clientWidth, scrollWidth }, ...Array.from(document.querySelectorAll('.ant-popover, body > div, .process-quality-filter-panel, .process-quality-toolbar-main, .process-quality-compact-ledger')).flatMap(element => {
+        const { left, right } = element.getBoundingClientRect();
+        return right > clientWidth + 1 ? [{ className: element.className, left, right, clientWidth, scrollWidth }] : [];
+      })];
+    }), { message: `Filter must fit at ${width}px` }).toEqual([]);
+    await expect(filter.getByRole('button', { name: '应用筛选' })).toBeInViewport();
     if (process.env.QMS_ACCEPTANCE_ARTIFACT_DIRECTORY) await page.screenshot({ path: `${process.env.QMS_ACCEPTANCE_ARTIFACT_DIRECTORY}/process-defects-${width}.png` });
   }
+  await filter.getByRole('button', { name: '恢复系统默认筛选' }).click();
+  await expect(search).toHaveValue('');
+  await toolbar.getByRole('button', { name: '筛选条件' }).click();
+  await expect(filter.getByLabel('仅当前自然月（北京时间）')).toBeChecked();
+  await expect(filter.getByLabel('筛选字段 1')).toHaveCount(0);
+  await filter.getByLabel('筛选逻辑').selectOption('ANY');
+  await filter.getByRole('button', { name: '应用筛选' }).click();
+  await expect(page.getByRole('checkbox', { name: '选择当前页制程不良' })).toBeEnabled();
 });
 
 test('manual registration retains the trace draft after closing the camera and saves the default quantity', async ({ page }) => {

@@ -70,18 +70,24 @@ function filterValue(item: FilterItem): string | number | boolean | undefined {
     return Number.isInteger(number) && number >= -2147483648 && number <= 2147483647 ? number : undefined;
   }
   if (item.field === 'occurredAt') {
-    const date = new Date(`${value}T00:00:00+08:00`);
-    return Number.isFinite(date.getTime()) ? date.toISOString() : undefined;
+    const date = new Date(`${value}T00:00:00Z`);
+    return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : undefined;
   }
   return value.length <= 200 ? value : undefined;
 }
+function serializeFilters({ logic, items }: FilterState) {
+  return items.length ? JSON.stringify({ logic, items: items.map(item => ({ field: item.field, operator: item.operator, value: filterValue(item) })) }) : '';
+}
+// Leave room for the search text and paging in the gateway's request line.
+const filtersTooLong = (serialized: string) => new URLSearchParams({ filters: serialized }).toString().length > 5500;
 function normalizeFilterPreference(input: unknown): FilterPreference {
   if (!input || typeof input !== 'object') return { search: '', filters: defaultFilters };
   const { search, filters } = input as Partial<FilterPreference>;
   if (!Array.isArray(filters?.items) || filters.items.length > 10 || !['ALL', 'ANY'].includes(filters.logic)) return { search: '', filters: defaultFilters };
   const items = filters.items.filter(item => item && allowedFields.has(item.field) && operatorsFor(item.field as FilterField).some(([operator]) => operator === item.operator) && (emptyOperator(item.operator) || typeof item.value === 'string' && filterValue(item as FilterItem) !== undefined)) as FilterItem[];
   if (items.length !== filters.items.length) return { search: '', filters: defaultFilters };
-  return { search: typeof search === 'string' ? search.trim().slice(0, 200) : '', filters: { currentMonth: filters.currentMonth === true, logic: filters.logic, items } };
+  const preference = { currentMonth: filters.currentMonth === true, logic: filters.logic, items };
+  return { search: typeof search === 'string' ? search.trim().slice(0, 200) : '', filters: filtersTooLong(serializeFilters(preference)) ? defaultFilters : preference };
 }
 function monthBounds() {
   const parts = Intl.DateTimeFormat('en', { timeZone: 'Asia/Shanghai', year: 'numeric', month: 'numeric' }).formatToParts(new Date());
@@ -190,7 +196,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   function scoped(path: string) {
     return organizationId ? `${path}${path.includes('?') ? '&' : '?'}organizationId=${encodeURIComponent(organizationId)}` : path;
   }
-  const serializedFilters = appliedFilters.items.length ? JSON.stringify({ logic: appliedFilters.logic, items: appliedFilters.items.map(({ field, operator, ...item }) => ({ field, operator, value: filterValue({ field, operator, ...item }) })) }) : '';
+  const serializedFilters = serializeFilters(appliedFilters);
   useEffect(() => {
     if (!canReadSuppliers || accessLost) { setSuppliers([]); return; }
     let active = true;
@@ -310,8 +316,9 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   function dismissFilters() { setFilterOpen(false); setDraftFilters(appliedFilters); filterAnchor.current?.focus(); }
   function closeFilters() { if (filterDirty) requestLeave(dismissFilters, true); else dismissFilters(); }
   function saveAppliedFilters(next: FilterState, nextSearch = search, reset = false) {
-    if (locked || deletionTargets) return;
-    const changed = nextSearch !== search || JSON.stringify(next) !== JSON.stringify(appliedFilters);
+    const nextFilters = serializeFilters(next);
+    if (locked || deletionTargets || filtersTooLong(nextFilters)) return;
+    const changed = nextSearch !== search || next.currentMonth !== appliedFilters.currentMonth || nextFilters !== serializedFilters;
     if (changed) { setSelected({}); setPage(1); setResult(undefined); setLoading(true); setActionError(undefined); }
     setSearchInput(nextSearch);
     saveFilterPreference(reset ? undefined : { search: nextSearch, filters: next });
@@ -334,6 +341,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   function updateFilterItem(index: number, next: FilterItem) {
     setDraftFilters(current => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? next : item) }));
   }
+  const draftTooLong = filtersTooLong(serializeFilters(draftFilters));
   const filterPanel = <div role="dialog" className="process-quality-filter-panel" aria-label="筛选面板" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeFilters(); } }}>
     <div className="process-quality-filter-heading"><strong>筛选条件</strong><Button type="text" aria-label="关闭筛选" icon={<X size={14} />} onClick={closeFilters} /></div>
     <Checkbox checked={draftFilters.currentMonth} onChange={event => setDraftFilters(current => ({ ...current, currentMonth: event.target.checked }))}>仅当前自然月（北京时间）</Checkbox>
@@ -348,11 +356,12 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
         <Button type="text" aria-label={`删除筛选条件 ${index + 1}`} icon={<X size={13} />} onClick={() => { setFilterRow(undefined); setDraftFilters(current => ({ ...current, items: current.items.filter((_, entryIndex) => entryIndex !== index) })); }} />
       </div>)}
     </div>
+    {draftTooLong ? <Alert type="warning" showIcon title="筛选内容过长，请缩短文字或减少条件。" /> : null}
     <Space wrap>
       <Button disabled={draftFilters.items.length >= 10} onClick={() => { setFilterRow(draftFilters.items.length); setDraftFilters(current => ({ ...current, items: [...current.items, filterItem('description')] })); }}>添加筛选条件</Button>
       <Button onClick={() => saveAppliedFilters(defaultFilters, '', true)}>恢复系统默认筛选</Button>
       <Button aria-label="清空" onClick={() => setDraftFilters({ currentMonth: false, logic: 'ALL', items: [] })}>清空</Button>
-      <Button type="primary" disabled={draftFilters.items.some(item => !emptyOperator(item.operator) && filterValue(item) === undefined)} onClick={() => saveAppliedFilters(draftFilters)}>应用筛选</Button>
+      <Button type="primary" disabled={draftTooLong || draftFilters.items.some(item => !emptyOperator(item.operator) && filterValue(item) === undefined)} onClick={() => saveAppliedFilters(draftFilters)}>应用筛选</Button>
     </Space>
   </div>;
   if (accessLost) return <main className="process-quality-page"><Alert type="warning" showIcon title="暂无制程不良访问权限" description="当前会话或权限已变化，已清除来源、选择与草稿；请重新进入。" /></main>;
@@ -388,7 +397,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const toolbar = <div className="process-quality-toolbar-main" role="group" aria-label="台账工具栏">
     <Input.Search aria-label="搜索制程不良" placeholder="搜索追溯码、成品编码、工单、不良描述或批次" value={searchInput} allowClear maxLength={200} disabled={locked || !!deletionTargets} onChange={event => setSearchInput(event.target.value)} onSearch={value => requestLeave(() => saveAppliedFilters(appliedFilters, value.trim()))} />
     {canWrite ? <Button type="primary" disabled={locked} onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
-    <Popover open={filterOpen} onOpenChange={open => { if (open && filterTrigger.current) openFilters(filterTrigger.current); else if (!open && filterOpen) closeFilters(); }} afterOpenChange={open => { if (open) filterControl.current?.focus(); }} content={filterPanel} trigger="click" placement="bottomLeft" destroyOnHidden><Button ref={filterTrigger} aria-label="筛选条件" aria-haspopup="dialog" aria-expanded={filterOpen} disabled={locked || !!deletionTargets} icon={<Filter size={14} />}>筛选条件{appliedFilters.items.length || appliedFilters.currentMonth ? ` ${appliedFilters.items.length + Number(appliedFilters.currentMonth)}` : ''}</Button></Popover>
+    <Popover open={filterOpen} onOpenChange={open => { if (open && filterTrigger.current) openFilters(filterTrigger.current); else if (!open && filterOpen) closeFilters(); }} afterOpenChange={open => { if (open) filterControl.current?.focus(); }} content={filterPanel} trigger="click" placement="bottomLeft" align={{ overflow: { shiftX: true } }} destroyOnHidden><Button ref={filterTrigger} aria-label="筛选条件" aria-haspopup="dialog" aria-expanded={filterOpen} disabled={locked || !!deletionTargets} icon={<Filter size={14} />}>筛选条件{appliedFilters.items.length || appliedFilters.currentMonth ? ` ${appliedFilters.items.length + Number(appliedFilters.currentMonth)}` : ''}</Button></Popover>
     {canIssue ? <Button aria-label="发起 8D" disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起 8D</Button> : null}
     <Button aria-label="刷新" disabled={locked} onClick={() => requestLeave(() => { if (filterOpen) dismissFilters(); setRevision(value => value + 1); })} loading={loading}>刷新</Button>
   </div>;

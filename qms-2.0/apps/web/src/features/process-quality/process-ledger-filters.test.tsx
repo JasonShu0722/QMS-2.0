@@ -90,7 +90,25 @@ it('keeps the default month independent of an ANY condition', async () => {
   expect(latestQuery().get('occurredTo')).toBe(monthTo);
 });
 
-it('uses the same filter panel for the date header and submits a Beijing date-time boundary', async () => {
+it('keeps an oversized set of text conditions editable without sending or saving it', async () => {
+  const condition = { field: 'description', operator: 'CONTAINS', value: '划'.repeat(200) };
+  const saved = JSON.stringify({ schema: 1, value: { search: '', filters: { currentMonth: true, logic: 'ALL', items: [condition, condition] } } });
+  localStorage.setItem(filtersKey, saved);
+  mount();
+  fireEvent.click(screen.getByLabelText('筛选条件', { selector: 'button' }));
+  const panel = within(await screen.findByLabelText('筛选面板'));
+  fireEvent.click(panel.getByText('添加筛选条件'));
+  fireEvent.change(panel.getByLabelText('筛选值 3'), { target: { value: condition.value } });
+  expect(panel.getByText('筛选内容过长，请缩短文字或减少条件。')).toBeInTheDocument();
+  const apply = panel.getByText('应用筛选').closest('button');
+  expect(apply).toBeDisabled();
+  expect(JSON.parse(latestQuery().get('filters')!).items).toEqual([condition, condition]);
+  expect(localStorage.getItem(filtersKey)).toBe(saved);
+  fireEvent.click(panel.getByLabelText('删除筛选条件 3'));
+  expect(apply).toBeEnabled();
+});
+
+it('uses the same filter panel for the date header and submits a calendar date', async () => {
   localStorage.setItem(filtersKey, JSON.stringify({ schema: 1, value: { search: '', filters: { currentMonth: false, logic: 'ALL', items: [{ field: 'traceCode', operator: 'EQ', value: 'TRACE-SAVED' }] } } }));
   mount();
   await screen.findByLabelText('搜索制程不良');
@@ -103,7 +121,7 @@ it('uses the same filter panel for the date header and submits a Beijing date-ti
   expect(date).toHaveAttribute('type', 'date');
   fireEvent.change(date, { target: { value: '2026-11-01' } });
   fireEvent.click(queries.getByText('应用筛选'));
-  expect(latestQuery().get('filters')).toContain('2026-10-31T16:00:00.000Z');
+  expect(latestQuery().get('filters')).toContain('"value":"2026-11-01"');
   expect(trigger).toHaveFocus();
 });
 

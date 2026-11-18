@@ -72,7 +72,7 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     const base = { organizationId, createdById: userId, updatedById: userId, ledgerStatus: 'FOLLOWING', productCode: 'COMP', description: 'FilterScope 100%_A' };
     const at = (value: string) => new Date(value);
     await prisma.processDefect.createMany({ data: [
-      { ...base, id: recent, projectSnapshot: snapshot('NEW_PRODUCT'), occurredAt: at('2026-11-01T00:00:00.001+08:00'), defectQuantity: 7, lineName: '' },
+      { ...base, id: recent, projectCode: 'MANUAL-PROJECT', projectSnapshot: snapshot('NEW_PRODUCT'), occurredAt: at('2026-11-01T00:00:00.001+08:00'), defectQuantity: 7, lineName: '' },
       { ...base, id: boundary, projectSnapshot: snapshot('NEW_PRODUCT'), occurredAt: at('2026-11-01T00:00:00+08:00'), defectQuantity: 2, lineName: 'Line A' },
       { ...base, id: older, projectSnapshot: snapshot('NEW_PRODUCT'), occurredAt: at('2026-10-31T23:59:59.999+08:00'), defectQuantity: 1, description: 'OtherScope 100xxA' },
       { ...base, id: mass, projectSnapshot: snapshot('MASS_PRODUCTION'), occurredAt: at('2026-11-05T00:00:00+08:00'), defectQuantity: 8, description: 'FilterScope 100XYA', responsibilityCategory: 'MATERIAL' },
@@ -100,6 +100,9 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
       expect(response.body.items).toHaveLength(ids.length);
     }
     expect(await results('ANY', stage, condition('pendingCompletion', 'EQ', true))).toEqual([recent, boundary, blank]);
+    expect(await results('ALL', stage, condition('projectCode', 'EQ', 'FILTER-PROJECT'))).toEqual([recent, boundary]);
+    const manualProject = await list({ projectCode: 'MANUAL-PROJECT', search: 'FilterScope' }).expect(200);
+    expect(manualProject.body).toMatchObject({ total: 1, items: [{ id: recent }] });
     expect(await results('ALL', condition('description', 'CONTAINS', '100%_a'), condition('occurredAt', 'AFTER', after))).toEqual([recent]);
     expect(await results('ALL', condition('description', 'NOT_CONTAINS', '%_'), condition('projectStage', 'NE', 'NEW_PRODUCT'))).toEqual([mass]);
     expect(await results('ALL', condition('description', 'EQ', 'filterscope 100%_a'), condition('occurredAt', 'EQ', after))).toEqual([boundary]);

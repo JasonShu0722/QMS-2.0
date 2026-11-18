@@ -157,7 +157,7 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
         {variables.map(({ variable, label }, index) => <div className="qms-ingestion-description-row" key={variable}>
           <Form.Item label={t('变量名') + (index + 1)}><Input aria-label={t('变量名') + (index + 1)} readOnly value={variable} /></Form.Item>
           <Form.Item label={t('变量标签') + (index + 1)}><Input aria-label={t('变量标签') + (index + 1)} readOnly value={label} /></Form.Item>
-          {sourceVariables ? <Button onClick={() => insertVariable(variable)}>{text('插入', 'Insert')} {variable}</Button> : null}
+          <Button onClick={() => insertVariable(variable)}>{text('插入', 'Insert')} {variable}</Button>
         </div>)}
         <div className="qms-ingestion-grid qms-ingestion-actions">
           <Form.Item name="connectionId" label={t('模型渠道')} rules={[{ required: true }]}><Select disabled={locked || !readConnections} loading={connectionsLoading} options={connections.map(connection => ({ value: connection.id, label: connection.name, disabled: !connection.enabled || !connection.hasKey }))} onChange={value => form.setFieldValue('model', connections.find(connection => connection.id === value)?.defaultModel)} /></Form.Item>

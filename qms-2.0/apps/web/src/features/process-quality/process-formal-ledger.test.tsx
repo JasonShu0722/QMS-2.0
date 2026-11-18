@@ -22,7 +22,7 @@ vi.mock('antd', async () => {
     // Batch boundary-test selection intent; the normal cross-page test keeps real AntD controls.
     const columns = props.columns?.filter(column => column.key === 'select' || ('dataIndex' in column && column.dataIndex === 'description')) ?? [];
     const pagination = props.pagination;
-    return <div>{props.dataSource?.map((record, index) => <div key={record.id}>{columns.map((column, columnIndex) => <span key={columnIndex}>{'render' in column ? column.render?.(record.description, record, index) as ReactNode : null}</span>)}</div>)}
+    return <div>{columns.map(column => <span key={column.key}>{typeof column.title === 'function' ? column.title({}) : column.title}</span>)}{props.dataSource?.map((record, index) => <div key={record.id}>{columns.map((column, columnIndex) => <span key={columnIndex}>{'render' in column ? column.render?.(record.description, record, index) as ReactNode : null}</span>)}</div>)}
       {pagination && Array.from({ length: Math.ceil((pagination.total ?? 0) / 20) }, (_, index) => <button key={index} title={String(index + 1)} onClick={() => pagination.onChange?.(index + 1, 20)}>{index + 1}</button>)}
     </div>;
   } };
@@ -40,12 +40,14 @@ const permissions = ['process-quality:defects:read', 'process-quality:defects:wr
 const list = { items: [defect], total: 1, page: 1, pageSize: 20 };
 
 it('shows the approved default columns and applies incomplete and unconfigured conditions together', async () => {
-  mount();
+  const { container } = mount();
   await screen.findByLabelText(`选择制程不良 ${defect.description}`);
-  for (const title of ['发生时间', '班次', '项目号', '细分类型', '项目状态', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']) expect(screen.getByRole('columnheader', { name: title })).toBeVisible();
-  expect(screen.queryByRole('columnheader', { name: '成品编码' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '筛选条件' }));
-  const panel = within(await screen.findByRole('dialog', { name: '筛选面板' }));
+  const headers = within(container.querySelector('.qms-ledger thead') as HTMLElement);
+  const names = headers.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'));
+  expect(names).toEqual(expect.arrayContaining(['发生时间', '班次', '项目号', '细分类型', '项目状态', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']));
+  expect(names).not.toContain('成品编码');
+  fireEvent.click(screen.getByLabelText('筛选条件', { selector: 'button' }));
+  const panel = within(await screen.findByLabelText('筛选面板', { selector: '[role="dialog"]' }));
   for (const [index, field] of ['pendingCompletion', 'pendingConfiguration'].entries()) {
     fireEvent.click(panel.getByRole('button', { name: '添加筛选条件' }));
     fireEvent.change(panel.getByLabelText(`筛选字段 ${index + 1}`), { target: { value: field } });
@@ -372,7 +374,7 @@ it.each([401, 403])('clears parent sources, relations and draft when the preflig
   useWorkTabsStore.getState().bindSession(`INTERNAL:${organizationId}:${owner.id}`);
   mount();
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
-  fireEvent.click(await screen.findByRole('button', { name: '发起 8D' }));
+  fireEvent.click(within(screen.getByLabelText('台账工具栏')).getByLabelText('发起 8D', { selector: 'button' }));
   await screen.findByText('PQ-OLD');
   await fillIssue();
   fireEvent.change(screen.getByLabelText(`判定说明 ${defect.id}`), { target: { value: '敏感判定草稿' } });
@@ -567,7 +569,7 @@ it.each(['selected', 'new'] as const)('keeps the 100-source limit consistent for
   for (let page = 1; page <= 5; page++) {
     if (page > 1) fireEvent.click(screen.getByTitle(String(page)));
     await screen.findByLabelText(`选择制程不良 边界来源 ${(page - 1) * 20}`);
-    act(() => { screen.getAllByLabelText(/^选择制程不良 /).forEach(checkbox => fireEvent.click(checkbox)); });
+    fireEvent.click(screen.getByLabelText('选择当前页制程不良'));
     expect(screen.getByText(`已选择 ${page * 20} 条来源`)).toBeVisible();
   }
   if (entry === 'new') {
@@ -575,10 +577,10 @@ it.each(['selected', 'new'] as const)('keeps the 100-source limit consistent for
     expect(await screen.findByLabelText('选择制程不良 边界来源 100')).toBeDisabled();
   }
   fireEvent.click(screen.getByText(entry === 'selected' ? '边界来源 80' : '边界来源 100', { selector: 'button span' }));
-  const button = await screen.findByRole('button', { name: '选择此条并返回台账' });
+  const button = (await screen.findByText('选择此条并返回台账', { selector: 'button span' })).closest('button')!;
   if (entry === 'selected') {
     fireEvent.click(button);
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: '来源详情' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('来源详情', { selector: '.ant-drawer-title' })).not.toBeInTheDocument());
     expect(screen.getByLabelText('选择制程不良 边界来源 80')).toBeChecked();
   } else {
     expect(button).toBeDisabled();
@@ -586,7 +588,7 @@ it.each(['selected', 'new'] as const)('keeps the 100-source limit consistent for
     fireEvent.click(button);
   }
   expect(screen.getByText('已选择 100 条来源')).toBeVisible();
-  expect(screen.queryByRole('dialog', { name: '发起正式内部8D' })).not.toBeInTheDocument();
+  expect(screen.queryByText('发起正式内部8D', { selector: '.ant-drawer-title' })).not.toBeInTheDocument();
 });
 
 it('retries an unknown formal issue result without re-previewing or changing the original payload', async () => {
