@@ -39,7 +39,7 @@ type PickerProps = { organizationId: string; id?: string; value?: string | null;
 const english: Record<string, string> = {
   '组件项目映射': 'Component project mapping', '项目资料': 'Project records', '组件映射': 'Component mappings',
   '无组件项目映射读取权限': 'You cannot read component project mappings.', '新增项目': 'Add project', '新增组件映射': 'Add component mapping',
-  '编辑项目': 'Edit project', '编辑组件': 'Edit component', '项目编码': 'Project code', '项目名称': 'Project name', '项目阶段': 'Project stage',
+  '编辑项目': 'Edit project', '编辑组件': 'Edit component', '项目编码': 'Project code', '项目名称': 'Project name', '项目阶段': 'Project stage', '项目状态': 'Project status',
   '新品': 'New product', '量产': 'Mass production', '客户质量工程师': 'Customer quality engineer', '项目质量工程师': 'Project quality engineer',
   '组件编码': 'Component code', '关联项目': 'Project', '产品大类': 'Product category', '产品细分': 'Product subcategory',
   '搜索项目': 'Search projects', '搜索组件': 'Search components', '请选择项目阶段': 'Select a project stage',
@@ -523,7 +523,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
         { key: 'configuration', title: t('配置状态'), width: 120, render: (_, record) => t(!record.projectRecordId || !record.productCategory?.trim() ? '待配置' : '已配置') },
         { key: 'project', title: t('关联项目'), width: 230, render: (_, record) => record.project ? text(`${record.project.code} · ${record.project.name}`) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('尚未关联项目，可稍后完善映射。')}><Button type="text" size="small" aria-label={t('未映射')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> },
         { key: 'productCategory', title: t('产品大类'), dataIndex: 'productCategory', width: 140, render: value => value ? text(value) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('产品大类未配置，可稍后完善。')}><Button type="text" size="small" aria-label={t('产品大类未配置')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> }, { key: 'productSubcategory', title: t('产品细分'), dataIndex: 'productSubcategory', width: 140, render: value => value ? text(value) : '—' },
-        { key: 'stage', title: t('项目阶段'), width: 100, render: (_, record) => record.project ? t(record.project.stage === 'NEW_PRODUCT' ? '新品' : '量产') : '—' },
+        { key: 'stage', title: t('项目状态'), width: 100, render: (_, record) => record.project ? t(record.project.stage === 'NEW_PRODUCT' ? '新品' : '量产') : '—' },
         { key: 'customerEngineer', title: t('客户质量工程师'), width: 160, render: (_, record) => record.project ? <EngineerCell assignment={record.project.customerEngineer} label={t('客户质量工程师')} /> : '—' },
         { key: 'projectEngineer', title: t('项目质量工程师'), width: 160, render: (_, record) => record.project ? <EngineerCell assignment={record.project.projectEngineer} label={t('项目质量工程师')} /> : '—' },
         { key: 'status', title: t('状态'), dataIndex: 'status', width: 100, render: status => t(status === 'ACTIVE' ? '启用' : '停用') },

@@ -74,7 +74,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   const businessWidth = keys.filter(key => visible.includes(key) || required.includes(key)).reduce((total, key) => total + widthFor(key), 0);
   const fitSelection = Boolean(rowSelection && resizableSelection && businessWidth);
   const selectionWidth = widthFor(SELECTION_WIDTH_KEY);
-  const columnWidth = (key: string) => fitSelection ? `${widthFor(key) / businessWidth * 100}%` : widthFor(key);
+  const columnWidth = (key: string) => fitSelection && key !== SELECTION_WIDTH_KEY ? `${widthFor(key) / businessWidth * 100}%` : widthFor(key);
   function commit(next: Preferences) { save(normalize({ ...next, fixed: resolveFixed(next.fixed, columnOrder ?? next.order) })); }
   function setWidth(key: string, width: number) { commit({ ...saved, widths: { ...saved.widths, [key]: clampWidth(key, width) } }); }
   function setOrder(next: string[]) {

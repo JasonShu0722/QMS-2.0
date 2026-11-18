@@ -117,7 +117,7 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
       {saved?.sourceKind === 'IMS' ? <Form.Item name="externalRecordKey" label="来源明细编号"><Input maxLength={200} readOnly={!!saved.externalRecordKey} placeholder="待补充" /></Form.Item> : null}
       {saved ? <Descriptions size="small" column={2} items={[
         { key: 'project', label: '项目号', children: saved.componentProject?.project?.code ?? '待补配' },
-        { key: 'stage', label: '新品/量产', children: saved.projectStage === 'NEW_PRODUCT' ? '新品' : saved.projectStage === 'MASS_PRODUCTION' ? '量产' : '未确认' },
+        { key: 'stage', label: '项目状态', children: saved.projectStage === 'NEW_PRODUCT' ? '新品' : saved.projectStage === 'MASS_PRODUCTION' ? '量产' : '未确认' },
         { key: 'subcategory', label: '细分类型', children: saved.productSubcategory ?? '待补配' },
         { key: 'sector', label: '板块', children: saved.operationSector ?? '待补配' },
         { key: 'shift', label: '班次', children: saved.shift === 'DAY' ? '白班' : saved.shift === 'NIGHT' ? '夜班' : '未知' },

@@ -558,7 +558,7 @@
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.tsx",
-            "sha256": "a3ff0a3e0f41dfecebb39973d9e826e5cc4302b7e618ee2f8d55c6942455d351"
+            "sha256": "bd7fe3900760990e4c6d51e2a05f858090c0bffd73cb6b2f0230f190c13a70ea"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.test.tsx",
@@ -698,7 +698,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/index.tsx",
-            "sha256": "9b95c4b61e3873ced08a1b608552b0d6798dd9e9bf65ad83daecdaa9e1248ffd"
+            "sha256": "f0504111fd00b3db5653ec90fb49a244689d3f554215c0cd4a04da9c035dc513"
           },
           {
             "path": "apps/web/src/ui/ledger/model.ts",
