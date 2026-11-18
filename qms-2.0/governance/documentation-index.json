@@ -698,7 +698,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/index.tsx",
-            "sha256": "f0504111fd00b3db5653ec90fb49a244689d3f554215c0cd4a04da9c035dc513"
+            "sha256": "da218f97705a47a3134c3bd022710a71a7941abafc6110fbc31c591921e694f0"
           },
           {
             "path": "apps/web/src/ui/ledger/model.ts",

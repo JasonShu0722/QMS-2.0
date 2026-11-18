@@ -100,8 +100,10 @@ export function CompletionStatus({ record }: { record: Defect }) {
 export function MappingHint({ record }: { record: Defect }) {
   const hints = [...(record.issues ?? []), ...(record.registrationIssues ?? []), ...(record.componentProject?.issues ?? [])];
   if (record.duplicateCount && !hints.includes('SAME_OPERATION_TRACE_DUPLICATE')) hints.push('SAME_OPERATION_TRACE_DUPLICATE');
-  if (!hints.length) return null;
-  return <Tooltip trigger={['hover', 'focus']} title={<ul>{[...new Set(hints)].map(hint => <li key={hint}>{hintLabels[hint] ?? sourceIssueMessage(hint)}</li>)}</ul>}>
+  const statusHints = [record.pendingCompletion ? '待完善' : null, record.pendingConfiguration ? '待补配' : null].filter((value): value is string => Boolean(value));
+  if (!hints.length && !statusHints.length) return null;
+  const messages = [...statusHints, ...Array.from(new Set(hints), hint => hintLabels[hint] ?? sourceIssueMessage(hint))];
+  return <Tooltip trigger={['hover', 'focus']} title={<ul>{messages.map((hint, index) => <li key={`${hint}-${index}`}>{hint}</li>)}</ul>}>
     <button type="button" className="process-quality-warning" aria-label={`映射与来源提示 ${record.description}`}>!</button>
   </Tooltip>;
 }
