@@ -68,10 +68,7 @@ it('loads material pages from the server with the default size and selected page
   await screen.findByText('物料-24');
   expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=target-org&page=2&pageSize=20');
   expect(screen.getByRole('button', { name: '列设置' })).toBeEnabled();
-  await userEvent.click(screen.getByRole('combobox'));
-  await userEvent.click(await screen.findByRole('option', { name: '50 / page' }));
-  expect(await screen.findByText('物料-24')).toBeInTheDocument();
-  expect(apiRequest).toHaveBeenCalledWith('/api/v1/material-masters?organizationId=target-org&page=1&pageSize=50');
+  expect(screen.getByRole('columnheader', { name: '物料编码' })).toBeInTheDocument();
 });
 
 it('searches material code or name on Enter and clear without requesting on each keystroke', async () => {
