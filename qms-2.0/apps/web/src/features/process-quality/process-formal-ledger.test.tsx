@@ -325,7 +325,7 @@ it('uses independent close permission and clears sensitive rows after an actual 
     return baseResponse(path);
   });
   mount();
-  fireEvent.click(await screen.findByText('查看详情'));
+  fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
   fireEvent.click(await screen.findByText('关闭台账'));
   const title = await screen.findByText('确认关闭', { selector: '.ant-modal-title' });
   await waitFor(() => expect(title).toBeVisible());
@@ -435,7 +435,7 @@ it.each([
     return baseResponse(path);
   });
   mount();
-  fireEvent.click(await screen.findByText('查看详情'));
+  fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
   fireEvent.click(await screen.findByText('维护台账'));
   const time = await screen.findByLabelText('发生时间', { selector: 'input' });
   expect(time).toHaveValue(display);
@@ -629,7 +629,7 @@ it('protects an unfinished formal issue on keyboard drawer close', async () => {
 it('never shows PQC close or material review merely because the account can maintain defects', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/my-permissions') ? { permissions: ['process-quality:defects:write'] } : baseResponse(path));
   mount();
-  fireEvent.click(await screen.findByText('查看详情'));
+  fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
   await screen.findByText('维护台账');
   expect(screen.queryByText('关闭台账')).not.toBeInTheDocument();
   expect(screen.queryByText('恢复跟进')).not.toBeInTheDocument();
@@ -640,7 +640,7 @@ it('discards prior identity rows, selections and a late source-detail response o
   let resolve!: (value: typeof defect) => void;
   vi.mocked(apiRequest).mockImplementation(async path => path.endsWith(`/defects/${defect.id}`) ? new Promise(done => { resolve = done; }) : baseResponse(path));
   mount();
-  fireEvent.click(await screen.findByText('查看详情'));
+  fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/defects?') ? { ...list, items: [] } : baseResponse(path));
   useWorkTabsStore.getState().bindSession('INTERNAL:new-org:new-user');
   resolve({ ...defect, description: '迟到的旧账号敏感详情' });

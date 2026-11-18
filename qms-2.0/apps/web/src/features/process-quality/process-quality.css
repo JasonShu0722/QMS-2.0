@@ -27,6 +27,8 @@
 .process-quality-description-heading .process-quality-detail-link { min-width: 0; flex: 1; }
 .process-quality-description-heading .process-quality-detail-link > span { overflow: hidden; text-overflow: ellipsis; }
 .process-quality-description-heading .process-quality-warning { flex-shrink: 0; }
+.process-quality-row-actions { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.process-quality-row-actions > .ant-btn { flex-shrink: 0; }
 .process-quality-completion { display: grid; gap: 2px; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
 .process-quality-completion > span { color: var(--qms-muted); }
 .process-quality-batch-toolbar { display: flex; padding-block: 8px; border-block-start: 1px solid var(--qms-border); }

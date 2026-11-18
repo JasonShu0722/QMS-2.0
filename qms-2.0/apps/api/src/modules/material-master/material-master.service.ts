@@ -1,9 +1,12 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
-import type { MaterialMasterDto, MaterialMasterImportRowDto, MaterialMasterImportItemDto } from './material-master.dto.js';
+import { MaterialMasterListQueryDto, type MaterialMasterPageDto, type MaterialMasterDto, type MaterialMasterImportRowDto, type MaterialMasterImportItemDto } from './material-master.dto.js';
 import type { MasterDataBulkDeleteDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
 import { deleteSelectedMasterData, validateMasterDataDeletion } from '../../common/master-data/master-data-bulk-delete.js';
 
@@ -37,12 +40,17 @@ export class MaterialMasterService {
     transaction => this.assertInternalOrganization(transaction, organizationId));
   }
 
-  async listMaterials(actor: AdminActor): Promise<MaterialMasterDto[]> {
+  async listMaterials(actor: AdminActor, input: MaterialMasterListQueryDto = new MaterialMasterListQueryDto()): Promise<MaterialMasterPageDto> {
     const organizationId = this.scope(actor);
+    const query = plainToInstance(MaterialMasterListQueryDto, input);
+    if ((await validate(query, { whitelist: true, forbidNonWhitelisted: true })).length) fail('MATERIAL_MASTER_INPUT_INVALID', 400);
     return this.prisma.$transaction(async (tx) => {
       await assertAdminAccess(tx, actor, organizationId, 'material-master:read');
       await this.assertInternalOrganization(tx, organizationId);
-      return tx.$queryRaw<MaterialMasterDto[]>`SELECT id, material_code AS "materialCode", material_name AS "materialName", version FROM material_masters WHERE organization_id = ${organizationId}::uuid ORDER BY material_code`;
+      const filter = Prisma.sql`organization_id = ${organizationId}::uuid ${query.search ? Prisma.sql`AND (strpos(lower(material_code), lower(${query.search})) > 0 OR strpos(lower(material_name), lower(${query.search})) > 0)` : Prisma.empty}`;
+      const items = await tx.$queryRaw<MaterialMasterDto[]>(Prisma.sql`SELECT id, material_code AS "materialCode", material_name AS "materialName", version FROM material_masters WHERE ${filter} ORDER BY material_code, id LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`);
+      const [count] = await tx.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::int AS total FROM material_masters WHERE ${filter}`);
+      return { items, total: count!.total, page: query.page, pageSize: query.pageSize };
     });
   }
 

@@ -29,7 +29,7 @@ function mount() { return render(<LanguageProvider><MemoryRouter><UnsavedChanges
 it('AI description keeps manual text as the ledger body and exposes late AI only for explicit adoption', async () => {
   mount();
   expect(await screen.findByText('人工保留的描述')).toBeVisible();
-  fireEvent.click(screen.getByText('查看详情').closest('button')!);
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   const sources = within(await screen.findByLabelText('描述来源'));
   expect(sources.getByText('现象：松脱 位置：0')).toBeVisible();
   expect(sources.getByText('<b>AI建议</b>')).toBeVisible();
@@ -42,7 +42,7 @@ it('AI description source inspection has no retry or adoption for an unauthorize
   const original = vi.mocked(apiRequest).getMockImplementation()!;
   vi.mocked(apiRequest).mockImplementation(async (path, ...args) => path.includes('/my-permissions') ? { permissions: ['process-quality:defects:read', 'ingestion:read'] } as never : original(path, ...args));
   mount(); await screen.findByText('人工保留的描述');
-  fireEvent.click(screen.getByText('查看详情').closest('button')!);
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   const sources = within(await screen.findByLabelText('描述来源'));
   expect(sources.queryByRole('button', { name: '采用AI建议' })).not.toBeInTheDocument();
   expect(sources.queryByRole('button', { name: '重试AI整理' })).not.toBeInTheDocument();
@@ -55,7 +55,7 @@ it('AI description retries a failed task with the same body and idempotency key 
     return original(path, init, ...args);
   });
   mount(); await screen.findByText('人工保留的描述');
-  fireEvent.click(screen.getByText('查看详情').closest('button')!);
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   const sources = within(await screen.findByLabelText('描述来源'));
   fireEvent.click(await sources.findByRole('button', { name: '重试AI整理' }));
   const retry = await sources.findByRole('button', { name: '重试原请求' });
@@ -70,7 +70,7 @@ it('AI description adoption requires explicit confirmation before writing over m
   const original = vi.mocked(apiRequest).getMockImplementation()!;
   vi.mocked(apiRequest).mockImplementation(async (path, init, ...args) => path.endsWith('/task-1/adopt') && init?.method === 'POST' ? { ...task, status: 'APPLIED', version: 3 } as never : original(path, init, ...args));
   mount(); await screen.findByText('人工保留的描述');
-  fireEvent.click(screen.getByText('查看详情').closest('button')!);
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   const sources = within(await screen.findByLabelText('描述来源'));
   fireEvent.click(await sources.findByRole('button', { name: '采用AI建议' }));
   expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/adopt'))).toBe(false);
@@ -88,7 +88,7 @@ it('AI description refresh reads the worker result into the existing ledger desc
     return original(path, init, ...args);
   });
   mount(); await screen.findByText('人工保留的描述');
-  fireEvent.click(screen.getByText('查看详情').closest('button')!);
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   const sources = within(await screen.findByLabelText('描述来源'));
   await sources.findByRole('button', { name: '采用AI建议' });
   const refresh = sources.getByRole('button', { name: '刷新整理状态' });
@@ -107,7 +107,7 @@ it('AI description ignores an earlier task when the current source has returned 
     return original(path, init, ...args);
   });
   mount(); await screen.findByText('当前直接组合');
-  fireEvent.click(screen.getByText('查看详情').closest('button')!);
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   const sources = within(await screen.findByLabelText('描述来源'));
   expect(sources.queryByRole('button', { name: '刷新整理状态' })).not.toBeInTheDocument();
   expect(sources.queryByText('AI结果')).not.toBeInTheDocument();

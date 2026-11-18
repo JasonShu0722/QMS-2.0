@@ -29,7 +29,7 @@ beforeEach(() => {
 it('loads the defect ledger and opens source detail with linked issues', async () => {
   render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
   expect(await screen.findByText('表面划伤')).toBeVisible();
-  fireEvent.click(screen.getByText('查看详情'));
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   expect(await screen.findByText('来源详情')).toBeVisible();
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}`, { signal: expect.any(AbortSignal) });
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}/issues`, { signal: expect.any(AbortSignal) });

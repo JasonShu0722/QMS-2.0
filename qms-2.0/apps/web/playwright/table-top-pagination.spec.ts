@@ -488,7 +488,7 @@ async function changeSize(page: Page, pager: Locator, custom: boolean, size: num
 
 for (const scenario of [
   { name: 'supplier server pagination', route: '/console/master-data/suppliers', region: '供应商档案', path: '/api/v1/supplier-quality/profiles', custom: false },
-  { name: 'material client pagination', route: '/console/master-data/materials', region: '物料主数据', path: '/api/v1/material-masters', custom: false },
+  { name: 'material server pagination', route: '/console/master-data/materials', region: '物料主数据', path: '/api/v1/material-masters', custom: false },
   { name: 'receipt custom pagination', route: '/console/api-integrations', region: 'API接口管理', path: '/api/v1/admin/integrations/receipts', custom: true },
 ]) {
   test(`${scenario.name} stays above real data at desktop, 390 and 320 widths`, async ({ page }, testInfo) => {
@@ -512,10 +512,7 @@ for (const scenario of [
     await expect(ledger.locator('tbody tr[data-row-key]')).toHaveCount(10);
     await expect(ledger.locator('.ant-spin-spinning')).toHaveCount(0);
     const first = await rowIds(ledger);
-    if (scenario.path !== '/api/v1/material-masters') {
-      await expect.poll(() => responses.some(response => response.page === '1' && response.size === '10' && JSON.stringify(response.ids) === JSON.stringify(first))).toBe(true);
-    }
-    const materialRequests = responses.length;
+    await expect.poll(() => responses.some(response => response.page === '1' && response.size === '10' && JSON.stringify(response.ids) === JSON.stringify(first))).toBe(true);
     const geometry: object[] = [];
     for (const width of [1440, 390, 320]) {
       await page.setViewportSize({ width, height: width === 1440 ? 900 : 844 });
@@ -531,9 +528,7 @@ for (const scenario of [
       const second = await rowIds(ledger);
       expect(second).toHaveLength(10);
       expect(second.filter(identifier => first.includes(identifier))).toHaveLength(0);
-      if (scenario.path !== '/api/v1/material-masters') {
-        await expect.poll(() => responses.some(response => response.page === '2' && response.size === '10' && JSON.stringify(response.ids) === JSON.stringify(second))).toBe(true);
-      }
+      await expect.poll(() => responses.some(response => response.page === '2' && response.size === '10' && JSON.stringify(response.ids) === JSON.stringify(second))).toBe(true);
       await expect(previous).toBeEnabled();
       await previous.click();
       await expect.poll(() => rowIds(ledger)).toEqual(first);
@@ -543,8 +538,7 @@ for (const scenario of [
     await expect(ledger.locator('tbody tr[data-row-key]')).toHaveCount(20);
     const larger = await rowIds(ledger);
     expect(larger.slice(0, 10)).toEqual(first);
-    if (scenario.path === '/api/v1/material-masters') expect(responses).toHaveLength(materialRequests);
-    else await expect.poll(() => responses.some(response => response.page === '1' && response.size === '20' && JSON.stringify(response.ids) === JSON.stringify(larger))).toBe(true);
+    await expect.poll(() => responses.some(response => response.page === '1' && response.size === '20' && JSON.stringify(response.ids) === JSON.stringify(larger))).toBe(true);
     await assertTopGeometry(page, ledger, scenario.custom, testInfo.outputPath('top-pagination-size20-geometry.json'));
     await testInfo.attach('pagination-geometry', { body: JSON.stringify(geometry, null, 2), contentType: 'application/json' });
     await writeFile(testInfo.outputPath('pagination-geometry.json'), JSON.stringify(geometry, null, 2));

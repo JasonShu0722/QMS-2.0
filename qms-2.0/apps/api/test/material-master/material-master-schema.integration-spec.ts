@@ -107,7 +107,7 @@ describe('material master HTTP and real PostgreSQL', () => {
     expect((await rename(first.body.id, { materialName: '新名称', expectedVersion: 1 }).expect(200)).body).toMatchObject({ materialCode: '00042', materialName: '新名称', version: 2 });
     await rename(first.body.id, { materialName: '旧提交', expectedVersion: 1 }).expect(409);
     await rename(first.body.id, { materialCode: 'CHANGED', materialName: '覆盖编码', expectedVersion: 2 }).expect(400);
-    expect((await list().expect(200)).body).toEqual(expect.arrayContaining([expect.objectContaining({ materialCode: '00042', materialName: '新名称', version: 2 })]));
+    expect((await list().expect(200)).body.items).toEqual(expect.arrayContaining([expect.objectContaining({ materialCode: '00042', materialName: '新名称', version: 2 })]));
   });
 
   it('imports sorted rows independently, skips duplicates without overwrite and replays the complete batch', async () => {
@@ -117,7 +117,7 @@ describe('material master HTTP and real PostgreSQL', () => {
     expect(result.body).toMatchObject({ created: 2, skipped: 1, failed: 2, items: [{ rowNumber: 2, code: 'BATCH', status: 'CREATED' }, { rowNumber: 3, status: 'SKIPPED_DUPLICATE' }, { rowNumber: 4, status: 'FAILED' }, { rowNumber: 5, status: 'CREATED' }, { rowNumber: 6, status: 'FAILED' }] });
     expect((await send({ rows }, key).expect(201)).body).toEqual(result.body);
     await send({ rows: [row('DIFFERENT')] }, key).expect(409);
-    expect((await list().expect(200)).body.find((item: { materialCode: string }) => item.materialCode === 'BATCH')).toMatchObject({ materialName: '物料', version: 1 });
+    expect((await list().expect(200)).body.items.find((item: { materialCode: string }) => item.materialCode === 'BATCH')).toMatchObject({ materialName: '物料', version: 1 });
     expect(await prisma.auditEvent.count({ where: { organizationId, action: 'MATERIAL_MASTER_CREATED' } })).toBe(5);
   });
 
@@ -128,7 +128,7 @@ describe('material master HTTP and real PostgreSQL', () => {
     await request(app.getHttpServer()).get(`${path}?organizationId=${otherOrganizationId}`).set('Cookie', cookie).expect(403);
     await request(app.getHttpServer()).post(`${path}/import`).set('Cookie', cookie).set('x-csrf-token', csrf).send({ rows: [row('NO-KEY')] }).expect(400);
     await request(app.getHttpServer()).post(`${path}/import`).set('Cookie', cookie).set('Idempotency-Key', randomUUID()).send({ rows: [row('NO-CSRF')] }).expect(403);
-    expect((await list().expect(200)).body.some((item: { materialCode: string }) => /^(SIZE-|STRUCTURE|OTHER|CROSS|NO-)/.test(item.materialCode))).toBe(false);
+    expect((await list().expect(200)).body.items.some((item: { materialCode: string }) => /^(SIZE-|STRUCTURE|OTHER|CROSS|NO-)/.test(item.materialCode))).toBe(false);
   });
 
   it('uses an independent import permission including on replay', async () => {
@@ -149,7 +149,7 @@ describe('material master HTTP and real PostgreSQL', () => {
     await prisma.userRole.create({ data: { userId, organizationId: otherOrganizationId, roleId: otherRole.id } });
     const other = await create({ organizationId: otherOrganizationId, materialCode: '00042', materialName: '其他组织' }).expect(201);
     await rename(other.body.id, { expectedVersion: 1, materialName: '越权' }).expect(404);
-    expect((await list().expect(200)).body.some((item: { id: string }) => item.id === other.body.id)).toBe(false);
+    expect((await list().expect(200)).body.items.some((item: { id: string }) => item.id === other.body.id)).toBe(false);
     const bulk = Array.from({ length: 100 }, (_, index) => ({ ...row(`BULK-${index}`), rowNumber: index + 2 }));
     expect((await send({ rows: bulk }).expect(201)).body).toMatchObject({ created: 100, failed: 0, skipped: 0 });
     const result = await Promise.all([send({ rows: [row('RACE')] }), send({ rows: [row(' RACE ')] })]);
@@ -167,7 +167,7 @@ describe('material master HTTP and real PostgreSQL', () => {
       const actor = { id: userId, organizationId, sessionId: session.id, accountType: 'INTERNAL' as const };
       const result = await app.get(MaterialMasterService).importMaterials(actor, [row('AUDIT-FAIL')], 'x'.repeat(101), randomUUID());
       expect(result).toMatchObject({ created: 0, skipped: 0, failed: 1 });
-      expect((await list().expect(200)).body.some((item: { materialCode: string }) => item.materialCode === 'AUDIT-FAIL')).toBe(false);
+      expect((await list().expect(200)).body.items.some((item: { materialCode: string }) => item.materialCode === 'AUDIT-FAIL')).toBe(false);
       await expect(app.get(MaterialMasterService).listMaterials({ ...actor, accountType: 'SUPPLIER' })).rejects.toMatchObject({ status: 403 });
     } finally { await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } }); }
   });
@@ -182,5 +182,30 @@ describe('material master HTTP and real PostgreSQL', () => {
     await create({ organizationId: supplierOrganizationId, materialCode: 'SUPPLIER-SCOPE', materialName: '错误组织' }).expect(403);
     await send({ organizationId: supplierOrganizationId, rows: [row('SUPPLIER-SCOPE')] }).expect(403);
     await request(app.getHttpServer()).get(`${path}?organizationId=${supplierOrganizationId}`).set('Cookie', cookie).expect(403);
+  });
+
+  it('paginates and searches material codes and names literally within the authorized organization', async () => {
+    const prefix = `SEARCH-${randomUUID()}`;
+    const rows = Array.from({ length: 25 }, (_, index) => ({ rowNumber: index + 1, materialCode: `${prefix}-${String(index).padStart(2, '0')}`, materialName: index === 24 ? '精密_%零件' : '分页物料' }));
+    await send({ rows }).expect(201);
+    const get = (query: object) => request(app.getHttpServer()).get(path).query(query).set('Cookie', cookie);
+    const defaults = await get({ search: prefix }).expect(200);
+    expect(defaults.body).toMatchObject({ total: 25, page: 1, pageSize: 20 });
+    expect(defaults.body.items).toHaveLength(20);
+    const second = await get({ search: ` ${prefix.toLowerCase()} `, page: 2, pageSize: 20 }).expect(200);
+    expect(second.body).toMatchObject({ total: 25, page: 2, pageSize: 20 });
+    expect(second.body.items.map((item: { materialCode: string }) => item.materialCode)).toEqual(rows.slice(20).map(row => row.materialCode));
+    const byName = await get({ search: '_%' }).expect(200);
+    expect(byName.body.total).toBe(1);
+    expect(byName.body.items[0].materialName).toBe('精密_%零件');
+    expect((await get({ search: prefix, pageSize: 50 }).expect(200)).body.items).toHaveLength(25);
+    expect((await get({ search: prefix, page: 3 }).expect(200)).body).toMatchObject({ items: [], total: 25, page: 3 });
+    expect((await get({ search: '不存在的物料' }).expect(200)).body).toMatchObject({ items: [], total: 0 });
+    for (const query of [{ page: 0 }, { page: 1.5 }, { page: 2147483648 }, { pageSize: 0 }, { pageSize: 1001 }, { search: 'x'.repeat(201) }]) await get(query).expect(400);
+    await get({ organizationId: otherOrganizationId, search: prefix }).expect(403);
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'material-master:read' } });
+    await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId, permissionId: permission.id } } });
+    try { await get({ search: prefix }).expect(403); }
+    finally { await prisma.rolePermission.create({ data: { roleId, permissionId: permission.id } }); }
   });
 });
