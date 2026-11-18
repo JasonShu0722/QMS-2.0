@@ -93,13 +93,15 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
       return field.path === initialField.path && (field.label ?? '') === (initialField.label?.trim() ?? '') && field.variable === initialField.variable;
     });
     const preserveBinding = originalBinding && (usesComposition ? unchangedRows : !rule?.descriptionComposition);
+    const inputVariables = referenced.size ? referenced : new Set((effectiveRevision?.configuration.variables ?? (originalBinding ? previousInput : undefined))?.map(field => field.variable));
+    const inputFields = preserveBinding ? previousInput ?? [] : compositionFields.flatMap(({ path, label, variable }) => variable && inputVariables.has(variable) ? [{ path, variable, ...(label ? { label } : {}) }] : []);
     if (usesComposition && new Set(variables).size !== variables.length) { setBindingError(text('同一提示词变量不能绑定多个来源字段', 'A prompt variable can only have one source field')); return; }
     if (process && values.aiEnabled && !preserveBinding) {
       if (!usesComposition) { setBindingError(text('启用 AI 整理请选择多字段组合', 'Select ordered fields to enable AI description')); return; }
       const missing = [...referenced].filter(variable => !variables.includes(variable));
       if (missing.length) { setBindingError(text(`请为提示词变量绑定来源字段：${missing.join('、')}`, `Bind source fields for prompt variables: ${missing.join(', ')}`)); return; }
+      if (!inputFields.length) { setBindingError(text('请至少绑定一个所选提示词版本的变量', 'Bind at least one variable from the selected prompt version')); return; }
     }
-    const inputFields = preserveBinding ? previousInput ?? [] : compositionFields.flatMap(({ path, label, variable }) => variable && referenced.has(variable) ? [{ path, variable, ...(label ? { label } : {}) }] : []);
     const body: Save = { organizationId: scope.organizationId, name: values.name.trim(), endpointId: values.endpointId, target: values.target, enabled: values.enabled, match: values.match, conditions, mapping,
       mode: values.mode, updateFields: values.mode === 'INSERT_ONLY' ? [] : values.updateFields.filter(field => allowedFields.includes(field)),
       ...(values.target === 'COMPONENT' && values.componentNameSource === 'MATERIAL' ? { componentNameLookup: { source: 'MATERIAL', field: 'materialName' } } : {}),

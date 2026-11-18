@@ -62,6 +62,20 @@ it('binds only referenced variables from the ordered description rows of a publi
   expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ aiApplication: { applicationId: 'app-1', publishedVersion: 2, inputFields: [{ path: 'errorName', label: '现象', variable: 'fault' }] }, descriptionComposition: { fields: [{ path: 'position', label: '位置' }, { path: 'errorName', label: '现象', variable: 'fault' }], separator: '\n' } });
   expect(mocks.mutate.mock.calls[0][2]).not.toHaveProperty('aiDescription');
 });
+it('keeps the configured input when an existing prompt uses selected data without placeholders', async () => {
+  mocks.mutate.mockResolvedValue({});
+  const prompt = '整理提供的不良事实';
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, ...options) => path.includes('/revisions/') ? { applicationId: application.id, organizationId: org, publishedVersion: 1, configuration: { ...application, prompt } } : read(path, ...options));
+  const aiDescription = { connectionId: 'ai-1', model: 'quality-a', prompt, inputFields: binding.inputFields, output: { mode: 'TEXT' as const, field: 'description', target: 'description' as const } };
+  mount(<RuleEditor scope={scope()} rule={{ ...rule, aiDescription, aiApplication: binding }} endpoints={[{ id: endpointId, name: '制程接收', code: 'PROCESS', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={vi.fn()} />);
+  const dialog = within(screen.getByRole('dialog'));
+  fireEvent.change(dialog.getByLabelText('描述来源字段1'), { target: { value: 'errorName' } });
+  fireEvent.change(dialog.getByLabelText('提示词变量2'), { target: { value: 'unspecified' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(mocks.mutate).toHaveBeenCalledTimes(1));
+  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ aiApplication: { ...binding, inputFields: [{ path: 'errorName', label: '现象', variable: 'fault' }] } });
+});
 it('AI description unknown rule save retries its complete original configuration outside the disabled form', async () => {
   const aiDescription = { connectionId: 'ai-1', model: 'quality-a', prompt: '整理{{fault}}', inputFields: [{ path: 'fault', label: '现象', variable: 'fault' }], output: { mode: 'TEXT' as const, field: 'description', target: 'description' as const } };
   const saved = vi.fn(); mocks.mutate.mockRejectedValueOnce(new TypeError('network')).mockResolvedValueOnce({});
