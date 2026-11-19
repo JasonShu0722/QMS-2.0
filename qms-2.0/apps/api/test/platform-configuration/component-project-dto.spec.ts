@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
+import { ComponentProjectController } from '../../src/modules/platform-configuration/component-project.controller.js';
 import {
   CreateComponentProjectRecordDto, UpdateComponentProjectRecordDto, CreateComponentProjectMappingDto,
   UpdateComponentProjectMappingDto, ComponentProjectListQueryDto, ResolveComponentProjectQueryDto,
@@ -9,6 +10,24 @@ import {
 
 const options = { whitelist: true, forbidNonWhitelisted: true };
 describe('component project DTO boundaries', () => {
+  it('accepts a trimmed exact code on the project list only', async () => {
+    const queryType = Reflect.getMetadata('design:paramtypes', ComponentProjectController.prototype, 'listProjects')[0] as typeof ComponentProjectListQueryDto;
+    expect(await validate(plainToInstance(queryType, {}), options)).toEqual([]);
+    const query = plainToInstance(queryType, { exactCode: '  aB/12  ', page: '2' });
+    expect(await validate(query, options)).toEqual([]);
+    expect(query).toMatchObject({ exactCode: 'aB/12', page: 2, pageSize: 20 });
+    for (const exactCode of ['A', 'A'.repeat(100)]) {
+      expect(await validate(plainToInstance(queryType, { exactCode }), options)).toEqual([]);
+    }
+    for (const exactCode of ['', ' ', 'A'.repeat(101), null, 42, ['A', 'B']]) {
+      expect((await validate(plainToInstance(queryType, { exactCode }), options)).map(({ property }) => property)).toContain('exactCode');
+    }
+    for (const method of ['listMappings', 'engineerAssignments']) {
+      const otherQueryType = Reflect.getMetadata('design:paramtypes', ComponentProjectController.prototype, method)[0] as typeof ComponentProjectListQueryDto;
+      expect((await validate(plainToInstance(otherQueryType, { exactCode: 'aB/12' }), options)).map(({ property }) => property)).toContain('exactCode');
+    }
+  });
+
   it('accepts an optional explicit mapping readiness filter without changing the default query', async () => {
     expect(await validate(plainToInstance(ComponentProjectMappingsQueryDto, {}), options)).toEqual([]);
     for (const configuration of ['PENDING', 'CONFIGURED']) expect(await validate(plainToInstance(ComponentProjectMappingsQueryDto, { configuration }), options)).toEqual([]);

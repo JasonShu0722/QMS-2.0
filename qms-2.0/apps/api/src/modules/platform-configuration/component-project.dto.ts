@@ -19,6 +19,10 @@ export class ComponentProjectListQueryDto extends ComponentProjectScopeDto {
   @ApiPropertyOptional({ enum: COMPONENT_PROJECT_STATUSES }) @IsOptional() @IsIn(COMPONENT_PROJECT_STATUSES) status?: ComponentProjectStatus;
 }
 
+export class ComponentProjectRecordsQueryDto extends ComponentProjectListQueryDto {
+  @ApiPropertyOptional({ minLength: 1, maxLength: 100 }) @ValidateIf((_o, value) => value !== undefined) @Transform(trim) @IsString() @Length(1, 100) exactCode?: string;
+}
+
 export class ComponentEngineerAssignmentsQueryDto extends ComponentProjectListQueryDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() selectedAssignmentId?: string;
 }

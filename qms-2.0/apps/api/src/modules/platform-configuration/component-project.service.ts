@@ -12,7 +12,7 @@ import type { MasterDataBulkDeleteDto } from '../../common/master-data/master-da
 import { deleteSelectedMasterData, validateMasterDataDeletion } from '../../common/master-data/master-data-bulk-delete.js';
 import { componentMappingIsReferenced } from '../../common/master-data/master-data-deletion-references.read-model.js';
 import {
-  ComponentProjectListQueryDto, ComponentProjectMappingsQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
+  ComponentProjectRecordsQueryDto, ComponentProjectMappingsQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
   ComponentProjectImportDto, type ComponentProjectImportItemDto, type ComponentProjectImportResultDto,
   CreateComponentProjectRecordDto, UpdateComponentProjectRecordDto, CreateComponentProjectMappingDto, UpdateComponentProjectMappingDto,
   type ComponentProjectRecordDto, type ComponentProjectMappingDto, type ComponentProjectMappingListItemDto, type ComponentEngineerAssignmentDto, type ComponentProjectResolutionDto,
@@ -80,11 +80,12 @@ export class ComponentProjectService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService,
     private readonly audit: AuditLogService, private readonly organizations: OrganizationService) {}
 
-  async listProjects(actor: AdminActor, organizationId: string, input: ComponentProjectListQueryDto) {
-    const query = await this.input(ComponentProjectListQueryDto, input);
+  async listProjects(actor: AdminActor, organizationId: string, input: ComponentProjectRecordsQueryDto) {
+    const query = await this.input(ComponentProjectRecordsQueryDto, input);
     return this.read(actor, organizationId, async (transaction) => {
       const filter = Prisma.sql`organization_id = ${organizationId}::uuid
         ${query.status ? Prisma.sql`AND status = ${query.status}` : Prisma.empty}
+        ${query.exactCode !== undefined ? Prisma.sql`AND code = ${query.exactCode}` : Prisma.empty}
         ${query.search ? Prisma.sql`AND (strpos(lower(code), lower(${query.search})) > 0 OR strpos(lower(name), lower(${query.search})) > 0)` : Prisma.empty}`;
       const rows = await transaction.$queryRaw<Stored<ComponentProjectRecordDto>[]>(Prisma.sql`SELECT ${projectColumns} FROM component_project_records WHERE ${filter} ORDER BY code, id LIMIT ${query.pageSize} OFFSET ${(query.page - 1) * query.pageSize}`);
       const [count] = await transaction.$queryRaw<{ total: number }[]>(Prisma.sql`SELECT count(*)::int AS total FROM component_project_records WHERE ${filter}`);

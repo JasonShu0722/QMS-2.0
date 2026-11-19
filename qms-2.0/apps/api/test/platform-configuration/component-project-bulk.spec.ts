@@ -36,8 +36,11 @@ describe('bulk shared-project preview policy (no PostgreSQL claim)', () => {
     const m = mapping(null);
     const p = project();
     const selection = [{ id: m.id, expectedVersion: 1 }];
-    for (const changes of [{ stage: 'MASS_PRODUCTION' as const }, { customerEngineerAssignmentId: null }]) {
-      expect(() => buildComponentProjectBulkPreview(org, { selection, changes }, [m], [], [])).toThrow(expect.objectContaining({ status: 409 }));
+    for (const changes of [{ stage: 'MASS_PRODUCTION' as const }, { customerEngineerAssignmentId: null }, { projectEngineerAssignmentId: null }]) {
+      expect(() => buildComponentProjectBulkPreview(org, { selection, changes }, [m], [], [])).toThrow(expect.objectContaining({
+        status: 409,
+        response: { code: 'COMPONENT_PROJECT_LINK_REQUIRED', message: '所选组件中有未关联项目的记录，请先设置关联项目' },
+      }));
     }
     expect(buildComponentProjectBulkPreview(org, { selection, changes: { productCategory: 'Body' } }, [m], [], []).affectedProjects).toEqual([]);
     expect(buildComponentProjectBulkPreview(org, { selection, changes: { projectRecordId: p.id, stage: 'MASS_PRODUCTION' } }, [m], [p], []).affectedProjects[0]!.id).toBe(p.id);

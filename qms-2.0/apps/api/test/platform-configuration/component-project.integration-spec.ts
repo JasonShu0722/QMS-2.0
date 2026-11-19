@@ -95,6 +95,28 @@ describe('component project mapping with real PostgreSQL / HTTP', () => {
     await write(f, 'patch', `component-project-records/${selected.id}`, { expectedVersion: 1, name: 'Denied' }).expect(403);
   });
 
+  it('returns a scoped page for an exact case-sensitive project code and preserves fuzzy search', async () => {
+    const f = await fixture();
+    const other = await fixture();
+    const exact = await project(f, { code: 'Prj-Ab' });
+    const lowerCase = await project(f, { code: 'prj-ab' });
+    const longer = await project(f, { code: 'Prj-Ab-2' });
+    const nameOnly = await project(f, { code: 'OTHER', name: 'Uses Prj-Ab' });
+    await project(other, { code: exact.code });
+    const foreignOnly = await project(other, { code: 'FOREIGN' });
+    const list = (query: object) => get(f, 'component-project-records', query).expect(200);
+
+    expect((await list({ exactCode: ` ${exact.code} `, pageSize: 1 })).body).toEqual({ items: [exact], total: 1, page: 1, pageSize: 1 });
+    expect((await list({ exactCode: exact.code, page: 2, pageSize: 1 })).body).toEqual({ items: [], total: 1, page: 2, pageSize: 1 });
+    expect((await list({ exactCode: lowerCase.code })).body.items).toEqual([lowerCase]);
+    expect((await list({ exactCode: foreignOnly.code })).body).toEqual({ items: [], total: 0, page: 1, pageSize: 20 });
+    expect((await list({ exactCode: exact.code, status: 'DISABLED' })).body.total).toBe(0);
+    const fuzzy = (await list({ search: 'PRJ-AB' })).body;
+    expect(fuzzy.total).toBe(4);
+    expect(fuzzy.items).toEqual(expect.arrayContaining([exact, lowerCase, longer, nameOnly]));
+    await get(f, 'component-project-records', { organizationId: other.org.id, exactCode: exact.code }).expect(403);
+  });
+
   it('projects both engineer identities and invalidity in the component page without substituting people', async () => {
     const f = await fixture();
     const customer = await engineer(f);

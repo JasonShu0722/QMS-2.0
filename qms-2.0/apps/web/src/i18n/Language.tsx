@@ -444,6 +444,7 @@ const translations: Record<string, string> = {
   '准入': 'Qualification', '计划': 'Plans', '发现项': 'Findings', '报告': 'Reports', '文件库': 'Document library', '评审': 'Review', '分发': 'Distribution', '风险矩阵': 'Risk matrix', '预警规则': 'Alert rules',
   '当前草稿尚未保存，切换组织将放弃修改。': 'This draft is not saved. Switching organizations will discard it.',
   '组织层级关系不合法': 'Invalid organization hierarchy.', '部门、岗位或任职引用不合法': 'Invalid department, position or assignment reference.', '部门或岗位已停用': 'The department or position is disabled.',
+  '所选组件中有未关联项目的记录，请先设置关联项目': 'Some selected components have no project. Set the linked project first.',
   '该用户仍关联业务记录，无法变更主组织': 'This user has business records and cannot change home organization.', '角色仍在使用，请先解除用户分配': 'This role is assigned to users. Remove those assignments first.',
   '用户名或邮箱已存在': 'The username or email already exists.', '角色代码已存在': 'The role code already exists.', '请重新加载角色权限后再保存': 'Reload role permissions before saving.',
   '全局角色只读，不能通过组织管理变更': 'Global roles are read only in organization administration.', '不能停用当前账号': 'You cannot disable your current account.',

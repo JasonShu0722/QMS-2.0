@@ -38,7 +38,7 @@ export function buildComponentProjectBulkPreview(organizationId: string, dto: Co
   const finalProjects = new Map<string, number>();
   for (const mapping of mappings) {
     const projectId = dto.changes.projectRecordId ?? mapping.projectRecordId;
-    if (sharedEdit && !projectId) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+    if (sharedEdit && !projectId) adminError('COMPONENT_PROJECT_LINK_REQUIRED', 409);
     if (projectId) finalProjects.set(projectId, (finalProjects.get(projectId) ?? 0) + 1);
   }
   const affectedProjects = [...finalProjects.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([id, selectedComponentCount]) => {

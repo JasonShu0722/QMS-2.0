@@ -534,7 +534,7 @@
           },
           {
             "path": "apps/web/src/i18n/Language.tsx",
-            "sha256": "27d36569686071c67462a363105d6f258ebe6b3378e0a0ff0c171e67ff96aaa0"
+            "sha256": "80751088ac1e1a37842f1da54b6f44f5f04f69d363bdf8b4e1f76f80d5365e66"
           },
           {
             "path": "apps/web/component-project-preview.html",
@@ -558,11 +558,11 @@
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.tsx",
-            "sha256": "bd7fe3900760990e4c6d51e2a05f858090c0bffd73cb6b2f0230f190c13a70ea"
+            "sha256": "9683ca9a1839950d4fe79e76e31c28433983016ed9b445d20b94d4c08fbaaea8"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.test.tsx",
-            "sha256": "fe2531985b14e55f5b106e0a09c9173487de2aef5ee81fa8e20fd7dc011fd9f3"
+            "sha256": "a650dd7f3f04e99a05ab141d1d791d5617a36e386e727db430d05e5af4376591"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectImport.tsx",
@@ -594,7 +594,7 @@
           },
           {
             "path": "apps/web/src/api/client.ts",
-            "sha256": "621c69fce0111baa2bb818ed01836e2649e218d39b619beede22986d71095703"
+            "sha256": "a8d2c7bc823ff9b99b774bd3e2b577dd43b8d8c6a77588ff6e5d3d86388a969b"
           },
           {
             "path": "apps/web/src/api/admin-request.test.ts",
