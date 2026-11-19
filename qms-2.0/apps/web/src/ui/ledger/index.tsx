@@ -1,6 +1,6 @@
 import { Button, Checkbox, Popover, Table, type TableProps } from 'antd';
 import { ArrowDown, ArrowUp, GripVertical, RotateCcw, Settings2 } from 'lucide-react';
-import { createContext, isValidElement, useContext, useRef, useState, type ComponentProps, type ElementType, type ReactNode } from 'react';
+import { createContext, isValidElement, useContext, useLayoutEffect, useRef, useState, type ComponentProps, type ElementType, type ReactNode } from 'react';
 import { useLanguage } from '../../i18n/Language';
 import { boundedWidth, columnKey, DEFAULT_WIDTH, MAX_WIDTH, MIN_SELECTION_WIDTH, MIN_WIDTH, moveColumn, normalizePreferences, preferenceKey, SELECTION_WIDTH_KEY, type Fixed, type Preferences } from './model';
 import { getLedgerSessionEpoch, useLedgerScope, useLedgerSessionEpoch, usePreference } from './preferences';
@@ -9,6 +9,7 @@ export { LedgerScopeProvider, useLedgerPageSize } from './preferences';
 export type LedgerTableProps<RecordType extends object> = TableProps<RecordType> & {
   ledgerId: string; organizationId?: string; viewId?: string; requiredColumnKeys?: string[];
   resizableSelection?: boolean;
+  compactHeaders?: boolean;
   toolbarContent?: ReactNode;
   columnOrder?: string[]; visibleColumnKeys?: string[];
   defaultVisibleColumnKeys?: string[];
@@ -16,7 +17,8 @@ export type LedgerTableProps<RecordType extends object> = TableProps<RecordType>
   onColumnOrderChange?: (keys: string[]) => void; onVisibleColumnKeysChange?: (keys: string[]) => void;
 };
 type Column<RecordType extends object> = NonNullable<TableProps<RecordType>['columns']>[number];
-type Drag = { kind: 'width' | 'order'; key: string; origin: number; width: number; target?: string; scope?: string; epoch: number; pointerId: number };
+type Drag = { kind: 'width' | 'order'; key: string; origin: number; width: number; target?: string; scope?: string; epoch: number; pointerId: number; awaitingMotion?: boolean };
+const headerControls = 'button, a, input, select, textarea, label, [contenteditable], [role="button"], [role="checkbox"], [role="combobox"], [role="separator"], [tabindex]';
 const HeaderCellComponent = createContext<{ Cell: ElementType; selectionResize?: ReactNode }>({ Cell: 'th' });
 function LedgerHeaderCell({ ledgerResize, ledgerAriaLabel, children, ...props }: ComponentProps<'th'> & { ledgerResize?: ReactNode; ledgerAriaLabel?: string }) {
   const { Cell, selectionResize } = useContext(HeaderCellComponent);
@@ -30,7 +32,7 @@ function WidthInput({ value, minimum, label, onCommit }: { value: number; minimu
   }
   return <input aria-label={label} type="number" min={minimum} max={MAX_WIDTH} step={10} value={draft ?? value} onChange={event => setDraft(event.target.value)} onBlur={submit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); submit(); } else if (event.key === 'Escape') { event.preventDefault(); setDraft(undefined); } }} />;
 }
-export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, defaultVisibleColumnKeys, resetColumnsLabel, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
+export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, defaultVisibleColumnKeys, resetColumnsLabel, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, compactHeaders = false, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
   const { locale } = useLanguage();
   const text = (chinese: string, english: string) => locale === 'en-US' ? english : chinese;
   const scope = useLedgerScope(organizationId);
@@ -61,7 +63,30 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
     }));
   }
   const fixed = resolveFixed(saved.fixed);
+  const tableRoot = useRef<HTMLDivElement>(null);
+  const [headerMinimum, setHeaderMinimum] = useState<Record<string, number>>({});
+  const measuredColumns = JSON.stringify(keys.filter(key => visible.includes(key) || required.includes(key)));
+  useLayoutEffect(() => {
+    if (!compactHeaders) return;
+    const titles = Array.from(tableRoot.current?.querySelectorAll<HTMLElement>(':scope > .ant-table-wrapper th[data-compact-ledger-column] .qms-ledger__title') ?? []);
+    function measure() {
+      const widths: Record<string, number> = {};
+      for (const title of titles) {
+        const cell = title.closest<HTMLElement>('th[data-compact-ledger-column]');
+        if (!cell?.dataset.compactLedgerColumn || title.offsetWidth === 0) continue;
+        const style = getComputedStyle(cell);
+        const spacing = [style.paddingInlineStart || style.paddingLeft, style.paddingInlineEnd || style.paddingRight, style.borderInlineStartWidth || style.borderLeftWidth, style.borderInlineEndWidth || style.borderRightWidth].reduce((sum, value) => sum + (parseFloat(value) || 0), 0);
+        widths[cell.dataset.compactLedgerColumn] = Math.min(MAX_WIDTH, Math.ceil(title.offsetWidth + spacing + 5));
+      }
+      setHeaderMinimum(previous => Object.keys(widths).some(key => previous[key] !== widths[key]) ? { ...previous, ...widths } : previous);
+    }
+    measure();
+    const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
+    titles.forEach(title => observer?.observe(title));
+    return () => observer?.disconnect();
+  }, [compactHeaders, measuredColumns, stateKey]);
   const drag = useRef<Drag | undefined>(undefined);
+  const suppressHeaderClick = useRef<string | undefined>(undefined);
   const activeScope = useRef(stateKey);
   activeScope.current = stateKey;
   const [preview, setPreview] = useState<{ scope?: string; epoch: number; key: string; width: number }>();
@@ -69,7 +94,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   const label = (column: Column<RecordType>) => typeof column.title === 'string' || typeof column.title === 'number' ? String(column.title) : isValidElement<{ 'aria-label'?: string }>(column.title) && column.title.props['aria-label'] ? column.title.props['aria-label'] : columnKey(column)!;
   const getColumn = (key: string) => configurable.find(column => columnKey(column) === key)!;
   const isSelectionColumn = (key: string) => key === SELECTION_WIDTH_KEY || key === 'select';
-  const minimumFor = (key: string) => isSelectionColumn(key) ? MIN_SELECTION_WIDTH : boundedWidth(getColumn(key)?.minWidth, MIN_WIDTH);
+  const minimumFor = (key: string) => isSelectionColumn(key) ? MIN_SELECTION_WIDTH : boundedWidth(getColumn(key)?.minWidth, MIN_WIDTH, compactHeaders ? Math.max(MIN_WIDTH, headerMinimum[key] ?? 0) : MIN_WIDTH);
   const clampWidth = (key: string, value: unknown, fallback = DEFAULT_WIDTH) => boundedWidth(value, fallback, minimumFor(key));
   const widthFor = (key: string) => preview && preview.epoch === sessionEpoch && preview.scope === stateKey && preview.key === key ? preview.width : clampWidth(key, isSelectionColumn(key) && saved.widths[key] === 64 ? undefined : saved.widths[key], key === SELECTION_WIDTH_KEY ? clampWidth(key, rowSelection?.columnWidth, 44) : boundedWidth(getColumn(key)?.width, isSelectionColumn(key) ? 40 : DEFAULT_WIDTH, isSelectionColumn(key) ? MIN_SELECTION_WIDTH : MIN_WIDTH));
   const businessWidth = keys.filter(key => visible.includes(key) || required.includes(key)).reduce((total, key) => total + widthFor(key), 0);
@@ -100,10 +125,12 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
     if (visibleColumnKeys !== undefined) onVisibleColumnKeysChange?.(normalize(undefined).visible);
   }
   function begin(event: React.PointerEvent<HTMLElement>, key: string, kind: Drag['kind']) {
-    event.stopPropagation(); event.preventDefault();
+    event.stopPropagation();
     if (event.button !== 0 && event.button !== undefined) return;
+    // Compact headers let outside-click handlers receive the native mousedown.
+    if (!compactHeaders) event.preventDefault();
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    drag.current = { key, kind, origin: event.clientX, width: widthFor(key), scope: stateKey, epoch: getLedgerSessionEpoch(), pointerId: event.pointerId };
+    drag.current = { key, kind, origin: event.clientX, width: widthFor(key), scope: stateKey, epoch: getLedgerSessionEpoch(), pointerId: event.pointerId, awaitingMotion: compactHeaders && kind === 'order' };
   }
   function update(event: React.PointerEvent<HTMLElement>) {
     event.stopPropagation();
@@ -111,20 +138,36 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
     if (!current || current.epoch !== getLedgerSessionEpoch() || current.pointerId !== event.pointerId || current.scope !== activeScope.current) return;
     if (current.kind === 'width') setPreview({ scope: stateKey, epoch: current.epoch, key: current.key, width: clampWidth(current.key, current.width + event.clientX - current.origin, current.width) });
     else {
-      const target = document.elementFromPoint?.(event.clientX, event.clientY)?.closest<HTMLElement>('[data-ledger-column]');
-      if (target?.dataset.ledgerColumn && event.currentTarget.closest('.qms-ledger')?.contains(target)) {
-        current.target = target.dataset.ledgerColumn;
-        setDropTarget({ scope: stateKey, epoch: current.epoch, key: current.target });
+      if (current.awaitingMotion && Math.abs(event.clientX - current.origin) < 5) return;
+      current.awaitingMotion = false;
+      const target = document.elementFromPoint?.(event.clientX, event.clientY)?.closest<HTMLElement>(compactHeaders ? '[data-compact-ledger-column]' : '[data-ledger-column]');
+      const targetKey = compactHeaders ? target?.dataset.compactLedgerColumn : target?.dataset.ledgerColumn;
+      if (targetKey && target && event.currentTarget.closest('.qms-ledger')?.contains(target) && (!compactHeaders || moveColumn(order, current.key, targetKey, fixed, required) !== order)) {
+        current.target = targetKey;
+        setDropTarget({ scope: stateKey, epoch: current.epoch, key: targetKey });
+      } else if (compactHeaders) {
+        current.target = undefined;
+        setDropTarget(undefined);
       }
     }
   }
   function end(event: React.PointerEvent<HTMLElement>, cancelled: boolean) {
-    event.stopPropagation();
     const current = drag.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    event.stopPropagation();
     drag.current = undefined; setPreview(undefined); setDropTarget(undefined);
-    if (!current || cancelled || current.epoch !== getLedgerSessionEpoch() || current.pointerId !== event.pointerId || current.scope !== activeScope.current) return;
+    if (cancelled || current.epoch !== getLedgerSessionEpoch() || current.scope !== activeScope.current) return;
     if (current.kind === 'width') setWidth(current.key, clampWidth(current.key, current.width + event.clientX - current.origin, current.width));
-    else if (current.target) move(current.key, current.target);
+    else if (!current.awaitingMotion) {
+      if (compactHeaders) suppressHeaderClick.current = current.key;
+      if (current.target) move(current.key, current.target);
+    }
+  }
+  function moveByKey(event: React.KeyboardEvent<HTMLElement>, key: string) {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.stopPropagation(); event.preventDefault();
+    const target = order[order.indexOf(key) + (event.key === 'ArrowLeft' ? -1 : 1)];
+    if (target) move(key, target);
   }
   function resizeHandle(key: string, name: string) {
     return <span role="separator" tabIndex={0} aria-label={`${text('调整列宽', 'Resize column')} ${name}`} aria-orientation="vertical" aria-valuemin={minimumFor(key)} aria-valuemax={MAX_WIDTH} aria-valuenow={widthFor(key)} className="qms-ledger__resize" onClick={event => event.stopPropagation()} onDoubleClick={event => { event.stopPropagation(); const widths = { ...saved.widths }; delete widths[key]; commit({ ...saved, widths }); }} onPointerDown={event => begin(event, key, 'width')} onPointerMove={update} onPointerUp={event => end(event, false)} onPointerCancel={event => end(event, true)} onLostPointerCapture={event => end(event, true)} onKeyDown={event => { event.stopPropagation(); if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); setWidth(key, widthFor(key) + (event.key === 'ArrowLeft' ? -10 : 10)); } }} />;
@@ -136,13 +179,39 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
       if (!key || !keys.includes(key)) return column;
       const title = column.title;
       const name = label(column);
+      const movable = !required.includes(key);
       const onHeaderCell: typeof column.onHeaderCell = (headerColumn, index) => {
         const original = column.onHeaderCell?.(headerColumn, index) ?? {};
         const ariaLabel = original['aria-label'] ?? (typeof title === 'string' && original['aria-labelledby'] == null ? title : undefined);
-        return { ...original, 'aria-label': ariaLabel, ledgerAriaLabel: ariaLabel, className: [original.className, 'qms-ledger__header-cell'].filter(Boolean).join(' '), ledgerResize: resizeHandle(key, name) };
+        return { ...original, 'aria-label': ariaLabel, ledgerAriaLabel: ariaLabel, className: [original.className, 'qms-ledger__header-cell', compactHeaders && movable && 'qms-ledger__header-cell--movable'].filter(Boolean).join(' '), ledgerResize: resizeHandle(key, name),
+          ...(compactHeaders ? { 'data-compact-ledger-column': key } : {}),
+          ...(compactHeaders && movable ? {
+            tabIndex: original.tabIndex ?? 0,
+            'aria-keyshortcuts': 'ArrowLeft ArrowRight',
+            onPointerDown: (event: React.PointerEvent<HTMLElement>) => {
+              suppressHeaderClick.current = undefined;
+              original.onPointerDown?.(event);
+              if (event.defaultPrevented || event.pointerType === 'touch') return;
+              const control = (event.target as Element).closest(headerControls);
+              if (!control || control === event.currentTarget || !event.currentTarget.contains(control)) begin(event, key, 'order');
+            },
+            onPointerMove: (event: React.PointerEvent<HTMLElement>) => { original.onPointerMove?.(event); if (drag.current?.kind === 'order') update(event); },
+            onPointerUp: (event: React.PointerEvent<HTMLElement>) => { original.onPointerUp?.(event); if (drag.current?.kind === 'order') end(event, false); },
+            onPointerCancel: (event: React.PointerEvent<HTMLElement>) => { original.onPointerCancel?.(event); if (drag.current?.kind === 'order') end(event, true); },
+            onLostPointerCapture: (event: React.PointerEvent<HTMLElement>) => { original.onLostPointerCapture?.(event); if (drag.current?.kind === 'order') end(event, true); },
+            onClickCapture: (event: React.MouseEvent<HTMLElement>) => {
+              if (event.detail > 0 && suppressHeaderClick.current === key) { suppressHeaderClick.current = undefined; event.preventDefault(); event.stopPropagation(); return; }
+              original.onClickCapture?.(event);
+            },
+            onKeyDown: (event: React.KeyboardEvent<HTMLElement>) => {
+              original.onKeyDown?.(event);
+              if (!event.defaultPrevented && event.target === event.currentTarget) moveByKey(event, key);
+            },
+          } : {}),
+        };
       };
       return { ...column, key: column.key ?? key, onHeaderCell, hidden: !visible.includes(key) && !required.includes(key), width: columnWidth(key), fixed: fixed[key], title: (titleProps: Parameters<Exclude<typeof title, ReactNode>>[0]) => <div className={`qms-ledger__heading${dropTarget && dropTarget.epoch === sessionEpoch && dropTarget.scope === stateKey && dropTarget.key === key ? ' qms-ledger__heading--drop' : ''}`} data-ledger-column={key}>
-        {!required.includes(key) ? <button type="button" className="qms-ledger__grip" aria-label={`${text('移动列', 'Move column')} ${name}`} onClick={event => event.stopPropagation()} onPointerDown={event => begin(event, key, 'order')} onPointerMove={update} onPointerUp={event => end(event, false)} onPointerCancel={event => end(event, true)} onLostPointerCapture={event => end(event, true)} onKeyDown={event => { event.stopPropagation(); const index = order.indexOf(key); if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); const target = order[index + (event.key === 'ArrowLeft' ? -1 : 1)]; if (target) move(key, target); } }}><GripVertical size={12} aria-hidden="true" /></button> : null}
+        {movable && !compactHeaders ? <button type="button" className="qms-ledger__grip" aria-label={`${text('移动列', 'Move column')} ${name}`} onClick={event => event.stopPropagation()} onPointerDown={event => begin(event, key, 'order')} onPointerMove={update} onPointerUp={event => end(event, false)} onPointerCancel={event => end(event, true)} onLostPointerCapture={event => end(event, true)} onKeyDown={event => { event.stopPropagation(); moveByKey(event, key); }}><GripVertical size={12} aria-hidden="true" /></button> : null}
         <span className="qms-ledger__title">{typeof title === 'function' ? title(titleProps) : title}</span>
       </div> };
     });
@@ -181,7 +250,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
     <Button size="small" onClick={resetAll}>{resetColumnsLabel ?? text('恢复全部列', 'Reset all columns')}</Button>
   </div>;
   const expansion = expandable?.expandedRowRender ? { ...expandable, columnTitle: expandable.columnTitle === undefined ? text('明细', 'Details') : expandable.columnTitle, columnWidth: expandable.columnWidth ?? 64, showExpandColumn: expandable.showExpandColumn ?? (tableProps.dataSource?.some(record => !expandable.rowExpandable || expandable.rowExpandable(record)) ?? false) } : expandable;
-  return <div className={`qms-ledger${toolbarContent == null && tableProps.pagination !== false ? ' qms-ledger--native-pagination' : ''}`}>
+  return <div ref={tableRoot} className={`qms-ledger${compactHeaders ? ' qms-ledger--compact-headers' : ''}${toolbarContent == null && tableProps.pagination !== false ? ' qms-ledger--native-pagination' : ''}`}>
     <div className="qms-ledger__tools">{toolbarContent}<Popover content={settings} trigger="click" placement="bottomRight"><Button size="small" icon={<Settings2 size={13} />} disabled={!keys.length && !selection}>{text('列设置', 'Columns')}</Button></Popover></div>
     <HeaderCellComponent value={{ Cell: (components?.header?.cell ?? 'th') as ElementType, selectionResize: selection ? resizeHandle(SELECTION_WIDTH_KEY, selectionName) : undefined }}><Table<RecordType> {...tableProps} pagination={tableProps.pagination === false ? false : { placement: tableProps.pagination?.position ? undefined : ['topStart'], size: 'small', showTotal: total => text(`共 ${total} 条`, `${total} records`), showQuickJumper: true, ...tableProps.pagination }} tableLayout={fitSelection ? 'fixed' : tableProps.tableLayout} className={className} columns={decorate(columns)} rowSelection={selection ?? rowSelection} scroll={{ x: 'max-content', ...scroll, ...(fitSelection ? { x: `max(100%, ${businessWidth + selectionWidth}px)` } : {}) }} expandable={expansion} components={{ ...components, header: { ...components?.header, cell: LedgerHeaderCell } }} /></HeaderCellComponent>
   </div>;

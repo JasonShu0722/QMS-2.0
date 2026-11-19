@@ -2,12 +2,12 @@ import { LanguageProvider } from '../../i18n/Language';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
-import { apiRequest } from '../../api/client';
+import { apiRequest, csrfToken, getSession } from '../../api/client';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { ProcessShipmentReportPanel } from './ProcessShipmentReportPanel';
 import { ProcessDefectLedgerPage } from './ProcessDefectLedgerPage';
 
-vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn() }));
+vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() }));
 vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: () => null }));
 
 const report = { id: 'report-1', reportNumber: 'SHIP-001', status: 'DRAFT', version: 1, periodStart: '2026-10-01', periodEnd: '2026-10-02', batchCount: 1, goodQuantity: 90, defectQuantity: 10, yieldRate: 0.9, evidence: [], customers: [], issues: [] };
@@ -50,12 +50,15 @@ it('retains a new shipment report when closing is declined', async () => {
 });
 
 it('retains the selected process source and formal 8D draft when closing is declined', async () => {
-  const defect = { id: 'defect-1', description: '表面划伤', defectTypeCode: 'SCRATCH', defectQuantity: 1, responsibilityCategory: 'PROCESS', occurredAt: '2026-10-01', version: 1 };
+  const defect = { id: 'defect-1', organizationId: 'org-1', description: '表面划伤', defectTypeCode: 'SCRATCH', defectQuantity: 1, responsibilityCategory: 'PROCESS', occurredAt: '2026-10-01', version: 1 };
+  vi.mocked(getSession).mockResolvedValue({ userId: 'user-1', organizationId: defect.organizationId, accountType: 'INTERNAL', landingPath: '/app/workbench' });
+  vi.mocked(csrfToken).mockResolvedValue('csrf');
   vi.mocked(apiRequest).mockImplementation(async (url) => url.includes('/defects?') ? { items: [defect], total: 1 } : url.includes('/my-permissions') ? { permissions: ['process-quality:defects:read', 'process-quality:issues:issue'] } : url.endsWith('/sources/preview') ? [{ defectId: defect.id, relatedProblems: [], hasHiddenRelations: false, relatedSetToken: 'token' }] : { departments: [], users: [], departmentTotal: 0, userTotal: 0 });
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectLedgerPage /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
   fireEvent.click(screen.getByRole('button', { name: '发起 8D' }));
-  fireEvent.change(await screen.findByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
+  await screen.findByLabelText('发单来源预览');
+  fireEvent.change(screen.getByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
   fireEvent.click(within(screen.getByRole('dialog', { name: '发起正式内部8D' })).getByLabelText('关闭'));
   const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });
   await waitFor(() => expect(title).toBeVisible());
