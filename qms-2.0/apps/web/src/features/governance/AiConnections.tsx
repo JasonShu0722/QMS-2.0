@@ -111,9 +111,11 @@ function ConnectionContent({ organization }: { organization: AdminOrganization }
         <Form.Item name="defaultModel" label={t('默认模型')} dependencies={['models']} rules={[{ required: true }, { validator: async (_, value: string) => { if (value && !form.getFieldValue('models')?.includes(value)) throw new Error(t('请选择可用模型')); } }]}><Select options={models.map((value: string) => ({ value, label: value }))} /></Form.Item>
         {credentials ? <Form.Item name="apiKey" label={t('API密钥')} dependencies={['baseUrl', 'protocol']} extra={editor?.record?.hasKey ? t('留空保留已保存密钥') : undefined} rules={[{ validator: async (_, value: string) => { if (value) return; if (!editor?.record) throw new Error(t('请填写API密钥')); if (form.getFieldValue('baseUrl')?.trim() !== editor.record.baseUrl) throw new Error(t('更换服务地址时请填写新密钥')); if (form.getFieldValue('protocol') !== (editor.record.protocol ?? 'OPENAI_CHAT_COMPLETIONS')) throw new Error(t('更换渠道协议时请填写新密钥')); } }]}><Input.Password visibilityToggle={false} maxLength={4096} autoComplete="new-password" /></Form.Item> : null}
         <Form.Item name="enabled" label={t('启用连接')} valuePropName="checked"><Switch /></Form.Item>
-        {!unknown ? <Button type="primary" htmlType="submit" loading={busy}>{t('保存')}</Button> : null}
+        <div className="qms-dialog-actions">
+          <Button disabled={locked} onClick={close}>{t('取消')}</Button>
+          {unknown ? retry : <Button type="primary" htmlType="submit" loading={busy}>{t('保存')}</Button>}
+        </div>
       </Form>
-      <Space className="qms-ingestion-actions"><Button disabled={locked} onClick={close}>{t('取消')}</Button>{retry}</Space>
     </Modal>
     <Modal open={!!clearing} title={t('清除AI密钥')} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden footer={<Space><Button disabled={locked} onClick={close}>{t('取消')}</Button>{unknown ? retry : <Button danger type="primary" loading={busy} onClick={() => { if (clearing) void execute({ path: scoped(`/${clearing.id}/clear-key`), method: 'POST', body: { expectedVersion: clearing.version }, kind: 'clear' }); }}>{t('确认清除')}</Button>}</Space>}>
       {feedback}<p>{clearing?.name}</p><p>{t('清除后连接将停用；再次使用需重新填写密钥。')}</p>

@@ -175,9 +175,11 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
           <Form.Item label={t('失败处理')}><Input readOnly value={t('使用直接组合描述')} /></Form.Item>
         </div>
         <Form.Item name="enabled" label={t('启用应用')} valuePropName="checked"><Switch /></Form.Item>
-        {!mutation.unknown ? <Button type="primary" htmlType="submit" loading={mutation.busy}>{t('保存草稿')}</Button> : null}
+        <div className="qms-dialog-actions">
+          <Button disabled={locked} onClick={close}>{t('取消')}</Button>
+          {mutation.unknown ? retry : <Button type="primary" htmlType="submit" loading={mutation.busy}>{t('保存草稿')}</Button>}
+        </div>
       </Form>
-      <Space wrap className="qms-ingestion-actions"><Button disabled={locked} onClick={close}>{t('取消')}</Button>{retry}</Space>
     </Modal>
     <Modal open={!!publishing} title={t('发布应用版本')} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden footer={<Space wrap><Button disabled={locked} onClick={close}>{t('取消')}</Button>{mutation.unknown ? retry : <Button type="primary" loading={mutation.busy} onClick={publish}>{t('确认发布')}</Button>}</Space>}>
       {feedback}<p>{publishing?.name}</p><p>{t('既有入库规则仍使用原绑定版本。')}</p>

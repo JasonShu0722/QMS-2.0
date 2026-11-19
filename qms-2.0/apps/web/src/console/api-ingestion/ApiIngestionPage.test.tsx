@@ -125,6 +125,28 @@ it('shows named endpoints and keeps mutation controls absent for readers', async
   expect(screen.getByText('供应商接收')).toBeVisible(); expect(screen.queryByRole('button', { name: '新增规则' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '单条试处理' })).not.toBeInTheDocument();
 });
+it.each([homeId, endpointId, undefined])('allows a first AI binding only with prompt read access for target organization (%s)', async permissionOrg => {
+  const processRule: Rule = { ...rule, name: '制程规则', target: 'PROCESS_DEFECT', mapping: { traceCode: 'barcode' }, mode: 'INSERT_ONLY', updateFields: [], descriptionComposition: { fields: [{ path: 'BAD_ITEM_NAME', variable: 'fault' }], separator: '\n' } };
+  if (permissionOrg) mocks.context.modules.push({ key: 'ai-applications', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: permissionOrg, permissions: ['ai:applications:read'] });
+  const baselineRead = read.getMockImplementation()!;
+  read.mockImplementation(async (path, ...options) => {
+    if (path.includes('/ingestion/rules')) return { items: [processRule], total: 1, page: 1, limit: 20 } as never;
+    return baselineRead(path, ...options);
+  });
+  view();
+  fireEvent.click(await screen.findByLabelText('编辑制程规则'));
+  const toggle = screen.getByLabelText('AI整理');
+  if (permissionOrg !== homeId) {
+    expect(toggle).toBeDisabled();
+    fireEvent.click(toggle);
+    expect(read.mock.calls.some(([path]) => path.includes('/ai-applications'))).toBe(false);
+    return;
+  }
+  expect(toggle).toBeEnabled();
+  fireEvent.click(toggle);
+  expect(await screen.findByLabelText('提示词应用')).toBeEnabled();
+  expect(read.mock.calls.some(([path]) => path.includes('/ai-applications') && path.includes(`organizationId=${homeId}`))).toBe(true);
+});
 it('projects material master read permission into the component rule editor', async () => {
   const componentRule = { ...rule, name: '组件规则', target: 'COMPONENT', mapping: { code: 'partCode', name: 'name' } } as Rule;
   mocks.context = context(['ingestion:read', 'ingestion:manage', 'ingestion:run'], ['material-master:read']);
