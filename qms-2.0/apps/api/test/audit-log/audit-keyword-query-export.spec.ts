@@ -104,10 +104,17 @@ describe('audit keyword query/export filters (unit, not PostgreSQL evidence)', (
     expect(transaction.exportArtifact.create).not.toHaveBeenCalled();
   });
 
-  it('requires recent authentication before querying export rows', async () => {
+  it('allows exporting with a valid session after recent authentication expires', async () => {
     const { transaction, exports } = setup();
     transaction.session.findFirst.mockResolvedValueOnce({ reauthenticatedAt: new Date(0), mfaVerifiedAt: new Date() });
-    await expect(exports.create(actor, { action: '用户' }, 'keyword-stale')).rejects.toMatchObject({ status: 403 });
+    await expect(exports.create(actor, { action: '用户' }, 'keyword-stale')).resolves.toMatchObject({ rowCount: 1 });
+    expect(transaction.exportArtifact.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects an expired session before querying export rows', async () => {
+    const { transaction, exports } = setup();
+    transaction.session.findFirst.mockImplementationOnce(async () => null!);
+    await expect(exports.create(actor, { action: '用户' }, 'keyword-expired')).rejects.toMatchObject({ status: 401 });
     expect(transaction.auditEvent.findMany).not.toHaveBeenCalled();
     expect(transaction.exportArtifact.create).not.toHaveBeenCalled();
   });
