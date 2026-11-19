@@ -193,8 +193,10 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
       <Form.Item noStyle shouldUpdate={(before, after) => before.mode !== after.mode}>{({ getFieldValue }) => getFieldValue('mode') !== 'INSERT_ONLY' && <Form.Item name="updateFields" label={text('允许更新字段', 'Allowed update fields')} rules={[{ type: 'array', min: 1, message: text('请选择至少一个允许更新字段', 'Select at least one update field') }]}><Checkbox.Group options={fieldOptions} /></Form.Item>}</Form.Item>
       <IngestionError error={mutation.error} unknown={mutation.unknown} />
       {bindingError ? <Alert type="error" title={bindingError} /> : null}
-      {!mutation.unknown && <Button className="qms-ingestion-actions" type="primary" htmlType="submit" loading={mutation.busy}>{text('保存', 'Save')}</Button>}
+      <div className="qms-dialog-actions qms-ingestion-actions">
+        <Button disabled={mutation.locked} onClick={() => requestLeave(close, true)}>{text('取消', 'Cancel')}</Button>
+        {mutation.unknown ? <Button type="primary" disabled={mutation.busy} loading={mutation.busy} onClick={mutation.retry}>{text('重试原请求', 'Retry original request')}</Button> : <Button type="primary" htmlType="submit" loading={mutation.busy}>{text('保存', 'Save')}</Button>}
+      </div>
     </Form>
-    <Space wrap className="qms-ingestion-actions"><Button disabled={mutation.locked} onClick={() => requestLeave(close, true)}>{text('取消', 'Cancel')}</Button>{mutation.unknown ? <Button type="primary" disabled={mutation.busy} loading={mutation.busy} onClick={mutation.retry}>{text('重试原请求', 'Retry original request')}</Button> : null}</Space>
   </Modal>;
 }

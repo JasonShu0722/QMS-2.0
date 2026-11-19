@@ -467,6 +467,27 @@ test('AI management separates configuration and publishes prompt applications ac
       descriptionComposition: { fields: [{ path: 'FAULT', variable: 'fault', label: '现象样本' }], separator: '\n' },
     }, 201);
     expect(sourceRule.descriptionComposition?.fields).toEqual([{ path: 'FAULT', variable: 'fault', label: '现象样本' }]);
+    async function checkActionRow(dialog: ReturnType<typeof page.getByRole>, saveName: RegExp) {
+      const cancel = dialog.getByRole('button', { name: /^取\s*消$/ });
+      const save = dialog.getByRole('button', { name: saveName });
+      for (const width of [1440, 390, 320]) {
+        await page.setViewportSize({ width, height: 900 });
+        await save.scrollIntoViewIfNeeded();
+        await expect(cancel).toBeInViewport();
+        await expect(save).toBeInViewport();
+        const [cancelBox, saveBox] = await Promise.all([cancel.boundingBox(), save.boundingBox()]);
+        expect(Math.abs(cancelBox!.y + cancelBox!.height / 2 - saveBox!.y - saveBox!.height / 2)).toBeLessThan(2);
+        expect(cancelBox!.x + cancelBox!.width).toBeLessThan(saveBox!.x);
+        await expect.poll(() => dialog.locator('.ant-modal-body').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      }
+      await page.setViewportSize({ width: 1440, height: 900 });
+    }
+    await page.goto(`/console/ai-connections?organizationId=${organizationId}`);
+    await page.getByRole('button', { name: '新增AI连接', exact: true }).click();
+    const connectionEditor = page.getByRole('dialog', { name: 'AI连接', exact: true });
+    await checkActionRow(connectionEditor, /^保\s*存$/);
+    await connectionEditor.getByRole('button', { name: /^取\s*消$/ }).click();
+    await expect(connectionEditor).toHaveCount(0);
     await page.goto(`/console/ai-applications?organizationId=${organizationId}`);
     await expect(page.getByRole('button', { name: '新增应用', exact: true })).toBeVisible();
     await expect(page.getByText('AI管理', { exact: true })).toBeVisible();
@@ -481,11 +502,7 @@ test('AI management separates configuration and publishes prompt applications ac
     await editor.getByLabel('提示词', { exact: true }).fill('整理');
     await editor.getByRole('button', { name: '插入 fault', exact: true }).click();
     await expect(editor.getByLabel('提示词', { exact: true })).toHaveValue('整理{{fault}}');
-    for (const width of [1440, 390, 320]) {
-      await page.setViewportSize({ width, height: 900 });
-      await expect.poll(() => editor.locator('.ant-modal-body').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
-    }
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await checkActionRow(editor, /^保存草稿$/);
     const createdResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/admin/ai-applications' && response.request().method() === 'POST');
     await editor.getByRole('button', { name: '保存草稿', exact: true }).click();
     const created = await createdResponse;
@@ -499,6 +516,28 @@ test('AI management separates configuration and publishes prompt applications ac
     await publishing.getByRole('button', { name: '确认发布', exact: true }).click();
     expect((await publishedResponse).status()).toBe(201);
     await expect(publishing).toHaveCount(0);
+    await page.goto(`/console/api-ingestion?organizationId=${organizationId}`);
+    const editRule = page.getByRole('button', { name: `编辑${sourceRule.name}`, exact: true });
+    await editRule.click();
+    const ruleEditor = page.getByRole('dialog', { name: '编辑入库规则', exact: true });
+    await checkActionRow(ruleEditor, /^保\s*存$/);
+    const toggle = ruleEditor.getByRole('switch', { name: 'AI整理', exact: true });
+    await expect(toggle).toBeEnabled();
+    await toggle.click();
+    await ruleEditor.getByLabel('提示词应用', { exact: true }).press('ArrowDown');
+    const revisionResponse = page.waitForResponse(response => new URL(response.url()).pathname.endsWith(`/ai-applications/${application.id}/revisions/1`) && response.request().method() === 'GET');
+    await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: name }).click();
+    expect((await revisionResponse).status()).toBe(200);
+    await expect(ruleEditor.getByLabel('已发布版本', { exact: true })).toHaveValue('1');
+    const savedRule = page.waitForResponse(response => new URL(response.url()).pathname.endsWith(`/rules/${sourceRule.id}`) && response.request().method() === 'PATCH');
+    await ruleEditor.getByRole('button', { name: /^保\s*存$/ }).click();
+    expect((await savedRule).status()).toBe(200);
+    await expect(ruleEditor).toHaveCount(0);
+    await editRule.click();
+    await expect(toggle).toBeChecked();
+    await expect(ruleEditor.getByLabel('已发布版本', { exact: true })).toHaveValue('1');
+    await ruleEditor.getByRole('button', { name: /^取\s*消$/ }).click();
+    await page.goto(`/console/ai-applications?organizationId=${organizationId}`);
     await row.getByRole('button', { name: '样本试运行', exact: true }).click();
     const trial = page.getByRole('dialog', { name: '样本试运行', exact: true });
     await trial.getByLabel('现象样本', { exact: true }).fill('焊点异常');
