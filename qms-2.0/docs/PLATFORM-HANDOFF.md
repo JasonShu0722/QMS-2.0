@@ -108,7 +108,7 @@ fix8补配清理通过身份所有者`revokeForReconfiguration(tx, actor, userId
 | 组织与结构 | `/api/v1/organizations/tree`、`/:id/children`、`/:id/departments`、`/:id/positions`、`/:id/users/:userId/positions`。读/管理/任职分权，同组织引用，版本 CAS；层级不授予跨组织权限。停用用户主组织也使其身份失效 |
 | 受控配置 | `/api/v1/admin/configuration/*?organizationId`。岗位类别、通知语言、导出保留 5–10080 分钟、TASK_ASSIGNED/REMINDER/ESCALATED 模板与开关。默认语言与规则由真实 Worker 消费，历史已发通知冻结 |
 | 安全登录 | LoginResponse 增加 securityState；MFA_REQUIRED 和 MFA_ENROLLMENT_REQUIRED 只允许必要安全交互。`/mfa` 完成后才获得完整业务会话。角色增加 mfaRequired，策略 PATCH 须 expectedMfaRequired |
-| 高风险写入 | 服务事务重新检查有效会话、用户/主组织状态、securityVersion 和最近五分钟完整认证。403 AUTH_REAUTHENTICATION_REQUIRED 时 Web 验证身份后只重试一次原请求，保留幂等键；领域不得绕开公共授权边界 |
+| 管理操作认证 | 服务事务检查有效会话、用户与主组织状态、`securityVersion`、会话 MFA 要求及操作权限。组织、岗位、角色、用户及权限配置保留最近五分钟完整认证，其他领域使用有效会话。收到 `403 AUTH_REAUTHENTICATION_REQUIRED` 时，Web 验证身份后保留幂等键重试一次原请求。 |
 | 邮箱与找回 | `/me/email-verification`、`/auth/email-verification/complete`、`/auth/password-recovery`、`/auth/password-recovery/complete`。邮箱先确认再找回，凭证单次15分钟，密码重置撤销会话但保留MFA。SMTP Worker 默认关闭，需要明确配置启用；真实业务通知邮件不在本轮 |
 | 审计与导出 | `/api/v1/admin/audit-events` 和 `/audit-exports`。audit:read 与 audit:export 独立；导出最多5000，创建者实时会话/权限复验，保留设置生效、过期清除密文，不删除源审计 |
 | 失败事件 | `/api/v1/outbox/failures` 和 `/:id/retry`。按真实聚合归属验证，失败载荷及原异常不出接口；未知事件归属不放行。P2c 任务/通知读取、已读和独占领取也已接入 |

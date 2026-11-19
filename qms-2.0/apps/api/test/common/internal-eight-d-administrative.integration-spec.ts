@@ -122,7 +122,7 @@ describe('internal three-domain administrative recovery / actual App and Postgre
     expect(await db.auditEvent.count({ where: { resourceId: f.id, action: `${domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS ? 'PROCESS' : domain === INTERNAL_EIGHT_D_DOMAINS.CUSTOMER ? 'CUSTOMER' : 'NEW_PRODUCT'}_EIGHT_D_ADMINISTRATIVELY_RECONFIGURED` } })).toBe(1);
   }, 60_000);
 
-  it('denies ordinary admin, no recent auth, valid professional replacement and foreign/unqualified candidates', async () => {
+  it('denies ordinary admin and invalid replacements and lists pending cases without step-up', async () => {
     const f = await fixture(INTERNAL_EIGHT_D_DOMAINS.CUSTOMER);
     await db.rolePermission.create({ data: { roleId: f.role.id, permissionId: (await db.permission.findUniqueOrThrow({ where: { code: 'organization:reconfigure' } })).id } });
     await expect(f.pending(f.owner.actor)).rejects.toMatchObject({ status: 403 });
@@ -134,8 +134,12 @@ describe('internal three-domain administrative recovery / actual App and Postgre
     await db.userRole.deleteMany({ where: { userId: f.newProfessional.user.id } });
     await expect(f.configure({ expectedVersion: (await f.row()).version, professionalAssignmentId: f.newProfessional.assignment.id })).rejects.toMatchObject({ status: 400 });
     await db.session.update({ where: { id: admin.owner.actor.sessionId }, data: { reauthenticatedAt: null } });
-    await expect(f.pending()).rejects.toMatchObject({ status: 403 });
-    await db.session.update({ where: { id: admin.owner.actor.sessionId }, data: { reauthenticatedAt: new Date() } });
+    try {
+      expect((await f.pending()).items).toEqual(expect.arrayContaining([expect.objectContaining({ problemId: f.id })]));
+      await expect(f.configure({ expectedVersion: (await f.row()).version, professionalAssignmentId: f.newProfessional.assignment.id }))
+        .rejects.toMatchObject({ response: { code: 'AUTH_REAUTHENTICATION_REQUIRED' } });
+    }
+    finally { await db.session.update({ where: { id: admin.owner.actor.sessionId }, data: { reauthenticatedAt: new Date() } }); }
   }, 60_000);
 
   it('keeps a valid owner when only professional is invalid, and rolls back both report and audit on audit storage failure', async () => {

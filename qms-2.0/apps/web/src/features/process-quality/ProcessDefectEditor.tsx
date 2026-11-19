@@ -1,11 +1,11 @@
 import type { components } from '@qms/contracts';
 import { personLabel } from '../../ui/personLabel';
 import { Alert, Button, Collapse, Descriptions, Drawer, Form, Input, InputNumber, Pagination, Select, Typography } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { apiRequest } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
-import { categoryOptions, denied, MappingHint, ProcessError, useProcessWrite, type Defect } from './process-ledger';
+import { categoryOptions, denied, ProcessError, useProcessWrite, type Defect } from './process-ledger';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessTraceScanner } from './ProcessTraceScanner';
 
@@ -23,6 +23,7 @@ export function materialInputs(record?: Defect): Material[] {
 }
 export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSaved, onClose, onDenied }: { record?: Defect; suppliers: Supplier[]; canReadSuppliers: boolean; onSaved: (record: Defect) => void; onClose: () => void; onDenied: (cause?: unknown) => void }) {
   const [form] = Form.useForm<Update>();
+  const formId = useId();
   const [saved, setSaved] = useState(record);
   const [dirty, setDirty] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -100,12 +101,13 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
     finally { submitting.current = false; }
   }
   const initialValues: Partial<Update> = record ? { ...record, externalRecordKey: record.externalRecordKey ?? undefined, materials: materialInputs(record), occurredAt: record.occurredAt ? new Date(new Date(record.occurredAt).getTime() - new Date(record.occurredAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : null } : { materials: [{}], defectQuantity: 1 };
-  return <Drawer open title={record ? '维护不良台账' : '登记不良'} size="min(920px, 100vw)" onClose={() => { if (!writer.busy) requestLeave(onClose, true); }} closable={!writer.busy} keyboard={!writer.busy} mask={{ closable: !writer.busy }}>
+  return <Drawer open title={record ? '维护不良台账' : '登记不良'} size="min(920px, 100vw)"
+    extra={<Button type="primary" htmlType="submit" form={formId} loading={writer.busy} disabled={invalidated || writer.busy}>{writer.uncertain ? '同请求重试保存' : '保存登记'}</Button>}
+    onClose={() => { if (!writer.busy) requestLeave(onClose, true); }} closable={!writer.busy} keyboard={!writer.busy} mask={{ closable: !writer.busy }}>
     <ProcessError cause={error} fallback="保存失败，请重试。" />
     {invalidated ? <Alert type="warning" title="会话已变化，请重新打开编辑器。" /> : null}
     {writer.uncertain ? <Alert type="warning" title="保存结果未知；已锁定原请求，请使用同请求重试，避免重复登记。" /> : null}
-    {saved ? <Alert type="success" title={<>已保存 · 版本 {saved.version} <MappingHint record={saved} /></>} /> : null}
-    <Form form={form} layout="vertical" initialValues={initialValues} disabled={invalidated || writer.busy || writer.uncertain} onValuesChange={() => setDirty(true)} onFinish={() => void save(form.getFieldsValue(true))}>
+    <Form id={formId} form={form} layout="vertical" initialValues={initialValues} disabled={invalidated || writer.busy || writer.uncertain} onValuesChange={() => setDirty(true)} onFinish={() => void save(form.getFieldsValue(true))}>
       <div className="process-quality-form-grid">
         <Form.Item name="occurredAt" label="发生时间" rules={[{ required: !saved, message: '请填写发生时间' }]}><Input type="datetime-local" /></Form.Item>
         <Form.Item name="productCode" label="成品编码" rules={[{ required: !saved, whitespace: true, message: '请填写成品编码' }]}><Input maxLength={100} /></Form.Item>
@@ -114,12 +116,12 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
       </div>
       <Form.Item name="description" label="不良描述" rules={[{ required: !saved, whitespace: true, message: '请填写不良描述' }, { max: 10000, message: '最多10000个字符' }]}><Input.TextArea rows={3} maxLength={10000} /></Form.Item>
       <div className="process-quality-form-grid"><Form.Item name="workOrderCode" label="工单号"><Input maxLength={100} /></Form.Item><Form.Item name="lineName" label="生产线名称"><Input maxLength={200} /></Form.Item><Form.Item name="operationName" label="工序名称"><Input maxLength={200} /></Form.Item></div>
-      {saved?.sourceKind === 'IMS' ? <Form.Item name="externalRecordKey" label="来源明细编号"><Input maxLength={200} readOnly={!!saved.externalRecordKey} placeholder="待补充" /></Form.Item> : null}
+      {saved?.sourceKind === 'IMS' ? <Form.Item name="externalRecordKey" label="来源明细编号"><Input maxLength={200} readOnly={!!saved.externalRecordKey} /></Form.Item> : null}
       {saved ? <Descriptions size="small" column={2} items={[
-        { key: 'project', label: '项目号', children: saved.componentProject?.project?.code ?? '待补配' },
+        { key: 'project', label: '项目号', children: saved.componentProject?.project?.code ?? '未确认' },
         { key: 'stage', label: '项目状态', children: saved.projectStage === 'NEW_PRODUCT' ? '新品' : saved.projectStage === 'MASS_PRODUCTION' ? '量产' : '未确认' },
-        { key: 'subcategory', label: '细分类型', children: saved.productSubcategory ?? '待补配' },
-        { key: 'sector', label: '板块', children: saved.operationSector ?? '待补配' },
+        { key: 'subcategory', label: '细分类型', children: saved.productSubcategory ?? '—' },
+        { key: 'sector', label: '板块', children: saved.operationSector ?? '未确认' },
         { key: 'shift', label: '班次', children: saved.shift === 'DAY' ? '白班' : saved.shift === 'NIGHT' ? '夜班' : '未知' },
         { key: 'registrant', label: '登记人', children: saved.sourceKind === 'IMS' ? '自动' : saved.registeredByName ?? '—' },
         ...(saved.projectCode ? [{ key: 'legacyProject', label: '原人工项目', children: saved.projectCode }] : []),
@@ -144,7 +146,6 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
         </section>)}<Button disabled={fields.length >= 100 || writer.busy || writer.uncertain} onClick={() => { add({}); setDirty(true); }}>添加物料</Button></>}</Form.List>
         {(sqes?.total ?? 0) > 100 ? <Pagination aria-label="SQE候选分页" current={sqePage} pageSize={100} total={sqes?.total} showSizeChanger={false} onChange={setSqePage} /> : null}
       </> }]} />
-      <div className="qms-dialog-actions"><Button type="primary" htmlType="submit" loading={writer.busy} disabled={invalidated || writer.busy}>{writer.uncertain ? '同请求重试保存' : '保存登记'}</Button></div>
     </Form>
     {scanning && !invalidated ? <ProcessTraceScanner onScan={value => { form.setFieldValue('traceCode', value); setDirty(true); }} onClose={() => setScanning(false)} /> : null}
     {saved ? <><Typography.Title level={4}>附件与扫描</Typography.Title><AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: saved.id }} fileIds={(saved.evidence ?? []).map(file => file.id)} /></> : null}

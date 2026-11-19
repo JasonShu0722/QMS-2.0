@@ -168,7 +168,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "2f02f3b360b5d4d88563aa3a49c4d9d04a1a2ca38b1e92889f4bc95c976f8721"
+            "sha256": "46bfbc75296748868b71a2b971124ed0aa11483369a2db8a728aebb70ccd96db"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -194,7 +194,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "2f02f3b360b5d4d88563aa3a49c4d9d04a1a2ca38b1e92889f4bc95c976f8721"
+            "sha256": "46bfbc75296748868b71a2b971124ed0aa11483369a2db8a728aebb70ccd96db"
           }
         ]
       }
@@ -224,7 +224,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "2f02f3b360b5d4d88563aa3a49c4d9d04a1a2ca38b1e92889f4bc95c976f8721"
+            "sha256": "46bfbc75296748868b71a2b971124ed0aa11483369a2db8a728aebb70ccd96db"
           },
           {
             "path": "docs/ATTACHMENTS.md",
@@ -730,7 +730,7 @@
           },
           {
             "path": "apps/web/src/console/ConsoleLayout.tsx",
-            "sha256": "ca65affcd2bb8a3cdb3e0108bf37b4d4e155d5c6c89be3b6b319ac4730167986"
+            "sha256": "0c6a86d097733fbe0f9de0b99b6ee7c978f28bfe621ed20c17e140e2f350e15c"
           },
           {
             "path": "apps/web/src/styles/global.css",
@@ -754,7 +754,7 @@
           },
           {
             "path": "apps/web/src/layouts/sidebar-navigation.test.tsx",
-            "sha256": "36ef61325af30277202168416dd4fd6365e8458ec1a580f8d27eaaf9eabe043f"
+            "sha256": "416c2651d493234d60fa7396b4c0ae8ad758bded21b9b9ca2f54f42fada9e5f2"
           },
           {
             "path": "apps/web/src/interaction-preview/console/ConsolePreview.test.tsx",
@@ -770,7 +770,7 @@
           },
           {
             "path": "apps/web/src/console/console.css",
-            "sha256": "439873af66f62dfa474b6289f37e4d707df8200b97dd129617b2597955f4406b"
+            "sha256": "1145bc063b937c68ad10328e54d56428efbdb672181905802fc6cb7c679e6e52"
           },
           {
             "path": "apps/web/playwright/sidebar-regression-fixture.tsx",
@@ -1166,7 +1166,7 @@
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
-            "sha256": "2f02f3b360b5d4d88563aa3a49c4d9d04a1a2ca38b1e92889f4bc95c976f8721"
+            "sha256": "46bfbc75296748868b71a2b971124ed0aa11483369a2db8a728aebb70ccd96db"
           },
           {
             "path": "docs/SUPPLIER-PLATFORM-HANDOFF.md",

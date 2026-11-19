@@ -147,7 +147,7 @@ describe('supplier current-role administrative recovery / actual App and Postgre
     await expect(configure(f, replacement.id, version)).rejects.toMatchObject({ status: 409 });
   }, 60_000);
 
-  it('rejects ordinary same-name admins, supplier callers, stale authentication, and loss of the real platform marker', async () => {
+  it('requires the real platform marker and allows pending reads after step-up expires', async () => {
     const f = await fixture(), replacement = await f.f.person(f.f.section.id);
     await db.userPosition.update({ where: { id: f.f.owner.assignment.id }, data: { endedAt: new Date(Date.now() - 1000) } });
     const permission = await db.permission.findUniqueOrThrow({ where: { code: 'organization:reconfigure' } });
@@ -160,7 +160,11 @@ describe('supplier current-role administrative recovery / actual App and Postgre
     }
     const session = await db.session.findUniqueOrThrow({ where: { id: administrator.sessionId } });
     await db.session.update({ where: { id: session.id }, data: { reauthenticatedAt: new Date(Date.now() - 3600_000) } });
-    try { await expect(pending()).rejects.toMatchObject({ status: 403 }); }
+    try {
+      expect(await pendingItems()).toEqual(expect.arrayContaining([expect.objectContaining({ supplierProblemId: f.draft.id })]));
+      await expect(configure(f, replacement.assignment.id, f.issued.rowVersion))
+        .rejects.toMatchObject({ response: { code: 'AUTH_REAUTHENTICATION_REQUIRED' } });
+    }
     finally { await db.session.update({ where: { id: session.id }, data: { reauthenticatedAt: new Date() } }); }
     const grant = await db.userRole.findFirstOrThrow({ where: { userId: administrator.id } });
     await db.userRole.delete({ where: { userId_roleId_organizationId: { userId: administrator.id, roleId: grant.roleId, organizationId: grant.organizationId } } });

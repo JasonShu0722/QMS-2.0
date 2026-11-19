@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { Alert, Space, Tag, Tooltip } from 'antd';
+import { Alert, Tooltip } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, getSession, safeAccountError } from '../../api/client';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
@@ -67,43 +67,61 @@ export function useProcessWrite(onDenied: (cause?: unknown) => void) {
 const hintLabels: Record<string, string> = {
   SAME_OPERATION_TRACE_DUPLICATE: '同工序同条码已有记录。',
   MANUAL_PROJECT_DIFFERS: '人工项目与映射建议不同。',
-  COMPONENT_PROJECT_UNMAPPED: '零部件尚未映射项目，请核对人工资料。',
-  DESCRIPTION_EMPTY: '失效现象未填写。',
-  DEFECT_TYPE_UNKNOWN: '失效类型未知。',
+  DESCRIPTION_EMPTY: '不良描述待完善。',
   DEFECT_QUANTITY_UNKNOWN: '不良数量未知。',
   OCCURRED_AT_UNKNOWN: '发生时间未知。',
-  MAPPING_NOT_FOUND: '零部件尚未建立项目映射。',
-  PROJECT_NOT_CONFIGURED: '映射尚未配置项目。',
   PRODUCT_CATEGORY_NOT_CONFIGURED: '映射尚未配置产品分类。',
   MAPPING_OR_PROJECT_DISABLED: '映射或项目已停用，请核对。',
   MANUAL_ENGINEER_DIFFERS: '人工工程师与映射建议不同。',
   OCCURRED_AT_REQUIRED: '发生时间待完善。', PRODUCT_CODE_REQUIRED: '成品编码待完善。', TRACE_CODE_REQUIRED: '追溯码待完善。', DESCRIPTION_REQUIRED: '不良描述待完善。',
-  HISTORICAL_ASSOCIATION_UNCONFIRMED: '历史关联未确认。', PROJECT_MAPPING_PENDING: '项目映射待补配。', PRODUCT_SUBCATEGORY_PENDING: '细分类型待补配。', OPERATION_SECTOR_PENDING: '工序板块待补配。', SOURCE_IDENTITY_INCOMPLETE: '来源明细编号待补充；跨消息重复推送不能自动去重。',
+  HISTORICAL_ASSOCIATION_UNCONFIRMED: '历史关联未确认。',
+};
+const detailOnlyHints: Record<string, string> = {
+  PROJECT_MAPPING_PENDING: '项目映射待补配。', COMPONENT_PROJECT_UNMAPPED: '项目映射待补配。',
+  MAPPING_NOT_FOUND: '项目映射待补配。', PROJECT_NOT_CONFIGURED: '项目映射待补配。',
+  OPERATION_SECTOR_PENDING: '工序板块待补配。',
+};
+const hiddenHints = new Set(['PRODUCT_SUBCATEGORY_PENDING', 'SOURCE_IDENTITY_INCOMPLETE', 'DEFECT_TYPE_UNKNOWN']);
+const hintFields: Record<string, string> = {
+  OCCURRED_AT_REQUIRED: 'occurredAt', OCCURRED_AT_UNKNOWN: 'occurredAt', PRODUCT_CODE_REQUIRED: 'productCode',
+  TRACE_CODE_REQUIRED: 'traceCode', DESCRIPTION_REQUIRED: 'description', DESCRIPTION_EMPTY: 'description',
 };
 const sourceFieldLabels: Record<string, string> = {
   occurredAt: '发生时间', productCode: '成品编码', workOrderCode: '工单号', lineCode: '生产线编码', lineName: '生产线名称',
   operationCode: '工序编码', operationName: '工序名称', traceCode: '追溯码', description: '不良描述', externalRecordKey: '来源明细编号', sourceObservedAt: '来源更新时间',
 };
-function sourceIssueMessage(hint: string) {
-  const [field, problem] = hint.split(':');
-  const fieldLabel = Object.hasOwn(sourceFieldLabels, field) ? sourceFieldLabels[field] : undefined;
-  if (fieldLabel && problem === 'TYPE') return `${fieldLabel}来源值类型无效，请核对。`;
-  if (fieldLabel && problem === 'INVALID') return `${fieldLabel}来源值格式或长度无效，请核对。`;
-  return '来源字段待核对';
-}
-export function CompletionStatus({ record }: { record: Defect }) {
-  if (!record.pendingCompletion && !record.pendingConfiguration) return null;
+function visibleHintMessages(record: Defect, detail: boolean) {
   const hints = [...new Set([...(record.registrationIssues ?? []), ...(record.issues ?? []), ...(record.componentProject?.issues ?? [])])];
-  const missing = hints.filter(hint => /_(REQUIRED|PENDING)$/.test(hint));
-  return <div className="process-quality-completion"><Space wrap>{record.pendingCompletion ? <Tag color="warning">待完善</Tag> : null}{record.pendingConfiguration ? <Tag color="processing">待补配</Tag> : null}</Space>{missing.length ? <span>{missing.map(hint => hintLabels[hint] ?? sourceIssueMessage(hint)).join(' ')}</span> : null}</div>;
+  if (record.duplicateCount) hints.push('SAME_OPERATION_TRACE_DUPLICATE');
+  const byField = new Map<string, string>();
+  let unknown = false;
+  for (const hint of hints) {
+    const [field, problem] = hint.split(':');
+    if (!Object.hasOwn(sourceFieldLabels, field) || byField.has(field)) continue;
+    if (problem === 'TYPE') byField.set(field, `${sourceFieldLabels[field]}来源值类型无效，请核对。`);
+    if (problem === 'INVALID') byField.set(field, `${sourceFieldLabels[field]}来源值格式或长度无效，请核对。`);
+  }
+  for (const hint of hints) {
+    if (hiddenHints.has(hint)) continue;
+    if (Object.hasOwn(detailOnlyHints, hint)) {
+      if (detail) byField.set(detailOnlyHints[hint], detailOnlyHints[hint]);
+    } else if (Object.hasOwn(hintLabels, hint)) {
+      const field = Object.hasOwn(hintFields, hint) ? hintFields[hint] : hint;
+      if (!byField.has(field)) byField.set(field, hintLabels[hint]);
+    } else if (!byField.has(hint.split(':')[0])) {
+      unknown = true;
+    }
+  }
+  return byField.size ? [...byField.values()] : unknown ? ['来源字段待核对'] : [];
+}
+export function CompletionStatus({ record, detail = false }: { record: Defect; detail?: boolean }) {
+  const messages = visibleHintMessages(record, detail);
+  return messages.length ? <div className="process-quality-completion">{messages.join(' ')}</div> : '—';
 }
 export function MappingHint({ record }: { record: Defect }) {
-  const hints = [...(record.issues ?? []), ...(record.registrationIssues ?? []), ...(record.componentProject?.issues ?? [])];
-  if (record.duplicateCount && !hints.includes('SAME_OPERATION_TRACE_DUPLICATE')) hints.push('SAME_OPERATION_TRACE_DUPLICATE');
-  const statusHints = [record.pendingCompletion ? '待完善' : null, record.pendingConfiguration ? '待补配' : null].filter((value): value is string => Boolean(value));
-  if (!hints.length && !statusHints.length) return null;
-  const messages = [...statusHints, ...Array.from(new Set(hints), hint => hintLabels[hint] ?? sourceIssueMessage(hint))];
-  return <Tooltip trigger={['hover', 'focus']} title={<ul>{messages.map((hint, index) => <li key={`${hint}-${index}`}>{hint}</li>)}</ul>}>
+  const messages = visibleHintMessages(record, false);
+  if (!messages.length) return null;
+  return <Tooltip trigger={['hover', 'focus']} title={<ul>{messages.map(hint => <li key={hint}>{hint}</li>)}</ul>}>
     <button type="button" className="process-quality-warning" aria-label={`映射与来源提示 ${record.description}`}>!</button>
   </Tooltip>;
 }

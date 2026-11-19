@@ -598,7 +598,7 @@ describe('process 8D real domain transactions', () => {
     } finally { await app.close(); }
   }, 120_000);
 
-  it.each(['MISSING', 'EXPIRED'] as const)('rejects configuration writes and replays without %s recent authentication while allowing reads', async state => {
+  it.each(['MISSING', 'EXPIRED'] as const)('allows configuration with %s step-up and rejects writes and replays after the session is revoked', async state => {
     const f = await crossOrganizationFixture();
     const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
@@ -608,6 +608,7 @@ describe('process 8D real domain transactions', () => {
       const sessions = app.get(SessionService);
       const token = await sessions.create(f.home.issuer.user.id, app.get(PrismaService), { reauthenticated: true, mfaVerified: true });
       const session = (await sessions.resolve(token))!;
+      await prisma.session.update({ where: { id: session.id }, data: { reauthenticatedAt: state === 'MISSING' ? null : new Date(Date.now() - 6 * 60_000) } });
       const csrf = randomUUID(), cookie = `qms_session=${token}; qms_csrf=${csrf}`;
       const before = (await service.binding(f.target.issuer.actor))!;
       const bindKey = randomUUID(), activateKey = randomUUID();
@@ -619,8 +620,8 @@ describe('process 8D real domain transactions', () => {
       const auditBefore = await prisma.auditEvent.count({ where: { organizationId: f.target.organization.id, action: 'PROCESS_EIGHT_D_BINDING_CHANGED', outcome: 'SUCCESS' } });
       const receiptBefore = await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM process_eight_d_receipts WHERE organization_id = ${f.target.organization.id}::uuid AND actor_user_id = ${f.actor.id}::uuid`;
       const userBefore = await prisma.user.findUniqueOrThrow({ where: { id: f.actor.id } });
-      await prisma.session.update({ where: { id: session.id }, data: { reauthenticatedAt: state === 'MISSING' ? null : new Date(Date.now() - 6 * 60_000) } });
       await request(app.getHttpServer()).get(`/api/v1/process-quality/eight-d/binding?organizationId=${f.target.organization.id}`).set('Cookie', cookie).expect(200);
+      await prisma.session.update({ where: { id: session.id }, data: { revokedAt: new Date() } });
       for (const operation of [
         { path: 'binding', key: randomUUID(), body: { ...bindBody, expectedVersion: stable.version } },
         { path: 'activation', key: randomUUID(), body: { ...activateBody, expectedVersion: stable.version, enabled: false } },
@@ -628,8 +629,8 @@ describe('process 8D real domain transactions', () => {
         { path: 'activation', key: activateKey, body: activateBody },
       ]) {
         const rejected = await request(app.getHttpServer()).put(`/api/v1/process-quality/eight-d/${operation.path}`).set('Cookie', cookie)
-          .set('x-csrf-token', csrf).set('Idempotency-Key', operation.key).send(operation.body).expect(403);
-        expect(rejected.body.code).toBe('AUTH_REAUTHENTICATION_REQUIRED');
+          .set('x-csrf-token', csrf).set('Idempotency-Key', operation.key).send(operation.body).expect(401);
+        expect(rejected.body.code).toBe('AUTH_SESSION_REQUIRED');
       }
       expect(await service.binding(f.target.issuer.actor)).toEqual(stable);
       expect(await prisma.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM process_eight_d_receipts WHERE organization_id = ${f.target.organization.id}::uuid AND actor_user_id = ${f.actor.id}::uuid`).toEqual(receiptBefore);

@@ -538,8 +538,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     const history = await service.previewHistory(item.actor, { ruleId: configuration.id, ruleVersion: 1, from: new Date(Date.now() - 60000).toISOString(), to: new Date().toISOString() }, trace(), key());
     const imported = await service.submitImport(item.actor, { previewId: history.previewId, confirmed: true }, trace(), key());
     expect(imported).toMatchObject({ rowCount: 1, receiptCount: 1, reused: false });
-    await expect(service.saveRule(item.actor, { ...configuration, expectedVersion: 1 }, trace(), key(), configuration.id)).rejects.toThrow('AUTH_REAUTHENTICATION_REQUIRED');
-    await prisma.session.update({ where: { id: item.actor.sessionId }, data: { reauthenticatedAt: new Date() } });
+    await expect(service.saveRule(item.actor, { ...configuration, expectedVersion: 1 }, trace(), key(), configuration.id)).resolves.toMatchObject({ version: 2 });
     await service.controlJob(item.actor, imported.jobIds[0]!, { action: 'CANCEL', reason: '有效会话边界验证结束' }, trace(), key());
   });
 

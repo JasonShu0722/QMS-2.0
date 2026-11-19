@@ -87,6 +87,7 @@ describe('AI connections with real PostgreSQL and actual loopback requests', () 
   });
   it('stores only encrypted credentials while create/list/replay/admin-mutation/audit remain secret-free', async () => {
     const fixtureValue = await fixture();
+    await prisma.session.update({ where: { id: fixtureValue.actor.sessionId }, data: { reauthenticatedAt: null } });
     const key = randomUUID();
     const value = await connections.create(fixtureValue.actor, fixtureValue.organizationId, input(), randomUUID(), key);
     expect(value).toMatchObject({ hasKey: true, enabled: true, version: 1 });

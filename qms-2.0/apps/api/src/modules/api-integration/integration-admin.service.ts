@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor } from '../../common/security/admin-mutation.service.js';
-import { assertRecentAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { CreateIntegrationEndpointDto, DeleteIntegrationEndpointDto, IntegrationEndpointDto, IntegrationEndpointPageDto, IntegrationPageQueryDto, UpdateIntegrationEndpointDto } from './integration-admin.dto.js';
 import { assertIntegrationOrganization, integrationAllowedIps, integrationEndpointDto, integrationEndpointProjection, integrationError, integrationInteger, integrationPublicUrl, integrationScope, integrationText, lockIntegrationEndpoint, type IntegrationEndpointRow } from './integration-types.js';
@@ -64,7 +64,7 @@ export class IntegrationAdminService {
       return integrationEndpointDto(rows[0]);
     }, async transaction => {
       await assertIntegrationOrganization(transaction, organizationId, true);
-      await assertRecentAuthentication(transaction, actor);
+      await assertActiveAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, 'integration:manage');
     });
   }
@@ -91,7 +91,7 @@ export class IntegrationAdminService {
       return integrationEndpointDto(row);
     }, async transaction => {
       current = await lockIntegrationEndpoint(transaction, organizationId, endpointId);
-      await assertRecentAuthentication(transaction, actor);
+      await assertActiveAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, 'integration:manage');
     });
   }
@@ -110,7 +110,7 @@ export class IntegrationAdminService {
     }, async transaction => {
       current = await lockIntegrationEndpoint(transaction, organizationId, endpointId, true);
       await transaction.$queryRaw`SELECT id FROM integration_credentials WHERE organization_id=${organizationId}::uuid AND endpoint_id=${endpointId}::uuid ORDER BY id FOR UPDATE`;
-      await assertRecentAuthentication(transaction, actor);
+      await assertActiveAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, 'integration:manage');
     });
   }

@@ -3,7 +3,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor } from '../../common/security/admin-mutation.service.js';
-import { assertActiveAuthentication, assertRecentAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { decryptSecret, encryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { CreateIntegrationCredentialDto, IntegrationConnectionDto, IntegrationCredentialDto, IntegrationCredentialPageDto, IntegrationPageQueryDto } from './integration-admin.dto.js';
@@ -79,7 +79,7 @@ export class IntegrationCredentialService {
       return credentialDto(row);
     }, async transaction => {
       await lockIntegrationEndpoint(transaction, organizationId, endpointId);
-      await assertRecentAuthentication(transaction, actor);
+      await assertActiveAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, managePermissions);
     });
     return issuedSecret ? { ...saved, secret: issuedSecret } : saved;
@@ -95,7 +95,7 @@ export class IntegrationCredentialService {
     }, async transaction => {
       await lockIntegrationEndpoint(transaction, organizationId, endpointId);
       const [row] = await transaction.$queryRaw<{ id: string }[]>`SELECT id FROM integration_credentials WHERE organization_id = ${organizationId}::uuid AND endpoint_id = ${endpointId}::uuid AND id = ${credentialId}::uuid FOR UPDATE`;
-      await assertRecentAuthentication(transaction, actor);
+      await assertActiveAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, managePermissions);
       if (!row) integrationError('INTEGRATION_CREDENTIAL_NOT_FOUND', 404);
     });

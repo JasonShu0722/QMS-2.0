@@ -38,13 +38,17 @@ function fillRequiredFacts() {
 it('requires four registration facts and defaults quantity to one without creating from an incomplete form', async () => {
   const saved = editor('new');
   expect(screen.getByLabelText('不良数量')).toHaveValue('1');
-  fireEvent.click(screen.getByText('保存登记'));
+  const header = screen.getByRole('dialog', { name: '登记不良' }).querySelector('.ant-drawer-header')!;
+  const submit = within(header as HTMLElement).getByRole('button', { name: '保存登记' });
+  fireEvent.click(submit);
   await screen.findByText('请填写不良描述');
   expect(saved).not.toHaveBeenCalled();
   expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
   fillRequiredFacts();
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(saved).toHaveBeenCalled());
+  expect(screen.queryByText(/已保存 · 版本/)).not.toBeInTheDocument();
+  expect(screen.getByText('附件资源 process-defect:defect').closest('.ant-drawer-body')).not.toBeNull();
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'POST');
   expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '测试不良', productCode: '000123', traceCode: 'TRACE-1', defectQuantity: 1 });
   expect(JSON.parse(String(call?.[1]?.body))).not.toHaveProperty('projectCode');
@@ -205,6 +209,7 @@ it('leaves retry available after an unknown save outcome and replays the exact c
   const retry = await screen.findByText('同请求重试保存');
   expect(screen.getByLabelText('不良描述')).toBeDisabled();
   expect(retry.closest('button')).toBeEnabled();
+  expect(retry.closest('.ant-drawer-header')).not.toBeNull();
   fireEvent.click(retry);
   await waitFor(() => expect(saved).toHaveBeenCalled());
   const calls = vi.mocked(apiRequest).mock.calls.filter(([, init]) => init?.method === 'PUT');

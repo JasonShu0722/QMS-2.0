@@ -87,11 +87,11 @@ describe('central prompt applications with PostgreSQL and actual model requests'
     const channel = await connections.create(admin.actor, admin.organizationId, { name: '管理员渠道', baseUrl, models: ['sample-model'], defaultModel: 'sample-model', enabled: true, apiKey: 'disposable-admin-application-key' }, randomUUID(), randomUUID());
     expect(await applications.create(admin.actor, admin.organizationId, { ...scope.input, connectionId: channel.id }, randomUUID(), randomUUID())).toMatchObject({ organizationId: admin.organizationId });
   });
-  it('rejects cross-organization channels and stale authentication at draft creation', async () => {
+  it('rejects cross-organization channels and allows draft creation after step-up expires', async () => {
     const scope = await setup(), foreign = await fixture();
     await expect(applications.create(foreign.actor, foreign.organizationId, scope.input, randomUUID(), randomUUID())).rejects.toMatchObject({ response: { code: 'AI_CONNECTION_NOT_FOUND' } });
     await prisma.session.update({ where: { id: scope.session.id }, data: { reauthenticatedAt: new Date(Date.now() - 3600000), mfaVerifiedAt: new Date(Date.now() - 3600000) } });
-    await expect(applications.create(scope.actor, scope.organizationId, scope.input, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403, response: { code: 'AUTH_REAUTHENTICATION_REQUIRED' } });
+    await expect(applications.create(scope.actor, scope.organizationId, scope.input, randomUUID(), randomUUID())).resolves.toMatchObject({ id: expect.any(String) });
   });
   it('runs only explicit samples outside transactions without persisting sample or response plaintext in mutation receipts', async () => {
     const scope = await setup();

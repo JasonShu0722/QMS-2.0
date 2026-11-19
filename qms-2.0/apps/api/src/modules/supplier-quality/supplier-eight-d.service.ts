@@ -7,7 +7,7 @@ import { ControlledValidationException } from '../../common/contracts/controlled
 import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
 import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import type { AdministrativeLifecycleImpact } from '../../common/security/administrative-lifecycle.types.js';
-import { assertActiveAuthentication, isSecurityConcurrencyConflict, mfaPolicy } from '../../common/security/session-security.js';
+import { assertActiveAuthentication, assertRecentAuthentication, isSecurityConcurrencyConflict, mfaPolicy } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { FileLifecycleService } from '../file-management/file-lifecycle.service.js';
 import type { FileResourceAction } from '../file-management/file-resource-access.js';
@@ -31,7 +31,6 @@ import type { SupplierEightDReportRead } from './supplier-eight-d-report.model.j
 import type { SupplierDeadlineStage } from './supplier-eight-d-deadline.policy.js';
 import type { SupplierEightDTaskContext } from './supplier-eight-d-task.types.js';
 import { assertAdminAccess } from '../../common/security/admin-mutation.service.js';
-import { assertRecentAuthentication } from '../../common/security/session-security.js';
 import type { SupplierEightDAdministrativeQueryDto, SupplierEightDAdministrativeReconfigureDto,
   SupplierEightDAdministrativePageDto, SupplierEightDAdministrativeResultDto } from './supplier-eight-d-administrative.dto.js';
 
@@ -730,7 +729,7 @@ export class SupplierEightDService {
   }
 
   async administrativeOrganizationId(tx: Prisma.TransactionClient, actor: SupplierEightDActor, supplierProblemId: string): Promise<string> {
-    await this.authorizeAdministrativeRecovery(tx, actor);
+    await this.authorizeAdministrativeRecovery(tx, actor, true);
     this.uuid(supplierProblemId);
     const [row] = await tx.$queryRaw<{ organizationId: string }[]>`SELECT p.owner_organization_id AS "organizationId"
       FROM supplier_quality_problems p JOIN supplier_eight_d_controls c ON c.supplier_problem_id=p.id
@@ -808,7 +807,7 @@ export class SupplierEightDService {
       responderId = responder.userId;
     }
     if (!replaceSqe && responderId === record.supplier.internalResponderId) fail('WORKFLOW_ACTION_INVALID', 409);
-    await this.authorizeAdministrativeRecovery(tx, actor);
+    await this.authorizeAdministrativeRecovery(tx, actor, true);
     if (responderId !== record.supplier.internalResponderId) {
       if (record.supplier.version >= 2147483647 || (await tx.supplierQualityProblem.updateMany({
         where: { id: supplierProblemId, ownerOrganizationId: c.organizationId, version: record.supplier.version },
@@ -833,8 +832,8 @@ export class SupplierEightDService {
       responsibleSectionDepartmentId: assignment.departmentId, internalResponderId: responderId, status: record.problem.status };
   }
 
-  private async authorizeAdministrativeRecovery(tx: Prisma.TransactionClient, actor: SupplierEightDActor) {
-    const { user } = await assertRecentAuthentication(tx, actor);
+  private async authorizeAdministrativeRecovery(tx: Prisma.TransactionClient, actor: SupplierEightDActor, recent = false) {
+    const { user } = recent ? await assertRecentAuthentication(tx, actor) : await assertActiveAuthentication(tx, actor);
     if (actor.accountType !== 'INTERNAL' || user.accountType !== 'INTERNAL' || user.organizationId !== actor.organizationId
       || user.deletedAt || user.configurationRequired || user.organization.type !== 'INTERNAL'
       || user.organization.deletedAt || user.organization.configurationRequired || !await hasPlatformAdministrator(tx, actor.id)) fail('FEATURE_PERMISSION_DENIED', 403);

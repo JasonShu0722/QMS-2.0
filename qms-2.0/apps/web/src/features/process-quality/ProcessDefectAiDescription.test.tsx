@@ -46,6 +46,32 @@ it('AI description source inspection has no retry or adoption for an unauthorize
   const sources = within(await screen.findByLabelText('描述来源'));
   expect(sources.queryByRole('button', { name: '采用AI建议' })).not.toBeInTheDocument();
   expect(sources.queryByRole('button', { name: '重试AI整理' })).not.toBeInTheDocument();
+  expect(sources.queryByRole('button', { name: '重新生成AI描述' })).not.toBeInTheDocument();
+});
+it('regenerates an existing result and tracks the replacement task without changing manual text', async () => {
+  const original = vi.mocked(apiRequest).getMockImplementation()!;
+  const replacement = { ...task, id: 'task-2', status: 'PENDING', result: null, version: 1 };
+  let regenerated = false;
+  vi.mocked(apiRequest).mockImplementation(async (path, init, ...args) => {
+    if (path.endsWith('/task-1/regenerate') && init?.method === 'POST') {
+      regenerated = true;
+      return replacement as never;
+    }
+    if (regenerated && path.includes('/ai-tasks?')) return { items: [replacement, task] } as never;
+    if (regenerated && path.includes(`/defects/${defect.id}?`)) {
+      return { ...defect, descriptionTaskId: replacement.id, descriptionAiStatus: 'PENDING', descriptionAi: null } as never;
+    }
+    return original(path, init, ...args);
+  });
+  mount(); await screen.findByText('人工保留的描述');
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
+  const sources = within(await screen.findByLabelText('描述来源'));
+  fireEvent.click(await sources.findByRole('button', { name: '重新生成AI描述' }));
+  expect(await sources.findByText('等待整理')).toBeVisible();
+  expect(sources.getByRole('button', { name: '重新生成AI描述' })).toBeDisabled();
+  expect(screen.getAllByText('人工保留的描述').length).toBeGreaterThan(0);
+  const request = vi.mocked(apiRequest).mock.calls.find(([path]) => path.endsWith('/task-1/regenerate'));
+  expect(JSON.parse(String(request?.[1]?.body))).toEqual({ organizationId: defect.organizationId, expectedVersion: task.version });
 });
 it('AI description retries a failed task with the same body and idempotency key after an unknown result', async () => {
   const original = vi.mocked(apiRequest).getMockImplementation()!; let attempts = 0;

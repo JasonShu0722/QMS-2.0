@@ -682,7 +682,7 @@ export class ProcessEightDService {
     const command = plainToInstance(InternalEightDAdministrativeReconfigureDto, input);
     if (validateSync(command, { whitelist: true, forbidNonWhitelisted: true }).length) workflowError('STRUCTURE_REFERENCE_INVALID', 400);
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('administrative-lifecycle', 0))::text`;
-    await this.administrativeAuthorize(tx, actor);
+    await this.administrativeAuthorize(tx, actor, true);
     const organizationId = await this.readResourceOrganizationId(tx, problemId);
     if (actor.scopeOrganizationId && actor.scopeOrganizationId !== organizationId) workflowError('ORGANIZATION_SCOPE_DENIED', 403);
     const record = await this.lockFacts(tx, organizationId, problemId);
@@ -718,7 +718,7 @@ export class ProcessEightDService {
       WHERE organization_id = ${organizationId}::uuid AND problem_id = ${problemId}::uuid AND version = ${command.expectedVersion}
         AND closed_revision_id IS NULL AND submitted_at IS NULL`;
     if (changed !== 1) workflowError('CONCURRENCY_CONFLICT', 409);
-    await this.administrativeAuthorize(tx, actor);
+    await this.administrativeAuthorize(tx, actor, true);
     for (const candidate of [professional, owner]) {
       if (candidate && canonical(await this.responsibilities.workflowCurrentAssignment(tx, organizationId,
         { assignmentId: candidate.assignmentId }, true)) !== canonical(candidate)) workflowError('CONCURRENCY_CONFLICT', 409);
@@ -733,9 +733,9 @@ export class ProcessEightDService {
     return this.administrativeProjection(await this.lockFacts(tx, organizationId, problemId));
   }
 
-  private async administrativeAuthorize(tx: Prisma.TransactionClient, actor: ProcessEightDActor): Promise<void> {
+  private async administrativeAuthorize(tx: Prisma.TransactionClient, actor: ProcessEightDActor, recent = false): Promise<void> {
     this.uuid(actor.id); this.uuid(actor.organizationId); if (actor.scopeOrganizationId) this.uuid(actor.scopeOrganizationId);
-    const { user } = await assertRecentAuthentication(tx, actor);
+    const { user } = recent ? await assertRecentAuthentication(tx, actor) : await assertActiveAuthentication(tx, actor);
     if (actor.accountType !== 'INTERNAL' || user.accountType !== 'INTERNAL' || user.organizationId !== actor.organizationId
       || user.deletedAt || user.configurationRequired || user.organization.type !== 'INTERNAL'
       || user.organization.deletedAt || user.organization.configurationRequired || !await hasPlatformAdministrator(tx, actor.id)) workflowError('FEATURE_PERMISSION_DENIED', 403);
@@ -1015,7 +1015,7 @@ export class ProcessEightDService {
     const digest = eightDRequestDigest({ operation: 'configuration', input });
     return this.transaction(async tx => {
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`${this.domain.resourceType}-configuration:${organizationId}`}, 0))::text`;
-      await assertRecentAuthentication(tx, actor);
+      await assertActiveAuthentication(tx, actor);
       await this.authorize(tx, actor, 'configuration:manage', organizationId, 'ADMIN_CONFIGURATION');
       const replay = await this.receipt(tx, actor, key, digest, organizationId); if (replay) return replay;
       const binding = await this.readBinding(tx, organizationId);

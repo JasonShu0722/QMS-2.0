@@ -565,6 +565,8 @@ test('real management pages keep first content compact on desktop and narrow scr
     for (const path of ['/console/users', '/console/configuration']) {
       if (viewport.width <= 760) await page.getByRole('button', { name: '打开管理导航', exact: true }).click();
       const navigation = viewport.width <= 760 ? page.getByRole('dialog', { name: '管理导航', exact: true }) : page.locator('.qms-console-sidebar');
+      const group = navigation.getByRole('button', { name: path.endsWith('/users') ? '组织与授权' : '平台与流程配置', exact: true });
+      if (await group.getAttribute('aria-expanded') === 'false') await group.click();
       await navigation.locator(`a[href="${path}"]`).click();
       await page.waitForURL(url => url.pathname === path);
       const firstContent = page.locator(path.endsWith('/users') ? 'main > .admin-toolbar' : 'main > .governance-panel').first();

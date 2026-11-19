@@ -77,10 +77,16 @@ describe('electronic signatures on PostgreSQL', () => {
   it('signs an approval resource, preserves an immutable reference, and blocks revoked credentials', async () => {
     const signature = await service.register(actor, { label: '审批签名', signatureData: 'second-signature-payload' }, randomUUID(), randomUUID());
     const key = randomUUID();
-    const signed = await service.signApproval(actor, { signatureId: signature.id, resourceType: 'AUDIT_EXECUTION', resourceId: randomUUID(), resourceVersion: 3, note: '审核结论确认' }, randomUUID(), key);
+    const session = await prisma.session.create({ data: { userId, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3_600_000) } });
+    const activeActor = { ...actor, sessionId: session.id };
+    await expect(service.register(activeActor, { label: '新签名', signatureData: 'new-signature-payload' }, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ response: { code: 'AUTH_REAUTHENTICATION_REQUIRED' } });
+    await expect(service.revoke(activeActor, signature.id, { expectedVersion: 1 }, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ response: { code: 'AUTH_REAUTHENTICATION_REQUIRED' } });
+    const signed = await service.signApproval(activeActor, { signatureId: signature.id, resourceType: 'AUDIT_EXECUTION', resourceId: randomUUID(), resourceVersion: 3, note: '审核结论确认' }, randomUUID(), key);
     expect(signed).toMatchObject({ organizationId, signerUserId: userId, resourceType: 'AUDIT_EXECUTION', resourceVersion: 3, note: '审核结论确认' });
     expect(signed.signedDigest).toMatch(/^[0-9a-f]{64}$/);
-    expect(await service.signApproval(actor, { signatureId: signature.id, resourceType: signed.resourceType, resourceId: signed.resourceId, resourceVersion: 3, note: '审核结论确认' }, randomUUID(), key)).toMatchObject({ id: signed.id });
+    expect(await service.signApproval(activeActor, { signatureId: signature.id, resourceType: signed.resourceType, resourceId: signed.resourceId, resourceVersion: 3, note: '审核结论确认' }, randomUUID(), key)).toMatchObject({ id: signed.id });
     expect(await service.approvals(actor, { resourceType: signed.resourceType, resourceId: signed.resourceId, resourceVersion: 3 })).toEqual([signed]);
     await service.revoke(actor, signature.id, { expectedVersion: 1 }, randomUUID(), randomUUID());
     expect(await service.approvals(actor, { resourceType: signed.resourceType, resourceId: signed.resourceId, resourceVersion: 3 })).toEqual([signed]);

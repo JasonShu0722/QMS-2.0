@@ -1,5 +1,6 @@
 import type { components } from '@qms/contracts';
 import { Alert, Button, Descriptions, Modal, Space, Tag } from 'antd';
+import { RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest } from '../../api/client';
 import { useNavigationBusy, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -10,6 +11,7 @@ import { ingestionIssue, useIngestionText } from '../../console/api-ingestion/in
 
 type Defect = components['schemas']['ProcessDefectDto'];
 type Task = components['schemas']['AiDescriptionTaskDto'];
+type TaskAction = 'retry' | 'regenerate' | 'adopt';
 const tasksPath = '/api/v1/admin/integrations/ingestion/ai-tasks';
 const states: Record<string, string> = { DISABLED: '直接组合', PENDING: '等待整理', PROCESSING: '整理中', RETRY: '等待重试', FAILED: '整理失败，保留当前描述', APPLIED: '已采用AI结果', SUGGESTED: 'AI建议待采用', STALE: '输入已更新，保留当前描述' };
 
@@ -19,7 +21,7 @@ export function ProcessAiDescription({ record, permissions, onSaved, onDenied }:
   const [error, setError] = useState<unknown>(); const [adopting, setAdopting] = useState(false); const [retired, setRetired] = useState(false);
   const alive = useRef(true); const invalidated = useRef(false); const initialSession = useRef(useWorkTabsStore.getState().sessionScope); const initialEpoch = useRef(getLedgerSessionEpoch());
   const controller = useRef<AbortController>(undefined); const inFlight = useRef(false);
-  const pending = useRef<{ task: Task; action: 'retry' | 'adopt' }>(undefined);
+  const pending = useRef<{ task: Task; action: TaskAction }>(undefined);
   const writer = useProcessWrite(onDenied); useNavigationBusy(writer.busy); useUnsavedChanges(writer.uncertain);
   const canReadTasks = permissions.includes('ingestion:read'); const canRun = canReadTasks && permissions.includes('ingestion:run') && permissions.includes('process-quality:defects:write') && !record.archivedAt;
   const hasSource = record.descriptionDirect != null || record.descriptionAi != null || record.descriptionInput?.length;
@@ -40,7 +42,7 @@ export function ProcessAiDescription({ record, permissions, onSaved, onDenied }:
       setTasks(result.items);
     }).catch(cause => { if (active && current()) { setError(cause); if (denied(cause)) onDenied(cause); } }).finally(() => { if (active && current()) setLoading(false); });
     return () => { active = false; };
-  }, [record.id, record.version, hasAi, canReadTasks, revision]);
+  }, [record.id, record.version, record.descriptionTaskId, hasAi, canReadTasks, revision]);
   async function refresh() {
     if (!current() || writer.busy || writer.uncertain || loading) return;
     setError(undefined); setLoading(true);
@@ -50,7 +52,7 @@ export function ProcessAiDescription({ record, permissions, onSaved, onDenied }:
     } catch (cause) { if (current()) { setError(cause); if (denied(cause)) onDenied(cause); } }
     finally { if (current()) setLoading(false); }
   }
-  async function execute(task?: Task, action?: 'retry' | 'adopt') {
+  async function execute(task?: Task, action?: TaskAction) {
     if (inFlight.current || !canRun || !current()) return;
     const attempt = pending.current ?? (task && action ? { task, action } : undefined); if (!attempt) return;
     pending.current = attempt; inFlight.current = true; setError(undefined);
@@ -58,7 +60,9 @@ export function ProcessAiDescription({ record, permissions, onSaved, onDenied }:
       const body: components['schemas']['AiDescriptionTaskActionDto'] = { organizationId: record.organizationId, expectedVersion: attempt.task.version };
       const result = await writer.write<Task>(`${tasksPath}/${attempt.task.id}/${attempt.action}`, body, 'POST');
       if (!current()) return;
-      pending.current = undefined; setAdopting(false); setTasks(previous => previous.map(item => item.id === result.id ? result : item));
+      pending.current = undefined; setAdopting(false);
+      if (result.defectId !== record.id) { onDenied(); return; }
+      setTasks(previous => [result, ...previous.filter(item => item.id !== result.id)]);
       const updated = await apiRequest<Defect>(`/api/v1/process-quality/defects/${record.id}?organizationId=${encodeURIComponent(record.organizationId)}`, { signal: controller.current?.signal });
       if (current()) { if (updated.id !== record.id || updated.organizationId !== record.organizationId) onDenied(); else onSaved(updated); }
     } catch (cause) { if (current()) { if (cause instanceof ApiError && cause.status !== undefined && cause.status < 500 && ![408, 425].includes(cause.status)) pending.current = undefined; setError(cause); if (denied(cause)) onDenied(cause); } }
@@ -67,9 +71,14 @@ export function ProcessAiDescription({ record, permissions, onSaved, onDenied }:
   if (!hasSource || retired) return null;
   const task = hasAi ? record.descriptionTaskId ? tasks.find(item => item.id === record.descriptionTaskId) : tasks[0] : undefined;
   const status = task?.status ?? record.descriptionAiStatus;
+  const regenerateLabel = text('重新生成AI描述', 'Regenerate AI description');
   const unknownRetry = writer.uncertain ? <Button type="primary" loading={writer.busy} onClick={() => void execute()}>重试原请求</Button> : null;
   return <section className="process-ai-description" role="region" aria-label="描述来源">
-    <Space wrap><Tag>{record.descriptionSource === 'AI' ? 'AI整理' : record.descriptionSource === 'MANUAL' ? '人工修订' : '直接组合'}</Tag>{status && status !== 'DISABLED' ? <span>{states[status] ?? '状态待核对'}</span> : null}{hasAi && canReadTasks ? <Button disabled={writer.busy || writer.uncertain} loading={loading} onClick={() => void refresh()}>刷新整理状态</Button> : null}</Space>
+    <Space wrap><Tag>{record.descriptionSource === 'AI' ? 'AI整理' : record.descriptionSource === 'MANUAL' ? '人工修订' : '直接组合'}</Tag>{status && status !== 'DISABLED' ? <span>{states[status] ?? '状态待核对'}</span> : null}{hasAi && canReadTasks ? <Button disabled={writer.busy || writer.uncertain} loading={loading} onClick={() => void refresh()}>刷新整理状态</Button> : null}
+      {canRun && task ? <Button size="small" icon={<RotateCcw size={15} aria-hidden="true" />} aria-label={regenerateLabel} title={regenerateLabel}
+        disabled={loading || writer.busy || writer.uncertain || !['APPLIED', 'SUGGESTED', 'FAILED'].includes(task.status) || task.errorCode?.startsWith('AI_DESCRIPTION_INPUT_')}
+        onClick={() => void execute(task, task.status === 'FAILED' ? 'retry' : 'regenerate')} /> : null}
+    </Space>
     {task?.errorCode && (status === 'FAILED' || status === 'RETRY') && <Alert type="warning" showIcon title={ingestionIssue(task.errorCode, text('zh', 'en') === 'en')} description={<>{text('任务编号', 'Task ID')}: <code>{task.id}</code></>} />}
     <Descriptions size="small" column={1} items={[
       { key: 'direct', label: '直接组合', children: <span className="process-quality-description">{record.descriptionDirect ?? '—'}</span> },

@@ -95,14 +95,14 @@ describe('integration endpoint deletion through real HTTP and PostgreSQL', () =>
     expect(Object.keys(audit[0]!.metadata as object).sort()).toEqual(['endpointId', 'resourceVersion', 'status']);
     await remove(item.cookie, item.endpoint.id, 2, key).expect(409);
   });
-  it('requires session, management permission, CSRF, recent authentication and matching scope', async () => {
+  it('requires an active session, management permission, CSRF and matching scope', async () => {
     const item = await fixture();
     await request(app.getHttpServer()).delete(`${path}/${item.endpoint.id}`).set('Cookie', 'qms_csrf=fixture').set('x-csrf-token', 'fixture').send({ expectedVersion: 1 }).expect(401);
     for (const candidate of [await fixture([]), await fixture(['integration:read']), await fixture(permissions, 'SUPPLIER')]) await remove(candidate.cookie, candidate.endpoint.id).expect(403);
     await request(app.getHttpServer()).delete(`${path}/${item.endpoint.id}`).set('Cookie', item.cookie).set('Idempotency-Key', randomUUID()).send({ expectedVersion: 1 }).expect(403);
     const other = await fixture(); await remove(other.cookie, item.endpoint.id).expect(404);
     await prisma.session.updateMany({ where: { userId: item.user.id }, data: { reauthenticatedAt: new Date(Date.now() - 600000) } });
-    expect((await remove(item.cookie, item.endpoint.id).expect(403)).body.code).toBe('AUTH_REAUTHENTICATION_REQUIRED');
+    await remove(item.cookie, item.endpoint.id).expect(204);
   });
   it.each([{}, { expectedVersion: 0 }, { expectedVersion: 1.5 }, { expectedVersion: '1' }, { expectedVersion: 1, extra: true }])('validates the delete body %j', async body => {
     const item = await fixture();
@@ -155,10 +155,11 @@ describe('integration endpoint deletion through real HTTP and PostgreSQL', () =>
     let pending: Promise<request.Response> | undefined;
     try {
       await blocker.query('BEGIN'); await blocker.query('SELECT id FROM integration_credentials WHERE id=$1 FOR UPDATE', [issued.id]);
-      await prisma.session.updateMany({ where: { userId: item.user.id }, data: { reauthenticatedAt: new Date(Date.now() - 300000 + 1500) } });
+      await prisma.session.updateMany({ where: { userId: item.user.id }, data: { expiresAt: new Date(Date.now() + 1500) } });
       pending = remove(item.cookie, item.endpoint.id, 1, key).then(response => response);
-      await waitForBlock(blockerPid); await blocker.query('SELECT pg_sleep(1.6)'); await blocker.query('COMMIT');
-      const response = await pending; expect(response.status).toBe(403); expect(response.body.code).toBe('AUTH_REAUTHENTICATION_REQUIRED');
+      await waitForBlock(blockerPid);
+      await blocker.query('SELECT pg_sleep(1.6)'); await blocker.query('COMMIT');
+      const response = await pending; expect(response.status).toBe(401); expect(response.body.code).toBe('AUTH_SESSION_REQUIRED');
       expect(await prisma.adminMutation.count({ where: { actorUserId: item.user.id, key } })).toBe(replay ? 1 : 0);
     } finally { await blocker.query('ROLLBACK'); await blocker.end(); await pending; }
   });

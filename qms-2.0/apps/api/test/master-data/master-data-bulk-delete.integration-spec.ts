@@ -81,7 +81,7 @@ describe('master data selected deletion on real PostgreSQL', () => {
       expect((await post(f, `${domain.path}/bulk-delete`, { records: [{ id: second.id, expectedVersion: 1 }] }).expect(201)).body.deleted).toBe(1);
     });
 
-    it(`${domain.name}: enforces permissions, scope, CSRF, ${domain.name === 'mapping' ? 'active session' : 'recent authentication'} and bounded versioned selection`, async () => {
+    it(`${domain.name}: enforces permissions, scope, CSRF, an active session and bounded versioned selection`, async () => {
       const f = await fixture();
       const ordinary = await fixture(false);
       const record = await create(f, domain);
@@ -93,18 +93,14 @@ describe('master data selected deletion on real PostgreSQL', () => {
       await request(app.getHttpServer()).post(path).set('Cookie', f.cookie).set('Idempotency-Key', randomUUID()).send({ records }).expect(403);
       await request(app.getHttpServer()).post(path).set('Cookie', f.cookie).set('x-csrf-token', csrf).send({ records }).expect(400);
       await prisma.session.updateMany({ where: { userId: f.user.id }, data: { reauthenticatedAt: new Date(Date.now() - 3_600_000) } });
-      if (domain.name === 'mapping') {
-        const key = randomUUID();
-        const result = await post(f, path, { records }, key).expect(201);
-        expect(result.body).toMatchObject({ deleted: 1, items: [{ id: record.id, status: 'DELETED' }] });
-        expect(await prisma.$queryRaw`SELECT id FROM component_project_mappings WHERE id=${record.id}::uuid`).toHaveLength(0);
+      const key = randomUUID();
+      const result = await post(f, path, { records }, key).expect(201);
+      expect(result.body).toMatchObject({ deleted: 1, items: [{ id: record.id, status: 'DELETED' }] });
+      if (domain.name === 'mapping') expect(await prisma.$queryRaw`SELECT id FROM component_project_mappings WHERE id=${record.id}::uuid`).toHaveLength(0);
 
-        await prisma.session.updateMany({ where: { userId: f.user.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
-        const replay = await post(f, path, { records }, key).expect(401);
-        expect(replay.body.code).toBe('AUTH_SESSION_REQUIRED');
-      } else {
-        await post(f, path, { records }).expect(403);
-      }
+      await prisma.session.updateMany({ where: { userId: f.user.id }, data: { expiresAt: new Date(Date.now() - 1000) } });
+      const replay = await post(f, path, { records }, key).expect(401);
+      expect(replay.body.code).toBe('AUTH_SESSION_REQUIRED');
     });
   }
 

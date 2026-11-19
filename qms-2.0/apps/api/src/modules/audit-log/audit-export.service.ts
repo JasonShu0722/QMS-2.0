@@ -2,7 +2,7 @@ import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../../database/prisma.service.js';
 import { assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
-import { assertActiveAuthentication, assertRecentAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { encryptSecret, decryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from './audit-log.service.js';
 import { AuditExportContentDto, AuditExportDto, AuditExportRequestDto } from './audit-export.dto.js';
@@ -24,7 +24,7 @@ export class AuditExportService {
     const to = query.to ? new Date(query.to) : undefined;
     if ((from && !Number.isFinite(from.getTime())) || (to && !Number.isFinite(to.getTime())) || (from && to && from > to)) throw new BadRequestException();
     return this.controlled(actor, traceId, async (transaction) => {
-      await assertRecentAuthentication(transaction, actor);
+      await assertActiveAuthentication(transaction, actor);
       await assertAdminAccess(transaction, actor, organizationId, ['audit:read', 'audit:export']);
       const rows = await transaction.auditEvent.findMany({ where: { organizationId, actorUserId: query.actorUserId, ...auditActionFilter(query.action), resourceType: query.resourceType, resourceId: query.resourceId, outcome: query.outcome, ...(from || to ? { createdAt: { gte: from, lte: to } } : {}) }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 5001, select: auditEventReadSelect });
       if (rows.length > 5000) throw new HttpException({ code: 'EXPORT_TOO_LARGE', message: '请缩小导出筛选范围，最多 5000 条' }, 422);

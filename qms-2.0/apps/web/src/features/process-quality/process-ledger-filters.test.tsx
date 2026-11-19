@@ -62,7 +62,7 @@ async function openPanel(label = '筛选条件') {
 }
 
 it('displays the mapped product category even without a linked project and shows missing categories as unconfirmed', async () => {
-  const unmapped = { ...defect, id: '33333333-3333-4333-8333-333333333333', description: '历史记录', productCategory: null };
+  const unmapped = { ...defect, id: '33333333-3333-4333-8333-333333333333', description: '历史记录', productCategory: null, productSubcategory: null };
   items = [defect, unmapped];
   const { container } = mount();
   const headers = within(container.querySelector('thead')!);
@@ -72,7 +72,46 @@ it('displays the mapped product category even without a linked project and shows
   for (const [record, label] of [[defect, 'PCBA'], [unmapped, '未确认']] as const) {
     const selection = await screen.findByLabelText(`选择制程不良 ${record.description}`);
     expect(selection.closest('tr')?.cells[categoryIndex]).toHaveTextContent(label);
+    expect(selection.closest('tr')?.cells[categoryIndex + 1]).toHaveTextContent(record.productSubcategory ?? /^\/$/);
   }
+});
+
+it('starts the six compact columns narrower and preserves individually saved widths', () => {
+  const saved = JSON.stringify({ schema: 1, value: { widths: { project: 222, shift: 48 } } });
+  localStorage.setItem(columnsKey, saved);
+  mount();
+  for (const [name, width] of [['发生时间', 132], ['班次', 64], ['项目号', 222], ['产品类型', 84], ['细分类型', 112], ['项目状态', 100]] as const) {
+    const handle = within(screen.getByRole('columnheader', { name })).getByRole('separator');
+    expect(handle).toHaveAttribute('aria-valuenow', String(width));
+  }
+  expect(localStorage.getItem(columnsKey)).toBe(saved);
+});
+
+it('keeps configuration prompts in detail completion and puts permitted record actions in the header', async () => {
+  const pending = { ...defect, operationSector: null, productSubcategory: null, pendingConfiguration: true, issues: ['PROJECT_MAPPING_PENDING', 'OPERATION_SECTOR_PENDING', 'PRODUCT_SUBCATEGORY_PENDING', 'SOURCE_IDENTITY_INCOMPLETE', 'DEFECT_TYPE_UNKNOWN'] };
+  items = [pending];
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/my-permissions')) return { permissions: [...permissions, 'process-quality:defects:close', 'process-quality:defects:delete'] };
+    if (path.endsWith(`/defects/${pending.id}`)) return pending;
+    return read(path, init);
+  });
+  mount();
+  const row = (await screen.findByLabelText(`选择制程不良 ${pending.description}`)).closest('tr')!;
+  expect(within(row).queryByLabelText(`映射与来源提示 ${pending.description}`)).not.toBeInTheDocument();
+  fireEvent.click(within(row).getByLabelText('查看详情'));
+  const dialog = screen.getByText('不良品详情', { selector: '.ant-drawer-title' }).closest<HTMLElement>('[role="dialog"]')!;
+  const completion = (await within(dialog).findByText('完善情况')).closest('tr')!;
+  expect(completion).toHaveTextContent('项目映射待补配。');
+  expect(completion).toHaveTextContent('工序板块待补配。');
+  expect(within(completion).queryByText('待补配', { exact: true })).not.toBeInTheDocument();
+  expect(within(dialog).queryByText(/细分类型待补配|来源明细编号待补充|失效类型未知|记录版本/)).not.toBeInTheDocument();
+  const header = within(dialog.querySelector<HTMLElement>('.ant-drawer-header')!);
+  for (const name of ['维护台账', '关闭台账', '删除台账', '选择此条并返回台账']) {
+    expect(header.getByText(name, { selector: 'button span' })).toBeInTheDocument();
+  }
+  fireEvent.click(header.getByText('选择此条并返回台账', { selector: 'button span' }));
+  expect(within(row).getByLabelText(`选择制程不良 ${pending.description}`)).toBeChecked();
 });
 
 it.each([true, false])('inserts the category before the saved subcategory and follows its visibility (%s)', (showSubcategory) => {

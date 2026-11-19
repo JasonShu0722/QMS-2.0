@@ -73,7 +73,7 @@ export class ESignatureService {
     const organizationId = this.personalOrganization(actor, input.organizationId);
     const label = normalizeText(input.label, 120);
     const fingerprint = digest(normalizeSignatureData(input.signatureData));
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'E_SIGNATURE_REGISTERED', payload: { organizationId, label, fingerprint }, permission: SIGNATURE_WRITE_PERMISSION }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'E_SIGNATURE_REGISTERED', payload: { organizationId, label, fingerprint }, permission: SIGNATURE_WRITE_PERMISSION, authentication: 'recent' }, async (tx) => {
       const id = randomUUID();
       const rows = await tx.$queryRaw<Row[]>`INSERT INTO user_signatures (id, organization_id, user_id, label, fingerprint) VALUES (${id}::uuid, ${organizationId}::uuid, ${actor.id}::uuid, ${label}, ${fingerprint}) RETURNING *`;
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'E_SIGNATURE_REGISTERED', resourceType: 'UserSignature', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: 1 } }, tx);
@@ -83,7 +83,7 @@ export class ESignatureService {
 
   async revoke(actor: AdminActor, id: string, input: RevokeESignatureDto, traceId: string, key?: string) {
     const organizationId = this.personalOrganization(actor, input.organizationId);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'E_SIGNATURE_REVOKED', payload: { id, expectedVersion: input.expectedVersion }, permission: SIGNATURE_WRITE_PERMISSION }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'E_SIGNATURE_REVOKED', payload: { id, expectedVersion: input.expectedVersion }, permission: SIGNATURE_WRITE_PERMISSION, authentication: 'recent' }, async (tx) => {
       const rows = await tx.$queryRaw<Row[]>`UPDATE user_signatures SET status = 'REVOKED', revoked_at = CURRENT_TIMESTAMP, version = version + 1 WHERE id = ${id}::uuid AND organization_id = ${organizationId}::uuid AND user_id = ${actor.id}::uuid AND status = 'ACTIVE' AND version = ${input.expectedVersion} RETURNING *`;
       if (!rows[0]) fail('E_SIGNATURE_CONCURRENCY_CONFLICT', 409);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'E_SIGNATURE_REVOKED', resourceType: 'UserSignature', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: Number(rows[0]!.version) } }, tx);

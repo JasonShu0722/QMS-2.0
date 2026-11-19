@@ -360,12 +360,12 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
 
   const columns: TableColumnsType<Defect> = ([
     { title: <span aria-label="选择"><Checkbox aria-label="选择当前页制程不良" checked={!!selectablePage.length && selectedOnPage.length === selectablePage.length} indeterminate={!!selectedOnPage.length && selectedOnPage.length < selectablePage.length} disabled={locked || loading || !selectablePage.length || !selectedOnPage.length && selectedCount >= 100} onChange={event => togglePage(selectedCount >= 100 && selectedOnPage.length > 0 ? false : event.target.checked)} /></span>, onHeaderCell: () => ({ 'aria-label': '选择' }), key: 'select', width: 40, align: 'center', render: (_, record) => <Checkbox aria-label={`选择制程不良 ${record.description}`} disabled={locked || loading || (!selected[record.id] && selectedCount >= 100) || !!record.archivedAt} checked={Boolean(selected[record.id])} onChange={event => toggle(record, event.target.checked)} /> },
-    { title: filterTitle('occurredAt', '发生时间'), key: 'occurredAt', dataIndex: 'occurredAt', width: 165, align: 'center', render: (value: string | null) => value ? new Date(value).toLocaleString('zh-CN') : '—' },
-    { title: filterTitle('shift', '班次'), key: 'shift', dataIndex: 'shift', width: 80, align: 'center', render: value => value === 'DAY' ? '白班' : value === 'NIGHT' ? '夜班' : '未知' },
-    { title: filterTitle('projectCode', '项目号'), key: 'project', width: 130, align: 'center', render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
-    { title: '产品类型', key: 'productCategory', width: 120, align: 'center', ellipsis: true, render: (_, record) => record.productCategory ?? '未确认' },
-    { title: filterTitle('productSubcategory', '细分类型'), key: 'productSubcategory', dataIndex: 'productSubcategory', width: 120, align: 'center', render: value => value ?? '未确认' },
-    { title: filterTitle('projectStage', '项目状态'), key: 'projectStage', dataIndex: 'projectStage', width: 105, align: 'center', render: value => value === 'NEW_PRODUCT' ? '新品' : value === 'MASS_PRODUCTION' ? '量产' : '未确认' },
+    { title: filterTitle('occurredAt', '发生时间'), key: 'occurredAt', dataIndex: 'occurredAt', width: 132, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (value: string | null) => value ? new Date(value).toLocaleString('zh-CN') : '—' },
+    { title: filterTitle('shift', '班次'), key: 'shift', dataIndex: 'shift', width: 88, className: 'process-quality-compact-column', align: 'center', render: value => value === 'DAY' ? '白班' : value === 'NIGHT' ? '夜班' : '未知' },
+    { title: filterTitle('projectCode', '项目号'), key: 'project', width: 108, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
+    { title: '产品类型', key: 'productCategory', width: 84, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (_, record) => record.productCategory ?? '未确认' },
+    { title: filterTitle('productSubcategory', '细分类型'), key: 'productSubcategory', dataIndex: 'productSubcategory', width: 112, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: value => value ?? '/' },
+    { title: filterTitle('projectStage', '项目状态'), key: 'projectStage', dataIndex: 'projectStage', width: 100, className: 'process-quality-compact-column', align: 'center', render: value => value === 'NEW_PRODUCT' ? '新品' : value === 'MASS_PRODUCTION' ? '量产' : '未确认' },
     { title: filterTitle('description', '不良描述'), key: 'description', dataIndex: 'description', width: 260, align: 'left', ellipsis: true, render: (value: string, record) => <div className="process-quality-description-cell"><div className="process-quality-description-heading"><Button type="link" title={value || '查看待完善记录'} className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value || '查看待完善记录'}</Button><MappingHint record={record} /></div></div> },
     { title: filterTitle('traceCode', '追溯码'), key: 'traceCode', dataIndex: 'traceCode', width: 180, align: 'center', ellipsis: true },
     { title: filterTitle('lineName', '生产线名称'), key: 'lineName', dataIndex: 'lineName', width: 144, align: 'center', ellipsis: true },
@@ -382,7 +382,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     { title: filterTitle('responsibilityCategory', '责任类别'), key: 'responsibilityCategory', dataIndex: 'responsibilityCategory', width: 105, render: responsibility },
     { title: filterTitle('ledgerStatus', '状态'), key: 'ledgerStatus', dataIndex: 'ledgerStatus', width: 100, render: value => <Tag>{value === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
     { title: '首条物料 / 供应商', key: 'material', width: 190, render: (_, record) => record.materials?.length ? <span>{record.materials[0].materialCode ?? '—'} / {supplierName(record.materials[0])}{record.materials.length > 1 ? `（共${record.materials.length}项）` : ''}</span> : '—' },
-    { title: '人工项目 / 映射', key: 'mapping', width: 150, render: (_, record) => <Space>{record.projectCode ?? '—'}<MappingHint record={record} /></Space> },
+    { title: '人工项目 / 映射', key: 'mapping', width: 150, render: (_, record) => record.projectCode ?? '—' },
     { title: '批次 / 工单', key: 'source', width: 175, render: (_, record) => `${record.batchCode ?? '—'} / ${record.workOrderCode ?? '—'}` },
     { title: '操作', key: 'actions', width: canDelete ? 112 : 64, align: 'center', render: (_, record) => <div className="process-quality-row-actions"><Button type="text" aria-label="查看详情" title="查看详情" icon={<Eye size={16} aria-hidden="true" />} onClick={() => void openDetail(record.id)} />{canDelete && !record.archivedAt ? <Button type="text" danger aria-label="删除台账" title="删除台账" icon={<Trash2 size={16} aria-hidden="true" />} disabled={locked || !!deletionTargets} onClick={() => openDeletion([record])} /> : null}</div> },
   ] satisfies TableColumnsType<Defect>).map(column => 'onHeaderCell' in column ? column : { ...column, onHeaderCell: () => ({ 'aria-label': typeof column.title === 'string' ? column.title : column.title.props['aria-label'] }) });
@@ -410,7 +410,14 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
       {!listError ? <LedgerTable<Defect> compactHeaders ledgerId="process-defects" organizationId={targetOrganizationId} viewId={viewId} toolbarContent={toolbar} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productCategory', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} insertNewColumnBefore={['productCategory', 'productSubcategory']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search || appliedFilters.currentMonth || appliedFilters.items.length ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { if (filterOpen && !saveAppliedFilters(completeDraft, undefined, false, false)) return; setPage(size === pageSize && !changesSelection ? next : 1); setPageSize(size); }); }, placement: ['bottomStart'] }} /> : toolbar}
     </section>
-    <Drawer title="不良品详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
+    <Drawer title="不良品详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden
+      classNames={{ header: 'process-quality-drawer-header' }}
+      extra={!detailLoading && !detailError && detail && !detail.archivedAt && (canWrite || canClose || canDelete || canIssue) ? <Space wrap>
+        {canWrite ? <Button onClick={() => requestLeave(() => setEditor(detail))}>维护台账</Button> : null}
+        {canClose ? <Button onClick={() => setAction({ mode: detail.ledgerStatus === 'CLOSED' ? 'reopen' : 'close', record: detail })}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}
+        {canDelete ? <Button danger disabled={locked || !!deletionTargets} onClick={() => openDeletion([detail])}>删除台账</Button> : null}
+        {canIssue ? <Button disabled={locked || (!selected[detail.id] && selectedCount >= 100)} onClick={() => requestLeave(() => { toggle(detail, true); setDetailOpen(false); })}>选择此条并返回台账</Button> : null}
+      </Space> : null}>
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>
         <Descriptions bordered size="small" column={1} items={[
           { key: 'type', label: '失效类型', children: detail.defectTypeCode },
@@ -425,17 +432,16 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
           { key: 'lineName', label: '生产线名称', children: detail.lineName ?? '—' },
           { key: 'operationName', label: '工序名称', children: detail.operationName ?? '—' },
           { key: 'registrant', label: '登记人', children: detail.sourceKind === 'IMS' ? '自动' : detail.registeredByName ?? '—' },
-          { key: 'completion', label: '完善情况', children: <Space><CompletionStatus record={detail} /><MappingHint record={detail} /></Space> },
+          { key: 'completion', label: '完善情况', children: <CompletionStatus record={detail} detail /> },
           { key: 'responsibility', label: '责任类别', children: responsibility(detail.responsibilityCategory) },
           { key: 'ledgerStatus', label: '台账状态', children: detail.ledgerStatus === 'CLOSED' ? '已关闭' : '跟进中' },
           { key: 'trace', label: '条码', children: detail.traceCode ?? '—' },
           { key: 'progress', label: '分析进展', children: detail.analysisProgress ?? '—' },
-          { key: 'mapping', label: '人工项目 / 映射建议', children: <Space>{detail.projectCode ?? '—'} / {detail.componentProject?.project?.code ?? '—'}<MappingHint record={detail} /></Space> },
+          { key: 'mapping', label: '人工项目 / 映射建议', children: `${detail.projectCode ?? '—'} / ${detail.componentProject?.project?.code ?? '—'}` },
           { key: 'batch', label: '批次 / 工单', children: `${detail.batchCode ?? '—'} / ${detail.workOrderCode ?? '—'}` },
           { key: 'operation', label: '工序 / 产线', children: `${detail.operationCode ?? '—'} / ${detail.lineCode ?? '—'}` },
           { key: 'product', label: '产品 / 物料', children: `${detail.productCode ?? '—'} / ${detail.materialCode ?? '—'}` },
           { key: 'source', label: '来源', children: <Space><Tag>{detail.sourceKind === 'IMS' ? '自动' : '人工录入'}</Tag>{detail.externalSourceSystem ? <Tag>{detail.externalSourceSystem}</Tag> : null}</Space> },
-          { key: 'version', label: '记录版本', children: detail.version },
         ]} />
         <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} onSaved={saved} onDenied={revoke} />
         <Typography.Title level={4}>已关联问题</Typography.Title>
@@ -444,9 +450,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
         <AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: detail.id }} fileIds={(detail.evidence ?? []).map(evidence => evidence.id)} readOnly={!canWrite} />
         <Typography.Title level={4}>物料与复核事实</Typography.Title>
         <MaterialDetails record={detail} supplierName={supplierName} onReview={canReview && !detail.archivedAt ? materialId => setAction({ mode: 'verification', record: detail, materialId }) : undefined} />
-        <Space wrap>{canWrite && !detail.archivedAt ? <Button onClick={() => requestLeave(() => setEditor(detail))}>维护台账</Button> : null}{canClose && !detail.archivedAt ? <Button onClick={() => setAction({ mode: detail.ledgerStatus === 'CLOSED' ? 'reopen' : 'close', record: detail })}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}{canDelete && !detail.archivedAt ? <Button danger disabled={locked || !!deletionTargets} onClick={() => openDeletion([detail])}>删除台账</Button> : null}</Space>
         {!selected[detail.id] && selectedCount >= 100 ? <Alert type="warning" showIcon title="已选满100条来源，请先取消一条已选来源，再选择此条。" /> : null}
-        {canIssue && !detail.archivedAt ? <Button disabled={locked || (!selected[detail.id] && selectedCount >= 100)} onClick={() => requestLeave(() => { toggle(detail, true); setDetailOpen(false); })}>选择此条并返回台账</Button> : null}
       </> : null}
     </Drawer>
     {deletionTargets ? <ProcessDefectDeletionDialog sources={deletionTargets} organizationId={organizationId} open={deletionOpen} onClose={uncertain => { setDeletionOpen(false); if (!uncertain) setDeletionTargets(undefined); }} onDenied={revoke} onDeleted={response => {

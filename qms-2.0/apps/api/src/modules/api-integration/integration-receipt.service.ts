@@ -4,7 +4,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { ingestionInputProtected } from './ingestion-input.read-model.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
-import { assertRecentAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { decryptSecret } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
@@ -85,7 +85,7 @@ export class IntegrationReceiptService {
       for (const identity of identities) await tx.$queryRaw`SELECT id FROM integration_endpoints WHERE organization_id=${organizationId}::uuid AND id=${identity.endpoint_id}::uuid FOR UPDATE`;
       rows = await tx.$queryRaw<DeleteReceiptRow[]>(Prisma.sql`SELECT id,endpoint_id,CASE WHEN payload_ciphertext IS NULL THEN 0 ELSE payload_bytes END AS released_bytes,metadata_expires_at,clock_timestamp() AS now FROM integration_receipts WHERE organization_id=${organizationId}::uuid AND id IN (${Prisma.join(receiptIds.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
       await tx.$queryRaw`SELECT organization_id FROM integration_scope_capacities WHERE organization_id=${organizationId}::uuid FOR UPDATE`;
-      await assertRecentAuthentication(tx, actor);
+      await assertActiveAuthentication(tx, actor);
       await assertAdminAccess(tx, actor, organizationId, 'integration:manage');
     });
   }
@@ -167,7 +167,7 @@ export class IntegrationReceiptService {
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'INTEGRATION_SCOPE_CAPACITY_UPDATED', resourceType: 'IntegrationScopeCapacity', resourceId: organizationId, outcome: 'SUCCESS', traceId, metadata: { capacityBytes, previousCapacityBytes: Number(current?.capacity_bytes ?? 1073741824) } }, tx);
       const [row] = await tx.$queryRaw<{ used_body_bytes: bigint; capacity_bytes: bigint; receipt_count: number; last_cleanup_succeeded_at: Date | null; last_cleanup_failed_at: Date | null }[]>`SELECT used_body_bytes,capacity_bytes,receipt_count,last_cleanup_succeeded_at,last_cleanup_failed_at FROM integration_scope_capacities WHERE organization_id=${organizationId}::uuid`;
       return { usedBodyBytes: Number(row!.used_body_bytes), capacityBytes: Number(row!.capacity_bytes), receiptCount: row!.receipt_count, receiptLimit: 100000, requestCollection: this.collectionStatus(organizationId), ...(row!.last_cleanup_succeeded_at ? { lastCleanupSucceededAt: row!.last_cleanup_succeeded_at.toISOString() } : {}), ...(row!.last_cleanup_failed_at ? { lastCleanupFailedAt: row!.last_cleanup_failed_at.toISOString() } : {}) };
-    }, async tx => { await assertIntegrationOrganization(tx, organizationId, true); await assertRecentAuthentication(tx, actor); await assertAdminAccess(tx, actor, organizationId, 'integration:manage'); });
+    }, async tx => { await assertIntegrationOrganization(tx, organizationId, true); await assertActiveAuthentication(tx, actor); await assertAdminAccess(tx, actor, organizationId, 'integration:manage'); });
   }
 
   async recordAttempt(input: IntegrationAttemptInput): Promise<void> {
