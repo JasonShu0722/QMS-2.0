@@ -183,6 +183,17 @@ export class AiApplicationService {
     return (await this.row(tx, organizationId, applicationId)).published_version;
   }
 
+  async resolveLatestForTask(tx: AdminTransaction, organizationId: string, applicationId: string) {
+    applicationIdentifiers(organizationId, applicationId);
+    await this.organization(tx, organizationId);
+    const row = await this.row(tx, organizationId, applicationId);
+    if (!row.enabled || row.published_version === null) aiApplicationError('AI_APPLICATION_UNAVAILABLE', 409);
+    const revision = await this.revision(tx, organizationId, applicationId, row.published_version);
+    const configuration = normalizeAiApplication(revision.configuration);
+    const connection = await this.connection(tx, organizationId, configuration);
+    return { applicationId, publishedVersion: row.published_version, configuration, connectionVersion: connection.version };
+  }
+
   async assertAvailable(tx: AdminTransaction, organizationId: string, applicationId: string, publishedVersion: number, expectedAvailabilityVersion?: number): Promise<number> {
     applicationIdentifiers(organizationId, applicationId); applicationVersion(publishedVersion);
     await this.organization(tx, organizationId);

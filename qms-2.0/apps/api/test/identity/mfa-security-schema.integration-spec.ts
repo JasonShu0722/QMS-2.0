@@ -171,10 +171,10 @@ describe('MFA PostgreSQL security boundaries', () => {
   it('requires recent verification before idempotent replay and never bypasses missing session ownership', async () => {
     const account = await enrolled();
     const session = (await sessions.resolve(account.sessionToken))!;
-    const permission = await prisma.permission.upsert({ where: { code: 'configuration:manage' }, create: { code: 'configuration:manage', name: 'Configuration' }, update: {} });
+    const permission = await prisma.permission.upsert({ where: { code: 'account:roles:update' }, create: { code: 'account:roles:update', name: 'Role permissions' }, update: {} });
     const role = await prisma.role.findFirstOrThrow({ where: { userRoles: { some: { userId: account.account.id } } } });
     await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
-    const input = { actor: { ...account.account, sessionId: session.id }, organizationId, key: randomUUID(), action: 'TEST_SECURITY', payload: {}, permission: 'configuration:manage', traceId: randomUUID() };
+    const input = { actor: { ...account.account, sessionId: session.id }, organizationId, key: randomUUID(), action: 'TEST_SECURITY', payload: {}, permission: 'account:roles:update', traceId: randomUUID() };
     const mutations = app.get(AdminMutationService);
     const work = jest.fn(async () => ({ done: true }));
     await mutations.run(input, work);

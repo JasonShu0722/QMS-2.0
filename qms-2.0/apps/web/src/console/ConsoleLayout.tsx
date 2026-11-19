@@ -1,6 +1,6 @@
 import { Alert, Button, Drawer, Dropdown, Skeleton } from 'antd';
 import { ChevronDown, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { ApiError } from '../api/client';
 import { useLanguage } from '../i18n/Language';
@@ -8,7 +8,7 @@ import { TopbarLanguageSwitcher } from '../i18n/TopbarLanguageSwitcher';
 import { UnsavedChangesProvider, useNavigationGuard } from '../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { getConsoleContext } from './console-api';
-import { consoleNavigation, consoleRoute, type ConsoleContext as Context, type ConsoleNavigationItem } from './console-navigation';
+import { consoleGroups, consoleNavigation, consoleRoute, type ConsoleContext as Context, type ConsoleNavigationItem } from './console-navigation';
 import { ConsoleTheme, useConsoleAppearance } from './ConsoleTheme';
 import { SessionVerificationGate } from '../features/auth/SessionVerificationGate';
 import { subscribeSessionSignals, subscribeWindowResume } from '../features/auth/session-invalidation';
@@ -43,7 +43,9 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
   const verified = useRef<{ scope: symbol; context: Context }>(undefined);
   const sidebar = useSidebarState('console');
   const navigationElement = useRef<HTMLElement>(null);
+  const navigationId = useId();
   const [collapsed, setCollapsed] = useState(sidebar.value.collapsed);
+  const [expandedGroups, setExpandedGroups] = useState(sidebar.value.expandedDomains);
   const [mobileOpen, setMobileOpen] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const activeRequest = useRef<{ key: symbol; controller: AbortController; pending: boolean } | null>(null);
@@ -107,30 +109,56 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
   const value = result?.key === key ? result : undefined;
   const context = value?.context ?? (preserved?.scope === scope ? preserved.context : undefined);
   const blocked = !!context && !value?.context;
-  useLayoutEffect(() => { setCollapsed(sidebar.value.collapsed); }, [sidebar]);
+  const route = context ? consoleRoute(location.pathname, context) : undefined;
+  const activeItem = route?.status === 'allowed' ? route.item : undefined;
+  const activeGroup = value?.context && activeItem?.group !== 'workspace' ? activeItem?.group : undefined;
+  useLayoutEffect(() => {
+    const expanded = sidebar.value.expandedDomains;
+    const next = activeGroup && !expanded.includes(activeGroup) ? [...expanded, activeGroup] : expanded;
+    sidebar.update({ expandedDomains: next });
+    setExpandedGroups(next);
+    setCollapsed(sidebar.value.collapsed);
+  }, [sidebar, location, activeGroup]);
   useLayoutEffect(() => {
     if (value?.context && !blocked && navigationElement.current) navigationElement.current.scrollTop = sidebar.value.scrollTop;
-  }, [sidebar, value?.context, blocked, collapsed]);
+  }, [sidebar, value?.context, blocked, collapsed, expandedGroups]);
   const capabilityKey = context ? JSON.stringify([context.actor.id, context.actor.homeOrganization.id, context.targetOrganization.id, context.modules]) : undefined;
   useEffect(() => { if (capabilityKey) heading.current?.focus(); }, [scope, capabilityKey, location.search]);
-  const route = context ? consoleRoute(location.pathname, context) : undefined;
   const module = route?.module;
   const fixedHome = module?.scope === 'SESSION_HOME';
   const resourceOrganization = fixedHome ? context?.actor.homeOrganization : context?.targetOrganization;
   const entries = context ? consoleNavigation(context) : [];
   const label = (item: ConsoleNavigationItem) => text(item.label, item.english);
-  const groups = [['workspace', '工作空间', 'Workspace'], ['administration', '组织与授权', 'Organizations & access'], ['configuration', '基础数据与配置', 'Data & configuration'], ['ai', 'AI管理', 'AI management'], ['security', '安全与运行', 'Security & operations']];
+  const home = entries.find(item => item.group === 'workspace');
   const href = (path: string) => organizationId === undefined ? path : `${path}?${new URLSearchParams({ organizationId })}`;
   const brand = <Link className="qms-console-brand" to={href('/console')} aria-label={text('QMS Console · 管理首页', 'QMS Console · Management home')} title={text('返回管理首页', 'Return to management home')}><ShieldCheck size={24} aria-hidden="true" /><span className="qms-console-nav-label"><strong>QMS Console</strong><small>{text('管理工作空间', 'Management workspace')}</small></span></Link>;
+  const navigationLink = (item: ConsoleNavigationItem) => <Link key={item.path} to={href(item.path)} aria-label={label(item)} title={label(item)} aria-current={activeItem?.path === item.path ? 'page' : undefined}><item.icon size={18} aria-hidden="true" /><span className="qms-console-nav-label">{label(item)}</span></Link>;
+  const toggleGroup = (group: string, rail: boolean) => {
+    let next = expandedGroups;
+    if (!next.includes(group)) next = [...next, group];
+    else if (!rail) next = next.filter(key => key !== group);
+    sidebar.update({ expandedDomains: next });
+    setExpandedGroups(next);
+    if (rail) { sidebar.update({ collapsed: false }); setCollapsed(false); }
+  };
   const navigation = (mobile = false) => <nav ref={mobile ? undefined : navigationElement} className="qms-console-menu" aria-label={text('管理导航', 'Management navigation')} onScroll={mobile ? undefined : event => {
       if (value?.context && !blocked) sidebar.update({ scrollTop: event.currentTarget.scrollTop });
     }}>
-      {groups.map(([group, zh, en]) => {
-        const items = entries.filter(item => item.group === group);
-        return items.length ? <section key={group}><p className="qms-console-nav-label">{text(zh!, en!)}</p>{items.map(item => {
-          const Icon = item.icon;
-          return <Link key={item.path} to={href(item.path)} aria-label={label(item)} title={label(item)} aria-current={route?.item?.path === item.path ? 'page' : undefined}><Icon size={18} aria-hidden="true" /><span className="qms-console-nav-label">{label(item)}</span></Link>;
-        })}</section> : null;
+      {home && navigationLink(home)}
+      {consoleGroups.map(group => {
+        const items = entries.filter(item => item.group === group.key);
+        if (!items.length) return null;
+        const rail = !mobile && collapsed;
+        const expanded = !rail && expandedGroups.includes(group.key);
+        const current = items.some(item => item.path === activeItem?.path);
+        const title = text(group.label, group.english);
+        const entriesId = `${navigationId}-${mobile ? 'mobile' : 'desktop'}-${group.key}`;
+        return <div key={group.key} className="qms-console-menu-group">
+          <button type="button" className="qms-console-menu-toggle" aria-label={title} title={title} aria-expanded={expanded} aria-controls={entriesId} aria-current={current && !expanded ? 'true' : undefined} data-current={current || undefined} onClick={() => toggleGroup(group.key, rail)}>
+            <group.icon size={18} aria-hidden="true" /><span className="qms-console-nav-label">{title}</span>{!rail && <ChevronDown size={15} className="qms-console-menu-chevron" aria-hidden="true" />}
+          </button>
+          <div id={entriesId} className="qms-console-menu-entries" hidden={!expanded}>{items.map(navigationLink)}</div>
+        </div>;
       })}
     </nav>;
 

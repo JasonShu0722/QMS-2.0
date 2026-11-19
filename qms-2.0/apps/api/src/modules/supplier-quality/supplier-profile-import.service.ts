@@ -1,7 +1,7 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
-import { assertRecentAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { OrganizationService } from '../organization/organization.service.js';
 import { supplierProfileInput } from './supplier-profile-input.js';
@@ -20,7 +20,7 @@ export class SupplierProfileImportService {
       || input.rows.some((row) => !row || !Number.isSafeInteger(row.rowNumber) || row.rowNumber < 2 || row.rowNumber > 1000000)
       || new Set(input.rows.map((row) => row.rowNumber)).size !== input.rows.length) adminError('SUPPLIER_INPUT_INVALID', 400);
     const authorize = async (tx: AdminTransaction) => {
-      await assertRecentAuthentication(tx, actor);
+      await assertActiveAuthentication(tx, actor);
       await assertAdminAccess(tx, actor, organizationId, 'supplier-quality:profiles:write');
       if ((await this.organizations.lookup(organizationId, tx))?.type !== 'INTERNAL') adminError('SUPPLIER_INPUT_INVALID', 400);
     };

@@ -411,7 +411,10 @@ test('administrator bulk deletes four master data lists with partial reference p
       remaining: () => prisma.$queryRaw<{ id: string }[]>`SELECT id FROM component_project_mappings WHERE organization_id=${organization.id}::uuid AND id IN (${mappings[0]!.id}::uuid,${mappings[1]!.id}::uuid)` },
   ];
   for (const domain of domains) {
-    await page.getByRole('link', { name: domain.link, exact: true }).click();
+    const navigation = page.getByRole('navigation', { name: '管理导航', exact: true });
+    const group = navigation.getByRole('button', { name: '主数据', exact: true });
+    if (await group.getAttribute('aria-expanded') === 'false') await group.click();
+    await navigation.getByRole('link', { name: domain.link, exact: true }).click();
     const row = (code: string) => page.getByRole('row').filter({ has: page.getByText(code, { exact: true }) });
     const toolbar = page.getByRole('toolbar', { name: `已选${domain.noun}`, exact: true });
     await expect(toolbar).toHaveCount(0);

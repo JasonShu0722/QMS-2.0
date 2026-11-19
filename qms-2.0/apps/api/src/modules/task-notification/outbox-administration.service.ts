@@ -3,7 +3,7 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { adminError, assertAdminAccess, type AdminActor } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
-import { assertRecentAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { OutboxAttemptPageDto, OutboxFailureDto, OutboxFailurePageDto, OutboxFailureQueryDto, OutboxRetryDto } from './outbox-administration.dto.js';
 
 const ownedEvents = (organizationId: string) => Prisma.sql`
@@ -138,7 +138,7 @@ export class OutboxAdministrationService {
         const current = await transaction.$queryRaw<{ status: string; attempts: number }[]>(Prisma.sql`SELECT event.status, event.attempts ${ownedEvents(organizationId)} AND event.id = ${id}::uuid`);
         if (!current.length) adminError('OUTBOX_EVENT_NOT_FOUND', 404);
         if (current[0]!.status !== 'FAILED') adminError('CONCURRENCY_CONFLICT', 409);
-        await assertRecentAuthentication(transaction, actor);
+        await assertActiveAuthentication(transaction, actor);
         const retryAt = new Date();
         const attemptNumber = current[0]!.attempts;
         await transaction.outboxEvent.update({ where: { id }, data: { status: 'PENDING', attempts: 0, availableAt: retryAt, lastError: null, processingAt: null, processedAt: null } });

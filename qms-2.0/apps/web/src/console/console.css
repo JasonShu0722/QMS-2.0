@@ -3,19 +3,21 @@
 .qms-console-layout { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100dvh; }
 .qms-console-sidebar { position: sticky; top: 0; display: flex; flex-direction: column; height: 100dvh; padding: 20px 12px; border-right: 1px solid var(--qms-border); background: var(--qms-surface); }
 .qms-console-brand { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 10px 16px; flex: none; color: var(--qms-text); }
-.qms-console-menu { min-height: 0; overflow-y: auto; flex: 1; }
+.qms-console-menu { min-height: 0; overflow-y: auto; flex: 1; padding: 4px; }
 .qms-console-brand > svg { flex: none; }
 .qms-console-brand strong, .qms-console-brand small { display: block; }
 .qms-console-brand strong { font-size: 16px; letter-spacing: -.3px; }
 .qms-console-brand small { margin-top: 4px; color: var(--qms-muted); font-size: 12px; }
-.qms-console-theme :is(.qms-console-sidebar, .qms-console-mobile-drawer) nav section { margin-top: 24px; }
-.qms-console-theme :is(.qms-console-sidebar, .qms-console-mobile-drawer) nav section + section { padding-top: 16px; border-top: 1px solid var(--qms-border); }
-.qms-console-theme :is(.qms-console-sidebar, .qms-console-mobile-drawer) nav p { margin: 0 0 8px; padding-inline: 12px; font-size: 12px; font-weight: 650; line-height: 1.6; color: var(--qms-text); }
-.qms-console-theme :is(.qms-console-sidebar, .qms-console-mobile-drawer) nav a { display: flex; align-items: center; gap: 10px; min-height: 40px; margin: 3px 0; padding: 8px 12px; border-radius: 6px; overflow-wrap: anywhere; }
-.qms-console-theme :is(.qms-console-sidebar, .qms-console-mobile-drawer) nav a > svg { flex: none; color: var(--qms-muted); }
-.qms-console-theme :is(.qms-console-sidebar, .qms-console-mobile-drawer) nav a:hover { background: var(--qms-surface-tint); }
-.qms-console-theme :is(.qms-console-sidebar, .qms-console-mobile-drawer) nav a[aria-current="page"] { background: var(--qms-accent-soft); font-weight: 600; }
-.qms-console-sidebar-note { margin-top: auto; padding: 24px 12px 4px; color: var(--qms-muted); font-size: 12px; line-height: 1.6; }
+.qms-console-menu-group + .qms-console-menu-group { margin-top: 4px; }
+.qms-console-menu :is(a, .qms-console-menu-toggle) { display: flex; align-items: center; gap: 10px; min-height: 40px; margin: 3px 0; padding: 8px 12px; border-radius: 6px; overflow-wrap: anywhere; }
+.qms-console-menu :is(a, .qms-console-menu-toggle) > svg { flex: none; color: var(--qms-muted); }
+.qms-console-menu-toggle { width: 100%; border: 0; background: transparent; color: var(--qms-text); font: inherit; text-align: left; cursor: pointer; }
+.qms-console-menu :is(a, .qms-console-menu-toggle):hover, .qms-console-menu-toggle[aria-expanded="true"] { background: var(--qms-surface-tint); }
+.qms-console-menu-toggle[data-current] { box-shadow: inset 3px 0 var(--qms-accent-border); font-weight: 600; }
+.qms-console-menu [aria-current] { background: var(--qms-accent-soft); font-weight: 600; }
+.qms-console-menu-chevron { margin-inline-start: auto; }
+.qms-console-menu-toggle[aria-expanded="true"] .qms-console-menu-chevron { transform: rotate(180deg); }
+.qms-console-menu-entries { margin: 4px 0 8px 20px; padding-inline-start: 7px; border-inline-start: 1px solid var(--qms-border); }
 .qms-console-body { min-width: 0; }
 .qms-console-topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 64px; padding: 10px 24px; border-bottom: 1px solid var(--qms-border); background: var(--qms-surface); }
 .qms-console-topbar-leading { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; min-width: 0; }
@@ -41,10 +43,10 @@
 .qms-console-collapsed .qms-console-sidebar .qms-console-nav-label { display: none; }
 .qms-console-collapsed .qms-console-sidebar { padding-inline: 8px; }
 .qms-console-collapsed .qms-console-sidebar .qms-console-brand { padding-inline: 16px; }
-.qms-console-collapsed .qms-console-sidebar nav a { justify-content: center; padding-inline: 8px; }
+.qms-console-collapsed .qms-console-sidebar .qms-console-menu :is(a, .qms-console-menu-toggle) { justify-content: center; padding-inline: 8px; }
 .qms-console-theme .qms-console-mobile-drawer .ant-drawer-body { padding: 12px; overflow: hidden; display: flex; flex-direction: column; }
 #qms-console-mobile-navigation { min-height: 0; flex: 1; display: flex; flex-direction: column; }
-.qms-console-theme .qms-console-mobile-drawer nav a { min-height: 44px; }
+.qms-console-mobile-drawer .qms-console-menu :is(a, .qms-console-menu-toggle) { min-height: 44px; }
 .qms-console-theme .react-flow { --xy-background-color-default: var(--qms-surface-tint); --xy-node-color-default: var(--qms-text); --xy-node-background-color-default: var(--qms-surface); --xy-controls-button-background-color-default: var(--qms-surface); --xy-controls-button-color-default: var(--qms-text); }
 @media (max-width: 1100px) {
   .qms-console-layout { grid-template-columns: 208px minmax(0, 1fr); }
@@ -63,7 +65,7 @@
   .qms-console-content { padding: 12px 14px 18px; }
 }
 @media (max-width: 760px), (pointer: coarse) {
-  .qms-console-theme .qms-console-sidebar nav a { min-height: 44px; }
+  .qms-console-theme .qms-console-sidebar .qms-console-menu :is(a, .qms-console-menu-toggle) { min-height: 44px; }
   .qms-console-reading-notes > summary { min-height: 44px; }
   .qms-console-theme :is(.ant-btn, .ant-modal-close, .ant-drawer-close, .ant-select, .ant-select-selector, .ant-input-affix-wrapper, .ant-input-number, select, input:not([type="checkbox"], [type="radio"], [type="hidden"], .ant-select-input, .ant-input-number-input, .ant-input-affix-wrapper input), .ant-radio-button-wrapper) { min-height: 44px; }
   .qms-console-theme :is(button, .ant-btn, .ant-btn-icon-only, .ant-modal-close, .ant-drawer-close) { min-width: 44px; }

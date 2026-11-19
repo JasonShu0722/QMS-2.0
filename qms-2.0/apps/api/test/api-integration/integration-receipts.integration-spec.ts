@@ -135,7 +135,7 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
     expect(await prisma.integrationScopeCapacity.findUniqueOrThrow({ where: { organizationId: item.organization.id } })).toMatchObject({ usedBodyBytes: 0n, receiptCount: 0 });
     expect(await prisma.auditEvent.count({ where: { organizationId: item.organization.id, action: 'INTEGRATION_RECEIPTS_DELETED' } })).toBe(1000);
   });
-  it('requires session, CSRF, recent authentication and management permission, and rolls back mixed organization IDs', async () => {
+  it('requires an active session, CSRF and management permission, and rolls back mixed organization IDs', async () => {
     const item = await fixture(['integration:receipts:read', 'integration:manage']);
     const foreign = await fixture(['integration:receipts:read', 'integration:manage']);
     const body = { organizationId: item.organization.id, receiptIds: [item.receipt.id] };
@@ -144,15 +144,16 @@ describe('API integration receipt reads with real PostgreSQL and sessions', () =
     await request(app.getHttpServer()).delete(`${base}/receipts`).set('Cookie', item.cookie).set('Idempotency-Key', randomUUID()).send(body).expect(403);
     const readOnly = await fixture(['integration:receipts:read']);
     await remove(readOnly).expect(403);
+    await prisma.integrationEndpoint.update({ where: { id: item.endpoint.id }, data: { usedBodyBytes: item.receipt.payloadBytes } });
+    await prisma.integrationScopeCapacity.create({ data: { organizationId: item.organization.id, usedBodyBytes: item.receipt.payloadBytes, receiptCount: 1 } });
     await prisma.session.updateMany({ where: { userId: item.user.id }, data: { reauthenticatedAt: new Date(Date.now() - 600000) } });
-    await remove(item).expect(403);
-    await prisma.session.updateMany({ where: { userId: item.user.id }, data: { reauthenticatedAt: new Date() } });
     const endpointBefore = await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } });
     const mixed = await remove(item, { organizationId: item.organization.id, receiptIds: [item.receipt.id, foreign.receipt.id] });
     expect(mixed.status).toBe(404);
     expect(await prisma.integrationReceipt.count({ where: { organizationId: item.organization.id, id: item.receipt.id } })).toBe(1);
     expect((await prisma.integrationEndpoint.findUniqueOrThrow({ where: { id: item.endpoint.id } })).usedBodyBytes).toBe(endpointBefore.usedBodyBytes);
     await remove(foreign, { organizationId: foreign.organization.id, receiptIds: [item.receipt.id] }).expect(404);
+    await remove(item).expect(200);
   });
   it.each([
     { label: 'empty', receiptIds: [] },

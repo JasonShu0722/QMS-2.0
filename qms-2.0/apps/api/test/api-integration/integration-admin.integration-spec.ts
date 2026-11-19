@@ -139,18 +139,18 @@ describe('API integration administration through real HTTP and PostgreSQL', () =
     await create(second.cookie, { ...input(), organizationId: first.organization.id } as ReturnType<typeof input>).expect(403);
     await update(second.cookie, endpoint.id, { expectedVersion: 1, name: 'Hijack' }).expect(404);
   });
-  it('requires CSRF and recent authentication for management writes', async () => {
+  it('requires CSRF and allows management writes with an active session after step-up expires', async () => {
     const fixtureValue = await fixture();
     await request(app.getHttpServer()).post(path).set('Cookie', fixtureValue.cookie).set('Idempotency-Key', randomUUID()).send(input()).expect(403);
     await prisma.session.updateMany({ where: { userId: fixtureValue.user.id }, data: { reauthenticatedAt: new Date(Date.now() - 600000) } });
-    expect((await create(fixtureValue.cookie).expect(403)).body.code).toBe('AUTH_REAUTHENTICATION_REQUIRED');
+    await create(fixtureValue.cookie).expect(201);
   });
   it.each([
     ['create endpoint', false], ['create endpoint', true],
     ['update endpoint', false], ['update endpoint', true],
     ['create credential', false], ['create credential', true],
     ['revoke credential', false], ['revoke credential', true],
-  ] as const)('rechecks recent authentication after the final resource lock for %s (replay=%s)', async (operation, replay) => {
+  ] as const)('rechecks session validity after the final resource lock for %s (replay=%s)', async (operation, replay) => {
     const fixtureValue = await fixture(); const endpoint = (await create(fixtureValue.cookie).expect(201)).body;
     const key = randomUUID(), body = input();
     let credentialId: string | undefined;
@@ -163,6 +163,7 @@ describe('API integration administration through real HTTP and PostgreSQL', () =
       const mutation = operation === 'update endpoint' ? request(app.getHttpServer()).patch(url) : request(app.getHttpServer()).post(url);
       return mutation.set('Cookie', fixtureValue.cookie).set('x-csrf-token', 'fixture').set('Idempotency-Key', key).send(operation === 'create endpoint' ? body : operation === 'update endpoint' ? { expectedVersion: 1, name: 'Waited configuration' } : operation === 'create credential' ? { name: 'Waited credential' } : {});
     };
+    await prisma.session.updateMany({ where: { userId: fixtureValue.user.id }, data: { reauthenticatedAt: null } });
     if (replay) await invoke().expect(operation === 'update endpoint' ? 200 : 201);
     const blocker = new Client({ connectionString: process.env.DATABASE_URL }); await blocker.connect();
     const blockerPid = (await blocker.query<{ pid: number }>('SELECT pg_backend_pid() AS pid')).rows[0]!.pid;
@@ -172,7 +173,7 @@ describe('API integration administration through real HTTP and PostgreSQL', () =
       if (operation === 'create endpoint') await blocker.query('SELECT id FROM organizations WHERE id=$1 FOR SHARE', [fixtureValue.organization.id]);
       else if (operation === 'revoke credential') await blocker.query('SELECT id FROM integration_credentials WHERE id=$1 FOR UPDATE', [credentialId]);
       else await blocker.query('SELECT id FROM integration_endpoints WHERE id=$1 FOR UPDATE', [endpoint.id]);
-      await prisma.session.updateMany({ where: { userId: fixtureValue.user.id }, data: { reauthenticatedAt: new Date(Date.now() - 300000 + 1500) } });
+      await prisma.session.updateMany({ where: { userId: fixtureValue.user.id }, data: { expiresAt: new Date(Date.now() + 1500) } });
       pending = invoke().then(response => response);
       let waiting = false;
       for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
@@ -183,7 +184,7 @@ describe('API integration administration through real HTTP and PostgreSQL', () =
       expect(waiting).toBe(true);
       await blocker.query('SELECT pg_sleep(1.6)'); await blocker.query('COMMIT');
       const response = await pending;
-      expect(response.status).toBe(403); expect(response.body.code).toBe('AUTH_REAUTHENTICATION_REQUIRED');
+      expect(response.status).toBe(401); expect(response.body.code).toBe('AUTH_SESSION_REQUIRED');
       expect(response.body.secret).toBeUndefined();
       expect(await prisma.adminMutation.count({ where: { actorUserId: fixtureValue.user.id, key } })).toBe(replay ? 1 : 0);
     } finally { await blocker.query('ROLLBACK'); await blocker.end(); await pending; }

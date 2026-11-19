@@ -61,10 +61,10 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     if (fixture) await fixture.prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED' WHERE organization_id=${fixture.actor.organizationId}::uuid AND status IN ('PENDING','PAUSED','BLOCKED')`;
   });
 
-  async function engineSource(direct = '直接组合事实', updateFields = ['description','operationName','lineCode'], strategy: SaveIngestionRuleDto['mode'] = 'UPDATE') {
+  async function engineSource(direct = '直接组合事实', updateFields = ['description','operationName','lineCode'], strategy: SaveIngestionRuleDto['mode'] = 'UPDATE', name = '真实入库AI接缝') {
     const original = await fixture.prisma.integrationReceipt.findUniqueOrThrow({ where: { id: fixture.fields().receiptId } });
     const raw: Record<string, unknown> = { id: randomUUID(), time: '2026-11-16T00:30:00Z', product: 'QMS-AI-COMPLETE', trace: randomUUID(), operation: '目检', direct, fact: '毛刺' };
-    const configuration = await engine.saveRule(fixture.actor, { name: '真实入库AI接缝', endpointId: original.endpointId, target: 'PROCESS_DEFECT', enabled: false,
+    const configuration = await engine.saveRule(fixture.actor, { name, endpointId: original.endpointId, target: 'PROCESS_DEFECT', enabled: false,
       match: 'ALL', conditions: [], mode: strategy, updateFields, mapping: { externalRecordKey: 'id', occurredAt: 'time', productCode: 'product', traceCode: 'trace', operationName: 'operation', lineCode: 'line', description: 'direct' },
       aiDescription: { connectionId: connection.id, model: 'model-b', prompt: '整理{{fact}}。', inputFields: [{ path: 'fact', label: '现象', variable: 'fact' }], output: { mode: 'TEXT', field: 'description', target: 'description' } } }, randomUUID(), randomUUID());
     async function prepare(rule: IngestionRuleDto = configuration, body: Record<string, unknown> = raw) {
@@ -613,6 +613,166 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     const [oldTask] = await fixture.prisma.$queryRaw<{ prompt: string; application_version: number }[]>`SELECT prompt,application_version FROM integration_ai_description_tasks WHERE defect_id=${first.row.id}::uuid`;
     expect(oldTask).toMatchObject({ prompt: source.configuration.aiDescription!.prompt, application_version: binding.publishedVersion });
     await expect(engine.saveRule(fixture.actor, { ...switched, expectedVersion: switched.version, aiDescription: { ...switched.aiDescription!, prompt: '客户端伪造{{fact}}' } }, randomUUID(), randomUUID(), switched.id)).rejects.toMatchObject({ response: { code: 'INGESTION_RULE_INVALID' } });
+  });
+
+  it.each([false, true])('retries a historical failure against the original application after a rule switch (legacy reference: %p)', async legacy => {
+    mode = 'EMPTY';
+    const source = await engineSource(undefined, undefined, undefined, randomUUID());
+    const imported = await source.ingest();
+    await service.processDue();
+    const failed = (await service.list(fixture.actor, imported.row.id)).items[0]!;
+    expect(failed.status).toBe('FAILED');
+    if (legacy) await fixture.prisma.$executeRaw`UPDATE integration_ai_description_tasks SET application_id=NULL,application_version=NULL WHERE id=${failed.id}::uuid`;
+    const applications = new AiApplicationService(fixture.prisma, new AdminMutationService(fixture.prisma, fixture.audit), connections, fixture.audit);
+    const organizationId = fixture.actor.organizationId;
+    const application = await applications.read(fixture.actor, organizationId, source.configuration.aiApplication!.applicationId);
+    const edited = await applications.update(fixture.actor, organizationId, application.id, { ...application, expectedVersion: application.version,
+      prompt: '新版现象{{fact}}，新变量{{added}}', model: 'model-a', variables: [{ variable: 'added', label: '新增' }, { variable: 'fact', label: '现象' }],
+      output: { mode: 'JSON', field: '自定义描述', target: 'description' } }, randomUUID(), randomUUID());
+    const published = await applications.publish(fixture.actor, organizationId, application.id, { expectedVersion: edited.version }, randomUUID(), randomUUID());
+    await applications.update(fixture.actor, organizationId, application.id, { ...edited, expectedVersion: published.version, prompt: '未发布草稿' }, randomUUID(), randomUUID());
+    const currentRule = await source.changePrompt();
+    expect(currentRule.aiApplication!.applicationId).not.toBe(application.id);
+
+    const key = randomUUID(), input = { expectedVersion: failed.version };
+    const readPermission = await fixture.prisma.permission.findUniqueOrThrow({ where: { code: 'ai:applications:read' } });
+    await fixture.prisma.rolePermission.deleteMany({ where: { roleId: fixture.role.id, permissionId: readPermission.id } });
+    try {
+      const retry = await service.action(fixture.actor, failed.id, input, false, randomUUID(), key);
+      expect(retry).toMatchObject({ status: 'PENDING', ruleVersion: failed.ruleVersion });
+      expect(retry.id).not.toBe(failed.id);
+      expect(await service.action(fixture.actor, failed.id, input, false, randomUUID(), key)).toEqual(retry);
+      await expect(service.action(fixture.actor, failed.id, input, false, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+      mode = 'JSON';
+      await service.processDue();
+      expect(requests.at(-1)).toMatchObject({ model: 'model-a', messages: [expect.anything(), expect.objectContaining({ content: '新版现象"毛刺"，新变量""' }), expect.anything()] });
+      expect((await service.list(fixture.actor, imported.row.id)).items).toEqual([
+        expect.objectContaining({ id: retry.id, status: 'APPLIED', result: 'JSON整理结果' }), failed,
+      ]);
+    } finally { await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId: readPermission.id } }); }
+  });
+
+  it('rejects an unlinked pre-migration task after a rule switch even when applications match the old snapshot', async () => {
+    mode = 'EMPTY';
+    const source = await engineSource(undefined, undefined, undefined, randomUUID());
+    const imported = await source.ingest();
+    await service.processDue();
+    const failed = (await service.list(fixture.actor, imported.row.id)).items[0]!;
+    expect(failed.status).toBe('FAILED');
+    await fixture.prisma.$executeRaw`UPDATE integration_ai_description_tasks SET application_id=NULL,application_version=NULL WHERE id=${failed.id}::uuid`;
+    await fixture.prisma.$executeRaw`UPDATE integration_ingestion_jobs SET rule_snapshot=rule_snapshot-'aiApplication' WHERE rule_id=${failed.ruleId}::uuid AND rule_version=${failed.ruleVersion}`;
+    const applications = new AiApplicationService(fixture.prisma, new AdminMutationService(fixture.prisma, fixture.audit), connections, fixture.audit);
+    const organizationId = fixture.actor.organizationId;
+    const original = await applications.read(fixture.actor, organizationId, source.configuration.aiApplication!.applicationId);
+    const duplicate = await applications.create(fixture.actor, organizationId, original, randomUUID(), randomUUID());
+    await applications.publish(fixture.actor, organizationId, duplicate.id, { expectedVersion: duplicate.version }, randomUUID(), randomUUID());
+    await engine.saveRule(fixture.actor, { ...source.configuration, expectedVersion: source.configuration.version, aiDescription: undefined,
+      aiApplication: { ...source.configuration.aiApplication!, applicationId: duplicate.id } }, randomUUID(), randomUUID(), source.configuration.id);
+
+    const before = requests.length;
+    await expect(service.action(fixture.actor, failed.id, { expectedVersion: failed.version }, false, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ status: 404, response: { code: 'AI_APPLICATION_NOT_FOUND' } });
+    await service.processDue();
+    expect(requests).toHaveLength(before);
+    expect((await service.list(fixture.actor, imported.row.id)).items).toEqual([failed]);
+  });
+
+  it('restores previously selected values when the same application reintroduces variables', async () => {
+    mode = 'SUCCESS';
+    const value = await source();
+    const fields = [
+      ...value.input.fields,
+      { variable: 'count', path: 'count', label: '数量', value: 0 },
+      { variable: 'accepted', path: 'accepted', label: '通过', value: false },
+      { variable: 'unknown', path: 'unknown', label: '未确认', value: null },
+    ];
+    const bindings = fields.map(({ path, label, variable }) => ({ path, label, variable: variable! }));
+    const ai = { ...value.input.rule.aiDescription!, prompt: '整理{{fact}}，{{count}}，{{accepted}}，{{unknown}}', inputFields: bindings };
+    const applications = new AiApplicationService(fixture.prisma, new AdminMutationService(fixture.prisma, fixture.audit), connections, fixture.audit);
+    const organizationId = fixture.actor.organizationId;
+    const { binding } = await fixture.prisma.$transaction(tx => applications.importLegacy(tx, fixture.actor, randomUUID(), ai));
+    const rule = { ...value.input.rule, aiDescription: ai, aiApplication: binding };
+    await fixture.prisma.$executeRaw`UPDATE integration_ingestion_rules SET configuration=${JSON.stringify(rule)}::jsonb WHERE id=${value.input.ruleId}::uuid`;
+    await fixture.prisma.$transaction(tx => service.enqueue(tx, fixture.actor, { ...value.input, rule, fields }));
+    await service.processDue();
+    const original = (await service.list(fixture.actor, value.defect.id)).items[0]!;
+    expect(original.status).toBe('APPLIED');
+
+    const initialApplication = await applications.read(fixture.actor, organizationId, binding.applicationId);
+    const edited = await applications.update(fixture.actor, organizationId, binding.applicationId, { ...initialApplication, expectedVersion: initialApplication.version,
+      prompt: '只整理{{fact}}', variables: [{ variable: 'fact', label: '现象' }] }, randomUUID(), randomUUID());
+    const narrowed = await applications.publish(fixture.actor, organizationId, binding.applicationId, { expectedVersion: edited.version }, randomUUID(), randomUUID());
+    const narrowTask = await service.action(fixture.actor, original.id, { expectedVersion: original.version }, 'regenerate', randomUUID(), randomUUID());
+    await service.processDue();
+    expect(requests.at(-1)).toMatchObject({ messages: [expect.anything(), { role: 'user', content: '只整理"毛刺"' },
+      { role: 'user', content: JSON.stringify({ selectedData: [{ label: '现象', value: '毛刺', variable: 'fact' }] }) }] });
+    const completedNarrow = (await service.list(fixture.actor, value.defect.id)).items[0]!;
+    expect(completedNarrow).toMatchObject({ id: narrowTask.id, status: 'APPLIED' });
+
+    const restored = await applications.update(fixture.actor, organizationId, binding.applicationId, { ...initialApplication, expectedVersion: narrowed.version }, randomUUID(), randomUUID());
+    await applications.publish(fixture.actor, organizationId, binding.applicationId, { expectedVersion: restored.version }, randomUUID(), randomUUID());
+    const regenerated = await service.action(fixture.actor, completedNarrow.id, { expectedVersion: completedNarrow.version }, 'regenerate', randomUUID(), randomUUID());
+    await service.processDue();
+    const [snapshot] = await fixture.prisma.$queryRaw<{ input_fields: unknown }[]>`SELECT input_fields FROM integration_ai_description_tasks WHERE id=${regenerated.id}::uuid`;
+    expect(snapshot?.input_fields).toEqual(fields);
+    expect(requests.at(-1)).toMatchObject({ messages: [expect.anything(), { role: 'user', content: '整理"毛刺"，"0"，"false"，""' }, expect.anything()] });
+  });
+
+  it('keeps the applied description and skips unchanged ingestion while a manual generation is pending or fails', async () => {
+    mode = 'SUCCESS';
+    const source = await engineSource(undefined, undefined, undefined, randomUUID());
+    const initial = await source.ingest();
+    await service.processDue();
+    const original = (await service.list(fixture.actor, initial.row.id)).items[0]!;
+    const before = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: initial.row.id } });
+    const applications = new AiApplicationService(fixture.prisma, new AdminMutationService(fixture.prisma, fixture.audit), connections, fixture.audit);
+    const organizationId = fixture.actor.organizationId;
+    const application = await applications.read(fixture.actor, organizationId, source.configuration.aiApplication!.applicationId);
+    const edited = await applications.update(fixture.actor, organizationId, application.id, { ...application, expectedVersion: application.version,
+      prompt: '重新核实{{fact}}，备注{{added}}', variables: [...application.variables, { variable: 'added', label: '备注' }] }, randomUUID(), randomUUID());
+    await applications.publish(fixture.actor, organizationId, application.id, { expectedVersion: edited.version }, randomUUID(), randomUUID());
+
+    const regenerated = await service.action(fixture.actor, original.id, { expectedVersion: original.version }, 'regenerate', randomUUID(), randomUUID());
+    expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: before.id } })).toMatchObject({ description: before.description,
+      descriptionSource: 'AI', descriptionDirect: before.descriptionDirect, version: before.version, descriptionTaskId: regenerated.id });
+    await source.ingest();
+    expect((await service.list(fixture.actor, before.id)).items).toEqual([regenerated, original]);
+    mode = 'EMPTY';
+    await service.processDue();
+    expect((await service.list(fixture.actor, before.id)).items[0]).toMatchObject({ id: regenerated.id, status: 'FAILED' });
+    expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: before.id } })).toMatchObject({ description: before.description,
+      descriptionSource: 'AI', descriptionDirect: before.descriptionDirect, version: before.version });
+  });
+
+  it('regenerates an applied task using the migrated application and keeps manually edited text until adoption', async () => {
+    mode = 'SUCCESS';
+    const value = await source();
+    await value.enqueue();
+    await service.processDue();
+    const original = (await service.list(fixture.actor, value.defect.id)).items[0]!;
+    expect(original.status).toBe('APPLIED');
+    const applications = new AiApplicationService(fixture.prisma, new AdminMutationService(fixture.prisma, fixture.audit), connections, fixture.audit);
+    const organizationId = fixture.actor.organizationId;
+    const migrated = await fixture.prisma.$transaction(tx => applications.importLegacy(tx, fixture.actor, randomUUID(), value.input.rule.aiDescription!));
+    await fixture.prisma.$executeRaw`UPDATE integration_ingestion_rules SET configuration=configuration || ${JSON.stringify({ aiApplication: migrated.binding })}::jsonb WHERE id=${value.input.ruleId}::uuid`;
+    const application = await applications.read(fixture.actor, organizationId, migrated.binding.applicationId);
+    const edited = await applications.update(fixture.actor, organizationId, application.id, { ...application, expectedVersion: application.version,
+      prompt: '记录重新核对{{fact}}' }, randomUUID(), randomUUID());
+    await applications.publish(fixture.actor, organizationId, application.id, { expectedVersion: edited.version }, randomUUID(), randomUUID());
+    await fixture.prisma.processDefect.update({ where: { id: value.defect.id }, data: { description: '现场已人工核对', manualFields: ['description'] } });
+
+    const regenerated = await service.action(fixture.actor, original.id, { expectedVersion: original.version }, 'regenerate', randomUUID(), randomUUID());
+    expect(regenerated.id).not.toBe(original.id);
+    expect(regenerated.status).toBe('PENDING');
+    await fixture.prisma.$executeRaw`UPDATE integration_ingestion_rules SET version=version+1 WHERE id=${value.input.ruleId}::uuid`;
+    await service.processDue();
+    expect(requests.at(-1)).toMatchObject({ messages: [expect.anything(), expect.objectContaining({ content: '记录重新核对"毛刺"' }), expect.anything()] });
+    const [suggestion, preserved] = (await service.list(fixture.actor, value.defect.id)).items;
+    expect(suggestion).toMatchObject({ id: regenerated.id, status: 'SUGGESTED' });
+    expect(preserved).toEqual(original);
+    expect((await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } })).description).toBe('现场已人工核对');
+    await service.action(fixture.actor, suggestion!.id, { expectedVersion: suggestion!.version }, true, randomUUID(), randomUUID());
+    expect((await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } })).description).toBe('已选事实的整理结果');
   });
 
   it('keeps direct fallback and avoids HTTP after application disable; reenabling permits controlled task retry', async () => {

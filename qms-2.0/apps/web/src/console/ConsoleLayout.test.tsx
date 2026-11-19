@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, MemoryRouter, RouterProvider, useLocation, useNavigate } from 'react-router-dom';
 import { transferableAbortController } from 'node:util';
 import { readFileSync } from 'node:fs';
@@ -21,7 +22,12 @@ function context(target: string = a.id): ConsoleContext { return { actor: { id: 
   { key: 'users', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: target, permissions: ['account:users:read'] },
   { key: 'workflows', scope: 'SESSION_HOME', coverage: 'ORGANIZATION', organizationId: a.id, permissions: ['workflow:manage'] },
 ] }; }
-beforeEach(() => { getContext.mockReset(); useWorkTabsStore.getState().bindSession('INTERNAL:a:actor'); localStorage.clear(); });
+beforeEach(() => {
+  getContext.mockReset();
+  useWorkTabsStore.getState().reset();
+  useWorkTabsStore.getState().bindSession('INTERNAL:a:actor');
+  localStorage.clear();
+});
 function Page({ dirty = false }: { dirty?: boolean }) { const location = useLocation(); const { context } = useConsoleContext(); useUnsavedChanges(dirty); return <div>受保护内容<output aria-label="verified actor">{context.actor.id}</output><output aria-label="verified home">{context.actor.homeOrganization.name}</output><output aria-label="path">{location.pathname}{location.search}</output></div>; }
 function renderLayout(path = '/console/users', dirty = false) { return render(<MemoryRouter initialEntries={[path]}><ConsoleLayout><Page dirty={dirty} /></ConsoleLayout></MemoryRouter>); }
 function LedgerPreferenceProbe() {
@@ -147,8 +153,67 @@ it('retains a real return link and heading focus on a deep workflow route', asyn
   await screen.findByText('受保护内容');
   const breadcrumb = screen.getByRole('navigation', { name: '面包屑' });
   expect(within(breadcrumb).getByRole('link', { name: '管理控制台' })).toHaveAttribute('href', '/console?organizationId=b');
+  const menu = within(screen.getByRole('navigation', { name: '管理导航' }));
+  expect(menu.getByRole('button', { name: '平台与流程配置' })).toHaveAttribute('aria-expanded', 'true');
+  expect(menu.getByRole('link', { name: '流程管理' })).toHaveAttribute('aria-current', 'page');
   await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: '流程管理' })).toHaveFocus());
   expect(screen.getByLabelText('verified home')).toHaveTextContent('组织A');
+});
+it('only renders authorized groups and independently toggles them from the keyboard', async () => {
+  getContext.mockResolvedValue({ ...context(), modules: [...context().modules,
+    { key: 'api-integrations', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: a.id, permissions: ['integration:read'] },
+    { key: 'api-ingestion', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: a.id, permissions: ['ingestion:read'] },
+    { key: 'master-data', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: a.id, permissions: [] },
+  ] });
+  const user = userEvent.setup();
+  renderLayout();
+  await screen.findByText('受保护内容');
+  const menu = within(screen.getByRole('navigation', { name: '管理导航' }));
+  const organization = menu.getByRole('button', { name: '组织与授权' });
+  const api = menu.getByRole('button', { name: 'API 接入' });
+  expect(menu.queryByRole('button', { name: '主数据' })).not.toBeInTheDocument();
+  expect(organization).toHaveAttribute('aria-expanded', 'true');
+  expect(api).toHaveAttribute('aria-expanded', 'false');
+  expect(menu.queryByRole('link', { name: 'API接口管理' })).not.toBeInTheDocument();
+  api.focus();
+  await user.keyboard('{Enter}');
+  expect(api).toHaveAttribute('aria-expanded', 'true');
+  expect(organization).toHaveAttribute('aria-expanded', 'true');
+  const apiEntries = within(document.getElementById(api.getAttribute('aria-controls')!)!);
+  expect(apiEntries.getAllByRole('link').map(link => link.getAttribute('href'))).toEqual(['/console/api-ingestion', '/console/api-integrations']);
+  await user.keyboard(' ');
+  expect(api).toHaveAttribute('aria-expanded', 'false');
+  expect(api).toHaveFocus();
+  organization.focus();
+  await user.keyboard('{Enter}');
+  expect(organization).toHaveAttribute('aria-current', 'true');
+  expect(menu.queryByRole('link', { name: '用户与任职' })).not.toBeInTheDocument();
+});
+it('opens a group from the icon rail and shares expansion with the mobile drawer', async () => {
+  getContext.mockResolvedValue(context());
+  renderLayout();
+  await screen.findByText('受保护内容');
+  const rail = within(screen.getByRole('navigation', { name: '管理导航' }));
+  fireEvent.click(screen.getByRole('button', { name: '折叠导航' }));
+  expect(rail.getByRole('button', { name: '组织与授权' })).toHaveAttribute('aria-current', 'true');
+  expect(rail.queryByRole('link', { name: '用户与任职' })).not.toBeInTheDocument();
+  fireEvent.click(rail.getByRole('button', { name: '组织与授权' }));
+  expect(rail.getByRole('link', { name: '用户与任职' })).toHaveAttribute('aria-current', 'page');
+  fireEvent.click(screen.getByRole('button', { name: '折叠导航' }));
+  fireEvent.click(screen.getByRole('button', { name: '打开管理导航' }));
+  const drawer = within(await screen.findByRole('dialog', { name: '管理导航' }));
+  const group = drawer.getByRole('button', { name: '平台与流程配置' });
+  expect(group.getAttribute('aria-controls')).not.toBe(rail.getByRole('button', { name: '平台与流程配置' }).getAttribute('aria-controls'));
+  expect(drawer.getByRole('button', { name: '组织与授权' })).toHaveAttribute('aria-expanded', 'true');
+  expect(group).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(group);
+  expect(group).toHaveAttribute('aria-expanded', 'true');
+  fireEvent.click(drawer.getByRole('link', { name: '流程管理' }));
+  expect(await screen.findByLabelText('path')).toHaveTextContent('/console/workflows');
+  expect(screen.getByRole('button', { name: '打开管理导航' })).toHaveAttribute('aria-expanded', 'false');
+  expect(rail.getByRole('button', { name: '平台与流程配置' })).toHaveAttribute('aria-current', 'true');
+  fireEvent.click(screen.getByRole('button', { name: '打开管理导航' }));
+  expect(within(await screen.findByRole('dialog', { name: '管理导航' })).getByRole('link', { name: '流程管理' })).toHaveAttribute('aria-current', 'page');
 });
 it('renders semantic icons for every menu and reserves the gear for platform configuration', async () => {
   const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
@@ -164,6 +229,7 @@ it('renders semantic icons for every menu and reserves the gear for platform con
     if (link.getAttribute('href') === '/console/configuration') expect(icon).toHaveClass('lucide-settings');
     else expect(icon).not.toHaveClass('lucide-settings');
   });
+  fireEvent.click(screen.getByRole('button', { name: '主数据' }));
   expect(screen.getByRole('link', { name: '物料主数据' }).querySelector('svg')).toHaveClass('lucide-package');
   expect(screen.getByRole('link', { name: '组件项目映射' }).querySelector('svg')).toHaveClass('lucide-link2');
 });
@@ -177,6 +243,7 @@ it('verifies scope before rendering real children and navigates without writing 
   expect(screen.getByLabelText('verified actor')).toHaveTextContent('actor');
   expect(screen.getByLabelText('verified home')).toHaveTextContent('组织A');
   getContext.mockResolvedValue(context());
+  fireEvent.click(screen.getByRole('button', { name: '平台与流程配置' }));
   fireEvent.click(screen.getByRole('link', { name: '流程管理' }));
   expect(await screen.findByLabelText('path')).toHaveTextContent('/console/workflows');
   expect(useWorkTabsStore.getState().tabs).toEqual([]);
@@ -277,6 +344,7 @@ it('uses the actual router blocker for ordinary navigation and does not double-p
       window.dispatchEvent(unload);
       expect(unload.defaultPrevented).toBe(true);
     });
+    fireEvent.click(screen.getByRole('button', { name: '平台与流程配置' }));
     fireEvent.click(screen.getByRole('link', { name: '流程管理' }));
     await waitFor(() => expect([...router.state.blockers.values()].map(blocker => blocker.state)).toEqual(['blocked']));
     fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
@@ -338,7 +406,7 @@ it('keeps a fresh verification active when an obsolete page calls invalidate', a
   await act(async () => resolve(context()));
   expect(screen.getByText('受保护内容')).toBeInTheDocument();
 });
-it('declares coarse-pointer desktop sidebar link targets of at least 44px, including collapsed links', async () => {
+it('declares coarse-pointer desktop sidebar targets of at least 44px, including rail buttons', async () => {
   getContext.mockResolvedValue(context());
   renderLayout();
   await screen.findByText('受保护内容');
@@ -349,9 +417,9 @@ it('declares coarse-pointer desktop sidebar link targets of at least 44px, inclu
     const coarseRules = Array.from(style.sheet!.cssRules).filter((rule): rule is CSSMediaRule => rule.type === CSSRule.MEDIA_RULE && (rule as CSSMediaRule).conditionText.includes('(pointer: coarse)')).flatMap(rule => Array.from(rule.cssRules)).filter((rule): rule is CSSStyleRule => rule.type === CSSRule.STYLE_RULE && (rule as CSSStyleRule).selectorText.includes('.qms-console-sidebar'));
     expect(coarseRules.length).toBeGreaterThan(0);
     const verify = () => {
-      const links = document.querySelectorAll('.qms-console-sidebar nav a');
-      expect(links.length).toBeGreaterThan(0);
-      links.forEach(link => expect(coarseRules.some(rule => link.matches(rule.selectorText) && Number.parseFloat(rule.style.getPropertyValue('min-height')) >= 44)).toBe(true));
+      const targets = document.querySelectorAll('.qms-console-sidebar nav :is(a, button):not([hidden] *)');
+      expect(targets.length).toBeGreaterThan(0);
+      targets.forEach(target => expect(coarseRules.some(rule => target.matches(rule.selectorText) && Number.parseFloat(rule.style.getPropertyValue('min-height')) >= 44)).toBe(true));
     };
     verify();
     fireEvent.click(screen.getByRole('button', { name: '折叠导航' }));

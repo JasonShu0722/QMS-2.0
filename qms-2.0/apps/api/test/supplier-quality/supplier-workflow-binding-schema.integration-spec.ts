@@ -100,7 +100,7 @@ describe('supplier workflow configuration with real HTTP and PostgreSQL', () => 
     await get(supplier).expect(403);
   });
 
-  it('enforces read/manage separation, CSRF, recent authentication and validation', async () => {
+  it('enforces read/manage separation, CSRF, an active session and validation', async () => {
     const owner = await identity(); const reader = await identity('INTERNAL', ['configuration:read']);
     const version = await flow(owner);
     await get(reader).expect(200);
@@ -111,7 +111,7 @@ describe('supplier workflow configuration with real HTTP and PostgreSQL', () => 
     await put(owner, version, { slaMinutes: 1 }).expect(400);
     await put(owner, version, { expectedVersion: -1 }).expect(400);
     await prisma.session.updateMany({ where: { userId: owner.user.id }, data: { reauthenticatedAt: null } });
-    await put(owner, version).expect(403);
+    await put(owner, version).expect(200);
   });
 
   it('allows explicitly authorized internal scopes but rejects supplier-owned configuration', async () => {

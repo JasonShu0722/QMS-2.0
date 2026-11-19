@@ -8,11 +8,17 @@ import { PLATFORM_ERROR_MESSAGES, type PlatformErrorCode } from '../contracts/pl
 import { assertActiveAuthentication, assertRecentAuthentication, isSecurityConcurrencyConflict } from './session-security.js';
 import { effectiveRoleGrants } from './effective-role-grants.js';
 import { hasPlatformAdministrator } from './platform-administrator.js';
-import { PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES } from '../../modules/authorization/permission-catalog.js';
+import { ACTIVE_PERMISSION_CODES, PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES } from '../../modules/authorization/permission-catalog.js';
 
 export type AdminActor = { id: string; sessionId: string; organizationId: string; accountType: 'INTERNAL' | 'SUPPLIER'; scopeOrganizationId?: string };
 export type AdminTransaction = Prisma.TransactionClient;
 export { ADMIN_PERMISSIONS } from '../../modules/authorization/permission-catalog.js';
+
+const catalogPermissions = new Set(ACTIVE_PERMISSION_CODES);
+
+function allowsActiveAuthentication(permission: string): boolean {
+  return catalogPermissions.has(permission) && !/^(organization:|account:|platform:admin$|system:permissions:)/.test(permission);
+}
 
 export function adminError(code: PlatformErrorCode, status: number): never {
   throw new HttpException({ code, message: PLATFORM_ERROR_MESSAGES[code] }, status);
@@ -66,7 +72,10 @@ export class AdminMutationService {
           const lock = `admin-mutation:${input.organizationId}:${input.actor.id}:${key}`;
           await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lock}, 0))::text`;
         }
-        if (input.authentication === 'active') await assertActiveAuthentication(transaction, input.actor);
+        const permissions = [input.permission].flat().concat(input.additionalAccess?.map(access => access.permission) ?? []);
+        const active = input.authentication === 'active' || (input.authentication === undefined
+          && permissions.length > 0 && permissions.every(allowsActiveAuthentication));
+        if (active) await assertActiveAuthentication(transaction, input.actor);
         else await assertRecentAuthentication(transaction, input.actor);
         const granted = await assertAdminAccess(transaction, input.actor, input.organizationId, input.permission);
         for (const access of input.additionalAccess ?? []) await assertAdminAccess(transaction, input.actor, access.organizationId, access.permission);

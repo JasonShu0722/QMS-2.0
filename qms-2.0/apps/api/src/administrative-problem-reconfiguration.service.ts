@@ -29,7 +29,7 @@ export class AdministrativeProblemReconfigurationService {
   }
   assignments(actor: AdminActor, domain: Domain, query: AdministrativeProblemAssignmentQueryDto) {
     return this.prisma.$transaction(async tx => {
-      await this.organizations.authorize(tx, actor, true);
+      await this.organizations.authorize(tx, actor);
       if (actor.scopeOrganizationId && actor.scopeOrganizationId !== query.organizationId) adminError('ORGANIZATION_SCOPE_DENIED', 403);
       await this.organizations.scope(tx, query.organizationId, true, false);
       if (domain === Domain.SUPPLIER && query.duty === Duty.OWNER || domain !== Domain.SUPPLIER && query.duty === Duty.RESPONDER) adminError('STRUCTURE_REFERENCE_INVALID', 400);

@@ -222,7 +222,7 @@ describe('B4 closure publication with real PostgreSQL', () => {
     await post(supplier, randomUUID()).expect(403);
     const key = randomUUID(); await post(f, key).expect(201);
     await prisma.session.update({ where: { id: f.session.id }, data: { reauthenticatedAt: new Date(Date.now() - 10 * 60_000) } });
-    expect((await post(f, key).expect(403)).body.code).toBe('AUTH_REAUTHENTICATION_REQUIRED');
+    await post(f, key).expect(201);
     await prisma.session.update({ where: { id: f.session.id }, data: { revokedAt: new Date() } });
     await post(f, key).expect(401);
   });

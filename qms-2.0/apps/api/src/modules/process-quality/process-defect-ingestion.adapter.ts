@@ -122,31 +122,30 @@ export class ProcessDefectIngestionAdapter {
     return this.record(record, fields);
   }
 
-  async aiDescriptionState(tx: AdminTransaction, actor: AdminActor, id: string) {
+  async aiDescriptionState(tx: AdminTransaction, actor: AdminActor, id: string, lock = false) {
     const organizationId = actor.scopeOrganizationId ?? actor.organizationId;
     if (actor.accountType !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
     await assertAdminAccess(tx, actor, organizationId, 'process-quality:defects:write');
     const [organization] = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM organizations WHERE id=${organizationId}::uuid AND type='INTERNAL' AND status='ACTIVE' AND deleted_at IS NULL AND NOT configuration_required FOR SHARE`;
     if (!organization) fail('ORGANIZATION_DISABLED', 403);
+    if (lock) await tx.$queryRaw`SELECT id FROM process_defects WHERE organization_id=${organizationId}::uuid AND id=${id}::uuid FOR UPDATE`;
     const row = await tx.processDefect.findFirst({ where: { organizationId, id } });
     if (!row) fail('PROCESS_DEFECT_NOT_FOUND', 404);
     return row;
   }
 
-  async prepareAiDescription(tx: AdminTransaction, actor: AdminActor, id: string, taskId: string, fields: AiDescriptionField[], direct: string) {
-    const scoped = await this.aiDescriptionState(tx, actor, id);
-    await tx.$queryRaw`SELECT id FROM process_defects WHERE organization_id=${scoped.organizationId}::uuid AND id=${id}::uuid FOR UPDATE`;
-    const row = await tx.processDefect.findUniqueOrThrow({ where: { id } });
+  async prepareAiDescription(tx: AdminTransaction, actor: AdminActor, id: string, taskId: string, fields: AiDescriptionField[], direct: string, preserveText = false) {
+    const row = await this.aiDescriptionState(tx, actor, id, true);
     if (row.archivedAt) fail('PROCESS_DEFECT_ARCHIVED', 409);
     const revision = row.descriptionInputVersion + 1;
-    const protectedDescription = row.manualFields.includes('description');
+    const protectedDescription = preserveText || row.manualFields.includes('description');
     const description = protectedDescription ? row.description : direct;
     const descriptionRequired = processDefectRequiredIssues({ occurredAt: row.occurredAt, productCode: row.productCode, traceCode: row.traceCode, description }).includes('DESCRIPTION_REQUIRED');
     const registrationIssues = protectedDescription ? row.registrationIssues : descriptionRequired
       ? [...new Set([...row.registrationIssues, 'DESCRIPTION_REQUIRED'])] : row.registrationIssues.filter(issue => issue !== 'DESCRIPTION_REQUIRED');
     const pendingCompletion = protectedDescription ? row.pendingCompletion : registrationIssues.length > 0;
     const factsChanged = description !== row.description || pendingCompletion !== row.pendingCompletion || JSON.stringify(registrationIssues) !== JSON.stringify(row.registrationIssues);
-    const record = await tx.processDefect.update({ where: { id }, data: { descriptionInput: fields, descriptionDirect: direct, descriptionInputVersion: revision,
+    const record = await tx.processDefect.update({ where: { id }, data: { descriptionInput: fields, ...(!preserveText ? { descriptionDirect: direct } : {}), descriptionInputVersion: revision,
       descriptionTaskId: taskId, descriptionAi: null, descriptionAiStatus: 'PENDING',
       ...(!protectedDescription ? { description, descriptionSource: 'DIRECT', registrationIssues, pendingCompletion } : {}),
       ...(factsChanged ? { version: { increment: 1 }, updatedById: actor.id } : {}) } });

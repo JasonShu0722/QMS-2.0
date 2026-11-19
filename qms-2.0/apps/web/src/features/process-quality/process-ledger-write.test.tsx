@@ -1,4 +1,4 @@
-import { act, fireEvent, render, renderHook, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
@@ -20,7 +20,8 @@ it('explains source field issues in the keyboard-focused tooltip without exposin
     pendingCompletion: true, pendingConfiguration: false, registeredByName: null, traceCode: null, analysisProgress: null, responsibilityCategory: null,
     ledgerStatus: 'FOLLOWING', closedAt: null, closedById: null, sourceKind: 'IMS', version: 1,
     materials: [], materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0,
-    issues: ['MANUAL_PROJECT_DIFFERS'], registrationIssues: ['lineName:INVALID', 'operationName:TYPE', 'privateField:INVALID', 'traceCode:SECRET', 'UNRECOGNIZED_INTERNAL_CODE'],
+    issues: ['MANUAL_PROJECT_DIFFERS', 'DESCRIPTION_EMPTY', 'OCCURRED_AT_UNKNOWN', 'DEFECT_TYPE_UNKNOWN'],
+    registrationIssues: ['DESCRIPTION_REQUIRED', 'OCCURRED_AT_REQUIRED', 'occurredAt:INVALID', 'lineName:INVALID', 'operationName:TYPE', 'operationName:INVALID', 'privateField:INVALID', 'traceCode:SECRET', 'UNRECOGNIZED_INTERNAL_CODE'],
   };
   render(<MappingHint record={record} />);
   fireEvent.focus(screen.getByRole('button', { name: '映射与来源提示 来源行' }));
@@ -28,8 +29,18 @@ it('explains source field issues in the keyboard-focused tooltip without exposin
   expect(tooltip).toHaveTextContent('人工项目与映射建议不同。');
   expect(tooltip).toHaveTextContent('生产线名称来源值格式或长度无效，请核对。');
   expect(tooltip).toHaveTextContent('工序名称来源值类型无效，请核对。');
-  expect(within(tooltip).getAllByText('来源字段待核对')).toHaveLength(3);
+  expect(within(tooltip).getAllByText(/发生时间/)).toHaveLength(1);
+  expect(tooltip).toHaveTextContent('发生时间来源值格式或长度无效，请核对。');
+  expect(within(tooltip).getAllByText(/描述|现象/)).toHaveLength(1);
+  expect(within(tooltip).getAllByText(/工序名称/)).toHaveLength(1);
+  expect(tooltip).not.toHaveTextContent(/待完善$|来源字段待核对|失效类型未知|发生时间待完善/);
+  expect(within(tooltip).queryByText('待完善', { exact: true })).not.toBeInTheDocument();
   expect(tooltip).not.toHaveTextContent(/lineName|operationName|privateField|SECRET|UNRECOGNIZED_INTERNAL_CODE/);
+  const empty = render(<MappingHint record={{ ...record, issues: ['DEFECT_TYPE_UNKNOWN', 'SOURCE_IDENTITY_INCOMPLETE', 'PRODUCT_SUBCATEGORY_PENDING'], registrationIssues: [], duplicateCount: 0 }} />);
+  expect(within(empty.container).queryByRole('button')).not.toBeInTheDocument();
+  const duplicate = render(<MappingHint record={{ ...record, description: '重复来源', issues: [], registrationIssues: [], duplicateCount: 1 }} />);
+  fireEvent.focus(within(duplicate.container).getByRole('button'));
+  await waitFor(() => expect(screen.getByText('同工序同条码已有记录。')).toBeVisible());
 });
 it('retries unknown outcomes with exactly the same key, payload, method and endpoint', async () => {
   vi.mocked(apiRequest).mockRejectedValueOnce(new TypeError('network'));

@@ -96,6 +96,7 @@ it('restores console scroll after both gates without caching the old menu or a p
   mount('console');
   await screen.findByText('Verified console page');
   const sidebar = document.querySelector<HTMLElement>('.qms-console-menu')!;
+  fireEvent.click(within(sidebar).getByRole('button', { name: '平台与流程配置' }));
   sidebar.scrollTop = 220; fireEvent.scroll(sidebar);
   fireEvent.click(within(sidebar).getByRole('link', { name: '流程管理' }));
   expect(sidebar.isConnected).toBe(false);
@@ -110,13 +111,15 @@ it('restores console scroll after both gates without caching the old menu or a p
   await act(async () => finishContext(context));
   expect(await screen.findByText('Verified console page')).toBeInTheDocument();
   expect(document.querySelector<HTMLElement>('.qms-console-menu')!.scrollTop).toBe(220);
+  expect(screen.getByRole('button', { name: '组织与授权' })).toHaveAttribute('aria-expanded', 'true');
+  expect(screen.getByRole('link', { name: '流程管理' })).toHaveAttribute('aria-current', 'page');
 });
 
 it('retains console collapse through a verified route remount', async () => {
   mount('console');
   await screen.findByText('Verified console page');
   fireEvent.click(screen.getByRole('button', { name: '折叠导航' }));
-  fireEvent.click(within(document.querySelector<HTMLElement>('.qms-console-menu')!).getByRole('link', { name: '流程管理' }));
+  fireEvent.click(within(document.querySelector<HTMLElement>('.qms-console-menu')!).getByRole('link', { name: '管理首页' }));
   await act(async () => finishSession(response(session)));
   await screen.findByText('Verified console page');
   expect(screen.getByRole('button', { name: '展开导航' })).toBeInTheDocument();
@@ -140,7 +143,7 @@ it('makes the fixed console brand a home link while preserving the target organi
   expect(brand).toHaveAttribute('href', '/console?organizationId=a');
   const menu = document.querySelector<HTMLElement>('.qms-console-menu')!;
   expect(menu).not.toContainElement(brand);
-  expect(menu).toContainElement(screen.getByRole('link', { name: '流程管理' }));
+  expect(menu).toContainElement(screen.getByRole('link', { name: '用户与任职' }));
 });
 
 it('constrains only menu regions to scroll and reserves fixed brand space in both drawers', () => {

@@ -27,6 +27,10 @@ export class AiDescriptionController {
   @RequireAccess({ featurePermission: 'ingestion:run', organizationScope: { source: 'body', field: 'organizationId', optional: true } })
   retry(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() input: AiDescriptionTaskActionDto) { return this.service.action(actor(request), id, input, false, requestTraceId(request), request.get('Idempotency-Key')); }
 
+  @Post(':id/regenerate') @Header('Cache-Control', 'no-store') @ApiCreatedResponse({ type: AiDescriptionTaskDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'ingestion:run', organizationScope: { source: 'body', field: 'organizationId', optional: true } })
+  regenerate(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() input: AiDescriptionTaskActionDto) { return this.service.action(actor(request), id, input, 'regenerate', requestTraceId(request), request.get('Idempotency-Key')); }
+
   @Post(':id/adopt') @Header('Cache-Control', 'no-store') @ApiCreatedResponse({ type: AiDescriptionTaskDto }) @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'ingestion:run', organizationScope: { source: 'body', field: 'organizationId', optional: true } })
   adopt(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() input: AiDescriptionTaskActionDto) { return this.service.action(actor(request), id, input, true, requestTraceId(request), request.get('Idempotency-Key')); }

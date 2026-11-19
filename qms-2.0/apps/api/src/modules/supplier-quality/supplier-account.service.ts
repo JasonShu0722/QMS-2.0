@@ -99,7 +99,7 @@ export class SupplierAccountService {
 
   async reset(actor: AdminActor, profileId: string, userId: string, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
-    const result = await this.mutations.run({ actor, organizationId, key, traceId, action: 'SUPPLIER_ACCOUNT_PASSWORD_RESET', payload: { profileId, userId }, permission: 'supplier-quality:profiles:write', isolationLevel: 'ReadCommitted' }, async (tx) => {
+    const result = await this.mutations.run({ actor, organizationId, key, traceId, action: 'SUPPLIER_ACCOUNT_PASSWORD_RESET', payload: { profileId, userId }, permission: 'supplier-quality:profiles:write', authentication: 'recent', isolationLevel: 'ReadCommitted' }, async (tx) => {
       const profile = await this.profile(tx, actor, profileId);
       if (!profile.supplierOrganizationId) adminError('SUPPLIER_COLLABORATION_NOT_ENABLED', 409);
       return this.identities.reset(tx, actor, profile.supplierOrganizationId, userId, traceId, profile.ownerOrganizationId);
@@ -109,7 +109,7 @@ export class SupplierAccountService {
 
   setStatus(actor: AdminActor, profileId: string, userId: string, dto: SetSupplierAccountStatusDto, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'SUPPLIER_ACCOUNT_STATUS_UPDATED', payload: { profileId, userId, dto }, permission: 'supplier-quality:profiles:write', isolationLevel: 'ReadCommitted' }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'SUPPLIER_ACCOUNT_STATUS_UPDATED', payload: { profileId, userId, dto }, permission: 'supplier-quality:profiles:write', authentication: 'recent', isolationLevel: 'ReadCommitted' }, async (tx) => {
       const profile = await this.profile(tx, actor, profileId);
       if (!profile.supplierOrganizationId) adminError('SUPPLIER_COLLABORATION_NOT_ENABLED', 409);
       return this.identities.setStatus(tx, actor, profile.supplierOrganizationId, userId, dto, traceId, profile.ownerOrganizationId);
