@@ -531,27 +531,22 @@ it('retires owner selections on a batched session A to B to A transition', async
   expect(screen.getByText('确认发起8D').closest('button')).toBeDisabled();
 });
 
-it('retains sources across pages and sends both recorded versions in a batch classification', async () => {
+it('lets the floating toolbar clear a cross-page selection without offering batch classification', async () => {
   const other = { ...defect, id: '55555555-5555-4555-8555-555555555555', description: '第二页线索', version: 7 };
-  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+  vi.mocked(apiRequest).mockImplementation(async path => {
     if (path.includes('/defects?')) return { ...list, total: 21, items: path.includes('page=2&') ? [other] : [defect] };
-    if (path.endsWith('/classification') && init?.method === 'PUT') return { items: [{ ...defect, version: 3 }, { ...other, version: 8 }] };
     return baseResponse(path);
   });
   mount();
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
   fireEvent.click(screen.getByTitle('2'));
   fireEvent.click(await screen.findByLabelText('选择制程不良 第二页线索'));
-  expect(screen.getByText('已选择 2 条来源')).toBeVisible();
-  fireEvent.mouseDown(screen.getByLabelText('批量责任分类'));
-  for (const label of ['物料', '作业', '设备', '工艺', '设计', '误报']) {
-    expect(await screen.findByText(label, { selector: '.ant-select-item-option-content' })).toBeInTheDocument();
-  }
-  fireEvent.click(screen.getByText('误报', { selector: '.ant-select-item-option-content' }));
-  fireEvent.click(screen.getByText('应用分类'));
-  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/classification'))).toBe(true));
-  const call = vi.mocked(apiRequest).mock.calls.find(([path]) => path.endsWith('/classification'));
-  expect(JSON.parse(String(call?.[1]?.body))).toEqual({ sources: [{ defectId: defect.id, expectedVersion: 2 }, { defectId: other.id, expectedVersion: 7 }], responsibilityCategory: 'FALSE_POSITIVE' });
+  const toolbar = screen.getByLabelText('台账批量操作');
+  expect(within(toolbar).getByText('已选择 2 条来源')).toBeVisible();
+  expect(within(toolbar).queryByLabelText('批量责任分类')).not.toBeInTheDocument();
+  fireEvent.click(within(toolbar).getByText('取消选择'));
+  expect(screen.queryByLabelText('台账批量操作')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('选择制程不良 第二页线索')).not.toBeChecked();
 });
 
 it.each(['selected', 'new'] as const)('keeps the 100-source limit consistent for a %s detail entry', async entry => {

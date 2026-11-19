@@ -90,6 +90,37 @@ it('keeps the default month independent of an ANY condition', async () => {
   expect(latestQuery().get('occurredTo')).toBe(monthTo);
 });
 
+it('closes an untouched header filter without submitting or clearing the selected row', async () => {
+  items = [defect];
+  mount();
+  const checkbox = await screen.findByLabelText(`选择制程不良 ${defect.description}`);
+  fireEvent.click(checkbox);
+  const readCount = listCalls().length;
+  const search = screen.getByLabelText('搜索制程不良');
+  fireEvent.change(search, { target: { value: '尚未提交的关键词' } });
+  const { panel, queries } = await openPanel('按班次筛选');
+  expect(queries.getByLabelText('筛选字段 1')).toHaveValue('shift');
+  fireEvent.keyDown(panel, { key: 'Escape' });
+  expect(screen.queryByText('当前草稿尚未保存，继续将放弃修改。')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('筛选条件', { selector: 'button' })).toHaveAttribute('aria-expanded', 'false');
+  expect(checkbox).toBeChecked();
+  expect(search).toHaveValue('尚未提交的关键词');
+  expect(listCalls()).toHaveLength(readCount);
+  expect(localStorage.getItem(filtersKey)).toBeNull();
+});
+
+it('applies complete and valueless empty operators when closing, ignoring an unfinished row', async () => {
+  const items = [{ field: 'traceCode', operator: 'EQ', value: 'TRACE-SAVED' }, { field: 'lineName', operator: 'EMPTY' }];
+  localStorage.setItem(filtersKey, JSON.stringify({ schema: 1, value: { search: '', filters: { currentMonth: false, logic: 'ALL', items } } }));
+  mount();
+  const { queries } = await openPanel('按班次筛选');
+  expect(queries.getByLabelText('筛选逻辑').closest('label')).toBeNull();
+  fireEvent.change(queries.getByLabelText('筛选逻辑'), { target: { value: 'ANY' } });
+  fireEvent.click(queries.getByLabelText('关闭筛选'));
+  expect(JSON.parse(latestQuery().get('filters')!)).toEqual({ logic: 'ANY', items });
+  expect(JSON.parse(localStorage.getItem(filtersKey)!).value.filters.items).toEqual(items);
+});
+
 it('keeps an oversized set of text conditions editable without sending or saving it', async () => {
   const condition = { field: 'description', operator: 'CONTAINS', value: '划'.repeat(200) };
   const saved = JSON.stringify({ schema: 1, value: { search: '', filters: { currentMonth: true, logic: 'ALL', items: [condition, condition] } } });

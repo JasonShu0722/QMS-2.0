@@ -1,11 +1,11 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Input, List, Popover, Select, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
+import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Input, List, Popover, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
 import { Eye, Filter, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import './process-quality.css';
-import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { useCompletedSessionNavigation, useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { preferenceKey } from '../../ui/ledger/model';
@@ -16,7 +16,7 @@ import { ProcessDefectEditor } from './ProcessDefectEditor';
 import { ProcessDefectDeletionDialog } from './ProcessDefectDeletionDialog';
 import { ProcessLedgerAction } from './ProcessLedgerAction';
 import { ProcessAiDescription } from './ProcessAiDescription';
-import { categoryLabels, categoryOptions, CompletionStatus, denied, MappingHint, ProcessError, useProcessWrite, verificationLabels } from './process-ledger';
+import { categoryLabels, categoryOptions, CompletionStatus, denied, MappingHint, ProcessError, verificationLabels } from './process-ledger';
 
 type Defect = components['schemas']['ProcessDefectDto'];
 type DefectPage = components['schemas']['ProcessDefectPageDto'];
@@ -150,8 +150,6 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const [editor, setEditor] = useState<Defect | 'new'>();
   const [suppliers, setSuppliers] = useState<components['schemas']['SupplierProfileDto'][]>([]);
   const [supplierError, setSupplierError] = useState<unknown>();
-  const [classification, setClassification] = useState<NonNullable<Defect['responsibilityCategory']>>();
-  const [actionError, setActionError] = useState<unknown>();
   const [action, setAction] = useState<{ mode: 'close' | 'reopen' | 'verification'; record: Defect; materialId?: string }>();
   const [deletionTargets, setDeletionTargets] = useState<Defect[]>();
   const [deletionOpen, setDeletionOpen] = useState(false);
@@ -183,9 +181,6 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   useEffect(() => {
     if (unauthorized) completeSessionNavigation(() => { useWorkTabsStore.getState().reset(); navigate('/login', { replace: true }); });
   }, [unauthorized, completeSessionNavigation, navigate]);
-  const batchWriter = useProcessWrite(revoke);
-  useNavigationBusy(batchWriter.busy);
-  useUnsavedChanges(batchWriter.uncertain);
   const requestLeave = useNavigationGuard();
 
   useEffect(() => {
@@ -225,16 +220,6 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     setDetail(current => current?.id === record.id ? record : current);
     setRevision(value => value + 1);
   }
-  async function classify() {
-    if (!classification || batchWriter.busy) return;
-    setActionError(undefined);
-    try {
-      const body: components['schemas']['ClassifyProcessDefectsDto'] = { sources: Object.values(selected).map(record => ({ defectId: record.id, expectedVersion: record.version })), responsibilityCategory: classification };
-      const value = await batchWriter.write<components['schemas']['ProcessDefectClassificationResultDto']>('/api/v1/process-quality/defects/classification', body);
-      if (alive.current) { setSelected(current => Object.fromEntries(Object.entries(current).map(([id, record]) => [id, value.items.find(item => item.id === id) ?? record]))); setRevision(value => value + 1); }
-    } catch (cause) { if (alive.current) setActionError(cause); }
-  }
-
   useEffect(() => {
     if (accessLost) return;
     const controller = new AbortController(); listController.current = controller;
@@ -294,7 +279,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
 
   const selectedCount = Object.keys(selected).length;
   const staleSelected = (result?.items ?? []).filter(item => selected[item.id] && selected[item.id].version !== item.version);
-  const locked = batchWriter.busy || batchWriter.uncertain || formalOpen || deletionOpen;
+  const locked = formalOpen || deletionOpen;
   const selectablePage = (result?.items ?? []).filter(record => !record.archivedAt);
   const selectedOnPage = selectablePage.filter(record => selected[record.id]);
   function openDeletion(records: Defect[]) { requestLeave(() => { setDeletionTargets(records); setDeletionOpen(true); }); }
@@ -310,21 +295,22 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       });
     });
   }
-  const filterDirty = filterOpen && JSON.stringify(draftFilters) !== JSON.stringify(appliedFilters);
-  useUnsavedChanges(filterDirty);
   useEffect(() => { if (filterOpen) filterControl.current?.focus(); }, [filterOpen, filterRow]);
-  function dismissFilters() { setFilterOpen(false); setDraftFilters(appliedFilters); filterAnchor.current?.focus(); }
-  function closeFilters() { if (filterDirty) requestLeave(dismissFilters, true); else dismissFilters(); }
-  function saveAppliedFilters(next: FilterState, nextSearch = search, reset = false) {
+  const completeDraft = { ...draftFilters, items: draftFilters.items.filter(item => emptyOperator(item.operator) || filterValue(item) !== undefined) };
+  const draftTooLong = filtersTooLong(serializeFilters(completeDraft));
+  const changesSelection = filterOpen && !draftTooLong && (completeDraft.currentMonth !== appliedFilters.currentMonth || serializeFilters(completeDraft) !== serializedFilters);
+  function saveAppliedFilters(next: FilterState, submittedSearch?: string, reset = false, restoreFocus = true) {
+    const nextSearch = submittedSearch ?? search;
     const nextFilters = serializeFilters(next);
-    if (locked || deletionTargets || filtersTooLong(nextFilters)) return;
+    if (locked || deletionTargets || filtersTooLong(nextFilters)) return false;
     const changed = nextSearch !== search || next.currentMonth !== appliedFilters.currentMonth || nextFilters !== serializedFilters;
-    if (changed) { setSelected({}); setPage(1); setResult(undefined); setLoading(true); setActionError(undefined); }
-    setSearchInput(nextSearch);
-    saveFilterPreference(reset ? undefined : { search: nextSearch, filters: next });
+    if (changed) { setSelected({}); setPage(1); setResult(undefined); setLoading(true); }
+    if (submittedSearch !== undefined) setSearchInput(nextSearch);
+    if (reset || changed || next.logic !== appliedFilters.logic) saveFilterPreference(reset ? undefined : { search: nextSearch, filters: next });
     setFilterOpen(false);
     setDraftFilters(next);
-    if (filterOpen) filterAnchor.current?.focus();
+    if (filterOpen && restoreFocus) filterAnchor.current?.focus();
+    return true;
   }
   function openFilters(anchor: HTMLElement, field?: FilterField) {
     filterAnchor.current = anchor;
@@ -336,18 +322,24 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     setFilterOpen(true);
   }
   function filterTitle(field: FilterField, label: string) {
-    return <span aria-label={label} className="process-quality-filter-title"><span>{label}</span><button type="button" aria-label={`按${label}筛选`} aria-pressed={appliedFilters.items.some(item => item.field === field) || field === 'occurredAt' && appliedFilters.currentMonth} disabled={locked || !!deletionTargets} onClick={event => { event.stopPropagation(); openFilters(event.currentTarget, field); }}><Filter size={13} aria-hidden="true" /></button></span>;
+    return <span aria-label={label} className="process-quality-filter-title"><span>{label}</span><button type="button" aria-label={`按${label}筛选`} aria-haspopup="dialog" aria-expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === `按${label}筛选`} aria-pressed={appliedFilters.items.some(item => item.field === field) || field === 'occurredAt' && appliedFilters.currentMonth} disabled={locked || !!deletionTargets} onClick={event => { event.stopPropagation(); openFilters(event.currentTarget, field); }}><Filter size={13} aria-hidden="true" /></button></span>;
   }
   function updateFilterItem(index: number, next: FilterItem) {
     setDraftFilters(current => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? next : item) }));
   }
-  const draftTooLong = filtersTooLong(serializeFilters(draftFilters));
-  const filterPanel = <div role="dialog" className="process-quality-filter-panel" aria-label="筛选面板" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); closeFilters(); } }}>
-    <div className="process-quality-filter-heading"><strong>筛选条件</strong><Button type="text" aria-label="关闭筛选" icon={<X size={14} />} onClick={closeFilters} /></div>
+  const filterPanel = <div role="dialog" className="process-quality-filter-panel" aria-label="筛选面板"
+    onBlur={event => {
+      const next = event.relatedTarget;
+      if (next && next !== filterTrigger.current && next !== filterAnchor.current && !event.currentTarget.contains(next)) {
+        saveAppliedFilters(completeDraft, undefined, false, false);
+      }
+    }}
+    onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); saveAppliedFilters(completeDraft); } }}>
+    <div className="process-quality-filter-heading"><strong>筛选条件</strong><Button type="text" aria-label="关闭筛选" icon={<X size={14} />} onClick={() => saveAppliedFilters(completeDraft)} /></div>
     <Checkbox checked={draftFilters.currentMonth} onChange={event => setDraftFilters(current => ({ ...current, currentMonth: event.target.checked }))}>仅当前自然月（北京时间）</Checkbox>
-    <label>满足条件
+    <div className="process-quality-filter-logic"><span>满足条件</span>
       <select ref={filterRow === undefined ? filterControl : undefined} aria-label="筛选逻辑" value={draftFilters.logic} onChange={event => setDraftFilters(current => ({ ...current, logic: event.target.value as FilterLogic }))}><option value="ALL">全部条件</option><option value="ANY">任一条件</option></select>
-    </label>
+    </div>
     <div className="process-quality-filter-rows">
       {draftFilters.items.map((item, index) => <div className="process-quality-filter-row" key={index}>
         <select ref={filterRow === index ? filterControl : undefined} aria-label={`筛选字段 ${index + 1}`} value={item.field} onChange={event => updateFilterItem(index, filterItem(event.target.value))}>{filterFields.map(([field, label]) => <option key={field} value={field}>{label}</option>)}</select>
@@ -361,7 +353,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       <Button disabled={draftFilters.items.length >= 10} onClick={() => { setFilterRow(draftFilters.items.length); setDraftFilters(current => ({ ...current, items: [...current.items, filterItem('description')] })); }}>添加筛选条件</Button>
       <Button onClick={() => saveAppliedFilters(defaultFilters, '', true)}>恢复系统默认筛选</Button>
       <Button aria-label="清空" onClick={() => setDraftFilters({ currentMonth: false, logic: 'ALL', items: [] })}>清空</Button>
-      <Button type="primary" disabled={draftTooLong || draftFilters.items.some(item => !emptyOperator(item.operator) && filterValue(item) === undefined)} onClick={() => saveAppliedFilters(draftFilters)}>应用筛选</Button>
+      <Button type="primary" disabled={draftTooLong} onClick={() => saveAppliedFilters(completeDraft)}>应用筛选</Button>
     </Space>
   </div>;
   if (accessLost) return <main className="process-quality-page"><Alert type="warning" showIcon title="暂无制程不良访问权限" description="当前会话或权限已变化，已清除来源、选择与草稿；请重新进入。" /></main>;
@@ -395,31 +387,27 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   ] satisfies TableColumnsType<Defect>).map(column => 'onHeaderCell' in column ? column : { ...column, onHeaderCell: () => ({ 'aria-label': typeof column.title === 'string' ? column.title : column.title.props['aria-label'] }) });
 
   const toolbar = <div className="process-quality-toolbar-main" role="group" aria-label="台账工具栏">
-    <Input.Search aria-label="搜索制程不良" placeholder="搜索追溯码、成品编码、工单、不良描述或批次" value={searchInput} allowClear maxLength={200} disabled={locked || !!deletionTargets} onChange={event => setSearchInput(event.target.value)} onSearch={value => requestLeave(() => saveAppliedFilters(appliedFilters, value.trim()))} />
+    <Input.Search aria-label="搜索制程不良" placeholder="搜索追溯码、成品编码、工单、不良描述或批次" value={searchInput} allowClear maxLength={200} disabled={locked || !!deletionTargets} onChange={event => setSearchInput(event.target.value)} onSearch={value => requestLeave(() => saveAppliedFilters(filterOpen ? completeDraft : appliedFilters, value.trim()))} />
     {canWrite ? <Button type="primary" disabled={locked} onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
-    <Popover open={filterOpen} onOpenChange={open => { if (open && filterTrigger.current) openFilters(filterTrigger.current); else if (!open && filterOpen) closeFilters(); }} afterOpenChange={open => { if (open) filterControl.current?.focus(); }} content={filterPanel} trigger="click" placement="bottomLeft" align={{ overflow: { shiftX: true } }} destroyOnHidden><Button ref={filterTrigger} aria-label="筛选条件" aria-haspopup="dialog" aria-expanded={filterOpen} disabled={locked || !!deletionTargets} icon={<Filter size={14} />}>筛选条件{appliedFilters.items.length || appliedFilters.currentMonth ? ` ${appliedFilters.items.length + Number(appliedFilters.currentMonth)}` : ''}</Button></Popover>
-    {canIssue ? <Button aria-label="发起 8D" disabled={locked || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起 8D</Button> : null}
-    <Button aria-label="刷新" disabled={locked} onClick={() => requestLeave(() => { if (filterOpen) dismissFilters(); setRevision(value => value + 1); })} loading={loading}>刷新</Button>
+    <Popover open={filterOpen} onOpenChange={open => { if (open && filterTrigger.current) openFilters(filterTrigger.current); else if (!open && filterOpen) saveAppliedFilters(completeDraft, undefined, false, false); }} afterOpenChange={open => { if (open) filterControl.current?.focus(); }} content={filterPanel} trigger="click" placement="bottomLeft" align={{ overflow: { shiftX: true } }} destroyOnHidden><Button ref={filterTrigger} aria-label="筛选条件" aria-haspopup="dialog" aria-expanded={filterOpen} disabled={locked || !!deletionTargets} icon={<Filter size={14} />}>筛选条件{appliedFilters.items.length || appliedFilters.currentMonth ? ` ${appliedFilters.items.length + Number(appliedFilters.currentMonth)}` : ''}</Button></Popover>
+    {canIssue ? <Button aria-label="发起 8D" disabled={locked || filterOpen || !selectedCount || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起 8D</Button> : null}
+    <Button aria-label="刷新" disabled={locked} onClick={() => requestLeave(() => { if (!filterOpen || saveAppliedFilters(completeDraft, undefined, false, false)) setRevision(value => value + 1); })} loading={loading}>刷新</Button>
   </div>;
 
-  return <main className="process-quality-page">
+  return <main className={`process-quality-page${selectedCount ? ' process-quality-page--selected' : ''}`}>
     <h1 className="sr-only">不良品台账</h1>
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${issued.problem.id}`}>查看问题</Link>} /> : null}
     <section className="process-quality-card process-quality-compact-ledger">
-      {selectedCount ? <div className="process-quality-batch-toolbar" role="group" aria-label="台账批量操作">
-        <Typography.Text type="secondary">已选择 {Object.keys(selected).length} 条来源</Typography.Text>
-        <Typography.Text type="secondary">跨页保留，最多100条</Typography.Text>
-        {selectedCount ? <Button disabled={locked} onClick={() => requestLeave(() => setSelected({}))}>清空选择</Button> : null}
-        {canWrite ? <><Select aria-label="批量责任分类" placeholder="批量分类" value={classification} options={categoryOptions} disabled={locked} onChange={setClassification} /><Button disabled={locked || !selectedCount || !classification || !!staleSelected.length} onClick={() => requestLeave(() => void classify())}>应用分类</Button></> : null}
-        {canDelete ? <Button danger disabled={locked || !!deletionTargets || !selectedCount || loading || !!listError || !!staleSelected.length} onClick={() => openDeletion(Object.values(selected))}>删除所选</Button> : null}
+      {selectedCount ? <div className="process-quality-selection-bar" role="toolbar" aria-label="台账批量操作">
+        <span aria-live="polite">已选择 {selectedCount} 条来源</span>
+        <Button disabled={locked || !!deletionTargets} onClick={() => requestLeave(() => setSelected({}))}>取消选择</Button>
+        {canDelete ? <Button danger disabled={locked || filterOpen || !!deletionTargets || loading || !!listError || !!staleSelected.length} onClick={() => openDeletion(Object.values(selected))}>删除所选</Button> : null}
       </div> : <span className="sr-only" role="status">已选择 0 条来源</span>}
       {deletionTargets && !deletionOpen ? <Alert type="warning" title="删除结果尚待确认" action={<Button onClick={() => setDeletionOpen(true)}>恢复删除操作</Button>} /> : null}
       {staleSelected.length ? <Alert type="warning" title="所选来源版本已更新。" action={<Button disabled={locked} onClick={() => requestLeave(() => setSelected(current => ({ ...current, ...Object.fromEntries(staleSelected.map(item => [item.id, item])) })))}>更新所选版本</Button>} /> : null}
-      <ProcessError cause={actionError} fallback="批量分类失败，保留选择，请重试。" />
-      {batchWriter.uncertain ? <Alert type="warning" title="分类结果未知，选择已锁定；重试复用原请求。" action={<Button loading={batchWriter.busy} onClick={() => void classify()}>同请求重试分类</Button>} /> : null}
       <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
       {listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : null}
-      {!listError ? <LedgerTable<Defect> ledgerId="process-defects" organizationId={targetOrganizationId} viewId={viewId} toolbarContent={toolbar} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search || appliedFilters.currentMonth || appliedFilters.items.length ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { if (filterOpen) dismissFilters(); setPage(size === pageSize ? next : 1); setPageSize(size); }); }, placement: ['bottomStart'] }} /> : toolbar}
+      {!listError ? <LedgerTable<Defect> compactHeaders ledgerId="process-defects" organizationId={targetOrganizationId} viewId={viewId} toolbarContent={toolbar} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} scroll={{ x: 1800 }} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search || appliedFilters.currentMonth || appliedFilters.items.length ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { if (filterOpen && !saveAppliedFilters(completeDraft, undefined, false, false)) return; setPage(size === pageSize && !changesSelection ? next : 1); setPageSize(size); }); }, placement: ['bottomStart'] }} /> : toolbar}
     </section>
     <Drawer title="来源详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden>
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>

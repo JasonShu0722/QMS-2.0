@@ -676,6 +676,57 @@ describe('LedgerTable', () => {
     expect(headings.getAllByRole('columnheader')[0]).toHaveTextContent('名称');
     Reflect.deleteProperty(document, 'elementFromPoint');
   });
+  it('reorders from the compact header surface without treating a filter click or small move as a drag', () => {
+    const onColumnOrderChange = vi.fn();
+    const onFilter = vi.fn();
+    render(<LedgerTable ledgerId="compact-header" compactHeaders columns={[{ ...columns[0], title: <span aria-label="编号">编号<button onClick={onFilter}>筛选编号</button></span> }, ...columns.slice(1)]} dataSource={data} pagination={false} onColumnOrderChange={onColumnOrderChange} />);
+    const filter = screen.getByRole('button', { name: '筛选编号' });
+    const source = filter.closest('th')!;
+    const target = screen.getByRole('columnheader', { name: '名称' });
+    expect(source.querySelector('.qms-ledger__grip')).toBeNull();
+    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => target });
+    try {
+      fireEvent.pointerDown(filter, { clientX: 10, pointerId: 1 });
+      fireEvent.pointerMove(filter, { clientX: 250, pointerId: 1 });
+      fireEvent.pointerUp(filter, { clientX: 250, pointerId: 1 });
+      fireEvent.click(filter);
+      expect(onFilter).toHaveBeenCalledOnce();
+      fireEvent.pointerDown(source, { clientX: 10, pointerId: 1 });
+      fireEvent.pointerMove(source, { clientX: 13, pointerId: 1 });
+      fireEvent.pointerUp(source, { clientX: 13, pointerId: 1 });
+      expect(onColumnOrderChange).not.toHaveBeenCalled();
+      fireEvent.pointerDown(source, { clientX: 10, pointerId: 1 });
+      fireEvent.pointerMove(source, { clientX: 250, pointerId: 1 });
+      fireEvent.pointerUp(source, { clientX: 250, pointerId: 1 });
+      expect(onColumnOrderChange).toHaveBeenCalledExactlyOnceWith(['b', 'a', 'action']);
+      fireEvent.keyDown(source, { key: 'ArrowLeft' });
+      expect(onColumnOrderChange).toHaveBeenLastCalledWith(['a', 'b', 'action']);
+    } finally { Reflect.deleteProperty(document, 'elementFromPoint'); }
+  });
+  it('clamps compact header widths to the title and cell spacing across cached and edited widths', () => {
+    const key = preferenceKey({ sessionScope: 'INTERNAL:home:user', portal: 'business' }, 'compact-minimum', 'columns')!;
+    localStorage.setItem(key, JSON.stringify({ schema: 1, value: { order: ['a'], visible: ['a'], widths: { a: 64 }, fixed: {} } }));
+    const inlineWidth = vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+      return this.classList.contains('qms-ledger__title') ? 70 : 0;
+    });
+    render(<LedgerTable ledgerId="compact-minimum" compactHeaders columns={[{ ...columns[0], title: '项目状态', onHeaderCell: () => ({ style: { paddingInlineStart: 12, paddingInlineEnd: 12 } }) }]} dataSource={data} pagination={false} />);
+    expect(inlineWidth).toHaveBeenCalled();
+    const separator = screen.getByRole('separator', { name: '调整列宽 项目状态' });
+    const minimum = Number(separator.getAttribute('aria-valuemin'));
+    expect(minimum).toBeGreaterThanOrEqual(94);
+    expect(separator).toHaveAttribute('aria-valuenow', String(minimum));
+    fireEvent.keyDown(separator, { key: 'ArrowLeft' });
+    expect(separator).toHaveAttribute('aria-valuenow', String(minimum));
+    settings();
+    const input = screen.getByRole('spinbutton', { name: '列宽 项目状态' });
+    fireEvent.change(input, { target: { value: '64' } });
+    fireEvent.blur(input);
+    expect(input).toHaveValue(minimum);
+    fireEvent.pointerDown(separator, { clientX: 100, pointerId: 1 });
+    fireEvent.pointerMove(separator, { clientX: 0, pointerId: 1 });
+    fireEvent.pointerUp(separator, { clientX: 0, pointerId: 1 });
+    expect(separator).toHaveAttribute('aria-valuenow', String(minimum));
+  });
   it('scope changes during a width drag cannot write old preferences into the new target', () => {
     const props = { ledgerId: 'drag-scope', columns, dataSource: data, pagination: false as const };
     const { rerender } = render(<LedgerTable {...props} organizationId="target-a" />);

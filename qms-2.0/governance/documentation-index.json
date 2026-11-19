@@ -698,7 +698,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/index.tsx",
-            "sha256": "da218f97705a47a3134c3bd022710a71a7941abafc6110fbc31c591921e694f0"
+            "sha256": "e3f4da0d3de1509956bb19857c09bfb19576478a3cb10e74c98f8baf5241951d"
           },
           {
             "path": "apps/web/src/ui/ledger/model.ts",
@@ -710,11 +710,11 @@
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.css",
-            "sha256": "502f96416a2eec7e08505e19fd7ead08b3a056faaf20082083bdd2234b564e31"
+            "sha256": "df247147aec8e48be2d9fd1542e82fb8fe4777dabdd90ed75f1faa1b550dc290"
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.test.tsx",
-            "sha256": "aa222fa0e2f469d32da423c0146288f52d2f3f626e193e04228b03c2db7b4296"
+            "sha256": "228d14447658669e6a1a6e31fa62456d3ef9dbd8e32c41528267976ac848c649"
           },
           {
             "path": "apps/web/src/ui/ledger/model.test.ts",
