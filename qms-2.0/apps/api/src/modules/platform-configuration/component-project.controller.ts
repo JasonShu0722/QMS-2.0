@@ -7,7 +7,7 @@ import { RequireAccess } from '../authorization/access.decorator.js';
 import { MasterDataBulkDeleteDto, MasterDataBulkDeleteResultDto } from '../../common/master-data/master-data-bulk-delete.dto.js';
 import { ComponentProjectService } from './component-project.service.js';
 import {
-  ComponentProjectScopeDto, ComponentProjectListQueryDto, ComponentProjectMappingsQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
+  ComponentProjectScopeDto, ComponentProjectRecordsQueryDto, ComponentProjectMappingsQueryDto, ComponentEngineerAssignmentsQueryDto, ResolveComponentProjectQueryDto,
   CreateComponentProjectRecordDto, UpdateComponentProjectRecordDto, CreateComponentProjectMappingDto, UpdateComponentProjectMappingDto,
   ComponentProjectRecordDto, ComponentProjectMappingDto, ComponentProjectRecordsPageDto, ComponentProjectMappingsPageDto,
   ComponentEngineerAssignmentsPageDto, ComponentProjectResolutionDto,
@@ -31,7 +31,7 @@ export class ComponentProjectController {
   }
 
   @Get('component-project-records') @RequireAccess(readAccess) @ApiOkResponse({ type: ComponentProjectRecordsPageDto })
-  listProjects(@Query() query: ComponentProjectListQueryDto, @Req() request: AuthorizedRequest) {
+  listProjects(@Query() query: ComponentProjectRecordsQueryDto, @Req() request: AuthorizedRequest) {
     return this.service.listProjects(this.actor(request), request.authorizedOrganizationId!, query);
   }
 

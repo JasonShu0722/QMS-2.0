@@ -60,6 +60,9 @@ const english: Record<string, string> = {
   '查看项目': 'View project', '关闭编辑器': 'Close editor',
   '批量设置': 'Bulk changes', '预览影响': 'Preview impact', '确认应用': 'Confirm and apply', '请至少选择一个批量字段': 'Enable at least one field',
   '设置关联项目': 'Set project', '设置项目阶段': 'Set project stage', '设置客户质量工程师': 'Set customer quality engineer', '设置项目质量工程师': 'Set project quality engineer',
+  '使用项目编码 {code}': 'Use project code {code}', '输入项目编码或选择项目': 'Enter a project code or select a project',
+  '新增并选中项目': 'Create and select project', '返回批量设置': 'Back to bulk settings',
+  '重新查询项目编码': 'Check the project code again',
   '设置产品大类': 'Set product category', '设置产品细分': 'Set product subcategory', '清空客户质量工程师': 'Clear customer quality engineer', '清空项目质量工程师': 'Clear project quality engineer', '清空产品细分': 'Clear product subcategory',
   '仅勾选的字段会修改；空白不代表清空。共享项目修改会影响该项目的全部组件。': 'Only enabled fields change. Blank does not mean clear. Shared project changes affect all its components.',
   '同项目另有 {count} 条未选组件': '{count} additional unselected components share this project',
@@ -148,7 +151,9 @@ function EngineerPicker({ organizationId, id, value, onChange, disabled, onReady
   </div>;
 }
 
-function ProjectPicker({ organizationId, id, value, onChange, disabled, onReady, onUnauthorized, initialProject, includeDisabled = true, allowClear = false, onRecord }: PickerProps & { initialProject?: ProjectDisplay | null; includeDisabled?: boolean; allowClear?: boolean; onRecord?: (record: Project | undefined) => void }) {
+const useTypedProjectCode = 'use-typed-project-code';
+
+function ProjectPicker({ organizationId, id, value, onChange, disabled, onReady, onUnauthorized, initialProject, includeDisabled = true, allowClear = false, onRecord, onUseCode }: PickerProps & { initialProject?: ProjectDisplay | null; includeDisabled?: boolean; allowClear?: boolean; onRecord?: (record: Project | undefined) => void; onUseCode?: (code: string) => void }) {
   const t = useCopy();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -192,12 +197,17 @@ function ProjectPicker({ organizationId, id, value, onChange, disabled, onReady,
   }, [organizationId, value, revision, onReady, onUnauthorized, includeDisabled, onRecord]);
   const choices: ProjectDisplay[] = (result?.items ?? []).filter(item => item.organizationId === organizationId);
   if (selected && selected.id === value && !choices.some(item => item.id === value)) choices.unshift(selected);
+  const typedCode = search.trim();
   return <div className="governance-panel">
-    <Select id={id} aria-label={t('关联项目')} value={value ?? undefined} disabled={disabled} loading={loading || selectedLoading} virtual={false}
+    <Select id={id} aria-label={t('关联项目')} value={value ?? null} disabled={disabled} loading={loading || selectedLoading} virtual={false}
       showSearch={{ filterOption: false, onSearch: next => { setSearch(next); setPage(1); } }}
       allowClear={allowClear} onClear={() => { onReady(false); onRecord?.(undefined); onChange?.(null); }}
-      onChange={next => { const choice = choices.find(item => item.id === next); setSelected(choice); onReady(false); onChange?.(next ?? null); }}
-      placeholder={t('请选择关联项目')} options={[
+      onChange={next => {
+        if (next === useTypedProjectCode && onUseCode) { onUseCode(typedCode); return; }
+        const choice = choices.find(item => item.id === next); setSelected(choice); onReady(false); onChange?.(next ?? null);
+      }}
+      placeholder={t(onUseCode ? '输入项目编码或选择项目' : '请选择关联项目')} options={[
+        ...(onUseCode && typedCode ? [{ value: useTypedProjectCode, label: t('使用项目编码 {code}').replace('{code}', () => typedCode) }] : []),
         ...choices.map(item => ({ value: item.id, label: projectLabel(item, t), disabled: !includeDisabled && item.status !== 'ACTIVE' })),
         ...(value && !choices.some(item => item.id === value) ? [{ value, label: t('已选项目待确认'), disabled: true }] : []),
       ]} notFoundContent={loading ? t('加载中') : error ? t('加载失败') : t('无匹配结果')} />
@@ -230,6 +240,8 @@ function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange,
   const [cleared, setCleared] = useState<Set<keyof BulkChanges>>(() => new Set());
   const [preview, setPreview] = useState<{ input: BulkPreviewInput; result: BulkPreviewResult }>();
   const [uncertain, setUncertain] = useState<BulkApplyInput>();
+  const [draftCode, setDraftCode] = useState<string>();
+  const [uncertainProject, setUncertainProject] = useState<CreateProject>();
   const [error, setError] = useState<unknown>();
   const [validation, setValidation] = useState<string>();
   const [dirty, setDirty] = useState(false);
@@ -239,6 +251,7 @@ function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange,
   const [engineerReady, setEngineerReady] = useState(false);
   const [previewMutation] = useState(createAdminMutation);
   const [applyMutation] = useState(createAdminMutation);
+  const [projectMutation] = useState(createAdminMutation);
   const alive = useRef(false);
   const lifetime = useRef<AbortController | undefined>(undefined);
   const pending = useRef(false);
@@ -262,8 +275,47 @@ function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange,
     setCleared(previous => { const next = new Set(previous); if (checked) next.add(key); else next.delete(key); return next; });
     form.setFieldValue(key, checked ? null : undefined); invalidate();
   }
+  function selectProject(project: Project) {
+    if (form.getFieldValue('projectRecordId') !== project.id) setProjectReady(false);
+    form.setFieldValue('projectRecordId', project.id);
+    setDraftCode(undefined);
+    invalidate();
+  }
+  async function useProjectCode(code: string) {
+    if (pending.current || !current() || uncertain || uncertainProject) return;
+    pending.current = true; setBusy(true); invalidate();
+    try {
+      const query = new URLSearchParams({ exactCode: code });
+      const result = await apiRequest<ProjectsPage>(`${configurationPath(organizationId, 'component-project-records')}&${query}`, { signal: lifetime.current?.signal });
+      if (!current()) return;
+      const project = result.items[0];
+      if (project) {
+        if (project.organizationId !== organizationId || project.code !== code) throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
+        selectProject(project);
+      } else setDraftCode(code);
+    } catch (cause) {
+      if (!current()) return;
+      setError(cause);
+      if (cause instanceof ApiError && cause.status === 401) onUnauthorized(cause);
+    } finally { pending.current = false; if (current()) setBusy(false); }
+  }
+  async function createProject(input: CreateProject) {
+    if (pending.current || !current() || !draftCode) return;
+    pending.current = true; setBusy(true); setError(undefined);
+    try {
+      const result = await projectMutation<Project>(configurationPath(organizationId, 'component-project-records'), 'POST', input, lifetime.current?.signal, record => {
+        if (!record?.id || record.organizationId !== organizationId || record.code !== input.code) throw new Error('Invalid project creation response');
+      });
+      if (current()) { setUncertainProject(undefined); selectProject(result); }
+    } catch (cause) {
+      if (!current()) return;
+      setError(cause);
+      setUncertainProject(!(cause instanceof ApiError) || cause.status !== undefined && cause.status >= 500 ? input : undefined);
+      if (cause instanceof ApiError && cause.status === 401) onUnauthorized(cause);
+    } finally { pending.current = false; if (current()) setBusy(false); }
+  }
   async function loadPreview(values: BulkChanges) {
-    if (pending.current || uncertain) return;
+    if (pending.current || uncertain || draftCode) return;
     if (!enabled.size) { setValidation(t('请至少选择一个批量字段')); return; }
     if (enabled.has('projectRecordId') && !projectReady || enabled.has('customerEngineerAssignmentId') && !cleared.has('customerEngineerAssignmentId') && !customerReady || enabled.has('projectEngineerAssignmentId') && !cleared.has('projectEngineerAssignmentId') && !engineerReady) return;
     const changes: BulkChanges = {};
@@ -298,6 +350,7 @@ function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange,
   function close() { if (!pending.current) leave(() => { if (current()) onClose(); }, true); }
   const frozen = busy || !!uncertain;
   const required = [{ required: true, message: t('请填写必填内容') }];
+  const stages = [{ value: 'NEW_PRODUCT', label: t('新品') }, { value: 'MASS_PRODUCTION', label: t('量产') }];
   const fields: Array<{ key: keyof BulkChanges; label: string }> = [
     { key: 'projectRecordId', label: '关联项目' }, { key: 'stage', label: '项目阶段' },
     { key: 'customerEngineerAssignmentId', label: '客户质量工程师' }, { key: 'projectEngineerAssignmentId', label: '项目质量工程师' },
@@ -305,23 +358,36 @@ function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange,
   ];
   return <Modal title={t('批量设置')} open onCancel={close} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} footer={null} width={640}>
     <Typography.Paragraph>{t('仅勾选的字段会修改；空白不代表清空。共享项目修改会影响该项目的全部组件。')}</Typography.Paragraph>
-    <Typography.Paragraph type="secondary">{t('未映射组件调整阶段或工程师时，必须同时选择关联项目。')}</Typography.Paragraph>
-    <Form form={form} name="component-project-bulk" layout="vertical" disabled={frozen} onValuesChange={invalidate} onFinish={loadPreview}>
-      <GovernanceFeedback error={error} />
+    <GovernanceFeedback error={error} />
+    {draftCode && <Form<Pick<CreateProject, 'name' | 'stage'>> name="bulk-new-project" layout="vertical" disabled={busy || !!uncertainProject}
+      initialValues={{ stage: enabled.has('stage') ? form.getFieldValue('stage') : undefined }} onFinish={values => void createProject({ code: draftCode, name: values.name.trim(), stage: values.stage })}>
+      <Form.Item label={t('项目编码')} htmlFor="bulk-new-project-code"><Input id="bulk-new-project-code" value={draftCode} readOnly /></Form.Item>
+      <Form.Item name="name" label={t('项目名称')} rules={[{ ...required[0], whitespace: true }]}><Input autoFocus maxLength={200} /></Form.Item>
+      <Form.Item name="stage" label={t('项目阶段')} rules={required}><Select aria-label={t('项目阶段')} virtual={false} options={stages} /></Form.Item>
+      {uncertainProject && <Typography.Paragraph role="status">{t('保存结果尚未确认，请使用原请求重试。')}</Typography.Paragraph>}
+      <div className="qms-dialog-actions">
+        <Button disabled={busy || !!uncertainProject} onClick={() => { setDraftCode(undefined); setError(undefined); }}>{t('返回批量设置')}</Button>
+        {!!error && !uncertainProject && <Button disabled={busy} onClick={() => void useProjectCode(draftCode)}>{t('重新查询项目编码')}</Button>}
+        {uncertainProject ? <Button disabled={busy} onClick={() => void createProject(uncertainProject)}>{t('重试原请求')}</Button>
+          : <Button type="primary" htmlType="submit" loading={busy}>{t('新增并选中项目')}</Button>}
+      </div>
+    </Form>}
+    <Form hidden={!!draftCode} form={form} name="component-project-bulk" layout="vertical" disabled={frozen || !!draftCode} onValuesChange={invalidate} onFinish={loadPreview}>
+      <Typography.Paragraph type="secondary">{t('未映射组件调整阶段或工程师时，必须同时选择关联项目。')}</Typography.Paragraph>
       {validation && <Typography.Paragraph role="alert">{validation}</Typography.Paragraph>}
       {fields.map(({ key, label }) => <div key={key} className="governance-panel">
         <Checkbox checked={enabled.has(key)} onChange={event => toggle(key, event.target.checked)}>{t(`设置${label}`)}</Checkbox>
         {enabled.has(key) && <>
           {(key === 'customerEngineerAssignmentId' || key === 'projectEngineerAssignmentId' || key === 'productSubcategory') && <Checkbox checked={cleared.has(key)} onChange={event => clear(key, event.target.checked)}>{t(`清空${label}`)}</Checkbox>}
           <Form.Item name={key} label={t(label)} rules={cleared.has(key) ? [] : [...required, ...(key === 'productCategory' || key === 'productSubcategory' ? [{ whitespace: true, message: t('请填写必填内容') }] : [])]}>
-            {key === 'projectRecordId' ? <ProjectPicker organizationId={organizationId} disabled={frozen} onReady={setProjectReady} onUnauthorized={onUnauthorized} />
-              : key === 'stage' ? <Select aria-label={t(label)} virtual={false} options={[{ value: 'NEW_PRODUCT', label: t('新品') }, { value: 'MASS_PRODUCTION', label: t('量产') }]} />
+            {key === 'projectRecordId' ? <ProjectPicker organizationId={organizationId} disabled={frozen || !!draftCode} onReady={setProjectReady} onUnauthorized={onUnauthorized} onUseCode={useProjectCode} />
+              : key === 'stage' ? <Select aria-label={t(label)} virtual={false} options={stages} />
                 : key === 'customerEngineerAssignmentId' || key === 'projectEngineerAssignmentId' ? <EngineerPicker organizationId={organizationId} label={t(label)} disabled={frozen || cleared.has(key)} onReady={key === 'customerEngineerAssignmentId' ? setCustomerReady : setEngineerReady} onUnauthorized={onUnauthorized} />
                   : <Input maxLength={100} disabled={frozen || cleared.has(key)} />}
           </Form.Item>
         </>}
       </div>)}
-      {uncertain ? <><Typography.Paragraph role="status">{t('保存结果尚未确认，请使用原请求重试。')}</Typography.Paragraph><Button disabled={busy} loading={busy} onClick={() => void apply(uncertain)}>{t('重试原请求')}</Button></> : <Button htmlType="submit" loading={busy}>{t('预览影响')}</Button>}
+      {uncertain ? <><Typography.Paragraph role="status">{t('保存结果尚未确认，请使用原请求重试。')}</Typography.Paragraph><Button disabled={busy} loading={busy} onClick={() => void apply(uncertain)}>{t('重试原请求')}</Button></> : <Button htmlType="submit" loading={busy} disabled={frozen || enabled.has('projectRecordId') && !projectReady}>{t('预览影响')}</Button>}
       {preview && !uncertain && <section aria-label={t('预览影响')} className="governance-panel">
         <Typography.Text strong>{t('选中 {selected} 条，影响 {affected} 条组件').replace('{selected}', String(preview.result.selectedCount)).replace('{affected}', String(preview.result.affectedMappingsCount))}</Typography.Text>
         <Typography.Text type="secondary">{t('共享字段发生变化时，同项目未选组件也会受影响；实际影响数以预览结果为准。')}</Typography.Text>

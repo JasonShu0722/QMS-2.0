@@ -190,9 +190,16 @@ describe('atomic component bulk configuration with real PostgreSQL / HTTP', () =
   it('never defaults an unmapped component to a project or mass production', async () => {
     const f = await fixture();
     const id = await mapping(f);
-    for (const changes of [{ stage: 'MASS_PRODUCTION' as const }, { projectEngineerAssignmentId: null }]) await post(f, 'bulk-preview', body([id], changes)).expect(409);
-    expect((await apply(f, body([id], { productCategory: 'Body' }))).body.updatedMappingCount).toBe(1);
-    expect(await readMapping(id)).toMatchObject({ project_record_id: null, version: 2 });
+    for (const changes of [{ stage: 'MASS_PRODUCTION' as const }, { projectEngineerAssignmentId: null }]) {
+      const input = body([id], changes);
+      const previewResult = await post(f, 'bulk-preview', input).expect(409);
+      const applyResult = await post(f, 'bulk-apply', { ...input, previewToken: 'a'.repeat(64) }).expect(409);
+      for (const result of [previewResult, applyResult]) {
+        expect(result.body).toMatchObject({ code: 'COMPONENT_PROJECT_LINK_REQUIRED', message: '所选组件中有未关联项目的记录，请先设置关联项目' });
+      }
+    }
+    expect((await apply(f, body([id], { productCategory: 'Body' }))).body).toMatchObject({ updatedMappingCount: 1, updatedProjectCount: 0 });
+    expect(await readMapping(id)).toMatchObject({ project_record_id: null, product_category: 'Body', version: 2 });
     const p = await project(f);
     const input = { selection: [{ id, expectedVersion: 2 }], changes: { projectRecordId: p, stage: 'MASS_PRODUCTION' as const } };
     expect((await apply(f, input)).body).toMatchObject({ updatedMappingCount: 1, updatedProjectCount: 1 });
@@ -308,8 +315,8 @@ describe('atomic component bulk configuration with real PostgreSQL / HTTP', () =
     const assignmentId = state === 'missing' ? randomUUID() : (await engineer(state === 'foreign' ? await fixture() : f,
       new Date(Date.now() + (state === 'future' ? 86_400_000 : -120_000)), state === 'ended' ? new Date(Date.now() - 1_000) : null)).assignment.id;
     const input = body([id], { customerEngineerAssignmentId: assignmentId });
-    await post(f, 'bulk-preview', input).expect(409);
-    await post(f, 'bulk-apply', { ...input, previewToken: 'a'.repeat(64) }).expect(409);
+    expect((await post(f, 'bulk-preview', input).expect(409)).body.code).toBe('STRUCTURE_REFERENCE_INVALID');
+    expect((await post(f, 'bulk-apply', { ...input, previewToken: 'a'.repeat(64) }).expect(409)).body.code).toBe('STRUCTURE_REFERENCE_INVALID');
     expect((await readProject(p)).version).toBe(1);
     expect((await readMapping(id)).version).toBe(1);
   });

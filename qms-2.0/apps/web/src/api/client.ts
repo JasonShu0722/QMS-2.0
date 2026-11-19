@@ -196,6 +196,7 @@ export function safeAccountError(cause: unknown): string {
     ORGANIZATION_DISABLED: '组织已停用',
     ORGANIZATION_HIERARCHY_INVALID: '组织层级关系不合法',
     STRUCTURE_REFERENCE_INVALID: '部门、岗位或任职引用不合法',
+    COMPONENT_PROJECT_LINK_REQUIRED: '所选组件中有未关联项目的记录，请先设置关联项目',
     STRUCTURE_DISABLED: '部门或岗位已停用',
     ADMIN_USER_ORGANIZATION_IN_USE: '该用户仍关联业务记录，无法变更主组织',
     ADMIN_ROLE_IN_USE: '角色仍在使用，请先解除用户分配',

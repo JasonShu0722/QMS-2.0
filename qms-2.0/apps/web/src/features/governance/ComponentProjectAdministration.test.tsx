@@ -439,6 +439,92 @@ function bulkServer(applyStatus = 200) {
   return requests;
 }
 
+it.each(['existing', 'new', 'concurrent'] as const)('uses an exact project code in the bulk draft (%s)', async mode => {
+  const target = mode === 'existing' ? { ...project, code: `P$&${'𠮷'.repeat(51)}` } : { ...project, id: 'new-project', code: 'AB911', name: '新项目' };
+  const writes: Array<{ path: string; body: unknown }> = [];
+  let exists = mode === 'existing';
+  let failNextLookup = false;
+  server({ intercept: (url, init) => {
+    if (url.searchParams.has('exactCode')) {
+      expect(url.searchParams.get('exactCode')).toBe(target.code);
+      expect(url.searchParams.get('organizationId')).toBe(organization.id);
+      if (failNextLookup) {
+        failNextLookup = false;
+        return Promise.resolve(json({ code: 'TEMPORARY_UNAVAILABLE', traceId: 'lookup-failed' }, 503));
+      }
+      const items = exists ? [target] : [];
+      return Promise.resolve(json({ items, total: items.length, page: 1, pageSize: 20 }));
+    }
+    if (init.method === 'POST' && (/component-project-records$|bulk-preview$/.test(url.pathname))) {
+      writes.push({ path: url.pathname, body: JSON.parse(String(init.body)) });
+      if (mode === 'concurrent' && url.pathname.endsWith('/component-project-records')) {
+        exists = true;
+        failNextLookup = true;
+        return Promise.resolve(json({ code: 'CONCURRENCY_CONFLICT', traceId: 'existing-project' }, 409));
+      }
+      return Promise.resolve(json(url.pathname.endsWith('/bulk-preview') ? bulkPreview : target));
+    }
+    if (url.pathname.endsWith(`/component-project-records/${target.id}`)) return Promise.resolve(json(target));
+    return undefined;
+  } });
+  mount(); const dialog = await openBulk();
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: '设置产品大类' }));
+  fireEvent.change(within(dialog).getByLabelText('产品大类'), { target: { value: 'BMS' } });
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: '设置关联项目' }));
+  const selector = within(dialog).getByRole('combobox', { name: '关联项目' });
+  fireEvent.mouseDown(selector);
+  fireEvent.change(selector, { target: { value: target.code } });
+  fireEvent.click(await screen.findByRole('option', { name: `使用项目编码 ${target.code}` }));
+  if (mode !== 'existing') {
+    expect(await within(dialog).findByLabelText('项目编码')).toHaveValue(target.code);
+    if (mode === 'new') {
+      fireEvent.click(within(dialog).getByRole('button', { name: '返回批量设置' }));
+      fireEvent.mouseDown(selector);
+      fireEvent.change(selector, { target: { value: target.code } });
+      fireEvent.click(await screen.findByRole('option', { name: `使用项目编码 ${target.code}` }));
+      expect(await within(dialog).findByLabelText('项目编码')).toHaveValue(target.code);
+    }
+    fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: target.name } });
+    await choose('项目阶段', '新品');
+    fireEvent.click(within(dialog).getByRole('button', { name: '新增并选中项目' }));
+    if (mode === 'concurrent') {
+      fireEvent.click(await within(dialog).findByRole('button', { name: '重新查询项目编码' }));
+      await within(dialog).findByText('lookup-failed');
+      expect(within(dialog).getByLabelText('项目名称')).toHaveValue(target.name);
+      fireEvent.click(within(dialog).getByRole('button', { name: '重新查询项目编码' }));
+    }
+    await waitFor(() => expect(within(dialog).queryByLabelText('项目编码')).not.toBeInTheDocument());
+    expect(writes[0].body).toEqual({ code: target.code, name: target.name, stage: 'NEW_PRODUCT' });
+  }
+  await waitFor(() => expect(within(dialog).getByRole('button', { name: '预览影响' })).toBeEnabled());
+  expect(within(dialog).getByLabelText('产品大类')).toHaveValue('BMS');
+  fireEvent.click(within(dialog).getByRole('button', { name: '预览影响' }));
+  await within(dialog).findByRole('button', { name: '确认应用' });
+  expect(writes).toHaveLength(mode === 'existing' ? 1 : 2);
+  expect(writes.at(-1)?.body).toEqual({ selection: [{ id: mapping.id, expectedVersion: mapping.version }], changes: { projectRecordId: target.id, productCategory: 'BMS' } });
+}, 90000);
+
+it('explains the missing project and lets the user preview classification alone', async () => {
+  const changes: unknown[] = [];
+  server({ mappings: [{ ...mapping, projectRecordId: null, project: null }], intercept: (url, init) => {
+    if (!url.pathname.endsWith('/bulk-preview')) return undefined;
+    const input = JSON.parse(String(init.body)); changes.push(input.changes);
+    return Promise.resolve(input.changes.stage ? json({ code: 'COMPONENT_PROJECT_LINK_REQUIRED', traceId: 'bulk-link' }, 409) : json(bulkPreview));
+  } });
+  mount(); const dialog = await openBulk();
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: '设置项目阶段' }));
+  await choose('项目阶段', '量产');
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: '设置产品细分' }));
+  fireEvent.change(within(dialog).getByLabelText('产品细分'), { target: { value: '从控' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '预览影响' }));
+  await within(dialog).findByText('所选组件中有未关联项目的记录，请先设置关联项目');
+  fireEvent.click(within(dialog).getByRole('checkbox', { name: '设置项目阶段' }));
+  expect(within(dialog).getByLabelText('产品细分')).toHaveValue('从控');
+  fireEvent.click(within(dialog).getByRole('button', { name: '预览影响' }));
+  await within(dialog).findByRole('button', { name: '确认应用' });
+  expect(changes).toEqual([{ stage: 'MASS_PRODUCTION', productSubcategory: '从控' }, { productSubcategory: '从控' }]);
+});
+
 it('previews shared project impact and applies only explicitly enabled fields after confirmation', async () => {
   const requests = bulkServer(); mount(); const dialog = await openBulk();
   fireEvent.click(within(dialog).getByRole('checkbox', { name: '设置项目阶段' }));
