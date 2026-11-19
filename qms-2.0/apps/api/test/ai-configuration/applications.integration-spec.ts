@@ -29,7 +29,7 @@ describe('central prompt applications with PostgreSQL and actual model requests'
   });
   afterAll(async () => { server?.closeAllConnections(); await new Promise<void>(resolve => server?.close(() => resolve())); await prisma.$disconnect();
     if (originalNodeEnv === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = originalNodeEnv; });
-  async function fixture(codes = ['ai:applications:read', 'ai:applications:manage', 'ai:applications:publish', 'ai:applications:test', 'ai:connections:manage', 'ai:credentials:manage']) {
+  async function fixture(codes = ['ai:applications:read', 'ai:applications:manage', 'ai:applications:publish', 'ai:applications:test', 'ai:connections:manage', 'ai:credentials:manage', 'audit:read', 'ingestion:read', 'process-quality:defects:read']) {
     const organization = await prisma.organization.create({ data: { code: randomUUID(), name: 'Application disposable scope', type: 'INTERNAL' } });
     const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'test-only', accountType: 'INTERNAL' } });
     const session = await prisma.session.create({ data: { userId: user.id, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 3600000), reauthenticatedAt: new Date(), mfaVerifiedAt: new Date() } });
@@ -97,12 +97,22 @@ describe('central prompt applications with PostgreSQL and actual model requests'
     const scope = await setup();
     const draft = await applications.create(scope.actor, scope.organizationId, scope.input, randomUUID(), randomUUID());
     const input = { expectedVersion: 1, samples: [{ variable: 'fact', value: '受控样本敏感事实' }] }, key = randomUUID();
-    expect(await applications.test(scope.actor, scope.organizationId, draft.id, input, randomUUID(), key)).toMatchObject({ status: 'SUCCESS', text: '已整理的现场事实' });
+    const traceId = randomUUID();
+    expect(await applications.test(scope.actor, scope.organizationId, draft.id, input, traceId, key)).toMatchObject({ status: 'SUCCESS', text: '已整理的现场事实' });
     expect(payload).toContain('受控样本敏感事实'); expect(payload).not.toContain('disposable-application-key');
     const receipts = await prisma.adminMutation.findMany({ where: { organizationId: scope.organizationId } });
     const events = await prisma.auditEvent.findMany({ where: { organizationId: scope.organizationId } });
     for (const value of [receipts, events]) { expect(JSON.stringify(value)).not.toContain('受控样本敏感事实'); expect(JSON.stringify(value)).not.toContain('已整理的现场事实'); }
     expect(await applications.test(scope.actor, scope.organizationId, draft.id, input, randomUUID(), key)).toMatchObject({ status: 'SUCCESS' });
+    const next = await connections.create(scope.actor, scope.organizationId, { name: '新渠道', baseUrl, models: ['next-model'], defaultModel: 'next-model', enabled: true, apiKey: 'disposable-next-application-key' }, randomUUID(), randomUUID());
+    await applications.update(scope.actor, scope.organizationId, draft.id, { ...scope.input, expectedVersion: 1, connectionId: next.id, model: 'next-model', output: { ...scope.input.output, mode: 'JSON' } }, randomUUID(), randomUUID());
+    expect(await applications.test(scope.actor, scope.organizationId, draft.id, { ...input, expectedVersion: 2 }, randomUUID(), randomUUID())).toMatchObject({ status: 'FAILED' });
+    const original = { connectionId: scope.connection.id, connectionVersion: scope.connection.version, model: 'sample-model', outputMode: 'TEXT' };
+    expect(events.find(event => event.action === 'AI_APPLICATION_TESTED' && event.traceId === traceId)?.metadata).toEqual({ resourceVersion: 1, reasonCode: 'AI_APPLICATION_OK', ...original });
+    expect(receipts.find(receipt => receipt.key === key)?.response).toEqual({ value: { applicationId: draft.id, version: 1, connectionVersion: scope.connection.version } });
+    const history = await applications.listInvocations(scope.actor, scope.organizationId, draft.id, {});
+    expect(history.items.find(record => record.traceId === traceId)).toMatchObject({ status: 'SUCCESS', applicationVersion: 1, ...original });
+    expect(history.items.find(record => record.status === 'FAILED')).toMatchObject({ applicationVersion: 2, connectionId: next.id, connectionVersion: next.version, model: 'next-model', outputMode: 'JSON' });
   });
   it('rechecks application CAS and actor access after an in-flight model request', async () => {
     const scope = await setup();

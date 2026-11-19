@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Button, Descriptions, Form, Input, Modal, Select, Space, Tag, type TableProps } from 'antd';
 import { RefreshCw } from 'lucide-react';
 import type { components } from '@qms/contracts';
+import { ApiError } from '../../api/client';
 import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { isAborted, useScopedIntegrationRequests, type IntegrationScope } from '../api-integrations/integration-ui';
@@ -69,7 +70,7 @@ function JobDetail({ scope, initial, endpointName, close, changed, canReceipts }
       <Button onClick={() => requestLeave(close, true)}>{text('关闭', 'Close')}</Button>
     </div>
     {control && job && <JobControl scope={scope} job={job} action={control} close={() => setControl(undefined)} saved={() => { setControl(undefined); reload(); }} />}
-    {selected && canReceipts && <ItemDetail scope={scope} item={selected} canRun={canRun} close={() => setSelected(undefined)} saved={() => { setSelected(undefined); reload(); }} />}
+    {selected && canReceipts && <ItemDetail scope={scope} item={selected} canRun={canRun} processLedger={initial.target === 'PROCESS_DEFECT'} receiptRemoved={!parent && job?.receiptId === null} close={() => setSelected(undefined)} saved={() => { setSelected(undefined); reload(); }} />}
   </Modal>;
 }
 function JobControl({ scope, job, action, close, saved }: { scope: IntegrationScope; job: Job; action: components['schemas']['IngestionControlDto']['action']; close: () => void; saved: () => void }) {
@@ -85,7 +86,7 @@ function JobControl({ scope, job, action, close, saved }: { scope: IntegrationSc
     </Form>
   </Modal>;
 }
-function ItemDetail({ scope, item, canRun, close, saved }: { scope: IntegrationScope; item: Item; canRun: boolean; close: () => void; saved: () => void }) {
+function ItemDetail({ scope, item, canRun, processLedger, receiptRemoved, close, saved }: { scope: IntegrationScope; item: Item; canRun: boolean; processLedger: boolean; receiptRemoved: boolean; close: () => void; saved: () => void }) {
   const text = useIngestionText(); const english = text('zh', 'en') === 'en'; const requestLeave = useNavigationGuard();
   const { read, current } = useScopedIntegrationRequests(scope); const mutation = useIngestionMutation(scope);
   const [detail, setDetail] = useState<components['schemas']['IngestionItemDetailDto']>(); const [error, setError] = useState<unknown>(); const [loading, setLoading] = useState(true); const [revision, setRevision] = useState(0); const [dirty, setDirty] = useState(false);
@@ -105,10 +106,19 @@ function ItemDetail({ scope, item, canRun, close, saved }: { scope: IntegrationS
     void mutation.execute<Item>({ path: `${ingestionPath}/items/${detail.id}/${confirm ? 'confirm' : 'skip'}`, method: 'POST', body }, () => { setDirty(false); saved(); });
   }
   const actionable = !!detail && ['PENDING', 'AWAITING_CONFIRMATION', 'VALIDATION_FAILED', 'PROCESSING_FAILED'].includes(detail.status);
+  let differenceError: string | undefined;
+  if (error instanceof ApiError && error.code === 'INTEGRATION_RECEIPT_NOT_FOUND') {
+    differenceError = receiptRemoved
+      ? text('原始接收记录已清理，无法计算差异', 'The original receiving record was removed, so differences cannot be calculated')
+      : text('原始接收记录不可用，可能已清理，无法计算差异', 'The original receiving record is unavailable and may have been removed, so differences cannot be calculated');
+  } else if (error instanceof ApiError && error.code === 'INTEGRATION_PAYLOAD_EXPIRED') {
+    differenceError = text('原始接收正文已清理，无法计算差异', 'The original received payload has expired, so differences cannot be calculated');
+  }
   return <Modal open title={text(`数组第${item.rowIndex + 1}行`, `Array row ${item.rowIndex + 1}`)} width={700} footer={null} mask={{ closable: false }} closable={!mutation.locked} keyboard={!mutation.locked} onCancel={() => { if (!mutation.locked) requestLeave(close, true); }}>
     <div className="qms-ingestion-section">
       <Space><Button icon={<RefreshCw size={15} />} loading={loading} disabled={mutation.locked} onClick={() => setRevision(value => value + 1)}>{text('刷新差异', 'Refresh differences')}</Button>{detail && <Tag>{label(detail.status, english)}</Tag>}</Space>
-      <IngestionError error={error} />
+      <IngestionError error={error} title={differenceError} />
+      {differenceError && processLedger && item.targetId && <ProcessIngestionResult result={item} organizationId={scope.organizationId} />}
       {detail && <>{detail.stale && <Alert type="warning" showIcon title={text('当前档案已变化，旧差异不可确认覆盖', 'The current record changed; these differences cannot overwrite it')} />}{detail.errorCode && <Alert type="warning" title={text('条目处理异常', 'Item processing error')} description={<>{ingestionIssue(detail.errorCode, english)}{detail.errorField && <div className="qms-ingestion-secondary">{text('字段', 'Field')}: <code>{detail.errorField}</code></div>}</>} />}{detail.duplicateOfItemId && <Alert type="info" showIcon title={text('已关联既有待确认项', 'Linked to an existing confirmation')} description={<>{text('关联条目编号', 'Linked item ID')}: <code>{detail.duplicateOfItemId}</code></>} />}<IngestionFields fields={detail.fields} differences={detail.differences} /></>}
       {canRun && actionable && <Form form={form} layout="vertical" className="qms-ingestion-form" disabled={mutation.locked} onValuesChange={() => setDirty(true)}>
         <Form.Item name="reason" label={text('确认 / 跳过原因', 'Confirmation / skip reason')} rules={[{ required: true, whitespace: true }]}><Input.TextArea maxLength={300} autoSize={{ minRows: 2, maxRows: 4 }} /></Form.Item>

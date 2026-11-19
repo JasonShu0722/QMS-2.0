@@ -5,11 +5,13 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { adminError, assertAdminAccess, AdminMutationService, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import type { AiDescriptionOutput } from '../../common/ai-description.js';
+import { aiDescriptionRuntimeRecords } from '../api-integration/ai-description-runtime.read-model.js';
+import { aiApplicationTestMetadata, aiApplicationTestRecords } from '../audit-log/ai-application-test.read-model.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 import { AiConnectionService } from './ai-connection.service.js';
 import { aiApplicationError, applicationIdentifiers, applicationSamples, applicationVersion, normalizeAiApplication } from './ai-application.policy.js';
-import type { AiApplicationDto, AiApplicationPageDto, AiApplicationQueryDto, AiApplicationRevisionDto, AiApplicationSettingsDto, AiApplicationTestResultDto, TestAiApplicationDto, UpdateAiApplicationDto } from './ai-application.dto.js';
+import type { AiApplicationDto, AiApplicationInvocationDto, AiApplicationInvocationPageDto, AiApplicationPageDto, AiApplicationQueryDto, AiApplicationRevisionDto, AiApplicationSettingsDto, AiApplicationTestResultDto, TestAiApplicationDto, UpdateAiApplicationDto } from './ai-application.dto.js';
 import type { AiConnectionVersionDto } from './ai-connection.dto.js';
 
 export type AiApplicationBinding = { applicationId: string; publishedVersion: number; inputFields: { path: string; variable: string; label?: string }[] };
@@ -17,6 +19,14 @@ export type ApplicationDescriptionSnapshot = { connectionId: string; connectionV
 type BindingResult = { binding: AiApplicationBinding; aiDescription: ApplicationDescriptionSnapshot };
 type ApplicationRow = { id: string; organization_id: string; configuration: AiApplicationSettingsDto; enabled: boolean; version: number; availability_version: number; published_version: number | null; created_at: Date; updated_at: Date };
 type RevisionRow = { application_id: string; organization_id: string; published_version: number; configuration: AiApplicationSettingsDto; created_at: Date };
+type InvocationRow = Omit<AiApplicationInvocationDto, 'organizationId' | 'applicationVersion' | 'recordedAt'> & { version: string | null; recordedAt: Date; testMetadata: Prisma.JsonValue };
+export const aiApplicationInvocationPermissions = ['ai:applications:read', 'audit:read', 'ingestion:read', 'process-quality:defects:read'];
+const connectionFailureCode = /^AI_CONNECTION_(INVALID|NOT_FOUND|UNAVAILABLE|VERSION_CONFLICT|TARGET_DENIED|REQUEST_FAILED|TIMEOUT|RESPONSE_INVALID|RESPONSE_TOO_LARGE)$/;
+function applicationPaging(query: AiApplicationQueryDto) {
+  const page = query.page ?? 1, limit = query.limit ?? 20;
+  if (!Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) aiApplicationError('AI_APPLICATION_INVALID');
+  return { page, limit };
+}
 const dto = (row: ApplicationRow): AiApplicationDto => ({ ...row.configuration, enabled: row.enabled, id: row.id, organizationId: row.organization_id, version: row.version,
   publishedVersion: row.published_version, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString() });
 const revisionDto = (row: RevisionRow): AiApplicationRevisionDto => ({ applicationId: row.application_id, organizationId: row.organization_id,
@@ -28,8 +38,7 @@ export class AiApplicationService {
 
   async list(actor: AdminActor, organizationId: string, query: AiApplicationQueryDto): Promise<AiApplicationPageDto> {
     applicationIdentifiers(organizationId);
-    const page = query.page ?? 1, limit = query.limit ?? 20;
-    if (!Number.isSafeInteger(page) || page < 1 || page > 10000 || !Number.isSafeInteger(limit) || limit < 1 || limit > 100) aiApplicationError('AI_APPLICATION_INVALID');
+    const { page, limit } = applicationPaging(query);
     return this.prisma.$transaction(async tx => {
       await this.access(tx, actor, organizationId);
       const rows = await tx.$queryRaw<ApplicationRow[]>`SELECT * FROM ai_prompt_applications WHERE organization_id=${organizationId}::uuid ORDER BY configuration->>'name',id LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
@@ -46,6 +55,26 @@ export class AiApplicationService {
   async readRevision(actor: AdminActor, organizationId: string, id: string, publishedVersion: number): Promise<AiApplicationRevisionDto> {
     applicationIdentifiers(organizationId, id); applicationVersion(publishedVersion);
     return this.prisma.$transaction(async tx => { await this.access(tx, actor, organizationId); return revisionDto(await this.revision(tx, organizationId, id, publishedVersion)); });
+  }
+
+  async listInvocations(actor: AdminActor, organizationId: string, id: string, query: AiApplicationQueryDto): Promise<AiApplicationInvocationPageDto> {
+    applicationIdentifiers(organizationId, id);
+    const { page, limit } = applicationPaging(query);
+    return this.prisma.$transaction(async tx => {
+      await assertActiveAuthentication(tx, actor, 'SHARE');
+      await this.access(tx, actor, organizationId, aiApplicationInvocationPermissions);
+      await this.row(tx, organizationId, id);
+      const records = Prisma.sql`(${aiApplicationTestRecords(organizationId, id)} UNION ALL ${aiDescriptionRuntimeRecords(organizationId, id)}) AS records`;
+      const rows = await tx.$queryRaw<InvocationRow[]>`SELECT * FROM ${records} ORDER BY "recordedAt" DESC, source, id DESC LIMIT ${limit} OFFSET ${(page - 1) * limit}`;
+      const [count] = await tx.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM ${records}`;
+      const items = rows.map(({ version, recordedAt, testMetadata, ...record }) => {
+        const parsedVersion = Number(version);
+        const applicationVersion = Number.isInteger(parsedVersion) && parsedVersion >= 1 && parsedVersion <= 2147483647 ? parsedVersion : null;
+        return { ...record, ...(record.source === 'APPLICATION_TEST' ? aiApplicationTestMetadata(testMetadata) : {}), organizationId, applicationVersion, recordedAt: recordedAt.toISOString(),
+          errorCode: record.source === 'RUNTIME_TASK' || record.status === 'FAILED' && connectionFailureCode.test(record.errorCode ?? '') ? record.errorCode : null };
+      });
+      return { items, total: count!.total, page, limit };
+    }, { isolationLevel: 'RepeatableRead' });
   }
 
   async create(actor: AdminActor, organizationId: string, input: AiApplicationSettingsDto, traceId: string, key?: string): Promise<AiApplicationDto> {
@@ -108,13 +137,14 @@ export class AiApplicationService {
       { model: configuration.model, prompt: configuration.prompt, output: configuration.output, selectedData })).text; }
     catch (error) {
       const reason = error instanceof HttpException ? (error.getResponse() as { code?: string }).code : undefined;
-      code = typeof reason === 'string' && /^AI_CONNECTION_(INVALID|NOT_FOUND|UNAVAILABLE|VERSION_CONFLICT|TARGET_DENIED|REQUEST_FAILED|TIMEOUT|RESPONSE_INVALID|RESPONSE_TOO_LARGE)$/.test(reason) ? reason : 'AI_CONNECTION_REQUEST_FAILED';
+      code = typeof reason === 'string' && connectionFailureCode.test(reason) ? reason : 'AI_CONNECTION_REQUEST_FAILED';
     }
     await this.prisma.$transaction(async tx => {
       await this.access(tx, actor, organizationId, 'ai:applications:test'); await assertActiveAuthentication(tx, actor);
       const row = await this.row(tx, organizationId, id); this.match(row, preparation.version);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'AI_APPLICATION_TESTED', resourceType: 'AiApplication', resourceId: id,
-        outcome: text === null ? 'FAILURE' : 'SUCCESS', traceId, metadata: { resourceVersion: row.version, reasonCode: code } }, tx);
+        outcome: text === null ? 'FAILURE' : 'SUCCESS', traceId, metadata: { resourceVersion: row.version, reasonCode: code,
+          connectionId: configuration.connectionId, connectionVersion: preparation.connectionVersion, model: configuration.model, outputMode: configuration.output.mode } }, tx);
     });
     return { applicationId: id, version: preparation.version, status: text === null ? 'FAILED' : 'SUCCESS', code, text };
   }
@@ -210,7 +240,7 @@ export class AiApplicationService {
     if (!organization || organization.type !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
     if (organization.status !== 'ACTIVE' || organization.deletedAt || organization.configurationRequired) adminError('ORGANIZATION_DISABLED', 403);
   }
-  private async access(tx: AdminTransaction, actor: AdminActor, organizationId: string, permission = 'ai:applications:read') {
+  private async access(tx: AdminTransaction, actor: AdminActor, organizationId: string, permission: string | string[] = 'ai:applications:read') {
     if (actor.accountType !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
     await assertAdminAccess(tx, actor, organizationId, permission); await this.organization(tx, organizationId);
   }

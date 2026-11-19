@@ -39,6 +39,12 @@ describe('platform error HTTP contract', () => {
     expect(JSON.stringify(response.body)).not.toMatch(/SELECT|password|private|token|secret/);
   });
 
+  it('returns a controlled HTTP 409 for an all-empty AI description retry', async () => {
+    const response = await request(app.getHttpServer()).get('/errors/409/AI_DESCRIPTION_INPUT_EMPTY').expect(409);
+    expect(response.body).toEqual({ code: 'AI_DESCRIPTION_INPUT_EMPTY', message: 'AI整理所选字段均为空，请补充来源数据', fields: {},
+      traceId: response.headers['x-test-trace-id'] });
+  });
+
   it.each(['PROBLEM_NOT_FOUND', 'UNKNOWN', 'UNEXPECTED'])('always returns the generic 500 message for %s', async (code) => {
     const response = await request(app.getHttpServer()).get(`/errors/500/${code}`).expect(500);
     expect(response.body).toEqual({ code: 'INTERNAL_ERROR', message: '服务暂时不可用', fields: {},

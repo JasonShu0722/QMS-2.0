@@ -1174,6 +1174,23 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect(await worker.processDue(10)).toBe(2);
   });
 
+  it.each([
+    { removeReceipt: false, code: 'INTEGRATION_PAYLOAD_EXPIRED' },
+    { removeReceipt: true, code: 'INTEGRATION_RECEIPT_NOT_FOUND' },
+  ])('keeps $code on the failed row and the blocked job', async ({ removeReceipt, code }) => {
+    const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);
+    const receiptId = await received(item, [{ code: 'blocked-source', name: '仅保留受控诊断' }]);
+    const { jobId } = await submitSingle(item, configuration, receiptId);
+    if (removeReceipt) await prisma.integrationReceipt.delete({ where: { id: receiptId } });
+    else await prisma.integrationReceipt.update({ where: { id: receiptId }, data: { payloadCiphertext: null, payloadBytes: 0 } });
+
+    expect(await worker.processDue(10)).toBe(1);
+    expect(await service.getJob(item.actor, jobId)).toMatchObject({ status: 'BLOCKED', errorCode: code });
+    const rows = await service.listItems(item.actor, jobId, {});
+    expect(rows.items).toEqual([expect.objectContaining({ status: 'PROCESSING_FAILED', errorCode: code, errorField: null })]);
+    expect(await inspect(item, 'MATERIAL', 'blocked-source')).toBeNull();
+  });
+
   it('rolls back target writes when item persistence fails, blocks later jobs, and recovers durably', async () => {
     const item = await fixture(); await rule(item);
     await machine(item, [{ code: 'atomic-fault', name: 'first' }]); await machine(item, [{ code: 'atomic-fault', name: 'second' }]);

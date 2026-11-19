@@ -11,7 +11,7 @@ import { assertIntegrationOrganization, integrationInteger, integrationScope, lo
 import { IngestionTargetsService, type IngestionTargetFields, type IngestionTargetRecord, type IngestionTargetResult } from './ingestion-targets.service.js';
 import { ingestionInputProtected } from './ingestion-input.read-model.js';
 import { evaluateIngestionRow, ingestionError, ingestionTargetPermission, normalizeIngestionRule, processDefectSourceFields, selectedDescriptionInput, type IngestionFields, type IngestionRule } from './ingestion.policy.js';
-import { AiDescriptionService } from './ai-description.service.js';
+import { AiDescriptionService, failureCode } from './ai-description.service.js';
 import { MaterialMasterService } from '../material-master/material-master.service.js';
 import type { AiIngestionPreviewDto } from './ai-description.dto.js';
 import type { ProcessCompletionVersion } from '../process-quality/process-defect-completion.service.js';
@@ -34,6 +34,15 @@ const ruleDto = (row: RuleRow): IngestionRuleDto => ({ ...row.configuration, org
 const aiRuleIdentity = (ai: IngestionRule['aiDescription']) => ai ? JSON.stringify([ai.connectionId, ai.model, ai.prompt, ai.inputFields.map(field => [field.path, field.label ?? '', field.variable]), ai.output.mode, ai.output.field, ai.output.target]) : null;
 const aiBindingIdentity = (binding: IngestionRule['aiApplication']) => binding ? JSON.stringify([binding.applicationId, binding.publishedVersion, binding.inputFields.map(field => [field.path, field.label ?? '', field.variable])]) : null;
 const displayedFields = (fields: IngestionFields): Record<string, string> => Object.fromEntries(Object.entries(fields).filter((entry): entry is [string, string] => typeof entry[1] === 'string' && !['receiptId', 'sourceObservedAt'].includes(entry[0]) && !(entry[0] === 'name' && (fields as IntegrationFields).componentNameMissing)));
+function aiDifferenceSummary(value: string | null): string | null {
+  if (value === null) return null;
+  const { ruleVersion, connectionVersion, model, output, errorCode } = JSON.parse(value) as {
+    ruleVersion?: number; connectionVersion?: number; model?: string; output?: { mode: string }; errorCode?: string;
+  };
+  return JSON.stringify({ ruleVersion, connectionVersion, model, outputMode: output?.mode, errorCode });
+}
+const displayedDifferences = (differences: IngestionDifferenceDto[]) => differences.map(difference => difference.field === 'aiDescription'
+  ? { ...difference, before: aiDifferenceSummary(difference.before), after: aiDifferenceSummary(difference.after) } : difference);
 const sameMaterialBaseline = (first: ComponentMaterialBaseline | undefined, second: ComponentMaterialBaseline | null | undefined) => JSON.stringify(first ?? null) === JSON.stringify(second ?? null);
 function proposedChanges(rule: IngestionRule, fields: IngestionFields, current: IngestionTargetRecord) {
   const componentNameMissing = rule.target === 'COMPONENT' && (fields as IntegrationFields).componentNameMissing === true;
@@ -56,6 +65,7 @@ function proposedChanges(rule: IngestionRule, fields: IngestionFields, current: 
   return { permitted, differences, issues };
 }
 const errorCode = (error: unknown): string => error instanceof HttpException ? String((error.getResponse() as { code?: string }).code ?? 'INGESTION_PROCESSING_FAILED') : 'INGESTION_PROCESSING_FAILED';
+const retryableJobFailures = ['INGESTION_PROCESSING_FAILED', 'INTEGRATION_PAYLOAD_EXPIRED'];
 const validationField = (error: HttpException, rule: IngestionRule): string => {
   const field = (error.getResponse() as { field?: unknown }).field;
   const controlled = [...Object.values(rule.mapping), ...rule.conditions.map(condition => condition.path), rule.sourceUpdatedAtField];
@@ -212,16 +222,21 @@ export class IngestionService {
       if (input.rowIndex >= rows.length) ingestionError('INGESTION_RULE_INVALID');
       const evaluated = evaluateIngestionRow(rule.configuration, rows[input.rowIndex]);
       if (!evaluated.matched) ingestionError('INGESTION_RULE_INVALID');
-      if ((evaluated.fields as ProcessDefectIntegrationFields).issues?.includes('description:INVALID')) ingestionError('INGESTION_RULE_INVALID');
+      const processFields = evaluated.fields as ProcessDefectIntegrationFields;
       const fields = selectedDescriptionInput(rule.configuration, rows[input.rowIndex]);
-      if (Buffer.byteLength(JSON.stringify(fields)) > 32768) ingestionError('INGESTION_RULE_INVALID');
       await this.event(tx, actor, organizationId, 'AI_DESCRIPTION_PREVIEWED', rule.id, traceId, { ruleVersion: rule.version, receiptId: receipt.id, rowIndex: input.rowIndex });
-      return { direct: (evaluated.fields as ProcessDefectIntegrationFields).description ?? '', fields, ai: rule.configuration.aiDescription, application: rule.configuration.aiApplication };
+      return { direct: processFields.description ?? '', invalidDirect: processFields.issues?.includes('description:INVALID'), fields, ai: rule.configuration.aiDescription, application: rule.configuration.aiApplication };
     });
-    let text: string | null = null;
-    try { text = await this.ai!.preview(actor, { connectionId: snapshot.ai.connectionId, model: snapshot.ai.model, prompt: snapshot.ai.prompt, fields: snapshot.fields, output: snapshot.ai.output, application: snapshot.application }); } catch {}
+    let text: string | null = null, previewErrorCode: string | null = null;
+    try {
+      text = await this.ai!.preview(actor, { connectionId: snapshot.ai.connectionId, model: snapshot.ai.model, prompt: snapshot.ai.prompt, fields: snapshot.fields,
+        inputFields: snapshot.ai.inputFields, output: snapshot.ai.output, application: snapshot.application, invalidDirect: snapshot.invalidDirect });
+    } catch (error) {
+      previewErrorCode = failureCode(error);
+    }
     await this.prisma.$transaction(async tx => { await this.access(tx, actor, 'ingestion:run', true, 'PROCESS_DEFECT'); await this.rule(tx, integrationScope(actor), input.ruleId, input.ruleVersion); });
-    return { directDescription: snapshot.direct, inputFields: snapshot.fields, aiDescription: text, status: text === null ? 'FAILED' : 'SUCCEEDED' };
+    const showInput = previewErrorCode !== 'AI_DESCRIPTION_INPUT_INVALID' && previewErrorCode !== 'AI_DESCRIPTION_INPUT_TOO_LARGE';
+    return { directDescription: snapshot.direct, inputFields: showInput ? snapshot.fields : [], aiDescription: text, status: text === null ? 'FAILED' : 'SUCCEEDED', errorCode: previewErrorCode, traceId };
   }
   private payload(receipt: ReceiptRow): unknown[] {
     const value: unknown = JSON.parse(decryptSecret(receipt.payload_ciphertext!, `integration:${receipt.organization_id}:${receipt.endpoint_id}:${receipt.id}`));
@@ -299,7 +314,7 @@ export class IngestionService {
       const evaluation = await this.evaluate(tx, actor, rule.configuration, rows[input.rowIndex], receipt, 'SINGLE', input.rowIndex, rule.id, rule.version);
       const process = rule.configuration.target === 'PROCESS_DEFECT', fields = evaluation.fields as ProcessDefectIntegrationFields | undefined;
       const result = evaluation.current ? (await this.targets.results(tx, actor, rule.configuration.target, [evaluation.current.id]))[0] : undefined;
-      return { ...preview, action: evaluation.action, ...(evaluation.errorCode ? { errorCode: evaluation.errorCode } : {}), ...(evaluation.errorField ? { errorField: evaluation.errorField } : {}), ...(evaluation.fields ? { fields: displayedFields(evaluation.fields) } : {}), ...(evaluation.current ? { targetId: evaluation.current.id } : {}), ...(rule.configuration.componentNameLookup ? { materialMatched: evaluation.componentMaterialSnapshot !== null, materialNameSource: 'MATERIAL_MASTER' as const } : {}), ...(process && fields ? { pendingCompletion: result?.pendingCompletion ?? (['occurredAt', 'productCode', 'traceCode', 'description', 'externalRecordKey'].some(field => !fields[field as keyof ProcessDefectIntegrationFields]) || !!fields.issues?.length), ...(result ? { pendingConfiguration: result.pendingConfiguration } : {}), registrationIssues: fields.issues ?? [], defectQuantity: result?.defectQuantity ?? 1 } : {}), differences: evaluation.differences };
+      return { ...preview, action: evaluation.action, ...(evaluation.errorCode ? { errorCode: evaluation.errorCode } : {}), ...(evaluation.errorField ? { errorField: evaluation.errorField } : {}), ...(evaluation.fields ? { fields: displayedFields(evaluation.fields) } : {}), ...(evaluation.current ? { targetId: evaluation.current.id } : {}), ...(rule.configuration.componentNameLookup ? { materialMatched: evaluation.componentMaterialSnapshot !== null, materialNameSource: 'MATERIAL_MASTER' as const } : {}), ...(process && fields ? { pendingCompletion: result?.pendingCompletion ?? (['occurredAt', 'productCode', 'traceCode', 'description', 'externalRecordKey'].some(field => !fields[field as keyof ProcessDefectIntegrationFields]) || !!fields.issues?.length), ...(result ? { pendingConfiguration: result.pendingConfiguration } : {}), registrationIssues: fields.issues ?? [], defectQuantity: result?.defectQuantity ?? 1 } : {}), differences: displayedDifferences(evaluation.differences) };
     }, { isolationLevel: 'RepeatableRead' });
   }
   async previewHistory(actor: AdminActor, input: IngestionHistoryPreviewInputDto, traceId: string, key?: string): Promise<IngestionPreviewDto> {
@@ -606,7 +621,9 @@ export class IngestionService {
   private async recordFailure(candidate: JobRow, itemId: string | undefined, error: unknown) {
     const validation = error instanceof HttpException && error.getStatus() === 400;
     const revoked = error instanceof HttpException && [401, 403, 404].includes(error.getStatus());
-    const code = validation ? errorCode(error) : revoked ? 'INGESTION_AUTHORIZATION_REVOKED' : 'INGESTION_PROCESSING_FAILED';
+    const cause = error instanceof HttpException ? (error.getResponse() as { code?: unknown } | null)?.code : undefined;
+    const code = cause === 'INTEGRATION_RECEIPT_NOT_FOUND' || cause === 'INTEGRATION_PAYLOAD_EXPIRED' ? cause
+      : validation ? errorCode(error) : revoked ? 'INGESTION_AUTHORIZATION_REVOKED' : 'INGESTION_PROCESSING_FAILED';
     await this.prisma.$transaction(async tx => {
       await readOrganizationRuntime(tx, candidate.organization_id, true);
       await tx.$queryRaw`SELECT id FROM integration_endpoints WHERE organization_id=${candidate.organization_id}::uuid AND id=${candidate.endpoint_id}::uuid FOR UPDATE`;
@@ -693,7 +710,7 @@ export class IngestionService {
       const evaluation = await this.evaluate(tx, actor, job.rule_snapshot, rows[item.row_index], receipt, job.source, item.row_index, job.rule_id, job.rule_version);
       await this.event(tx, actor, organizationId, 'INGESTION_DIFFERENCE_READ', item.id, traceId, { jobId: job.id, receiptId: receipt.id, rowIndex: item.row_index });
       const result = item.target_id ? (await this.targets.results(tx, actor, job.rule_snapshot.target, [item.target_id]))[0] : undefined;
-      return { ...itemDto(item), ...(result ? this.resultDto(result) : {}), differences: evaluation.differences, ...(evaluation.fields ? { fields: displayedFields(evaluation.fields) } : {}), ...(job.rule_snapshot.target === 'PROCESS_DEFECT' ? { registrationIssues: (evaluation.fields as ProcessDefectIntegrationFields | undefined)?.issues ?? [] } : {}), stale: await this.stale(tx, job, item, receipt, evaluation) };
+      return { ...itemDto(item), ...(result ? this.resultDto(result) : {}), differences: displayedDifferences(evaluation.differences), ...(evaluation.fields ? { fields: displayedFields(evaluation.fields) } : {}), ...(job.rule_snapshot.target === 'PROCESS_DEFECT' ? { registrationIssues: (evaluation.fields as ProcessDefectIntegrationFields | undefined)?.issues ?? [] } : {}), stale: await this.stale(tx, job, item, receipt, evaluation) };
     }, { isolationLevel: 'RepeatableRead' });
   }
   async controlJob(actor: AdminActor, id: string, input: IngestionControlDto, traceId: string, key?: string): Promise<IngestionJobDto> {
@@ -723,7 +740,7 @@ export class IngestionService {
         } else if (job.status === 'BLOCKED') ingestionError('INGESTION_QUEUE_BLOCKED', 409);
         await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PENDING',error_code=NULL,completed_at=NULL WHERE id=${id}::uuid`;
       }
-      await this.releaseResolvedParents(tx, organizationId, affectedOwnerIds, ['INGESTION_PROCESSING_FAILED','INGESTION_AUTHORIZATION_REVOKED']);
+      await this.releaseResolvedParents(tx, organizationId, affectedOwnerIds, [...retryableJobFailures, 'INGESTION_AUTHORIZATION_REVOKED', 'INTEGRATION_RECEIPT_NOT_FOUND']);
       await this.refreshJob(tx, id);
       await this.event(tx, actor, organizationId, 'INGESTION_JOB_CONTROLLED', id, traceId, { action: input.action, ingestionReason: input.reason.trim() });
       return this.jobDto(tx, await this.jobRow(tx, organizationId, id));
@@ -754,13 +771,13 @@ export class IngestionService {
         await this.applyEvaluation(tx, job, item, receipt, evaluation, actor, traceId, true);
       } else {
         await tx.$executeRaw`UPDATE integration_ingestion_items SET status='SKIPPED',error_code=NULL,error_field=NULL,version=version+1,updated_at=clock_timestamp() WHERE id=${id}::uuid`;
-        if (job.status === 'BLOCKED' && item.status === 'PROCESSING_FAILED' && job.error_code === 'INGESTION_PROCESSING_FAILED') {
-          await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PENDING',error_code=NULL WHERE id=${job.id}::uuid AND status='BLOCKED' AND error_code='INGESTION_PROCESSING_FAILED' AND NOT EXISTS(SELECT 1 FROM integration_ingestion_items WHERE job_id=${job.id}::uuid AND status='PROCESSING_FAILED')`;
+        if (job.status === 'BLOCKED' && item.status === 'PROCESSING_FAILED' && job.error_code && retryableJobFailures.includes(job.error_code)) {
+          await tx.$executeRaw`UPDATE integration_ingestion_jobs SET status='PENDING',error_code=NULL WHERE id=${job.id}::uuid AND status='BLOCKED' AND error_code=${job.error_code} AND NOT EXISTS(SELECT 1 FROM integration_ingestion_items WHERE job_id=${job.id}::uuid AND status='PROCESSING_FAILED')`;
         }
       }
       await this.refreshJob(tx, job.id);
-      if (!confirm && item.status === 'PROCESSING_FAILED' && job.error_code === 'INGESTION_PROCESSING_FAILED') {
-        await this.releaseResolvedParents(tx, organizationId, [job.id], ['INGESTION_PROCESSING_FAILED']);
+      if (!confirm && item.status === 'PROCESSING_FAILED' && job.error_code && retryableJobFailures.includes(job.error_code)) {
+        await this.releaseResolvedParents(tx, organizationId, [job.id], retryableJobFailures);
       }
       await this.event(tx, actor, organizationId, confirm ? 'INGESTION_ITEM_CONFIRMED' : 'INGESTION_ITEM_SKIPPED', id, traceId, { ingestionReason: input.reason.trim(), jobId: job.id });
       return itemDto(await this.itemRow(tx, organizationId, id));

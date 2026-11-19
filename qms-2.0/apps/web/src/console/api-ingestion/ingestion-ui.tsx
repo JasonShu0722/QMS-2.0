@@ -31,40 +31,100 @@ export function label(value: string, english: boolean) {
   };
   return labels[value]?.[english ? 1 : 0] ?? value;
 }
+const issueMessages: Record<string, [string, string]> = {
+  INGESTION_RULE_OVERLAP: ['该接口和目标已有启用规则，请先停用原规则', 'An enabled rule already exists for this interface and target. Disable it first.'],
+  INGESTION_RULE_INVALID: ['入库规则或操作参数无效，请核对当前输入和规则设置', 'The ingestion rule or operation parameters are invalid. Check your input and the rule settings.'],
+  INGESTION_FIELD_MISSING: ['缺少必需来源字段', 'A required source field is missing'],
+  INGESTION_FIELD_TYPE: ['来源字段类型与规则不符', 'A source field has an unexpected type'],
+  INGESTION_FIELD_INVALID: ['来源字段内容、长度或格式无效', 'A source field has an invalid value, length or format'],
+  INGESTION_SOURCE_VERSION_INVALID: ['来源更新时间格式无效，请使用含时区的 ISO 8601 时间', 'The source update time is invalid. Use an ISO 8601 timestamp with a time zone.'],
+  INGESTION_NOT_FOUND: ['入库记录不存在或不可访问', 'The ingestion record does not exist or is unavailable'],
+  INGESTION_PREVIEW_EXPIRED: ['预览已过期或配置已变化，请重新生成预览', 'The preview expired or its configuration changed. Generate a new preview.'],
+  INGESTION_INPUT_PROTECTED: ['接收数据仍有未完成的入库任务，暂时不能删除', 'Unfinished ingestion jobs still use this receiving data. It cannot be deleted yet.'],
+  INGESTION_AUTHORIZATION_REVOKED: ['入库授权已失效，请恢复授权后重试', 'Ingestion authorization was revoked. Restore authorization before retrying.'],
+  INGESTION_PROCESSING_FAILED: ['入库处理失败，请核查任务后重试', 'Ingestion processing failed. Review the job before retrying.'],
+  INGESTION_QUEUE_BLOCKED: ['接口队列已暂停或阻塞，请检查任务状态', 'The interface queue is paused or blocked. Check the job status.'],
+  INGESTION_STALE_CONFIRMATION: ['档案或来源已变化，请刷新差异后重新确认', 'The record or source changed. Refresh differences before confirming.'],
+  INGESTION_CAPACITY_UNAVAILABLE: ['处理容量不足，请核对处理规模和积压任务', 'Ingestion capacity is unavailable. Check the import size and job backlog.'],
+  INGESTION_HISTORY_LIMIT_EXCEEDED: ['请重新生成历史预览', 'Generate a new historical preview.'],
+  INGESTION_PREVIEW_LIMIT_EXCEEDED: ['临时预览已达上限，请稍后重试', 'Temporary preview capacity is full. Retry later.'],
+  INTEGRATION_ENDPOINT_NOT_FOUND: ['接收接口不存在或不可用', 'The receiving interface does not exist or is unavailable'],
+  INTEGRATION_RECEIPT_NOT_FOUND: ['接收记录不存在或不可访问', 'The receiving record does not exist or is unavailable'],
+  INTEGRATION_PAYLOAD_EXPIRED: ['接收正文已清理', 'The received payload expired'],
+  INTEGRATION_MESSAGE_INVALID: ['接收正文格式无效，或指定数组行不存在', 'The received payload has an invalid format or does not contain the specified row'],
+  INTEGRATION_ACCESS_DENIED: ['接收接口已停用或不可访问', 'The receiving interface is disabled or unavailable'],
+  INTEGRATION_INPUT_INVALID: ['接口请求或目标档案字段无效', 'The integration request or target record fields are invalid'],
+  PROCESS_DEFECT_ARCHIVED: ['目标不良记录已归档，无法更新', 'The target defect record is archived and cannot be updated'],
+  PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT: ['来源明细编号已关联其他不良记录', 'The source detail ID is linked to another defect record'],
+  PROCESS_DEFECT_MANUAL_CONFIRMATION_REQUIRED: ['来源变更涉及人工维护字段，请核对并确认差异', 'The source changes affect manually maintained fields. Review and confirm the differences.'],
+  AI_CONNECTION_INVALID: ['AI 渠道配置无效', 'The AI connection configuration is invalid'],
+  AI_CONNECTION_NOT_FOUND: ['AI 渠道不存在或不可访问', 'The AI connection does not exist or is unavailable'],
+  AI_CONNECTION_UNAVAILABLE: ['AI 渠道未启用或未配置密钥', 'The AI connection is disabled or has no key configured'],
+  AI_CONNECTION_VERSION_CONFLICT: ['AI 渠道配置已变化，请刷新后重试', 'The AI connection changed. Refresh before retrying.'],
+  AI_CONNECTION_TARGET_DENIED: ['AI 服务地址不符合安全要求', 'The AI service address does not meet security requirements'],
+  AI_CONNECTION_REQUEST_FAILED: ['AI 服务请求失败，请检查渠道状态', 'The AI service request failed. Check the connection status.'],
+  AI_CONNECTION_TIMEOUT: ['AI 服务请求超时', 'The AI service request timed out'],
+  AI_DESCRIPTION_INPUT_EMPTY: ['AI 整理没有可用输入，请补充来源字段后再处理', 'There is no usable AI input. Complete the source fields before processing again.'],
+  AI_DESCRIPTION_INPUT_INVALID: ['AI 整理输入格式无效，请修正来源数据', 'The AI input format is invalid. Correct the source data.'],
+  AI_DESCRIPTION_INPUT_TOO_LARGE: ['AI 整理输入超过长度限制，请缩短后再处理', 'The AI input is too large. Shorten it before processing again.'],
+  AI_CONNECTION_RESPONSE_INVALID: ['AI 服务未返回符合要求的结果', 'The AI service returned an invalid result'],
+  AI_CONNECTION_RESPONSE_TOO_LARGE: ['AI 服务响应超过大小限制', 'The AI service response exceeded the size limit'],
+  AI_APPLICATION_INVALID: ['提示词应用配置无效', 'The prompt application configuration is invalid'],
+  AI_APPLICATION_NOT_FOUND: ['提示词应用或已发布版本不存在', 'The prompt application or its published revision does not exist'],
+  AI_APPLICATION_UNAVAILABLE: ['提示词应用未启用', 'The prompt application is disabled'],
+  AI_APPLICATION_VERSION_CONFLICT: ['提示词应用已变化，请刷新后重试', 'The prompt application changed. Refresh before retrying.'],
+  CONCURRENCY_CONFLICT: ['配置或档案已变化，请保留输入并刷新后重试', 'Configuration or records changed. Preserve your input and refresh before retrying.'],
+  IDEMPOTENCY_REPLAY: ['同一请求编号已用于不同内容，请核对原操作结果', 'This request ID was already used for different content. Check the original outcome.'],
+  IDEMPOTENCY_KEY_REQUIRED: ['缺少有效的请求编号，请刷新后重试', 'A valid request ID is required. Refresh before retrying.'],
+  CSRF_INVALID: ['请求校验失败，请刷新后重试', 'Request verification failed. Refresh before retrying.'],
+  AUTH_REAUTHENTICATION_REQUIRED: ['此操作需要重新验证身份', 'Reauthenticate to perform this action'],
+  CLIENT_REAUTHENTICATION_CANCELLED: ['已取消身份验证，操作未提交', 'Reauthentication was cancelled. The action was not submitted.'],
+  CLIENT_REAUTHENTICATION_COMPLETED: ['身份验证已完成，请重新提交操作', 'Reauthentication is complete. Submit the action again.'],
+  INTERNAL_ERROR: ['服务暂时不可用，请稍后重试或按追踪编号核查', 'The service is temporarily unavailable. Retry later or investigate using the trace ID.'],
+};
+const issueMessage = (code: string) => typeof code === 'string' && Object.hasOwn(issueMessages, code) ? issueMessages[code] : undefined;
+
 export function ingestionIssue(code: string, english: boolean) {
-  const messages: Record<string, [string, string]> = {
-    INGESTION_FIELD_MISSING: ['缺少必需来源字段', 'A required source field is missing'], INGESTION_FIELD_TYPE: ['来源字段类型与规则不符', 'A source field has an unexpected type'],
-    INGESTION_FIELD_INVALID: ['来源字段内容、长度或格式无效', 'A source field has an invalid value, length or format'], INGESTION_SOURCE_VERSION_INVALID: ['来源更新时间无效', 'The source update time is invalid'],
-    INGESTION_AUTHORIZATION_REVOKED: ['入库授权已失效', 'Ingestion authorization was revoked'], INGESTION_PROCESSING_FAILED: ['处理失败，请重试或核查任务', 'Processing failed. Retry or investigate the job'],
-    INGESTION_QUEUE_BLOCKED: ['接口队列已阻塞', 'The interface queue is blocked'], INGESTION_STALE_CONFIRMATION: ['档案或来源已变化，请刷新差异', 'The record or source changed. Refresh differences'],
-    INTEGRATION_PAYLOAD_EXPIRED: ['接收正文已清理', 'The received payload expired'], INTEGRATION_MESSAGE_INVALID: ['接收正文格式无效', 'The received payload is invalid'],
-    INTEGRATION_ACCESS_DENIED: ['接收接口已停用或不可访问', 'The receiving interface is disabled or unavailable'], CONCURRENCY_CONFLICT: ['档案已变化，请刷新后核对', 'The record changed. Refresh and review'],
-    INTEGRATION_INPUT_INVALID: ['目标档案字段无效', 'Target record fields are invalid'], INTEGRATION_RECEIPT_NOT_FOUND: ['接收记录不存在或不可访问', 'The receiving record is unavailable'],
-  };
-  return (messages[code] ?? ['处理异常，请联系管理员核查', 'Processing failed. Contact an administrator'])[english ? 1 : 0];
+  const message = issueMessage(code);
+  return <><span>{(message ?? ['无法确定入库处理原因，请联系管理员核查', 'The ingestion issue could not be identified. Contact an administrator.'])[english ? 1 : 0]}</span>{message && <small><code>{code}</code></small>}</>;
 }
-export function IngestionError({ error, unknown = false, unknownTitle }: { error?: unknown; unknown?: boolean; unknownTitle?: string }) {
+
+function requestFailure(error: unknown, status?: number): [string, string] {
+  if (status === 400 || status === 422) return ['请求内容未通过校验，请核对输入', 'The request failed validation. Check your input.'];
+  if (status === 401) return ['会话无效或已过期，请重新登录', 'Your session is invalid or expired. Sign in again.'];
+  if (status === 403) return ['当前权限不允许此操作', 'Your current permissions do not allow this action'];
+  if (status === 404) return ['请求的资源不存在或不可访问', 'The requested resource does not exist or is unavailable'];
+  if (status === 408 || status === 504) return ['请求超时，请稍后重试', 'The request timed out. Retry later.'];
+  if (status === 409) return issueMessages.CONCURRENCY_CONFLICT;
+  if (status === 410) return ['请求的资源已失效，请刷新后核对', 'The requested resource is no longer available. Refresh and review.'];
+  if (status === 429) return ['请求过于频繁，请稍后重试', 'Too many requests. Retry later.'];
+  if (status !== undefined && status >= 500) return issueMessages.INTERNAL_ERROR;
+  if (error instanceof TypeError) return ['未收到可用响应，请检查网络连接后重试', 'No usable response was received. Check your network connection and retry.'];
+  return ['无法确定请求失败原因，请重试或联系管理员核查', 'The cause of the request failure is unknown. Retry or contact an administrator.'];
+}
+
+const safeField = (field: string) => field.length <= 160 && field.split('.').length <= 8
+  && /^[A-Za-z][A-Za-z0-9_]*(?:\[(?:0|[1-9]\d{0,3})\]|\.[A-Za-z][A-Za-z0-9_]*)*$/.test(field)
+  && !/__proto__|prototype|constructor|password|passphrase|secret|token|session|authorization|cookie|objectkey|accesskey|privatekey|apikey|credential|connectionstring|databaseurl/i.test(field.replace(/_/g, ''))
+  && !field.split(/[.\[\]]/).some(part => Object.hasOwn(Object.prototype, part));
+
+export function IngestionError({ error, title, unknown = false, unknownTitle }: { error?: unknown; title?: string; unknown?: boolean; unknownTitle?: string }) {
   const text = useIngestionText();
   if (!error) return null;
-  const messages: Record<string, [string, string]> = {
-    INGESTION_RULE_OVERLAP: ['该接口和目标已有启用规则，请先停用原规则', 'An enabled rule already exists for this interface and target. Disable it first.'],
-    INGESTION_RULE_INVALID: ['请检查必填字段、筛选条件及允许更新字段', 'Check required mappings, conditions and update fields.'],
-    INGESTION_PREVIEW_EXPIRED: ['预览已过期，请重新生成预览', 'Preview expired. Generate a new preview.'],
-    INGESTION_STALE_CONFIRMATION: ['档案已变化，请刷新差异后重新确认', 'The record changed. Refresh differences before confirming.'],
-    INGESTION_AUTHORIZATION_REVOKED: ['操作权限已变化，请重新验证', 'Authorization changed. Revalidate access.'],
-    INTEGRATION_PAYLOAD_EXPIRED: ['接收正文已清理，请选择其他接收记录', 'The received payload expired. Select another record.'],
-    INGESTION_CAPACITY_UNAVAILABLE: ['处理容量不足，请先处理积压任务', 'Processing capacity is unavailable. Resolve queued jobs first.'],
-    INGESTION_QUEUE_BLOCKED: ['接口队列已阻塞，请查看任务错误并处理', 'The interface queue is blocked. Resolve the job error.'],
-    INGESTION_HISTORY_LIMIT_EXCEEDED: ['请重新生成历史预览', 'Generate a new historical preview.'],
-    INGESTION_PREVIEW_LIMIT_EXCEEDED: ['临时预览已达上限，请稍后重试', 'Temporary preview capacity is full. Retry later.'],
-  };
-  const message = error instanceof ApiError ? messages[error.code] : undefined;
+  const apiError = error instanceof ApiError ? error : undefined;
+  const status = apiError?.status;
+  const message = apiError && issueMessage(apiError.code);
+  const code = message ? apiError?.code : status !== undefined && Number.isInteger(status) && status >= 400 && status < 600 ? `HTTP_${status}` : undefined;
+  const fields = message && apiError?.fields && typeof apiError.fields === 'object' && !Array.isArray(apiError.fields) ? Object.keys(apiError.fields).filter(safeField) : [];
+  const traceId = typeof apiError?.traceId === 'string' && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(apiError.traceId) ? apiError.traceId : undefined;
   return <Alert role="alert" type="error" showIcon title={unknown
     ? unknownTitle ?? text('操作结果未确认，请重试原请求；当前输入已锁定', 'The outcome is unknown. Retry the original request; inputs are locked.')
-    : message ? text(...message) : error instanceof ApiError && error.status === 409
-      ? text('配置或档案已变化，请保留输入并刷新后重试', 'Configuration or records changed. Preserve your input and refresh before retrying.')
-      : text('请求失败，请检查输入后重试', 'Request failed. Check your input and retry.')}
-    description={error instanceof ApiError ? error.traceId : undefined} />;
+    : title ?? text(...(message ?? requestFailure(error, status)))}
+    description={(code || traceId || fields.length > 0) ? <>
+      {fields.length > 0 && <div>{text('字段', 'Fields')}: <code>{fields.join(', ')}</code></div>}
+      {code && <div>{text('错误码', 'Error code')}: <code>{code}</code></div>}
+      {traceId && <div>{text('追踪编号', 'Trace ID')}: <code>{traceId}</code></div>}
+    </> : undefined} />;
 }
 
 type Requests = ReturnType<typeof useScopedIntegrationRequests>;

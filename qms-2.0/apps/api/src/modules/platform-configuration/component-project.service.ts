@@ -176,7 +176,7 @@ export class ComponentProjectService {
       await transaction.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid FOR SHARE`;
       await this.internalScope(transaction, actor, organizationId);
     };
-    const mutation = (action: string, payload: object, mutationKey: string | undefined) => ({ actor, organizationId, key: mutationKey, traceId, action, payload, permission: 'component-project:manage' });
+    const mutation = (action: string, payload: object, mutationKey: string | undefined) => ({ actor, organizationId, key: mutationKey, traceId, action, payload, permission: 'component-project:manage', authentication: 'active' as const });
     // Reserve the exact payload before independently committing rows; changed retries cannot append work.
     await this.mutations.run(mutation('COMPONENT_PROJECT_IMPORT', { organizationId, rows: dto.rows }, key), async () => null, authorize);
     const digest = createHash('sha256').update(key!).digest('hex');
@@ -245,7 +245,7 @@ export class ComponentProjectService {
   bulkDeleteMappings(actor: AdminActor, organizationId: string, input: MasterDataBulkDeleteDto, traceId: string, key?: string) {
     const dto = validateMasterDataDeletion(input);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'COMPONENT_PROJECT_MAPPINGS_BULK_DELETED', payload: dto,
-      permission: 'component-project:manage', isolationLevel: 'ReadCommitted' },
+      permission: 'component-project:manage', authentication: 'active', isolationLevel: 'ReadCommitted' },
     transaction => deleteSelectedMasterData(transaction, this.audit, actor, organizationId, 'mapping', dto, traceId,
       (current, id) => componentMappingIsReferenced(current, organizationId, id)),
     transaction => this.internalScope(transaction, actor, organizationId));
@@ -310,7 +310,7 @@ export class ComponentProjectService {
 
   private mutate<T>(actor: AdminActor, organizationId: string, action: string, payload: object, traceId: string, key: string | undefined,
     work: (transaction: AdminTransaction) => Promise<T>, authorize?: (transaction: AdminTransaction) => Promise<void>) {
-    return this.mutations.run({ actor, organizationId, permission: 'component-project:manage', action, payload: { organizationId, ...payload }, traceId, key }, async (transaction) => {
+    return this.mutations.run({ actor, organizationId, permission: 'component-project:manage', authentication: 'active', action, payload: { organizationId, ...payload }, traceId, key }, async (transaction) => {
       try { return await work(transaction); }
       catch (error) {
         // Migration-owned tables use raw SQL, whose constraint errors arrive as P2010 rather than P2002.

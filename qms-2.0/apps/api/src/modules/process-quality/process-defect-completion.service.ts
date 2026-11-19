@@ -29,6 +29,7 @@ export function processProjectSnapshot(value: unknown): ProcessProjectSnapshot |
 
 export type ProcessDefectDerivedFacts = {
   projectSnapshot: Prisma.InputJsonObject | typeof Prisma.DbNull; projectCode: string | null;
+  productCategory: string | null;
   productSubcategory: string | null; subcategorySnapshot: Prisma.InputJsonValue | typeof Prisma.DbNull;
   operationSector: string | null; sectorSnapshot: Prisma.InputJsonValue | typeof Prisma.DbNull;
   registrationIssues: string[]; pendingCompletion: boolean; pendingConfiguration: boolean;
@@ -42,16 +43,21 @@ export class ProcessDefectCompletionService {
   async derive(tx: AdminTransaction, organizationId: string, facts: RegistrationFacts, previous?: ProcessDefect, correctedFields: readonly string[] = []): Promise<ProcessDefectDerivedFacts> {
     const productChanged = previous !== undefined && previous.productCode !== facts.productCode;
     const operationChanged = previous !== undefined && previous.operationName !== facts.operationName;
+    const captureProductCategory = !previous || productChanged || previous.pendingConfiguration;
     let projectSnapshot = productChanged ? null : processProjectSnapshot(previous?.projectSnapshot ?? null);
+    let productCategory = productChanged ? null : previous?.productCategory ?? null;
     let productSubcategory = productChanged ? null : previous?.productSubcategory ?? null;
     let subcategorySnapshot = productChanged ? null : previous?.subcategorySnapshot ?? null;
     let operationSector = operationChanged ? null : previous?.operationSector ?? null;
     let sectorSnapshot = operationChanged ? null : previous?.sectorSnapshot ?? null;
     const now = new Date().toISOString();
-    if (facts.productCode && (!projectSnapshot || !productSubcategory) && this.projects) {
+    if (facts.productCode && (!projectSnapshot || !productSubcategory || (captureProductCategory && !productCategory)) && this.projects) {
       const resolved = await this.projects.resolveForDomain(tx, organizationId, facts.productCode);
       const mapping = resolved.mapping;
       if (mapping?.status === 'ACTIVE') {
+        if (captureProductCategory && !productCategory && mapping.productCategory) {
+          productCategory = mapping.productCategory;
+        }
         if (!projectSnapshot && resolved.project?.status === 'ACTIVE') {
           const project = resolved.project;
           projectSnapshot = { componentCode: facts.productCode, associatedAt: now,
@@ -83,10 +89,11 @@ export class ProcessDefectCompletionService {
     return {
       projectSnapshot: projectSnapshot ? projectSnapshot as unknown as Prisma.InputJsonObject : Prisma.DbNull,
       projectCode: projectSnapshot?.project.code ?? null,
+      productCategory,
       productSubcategory, subcategorySnapshot: subcategorySnapshot ?? Prisma.DbNull,
       operationSector, sectorSnapshot: sectorSnapshot ?? Prisma.DbNull,
       registrationIssues, pendingCompletion: registrationIssues.length > 0,
-      pendingConfiguration: !projectSnapshot || !productSubcategory || !operationSector,
+      pendingConfiguration: !projectSnapshot || (captureProductCategory && !productCategory) || !productSubcategory || !operationSector,
     };
   }
 
@@ -94,7 +101,7 @@ export class ProcessDefectCompletionService {
     const facts = (value: ProcessDefect) => JSON.stringify({ occurredAt: value.occurredAt, productCode: value.productCode, traceCode: value.traceCode,
       description: value.description, workOrderCode: value.workOrderCode, lineCode: value.lineCode, operationCode: value.operationCode,
       sourceObservedAt: value.sourceObservedAt, lineName: value.lineName, operationName: value.operationName, defectQuantity: value.defectQuantity,
-      externalRecordKey: value.externalRecordKey, projectSnapshot: value.projectSnapshot, productSubcategory: value.productSubcategory,
+      externalRecordKey: value.externalRecordKey, projectSnapshot: value.projectSnapshot, productCategory: value.productCategory, productSubcategory: value.productSubcategory,
       operationSector: value.operationSector, sectorSnapshot: value.sectorSnapshot, subcategorySnapshot: value.subcategorySnapshot,
       registrationIssues: value.registrationIssues, pendingCompletion: value.pendingCompletion, pendingConfiguration: value.pendingConfiguration });
     await tx.$executeRaw`INSERT INTO process_defect_registration_history (id, organization_id, defect_id, defect_version, actor_user_id, action, before_facts, after_facts)
@@ -122,7 +129,7 @@ export class ProcessDefectCompletionService {
         const current = await tx.processDefect.findUniqueOrThrow({ where: { id: candidate.id } });
         const derived = await this.derive(tx, current.organizationId, current, current);
         const changed = JSON.stringify(current.projectSnapshot) !== JSON.stringify(derived.projectSnapshot === Prisma.DbNull ? null : derived.projectSnapshot)
-          || current.productSubcategory !== derived.productSubcategory || current.operationSector !== derived.operationSector;
+          || current.productCategory !== derived.productCategory || current.productSubcategory !== derived.productSubcategory || current.operationSector !== derived.operationSector;
         if (!changed) {
           await tx.processDefect.updateMany({ where: { id: current.id, version: current.version, archivedAt: null },
             data: { completionNextAttemptAt: new Date(Date.now() + 60000) } });

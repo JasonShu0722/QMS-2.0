@@ -56,10 +56,12 @@ it('retains the selected process source and formal 8D draft when closing is decl
   vi.mocked(apiRequest).mockImplementation(async (url) => url.includes('/defects?') ? { items: [defect], total: 1 } : url.includes('/my-permissions') ? { permissions: ['process-quality:defects:read', 'process-quality:issues:issue'] } : url.endsWith('/sources/preview') ? [{ defectId: defect.id, relatedProblems: [], hasHiddenRelations: false, relatedSetToken: 'token' }] : { departments: [], users: [], departmentTotal: 0, userTotal: 0 });
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectLedgerPage /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
-  fireEvent.click(screen.getByRole('button', { name: '发起 8D' }));
-  await screen.findByLabelText('发单来源预览');
-  fireEvent.change(screen.getByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
-  fireEvent.click(within(screen.getByRole('dialog', { name: '发起正式内部8D' })).getByLabelText('关闭'));
+  fireEvent.click(within(screen.getByLabelText('台账工具栏')).getByLabelText('发起 8D', { selector: 'button' }));
+  const preview = await screen.findByLabelText('发单来源预览');
+  const drawer = preview.closest<HTMLElement>('[role="dialog"]')!;
+  expect(drawer).toHaveAccessibleName('发起正式内部8D');
+  fireEvent.change(within(drawer).getByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
+  fireEvent.click(within(drawer).getByLabelText('关闭'));
   const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });
   await waitFor(() => expect(title).toBeVisible());
   fireEvent.click(within(title.closest('[role="dialog"]') as HTMLElement).getByText('继续编辑'));

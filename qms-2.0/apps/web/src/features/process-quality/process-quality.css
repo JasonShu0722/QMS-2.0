@@ -56,13 +56,15 @@
 .process-quality-warning { display: inline-grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--qms-warning); border-radius: 50%; background: var(--qms-surface); color: var(--qms-warning); font: inherit; font-weight: 700; cursor: help; }
 .process-quality-warning:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 2px; }
 .process-quality-toolbar .ant-select { min-width: 140px; }
-.process-quality-filter-title { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
-.process-quality-filter-title > button { display: inline-flex; flex: none; padding: 2px; border: 0; background: transparent; color: var(--qms-muted); cursor: pointer; }
+.process-quality-ledger th[data-compact-ledger-column] > .qms-ledger__heading { text-align: center; }
+.process-quality-filter-title { --filter-size: 20px; display: inline-grid; grid-template-columns: var(--filter-size) max-content var(--filter-size); align-items: center; gap: 4px; white-space: nowrap; }
+.process-quality-filter-title > span { grid-column: 2; }
+.process-quality-filter-title > button { grid-column: 3; display: grid; place-items: center; width: var(--filter-size); height: var(--filter-size); padding: 0; border: 0; background: transparent; color: var(--qms-muted); cursor: pointer; }
 @media (hover: hover) and (pointer: fine) {
   .process-quality-ledger th:not(:hover):not(:focus-within) .process-quality-filter-title > button[aria-pressed='false'][aria-expanded='false'] { opacity: 0; }
 }
-@media (pointer: coarse) { .process-quality-filter-title > button { min-width: 28px; min-height: 32px; align-items: center; justify-content: center; } }
-.process-quality-filter-title > button:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: 1px; }
+@media (pointer: coarse) { .process-quality-filter-title { --filter-size: 32px; } }
+.process-quality-filter-title > button:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: -2px; }
 .process-quality-filter-title > button[aria-pressed='true'] { color: var(--qms-accent); }
 .process-quality-filter-title > button:disabled { cursor: default; opacity: .6; }
 .process-quality-filter-panel { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; width: min(640px, calc(100vw - 48px)); }

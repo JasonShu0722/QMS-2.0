@@ -33,7 +33,7 @@ const defect: components['schemas']['ProcessDefectDto'] = {
   id: 'defect-1', organizationId: 'org-1', defectTypeCode: null, description: '台账真实划伤', defectQuantity: null, occurredAt: null, traceCode: 'BAR-01', analysisProgress: null,
   ledgerStatus: 'FOLLOWING', closedById: null, closedAt: null, responsibilityCategory: null, sourceKind: 'MANUAL', version: 6,
   materials: [], materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0, issues: [],
-  lineName: null, operationName: null, shift: null, operationSector: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: false, pendingConfiguration: false, registrationIssues: [], registeredByName: null,
+  lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: false, pendingConfiguration: false, registrationIssues: [], registeredByName: null,
 };
 function controlled(view: 'CURRENT' | 'APPROVED' | 'HISTORICAL'): components['schemas']['ProcessEightDControlledReportDto'] {
   return { problemId: report.problemId, reportNumber: report.reportNumber, view, revisionId: view === 'CURRENT' ? null : 'revision-1', status: view === 'CURRENT' ? 'DRAFT' : view === 'APPROVED' ? 'APPROVED' : 'HISTORICAL', label: `${view} 服务端版本`, contentVersion: 4, rowVersion: 7, generatedAt: '2026-10-25T10:00:00Z', attachments: [],

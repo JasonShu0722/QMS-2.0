@@ -80,6 +80,18 @@ describe('audit log foundation', () => {
     }
   });
 
+  it('allowlists only bounded trial metadata on completed application audit outcomes', () => {
+    const service = new AuditLogService({} as never);
+    const event = { action: 'AI_APPLICATION_TESTED', resourceType: 'AiApplication', outcome: 'SUCCESS' };
+    const metadata = { connectionId: '10000000-0000-4000-8000-000000000001', connectionVersion: 3, model: 'vendor/model-1:stable', outputMode: 'JSON' };
+    expect(service.safeMetadata({ ...metadata, bindings: [{ path: 'private' }], sample: 'private', resultText: 'private', durationMs: 50 }, event)).toEqual(metadata);
+    expect(service.safeMetadata(metadata, { ...event, outcome: 'FAILURE' })).toEqual(metadata);
+    expect(service.safeMetadata(metadata, { ...event, outcome: 'DENIED' })).toEqual({});
+    expect(service.safeMetadata(metadata, { ...event, action: 'AI_APPLICATION_CREATED' })).toEqual({});
+    expect(service.safeMetadata({ connectionId: 'bad ID', connectionVersion: '3', model: 'a'.repeat(121), outputMode: ['JSON'] }, event)).toEqual({});
+    expect(service.safeMetadata({ connectionVersion: 2147483648, model: 'contains space', outputMode: 'XML' }, event)).toEqual({});
+  });
+
   it('preserves bounded structure snapshots and the initializer role ID, never arbitrary metadata or secrets', () => {
     const service = new AuditLogService({} as never);
     const snapshot = { structureCode: 'QMS-2.0', structurePreviousCode: 'QMS_OLD', structureName: 'Quality department', structurePreviousName: 'Former department name', structureGovernorRoleId: '10000000-0000-4000-8000-000000000001' };

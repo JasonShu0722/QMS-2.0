@@ -32,7 +32,7 @@ vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource 
 vi.mock('./ProcessShipmentReportPanel', () => ({ ProcessShipmentReportPanel: () => null }));
 
 const organizationId = '22222222-2222-4222-8222-222222222222';
-const defect: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '表面划伤', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-1', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, shift: null, operationSector: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人' };
+const defect: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '表面划伤', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-1', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人' };
 const section = { id: '33333333-3333-4333-8333-333333333333', code: 'SEC', name: '制造科' };
 const owner = { id: '44444444-4444-4444-8444-444444444444', username: 'owner', fullName: '真实负责人', departmentName: '制造科' };
 const preview = [{ defectId: defect.id, relatedProblems: [{ problemId: 'old', reportNumber: 'PQ-OLD', title: '已有问题', status: 'CLOSED', primary: true }], hasHiddenRelations: true, relatedSetToken: 'opaque-exact-1' }];
@@ -44,7 +44,7 @@ it('shows the approved default columns and applies incomplete and unconfigured c
   await screen.findByLabelText(`选择制程不良 ${defect.description}`);
   const headers = within(container.querySelector('.qms-ledger thead') as HTMLElement);
   const names = headers.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'));
-  expect(names).toEqual(expect.arrayContaining(['发生时间', '班次', '项目号', '细分类型', '项目状态', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']));
+  expect(names).toEqual(expect.arrayContaining(['发生时间', '班次', '项目号', '产品类型', '细分类型', '项目状态', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']));
   expect(names).not.toContain('成品编码');
   fireEvent.click(screen.getByLabelText('筛选条件', { selector: 'button' }));
   const panel = within(await screen.findByLabelText('筛选面板', { selector: '[role="dialog"]' }));
@@ -119,15 +119,17 @@ it('keeps legacy copy and issue actions out of the ledger even with copy-only ac
   });
   mount();
   fireEvent.click(await screen.findByLabelText(`选择制程不良 ${defect.description}`));
-  expect(screen.queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '发起 8D' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
+  for (const actions of [screen.getByLabelText('台账工具栏'), screen.getByLabelText('台账批量操作')]) {
+    expect(within(actions).queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
+    expect(within(actions).queryByRole('button', { name: '发起 8D' })).not.toBeInTheDocument();
+    expect(within(actions).queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
+  }
   expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/source-copies/'))).toBe(false);
 });
 
 it('hides supplier copy without its real copy permission', async () => {
   mount(); await screen.findByLabelText(`选择制程不良 ${defect.description}`);
-  expect(screen.queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
+  expect(within(screen.getByLabelText('台账工具栏')).queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
 });
 
 function baseResponse(path: string) {
@@ -171,7 +173,7 @@ it('opens a source deep-link only after scoped READ authorization, without selec
   await waitFor(() => expect(authorize).toBeTypeOf('function'));
   expect(sourceDetailCalls()).toHaveLength(0);
   await act(async () => authorize({ permissions }));
-  await waitFor(() => expect(screen.getByText('来源详情').closest('[role="dialog"]')).toBeVisible(), { timeout: 5000 });
+  await waitFor(() => expect(screen.getByText('不良品详情').closest('[role="dialog"]')).toBeVisible(), { timeout: 5000 });
   await screen.findByText('表面划伤');
   expect(sourceDetailCalls()).toHaveLength(1);
   const [path, init] = sourceDetailCalls()[0];
@@ -179,13 +181,13 @@ it('opens a source deep-link only after scoped READ authorization, without selec
   expect(init?.signal).toBeInstanceOf(AbortSignal);
   expect(screen.getByText('已选择 0 条来源')).toBeVisible();
   expect(vi.mocked(apiRequest).mock.calls.some(([, options]) => options?.method)).toBe(false);
-  const drawer = screen.getByText('来源详情').closest('[role="dialog"]') as HTMLElement;
+  const drawer = screen.getByText('不良品详情').closest('[role="dialog"]') as HTMLElement;
   fireEvent.click(within(drawer).getByRole('button', { name: /^(close|关闭)$/i }));
-  await waitFor(() => expect(screen.queryByText('来源详情')).not.toBeInTheDocument(), { timeout: 5000 });
+  await waitFor(() => expect(screen.queryByText('不良品详情')).not.toBeInTheDocument(), { timeout: 5000 });
   fireEvent.click(within(screen.getByLabelText('台账工具栏')).getByRole('button', { name: '刷新' }));
   await waitFor(() => expect(permissionReads).toBeGreaterThan(1));
   expect(sourceDetailCalls()).toHaveLength(1);
-  expect(screen.queryByText('来源详情')).not.toBeInTheDocument();
+  expect(screen.queryByText('不良品详情')).not.toBeInTheDocument();
 });
 
 it.each(['missing', '403'] as const)('does not read a source deep-link before actual READ access is granted: %s', async mode => {
@@ -199,7 +201,7 @@ it.each(['missing', '403'] as const)('does not read a source deep-link before ac
   mount(sourceLink());
   await screen.findByText('暂无制程不良访问权限');
   expect(sourceDetailCalls()).toHaveLength(0);
-  expect(screen.queryByText('来源详情')).not.toBeInTheDocument();
+  expect(screen.queryByText('不良品详情')).not.toBeInTheDocument();
 });
 
 it('clears private source content and aborts both detail reads when a deep-link target returns 403', async () => {
@@ -213,7 +215,7 @@ it('clears private source content and aborts both detail reads when a deep-link 
   expect(reads).toHaveLength(2);
   expect(reads.every(([, options]) => options?.signal?.aborted)).toBe(true);
   expect(screen.queryByText('表面划伤')).not.toBeInTheDocument();
-  expect(screen.queryByText('来源详情')).not.toBeInTheDocument();
+  expect(screen.queryByText('不良品详情')).not.toBeInTheDocument();
   expect(vi.mocked(apiRequest).mock.calls.some(([, options]) => options?.method)).toBe(false);
 });
 
@@ -263,8 +265,9 @@ it('aborts a replaced source deep-link and identity, ignores late data, and pres
 it('does not give formal 8D access through ledger write permission', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/my-permissions') ? { permissions: ['process-quality:defects:read', 'process-quality:defects:write'] } : baseResponse(path));
   mount(); await screen.findByLabelText('选择制程不良 表面划伤');
-  expect(screen.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '发起 8D' })).not.toBeInTheDocument();
+  const toolbar = within(screen.getByLabelText('台账工具栏'));
+  expect(toolbar.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
+  expect(toolbar.queryByRole('button', { name: '发起 8D' })).not.toBeInTheDocument();
 });
 async function selectOption(label: string, text: string, queries: Pick<typeof screen, 'getByLabelText'> = screen) {
   const control = queries.getByLabelText(label);
@@ -377,9 +380,10 @@ it.each([401, 403])('clears parent sources, relations and draft when the preflig
   fireEvent.click(within(screen.getByLabelText('台账工具栏')).getByLabelText('发起 8D', { selector: 'button' }));
   await screen.findByText('PQ-OLD');
   await fillIssue();
-  fireEvent.change(screen.getByLabelText(`判定说明 ${defect.id}`), { target: { value: '敏感判定草稿' } });
-  fireEvent.change(screen.getByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
-  fireEvent.click(screen.getByText('确认发起8D'));
+  const drawer = within(screen.getByText('发起正式内部8D', { selector: '.ant-drawer-title' }).closest<HTMLElement>('[role="dialog"]')!);
+  fireEvent.change(drawer.getByLabelText(`判定说明 ${defect.id}`), { target: { value: '敏感判定草稿' } });
+  fireEvent.change(drawer.getByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
+  fireEvent.click(drawer.getByText('确认发起8D'));
   await waitFor(() => expect(reads).toBe(2));
   await act(async () => { reject(new ApiError({ code: status === 401 ? 'AUTH_SESSION_REQUIRED' : 'FEATURE_PERMISSION_DENIED', message: 'private' }, status)); });
   expect(await screen.findByText(status === 401 ? '会话已退出，请登录' : '暂无制程不良访问权限')).toBeVisible();
@@ -575,7 +579,7 @@ it.each(['selected', 'new'] as const)('keeps the 100-source limit consistent for
   const button = (await screen.findByText('选择此条并返回台账', { selector: 'button span' })).closest('button')!;
   if (entry === 'selected') {
     fireEvent.click(button);
-    await waitFor(() => expect(screen.queryByText('来源详情', { selector: '.ant-drawer-title' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('不良品详情', { selector: '.ant-drawer-title' })).not.toBeInTheDocument());
     expect(screen.getByLabelText('选择制程不良 边界来源 80')).toBeChecked();
   } else {
     expect(button).toBeDisabled();

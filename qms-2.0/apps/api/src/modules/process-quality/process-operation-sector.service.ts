@@ -33,7 +33,7 @@ export class ProcessOperationSectorService {
 
   async create(actor: AdminActor, input: { operationName: string; sectorName: string }, traceId: string, key?: string) {
     const organizationId = this.scope(actor), operationName = name(input.operationName), sectorName = name(input.sectorName);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTOR_CREATED', permission: 'process-quality:configuration:manage', payload: { operationName, sectorName } }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTOR_CREATED', permission: 'process-quality:configuration:manage', payload: { operationName, sectorName }, authentication: 'active' }, async tx => {
       const id = randomUUID();
       const inserted = await tx.$executeRaw`INSERT INTO process_operation_sectors (id, organization_id, operation_name, sector_name, created_by_id, updated_by_id)
         VALUES (${id}::uuid, ${organizationId}::uuid, ${operationName}, ${sectorName}, ${actor.id}::uuid, ${actor.id}::uuid)
@@ -48,7 +48,7 @@ export class ProcessOperationSectorService {
   async update(actor: AdminActor, id: string, input: { expectedVersion: number; operationName: string; sectorName: string; active: boolean }, traceId: string, key?: string) {
     const organizationId = this.scope(actor), operationName = name(input.operationName), sectorName = name(input.sectorName);
     if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1 || typeof input.active !== 'boolean') fail('PROCESS_OPERATION_SECTOR_INPUT_INVALID', 400);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTOR_UPDATED', permission: 'process-quality:configuration:manage', payload: { id, ...input, operationName, sectorName } }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTOR_UPDATED', permission: 'process-quality:configuration:manage', payload: { id, ...input, operationName, sectorName }, authentication: 'active' }, async tx => {
       await tx.$queryRaw`SELECT id FROM process_operation_sectors WHERE organization_id = ${organizationId}::uuid ORDER BY id FOR UPDATE`;
       const conflicting = await tx.$queryRaw<{ id: string }[]>`SELECT id FROM process_operation_sectors WHERE organization_id = ${organizationId}::uuid AND operation_name = ${operationName} AND id <> ${id}::uuid`;
       if (conflicting.length) fail('PROCESS_OPERATION_SECTOR_NAME_CONFLICT', 409);
@@ -66,7 +66,7 @@ export class ProcessOperationSectorService {
   async remove(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
     if (!Number.isSafeInteger(expectedVersion) || expectedVersion < 1) fail('PROCESS_OPERATION_SECTOR_INPUT_INVALID', 400);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTOR_DELETED', permission: 'process-quality:configuration:manage', payload: { id, expectedVersion } }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTOR_DELETED', permission: 'process-quality:configuration:manage', payload: { id, expectedVersion }, authentication: 'active' }, async tx => {
       const changed = await tx.$executeRaw`DELETE FROM process_operation_sectors WHERE organization_id = ${organizationId}::uuid AND id = ${id}::uuid AND version = ${expectedVersion}`;
       if (changed !== 1) fail('CONCURRENCY_CONFLICT', 409);
       await this.audit.record({ actorUserId: actor.id, organizationId, action: 'PROCESS_OPERATION_SECTOR_DELETED', resourceType: 'ProcessOperationSector', resourceId: id,

@@ -91,6 +91,11 @@ export function normalizeAiOutput(value?: unknown): AiDescriptionOutput {
   return { mode: input.mode as 'TEXT' | 'JSON', field, target: 'description' };
 }
 export type AiGenerationInput = { model: string; prompt: string; selectedData: Array<{ label: string; value: string; variable?: string }>; output?: AiDescriptionOutput };
+const maxSelectedDataLength = 16000;
+export function aiGenerationDataTooLarge(selectedData: AiGenerationInput['selectedData']): boolean {
+  return selectedData.reduce((total, fact) => total + fact.label.length + fact.value.length, 0) > maxSelectedDataLength;
+}
+
 export function normalizeAiGeneration(value: unknown): AiGenerationInput {
   if (!value || typeof value !== 'object') aiConnectionError('AI_CONNECTION_INVALID', 400);
   const input = value as Record<string, unknown>;
@@ -100,8 +105,8 @@ export function normalizeAiGeneration(value: unknown): AiGenerationInput {
     const row = fact as Record<string, unknown>;
     const variable = row.variable === undefined ? undefined : text(row.variable, 64);
     if (variable !== undefined && !/^[a-z][a-z\d_]*$/i.test(variable)) aiConnectionError('AI_CONNECTION_INVALID', 400);
-    return { label: text(row.label, 200, true), value: text(row.value, 16000, true), ...(variable === undefined ? {} : { variable }) };
+    return { label: text(row.label, 200, true), value: text(row.value, maxSelectedDataLength, true), ...(variable === undefined ? {} : { variable }) };
   });
-  if (selectedData.reduce((total, fact) => total + fact.label.length + fact.value.length, 0) > 16000 || selectedData.every(fact => !fact.value.trim())) aiConnectionError('AI_CONNECTION_INVALID', 400);
+  if (aiGenerationDataTooLarge(selectedData) || selectedData.every(fact => !fact.value.trim())) aiConnectionError('AI_CONNECTION_INVALID', 400);
   return { model: modelName(input.model), prompt: text(input.prompt, 4000).trim(), selectedData, ...(input.output === undefined ? {} : { output: normalizeAiOutput(input.output) }) };
 }

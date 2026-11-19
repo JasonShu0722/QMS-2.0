@@ -97,6 +97,7 @@ export function ImportPreview({ scope, rule, history, canReceipts, close, viewJo
       {!history && rule.aiDescription && <>
         <Button disabled={locked || expired || aiBusy || preview.action === 'VALIDATION_FAILED'} loading={aiBusy} onClick={() => void trialAi()}>{text('试运行AI整理', 'Try AI description')}</Button>
         <IngestionError error={aiError} />
+        {aiTrial?.status === 'FAILED' && aiTrial.errorCode && <Alert type="warning" showIcon title={ingestionIssue(aiTrial.errorCode, english)} description={aiTrial.traceId && <>{text('追踪编号', 'Trace ID')}: <code>{aiTrial.traceId}</code></>} />}
         {aiTrial && <div role="region" aria-label={text('AI输入事实', 'Selected AI facts')}><strong>{text('AI输入事实', 'Selected AI facts')}</strong>{aiTrial.inputFields.map((field, index) => <div className="qms-ingestion-field-value" key={index}>{field.label || field.path}：{field.value === null ? '—' : String(field.value)}</div>)}</div>}
         <div role="region" aria-label={text('描述试运行结果', 'Description trial results')} className="qms-ingestion-grid qms-ai-preview">
           <div><strong>{text('直接组合', 'Direct description')}</strong><p className="qms-ingestion-field-value">{aiTrial?.directDescription ?? String(preview.fields?.description ?? '')}</p></div>

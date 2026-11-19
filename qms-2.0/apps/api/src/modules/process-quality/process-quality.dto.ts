@@ -316,6 +316,7 @@ export class ProcessDefectDto {
   @ApiProperty({ type: String, nullable: true }) operationName!: string | null;
   @ApiProperty({ type: String, enum: ['DAY', 'NIGHT'], nullable: true }) shift!: 'DAY' | 'NIGHT' | null;
   @ApiProperty({ type: String, nullable: true }) operationSector!: string | null;
+  @ApiProperty({ type: String, nullable: true }) productCategory!: string | null;
   @ApiProperty({ type: String, nullable: true }) productSubcategory!: string | null;
   @ApiProperty({ type: String, nullable: true }) projectName!: string | null;
   @ApiProperty({ type: String, enum: ['NEW_PRODUCT', 'MASS_PRODUCTION'], nullable: true }) projectStage!: 'NEW_PRODUCT' | 'MASS_PRODUCTION' | null;
