@@ -883,6 +883,7 @@ model ProcessDefect {
   completionNextAttemptAt DateTime? @map("completion_next_attempt_at") @db.Timestamptz(3)
   completionAttempts     Int       @default(0) @map("completion_attempts")
   projectSnapshot        Json?     @map("project_snapshot")
+  productCategory        String?   @map("product_category") @db.VarChar(100)
   productSubcategory     String?   @map("product_subcategory") @db.VarChar(100)
   subcategorySnapshot    Json?     @map("subcategory_snapshot")
   operationSector        String?   @map("operation_sector") @db.VarChar(200)

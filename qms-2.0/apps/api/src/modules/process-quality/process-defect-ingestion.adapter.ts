@@ -163,6 +163,11 @@ export class ProcessDefectIngestionAdapter {
     await tx.processDefect.updateMany({ where: { id, organizationId: row.organizationId, descriptionInputVersion: revision, archivedAt: null }, data: { descriptionAiStatus: status } });
   }
 
+  async expireAiDescription(tx: AdminTransaction, organizationId: string, id: string, taskId: string, revision: number) {
+    await tx.processDefect.updateMany({ where: { id, organizationId, descriptionTaskId: taskId, descriptionInputVersion: revision, archivedAt: null },
+      data: { descriptionAiStatus: 'FAILED' } });
+  }
+
   async applyAiDescription(tx: AdminTransaction, actor: AdminActor, id: string, revision: number, direct: string, text: string, traceId: string, adopt = false) {
     text = validateAiDescription(text);
     const scoped = await this.aiDescriptionState(tx, actor, id);

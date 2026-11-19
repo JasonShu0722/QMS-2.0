@@ -103,6 +103,43 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     return { fields, defect, input, enqueue };
   }
 
+  it.each([
+    { provider: 'FAIL', fact: '毛刺', called: true, errorCode: 'AI_CONNECTION_REQUEST_FAILED' },
+    { provider: 'EMPTY', fact: '毛刺', called: true, errorCode: 'AI_CONNECTION_RESPONSE_INVALID' },
+    { provider: 'SUCCESS', fact: '  ', called: false, errorCode: 'AI_DESCRIPTION_INPUT_EMPTY' },
+    { provider: 'SUCCESS', fact: undefined, called: false, errorCode: 'AI_DESCRIPTION_INPUT_EMPTY' },
+    { provider: 'SUCCESS', fact: 0, called: true, errorCode: null },
+    { provider: 'SUCCESS', fact: false, called: true, errorCode: null },
+  ])('returns a safe ingestion AI preview with provider=$provider and fact=$fact', async ({ provider, fact, called, errorCode }) => {
+    mode = provider;
+    const { configuration, prepare, raw } = await engineSource();
+    const { receipt } = await prepare(configuration, { ...raw, fact });
+    const before = requests.length;
+    const traceId = randomUUID();
+    const result = await engine.previewAi(fixture.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId: receipt.id, rowIndex: 0 }, traceId);
+
+    expect(result).toEqual({
+      directDescription: raw.direct,
+      inputFields: fact === undefined ? [] : [{ path: 'fact', label: '现象', variable: 'fact', value: fact }],
+      aiDescription: errorCode ? null : '已选事实的整理结果',
+      status: errorCode ? 'FAILED' : 'SUCCEEDED',
+      errorCode,
+      traceId,
+    });
+    expect(requests).toHaveLength(before + Number(called));
+  });
+
+  it.each(['x'.repeat(15999), '界'.repeat(12000)])('returns the specific input limit error without calling the provider (case %#)', async fact => {
+    const { configuration, prepare, raw } = await engineSource();
+    const { receipt } = await prepare(configuration, { ...raw, fact });
+    const before = requests.length;
+    const traceId = randomUUID();
+    const result = await engine.previewAi(fixture.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId: receipt.id, rowIndex: 0 }, traceId);
+
+    expect(result).toMatchObject({ status: 'FAILED', directDescription: raw.direct, inputFields: [], errorCode: 'AI_DESCRIPTION_INPUT_TOO_LARGE', traceId });
+    expect(requests).toHaveLength(before);
+  });
+
   it('uses the saved composition variable without sending unused fields, and keeps the fallback when it is blank', async () => {
     mode = 'SUCCESS';
     const value = await engineSource();
@@ -127,6 +164,107 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     await service.processDue();
     expect(requests).toHaveLength(before + 1);
     expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: blank.row.id } })).toMatchObject({ description: '直接组合事实' });
+  });
+
+  it('persists a terminal all-empty task, keeps the fallback, and rejects retries of its input', async () => {
+    mode = 'SUCCESS';
+    const value = await engineSource();
+    const empty = { ...value.raw, fact: undefined };
+    const before = requests.length;
+    const imported = await value.ingest(value.configuration, empty);
+    expect(imported.row).toMatchObject({ description: value.raw.direct, descriptionSource: 'DIRECT', descriptionAiStatus: 'FAILED' });
+    const task = { id: imported.row.descriptionTaskId, status: 'FAILED', errorCode: 'AI_DESCRIPTION_INPUT_EMPTY', attempts: 0, version: 1, result: null };
+    expect(task.id).toBeTruthy();
+    expect((await service.list(fixture.actor, imported.row.id)).items).toEqual([expect.objectContaining(task)]);
+
+    await expect(service.action(fixture.actor, task.id!, { expectedVersion: task.version }, false, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ status: 409, response: { code: 'AI_DESCRIPTION_INPUT_EMPTY' } });
+    await value.ingest(value.configuration, empty);
+    await service.processDue();
+    expect(requests).toHaveLength(before);
+    expect((await service.list(fixture.actor, imported.row.id)).items).toEqual([expect.objectContaining(task)]);
+
+    const corrected = await value.ingest();
+    expect(corrected.row.id).toBe(imported.row.id);
+    expect(corrected.row.descriptionTaskId).not.toBe(task.id);
+    await service.processDue();
+    expect(requests).toHaveLength(before + 1);
+    expect((await service.list(fixture.actor, imported.row.id)).items[0]).toMatchObject({ status: 'APPLIED', errorCode: null });
+  });
+
+  it.each([
+    { code: 'AI_DESCRIPTION_INPUT_INVALID', source: { direct: 'x'.repeat(10001), fact: '不应保存的候选内容\u0000' }, fallback: '' },
+    { code: 'AI_DESCRIPTION_INPUT_TOO_LARGE', source: { fact: '界'.repeat(12000) }, fallback: '直接组合事实' },
+    { code: 'AI_DESCRIPTION_INPUT_TOO_LARGE', source: { fact: 'x'.repeat(15999) }, fallback: '直接组合事实' },
+  ])('records $code safely when historical ingestion rejects AI input', async ({ code, source, fallback }) => {
+    mode = 'SUCCESS';
+    const value = await engineSource();
+    const { receipt } = await value.prepare(value.configuration, { ...value.raw, ...source });
+    const history = await engine.previewHistory(fixture.actor, { ruleId: value.configuration.id, ruleVersion: value.configuration.version,
+      from: receipt.receivedAt.toISOString(), to: new Date().toISOString() }, randomUUID(), randomUUID());
+    const submitted = await engine.submitImport(fixture.actor, { previewId: history.previewId, confirmed: true }, randomUUID(), randomUUID());
+    const before = requests.length;
+    await engine.processDue(20);
+    await service.processDue();
+    expect(await engine.getJob(fixture.actor, submitted.jobIds[0]!)).toMatchObject({ status: 'COMPLETED', failed: 0 });
+    expect(requests).toHaveLength(before);
+    const row = await fixture.prisma.processDefect.findFirstOrThrow({ where: { organizationId: fixture.actor.organizationId, externalRecordKey: String(value.raw.id) } });
+    expect(row).toMatchObject({ description: fallback, descriptionDirect: fallback, descriptionInput: [], descriptionAiStatus: 'FAILED' });
+    const [task] = (await service.list(fixture.actor, row.id)).items;
+    expect(task).toMatchObject({ id: row.descriptionTaskId, status: 'FAILED', errorCode: code, result: null, attempts: 0 });
+    const [snapshot] = await fixture.prisma.$queryRaw<{ input_fields: unknown; expected_description: string }[]>`SELECT input_fields, expected_description FROM integration_ai_description_tasks WHERE id=${task!.id}::uuid`;
+    expect(snapshot).toEqual({ input_fields: [], expected_description: '' });
+    await expect(service.action(fixture.actor, task!.id, { expectedVersion: task!.version }, false, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ status: 409, response: { code } });
+  });
+
+  it('publishes an exhausted claim timeout only on its current defect revision', async () => {
+    const older = await source(), current = await source();
+    await older.enqueue();
+    await current.enqueue();
+    const olderTask = (await service.list(fixture.actor, older.defect.id)).items[0]!;
+    older.input.fields[0]!.value = '新输入';
+    await older.enqueue();
+    const currentTask = (await service.list(fixture.actor, current.defect.id)).items[0]!;
+    await fixture.prisma.$executeRaw`UPDATE integration_ai_description_tasks SET status='PROCESSING',attempts=3,claimed_at=clock_timestamp()-interval '3 minutes',claim_token=${randomUUID()}::uuid WHERE id IN (${olderTask.id}::uuid,${currentTask.id}::uuid)`;
+    await fixture.prisma.$executeRaw`UPDATE integration_ai_description_tasks SET next_attempt_at=clock_timestamp()+interval '1 hour' WHERE defect_id=${older.defect.id}::uuid AND status='PENDING'`;
+
+    await service.processDue();
+
+    expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: current.defect.id } })).toMatchObject({ description: current.input.direct, descriptionAiStatus: 'FAILED' });
+    expect((await service.list(fixture.actor, current.defect.id)).items[0]).toMatchObject({ status: 'FAILED', errorCode: 'AI_CONNECTION_TIMEOUT' });
+    expect(await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: older.defect.id } })).toMatchObject({ descriptionAiStatus: 'PENDING' });
+  });
+
+  it.each([undefined, null, '  '])('uses the existing published mapping when a bound optional field is %p', async optional => {
+    mode = 'SUCCESS';
+    const value = await engineSource();
+    const applications = new AiApplicationService(fixture.prisma, new AdminMutationService(fixture.prisma, fixture.audit), connections, fixture.audit);
+    const organizationId = fixture.actor.organizationId;
+    const output = { mode: 'TEXT', field: 'description', target: 'description' } as const;
+    const application = await applications.create(fixture.actor, organizationId, { name: '选填来源字段', domain: 'PROCESS_QUALITY', scene: 'PROCESS_DEFECT_DESCRIPTION', enabled: true, fallback: 'DIRECT', connectionId: connection.id, model: 'model-a', output,
+      prompt: '现象{{fact}}；位置{{position}}', variables: [{ variable: 'fact', label: '现象' }, { variable: 'position', label: '位置' }] }, randomUUID(), randomUUID());
+    await applications.publish(fixture.actor, organizationId, application.id, { expectedVersion: application.version }, randomUUID(), randomUUID());
+    const { description: _description, ...mapping } = value.configuration.mapping;
+    const inputFields = [{ path: 'fact', variable: 'fact' }, { path: 'details.position', variable: 'position' }];
+    const rule = await engine.saveRule(fixture.actor, { ...value.configuration, mapping, aiDescription: undefined, expectedVersion: value.configuration.version,
+      descriptionComposition: { fields: [...inputFields, { path: 'direct' }], separator: '\n' },
+      aiApplication: { applicationId: application.id, publishedVersion: 1, inputFields } }, randomUUID(), randomUUID(), value.configuration.id);
+    const payload = { ...value.raw, details: { position: optional, privateNote: '不可外发' } };
+    const { receipt } = await value.prepare(rule, payload);
+    const before = requests.length;
+    const preview = await engine.previewAi(fixture.actor, { ruleId: rule.id, ruleVersion: rule.version, receiptId: receipt.id, rowIndex: 0 }, randomUUID());
+    const imported = await value.ingest(rule, payload);
+    await service.processDue();
+
+    expect(preview).toMatchObject({ status: 'SUCCEEDED', errorCode: null, aiDescription: '已选事实的整理结果', directDescription: '毛刺\n直接组合事实' });
+    expect(preview.inputFields.map(field => field.variable)).toEqual(['fact']);
+    expect((await service.list(fixture.actor, imported.row.id)).items[0]).toMatchObject({ status: 'APPLIED', errorCode: null, result: '已选事实的整理结果' });
+    expect(requests).toHaveLength(before + 2);
+    for (const sent of requests.slice(before)) {
+      expect(sent).toMatchObject({ messages: expect.arrayContaining([{ role: 'user', content: '现象"毛刺"；位置""' }]) });
+      expect(JSON.stringify(sent)).not.toMatch(/不可外发|直接组合事实|\{\{position\}\}/);
+    }
   });
 
   it.each(['INSERT_ONLY', 'UPDATE', 'CONFIRM'] as const)('gates independent AI-only input changes through the %s strategy and preserves current-input deduplication', async strategy => {
@@ -162,9 +300,13 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     const nextRule = await value.changePrompt();
     const { preview } = await value.prepare(nextRule);
     expect(preview.action).toBe('AWAITING_CONFIRMATION');
-    expect(preview.differences.find(difference => difference.field === 'aiDescription')?.after).toContain('新版本');
+    const previewDifference = preview.differences.find(difference => difference.field === 'aiDescription');
+    expect(JSON.parse(previewDifference?.after ?? 'null')).toMatchObject({ ruleVersion: nextRule.version });
+    expect(JSON.stringify(previewDifference)).not.toMatch(/新版本|毛刺|直接组合事实|"prompt"|"fields"/);
     const queued = await engine.submitImport(fixture.actor, { previewId: preview.previewId, confirmed: true }, randomUUID(), randomUUID()); await engine.processDue(20);
     const pending = (await engine.listItems(fixture.actor, queued.jobIds[0]!, {})).items[0]!;
+    const detail = await engine.getItem(fixture.actor, pending.id, randomUUID());
+    expect(detail.differences.find(difference => difference.field === 'aiDescription')).toEqual(previewDifference);
     expect((await service.list(fixture.actor, initial.row.id)).items).toHaveLength(1);
     await engine.actOnItem(fixture.actor, pending.id, { expectedVersion: pending.version, reason: '确认提示词版本' }, true, randomUUID(), randomUUID()); await service.processDue();
     const current = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: initial.row.id } });

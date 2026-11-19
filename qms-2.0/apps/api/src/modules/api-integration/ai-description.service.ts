@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { validateAiDescription, type AiDescriptionField, type AiDescriptionOutput } from '../../common/ai-description.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { PrismaService } from '../../database/prisma.service.js';
+import { aiGenerationDataTooLarge } from '../ai-configuration/ai-connection.policy.js';
 import { AiConnectionService } from '../ai-configuration/ai-connection.service.js';
 import { AiApplicationService, type AiApplicationBinding } from '../ai-configuration/ai-application.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
@@ -19,12 +20,38 @@ type DescriptionInput = { ruleId: string; ruleVersion: number; rule: IngestionRu
 const taskDto = (row: TaskRow): AiDescriptionTaskDto => ({ id: row.id, defectId: row.defect_id, ruleId: row.rule_id, ruleVersion: row.rule_version,
   connectionVersion: row.connection_version, status: row.status, attempts: row.attempts, version: row.version, result: row.result, errorCode: row.error_code, updatedAt: row.updated_at.toISOString() });
 const inputIdentity = (fields: AiDescriptionField[]) => JSON.stringify(fields.map(field => [field.path, field.label, field.variable ?? null, field.value]));
+const hasDescriptionInput = (fields: AiDescriptionField[]) => fields.some(field => String(field.value ?? '').trim());
+const emptyInputCode = 'AI_DESCRIPTION_INPUT_EMPTY';
+const invalidInputCode = 'AI_DESCRIPTION_INPUT_INVALID';
+const oversizedInputCode = 'AI_DESCRIPTION_INPUT_TOO_LARGE';
+const terminalInputCodes: readonly string[] = [emptyInputCode, invalidInputCode, oversizedInputCode];
 const taskApplication = (task: TaskRow, rule: IngestionRule | undefined) => task.application_id
   ? { applicationId: task.application_id, publishedVersion: task.application_version! } : rule?.aiApplication;
-const failureCode = (error: unknown): string => {
+export const failureCode = (error: unknown): string => {
   const value = error instanceof HttpException ? (error.getResponse() as { code?: unknown }).code : undefined;
-  return typeof value === 'string' && ['AI_APPLICATION_INVALID','AI_APPLICATION_NOT_FOUND','AI_APPLICATION_UNAVAILABLE','AI_APPLICATION_VERSION_CONFLICT','AI_CONNECTION_INVALID','AI_CONNECTION_NOT_FOUND','AI_CONNECTION_UNAVAILABLE','AI_CONNECTION_VERSION_CONFLICT','AI_CONNECTION_TARGET_DENIED','AI_CONNECTION_REQUEST_FAILED','AI_CONNECTION_TIMEOUT','AI_CONNECTION_RESPONSE_INVALID','AI_CONNECTION_RESPONSE_TOO_LARGE','ORGANIZATION_DISABLED','AUTH_SESSION_REQUIRED','FEATURE_PERMISSION_DENIED'].includes(value) ? value : 'AI_CONNECTION_REQUEST_FAILED';
+  return typeof value === 'string' && [...terminalInputCodes,'AI_APPLICATION_INVALID','AI_APPLICATION_NOT_FOUND','AI_APPLICATION_UNAVAILABLE','AI_APPLICATION_VERSION_CONFLICT','AI_CONNECTION_INVALID','AI_CONNECTION_NOT_FOUND','AI_CONNECTION_UNAVAILABLE','AI_CONNECTION_VERSION_CONFLICT','AI_CONNECTION_TARGET_DENIED','AI_CONNECTION_REQUEST_FAILED','AI_CONNECTION_TIMEOUT','AI_CONNECTION_RESPONSE_INVALID','AI_CONNECTION_RESPONSE_TOO_LARGE','ORGANIZATION_DISABLED','AUTH_SESSION_REQUIRED','FEATURE_PERMISSION_DENIED'].includes(value) ? value : 'AI_CONNECTION_REQUEST_FAILED';
 };
+
+function rejectedDescriptionInput(input: Pick<DescriptionInput, 'invalidDirect' | 'direct' | 'fields'>, bindings?: AiApplicationBinding['inputFields']) {
+  if (input.invalidDirect || (input.direct?.length ?? 0) > 10000) return invalidInputCode;
+  if (Buffer.byteLength(JSON.stringify(input.fields)) > 32768) return oversizedInputCode;
+  if (input.fields.some(field => typeof field.value === 'string' && /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\uD800-\uDFFF]/u.test(field.value))) return invalidInputCode;
+  if (hasDescriptionInput(input.fields) && aiGenerationDataTooLarge(providerSelectedData(input.fields, bindings))) return oversizedInputCode;
+  return null;
+}
+
+function providerSelectedData(fields: AiDescriptionField[], bindings: AiApplicationBinding['inputFields'] = []) {
+  if (!hasDescriptionInput(fields)) ingestionError(emptyInputCode);
+  const selected = fields.map(field => {
+    const value = String(field.value ?? '');
+    return { label: field.label || field.path, variable: field.variable, value: value.trim() ? value : '' };
+  });
+  const provided = new Set(fields.map(field => field.variable));
+  for (const binding of bindings) {
+    if (!provided.has(binding.variable)) selected.push({ label: binding.label || binding.path, variable: binding.variable, value: '' });
+  }
+  return selected;
+}
 
 @Injectable()
 export class AiDescriptionService {
@@ -67,12 +94,18 @@ export class AiDescriptionService {
     if (!ai) return null;
     const state = await this.defects.aiDescriptionState(tx, actor, input.defectId);
     const [existing] = await tx.$queryRaw<TaskRow[]>`SELECT * FROM integration_ai_description_tasks WHERE organization_id=${integrationScope(actor)}::uuid AND defect_id=${input.defectId}::uuid AND id=${state.descriptionTaskId}::uuid AND input_revision=${state.descriptionInputVersion}`;
+    const rejected = rejectedDescriptionInput(input, ai.inputFields);
+    if (rejected) {
+      if (existing?.error_code === rejected && existing.rule_id === input.ruleId && existing.rule_version === input.ruleVersion) return null;
+      return { field: 'aiDescription', before: null, after: JSON.stringify({ errorCode: rejected }) };
+    }
     const direct = input.direct ?? state.descriptionDirect ?? state.description;
     let connectionVersion = ai.connectionVersion ?? 1;
-    try { connectionVersion = (await this.connections.resolve(integrationScope(actor), ai.connectionId, tx)).version; } catch {}
-    if (input.invalidDirect || !input.fields.some(field => field.value !== null && String(field.value).trim()) || Buffer.byteLength(JSON.stringify(input.fields)) > 32768) {
-      if (JSON.stringify(state.descriptionInput) === JSON.stringify(input.fields)) return null;
-    } else if (existing && existing.rule_id === input.ruleId && existing.rule_version === input.ruleVersion && existing.connection_version === connectionVersion
+    if (hasDescriptionInput(input.fields)) {
+      try { connectionVersion = (await this.connections.resolve(integrationScope(actor), ai.connectionId, tx)).version; } catch {}
+    }
+    if (existing && existing.rule_id === input.ruleId && existing.rule_version === input.ruleVersion && existing.connection_version === connectionVersion
+      && existing.error_code !== invalidInputCode && existing.error_code !== oversizedInputCode
       && inputIdentity(existing.input_fields) === inputIdentity(input.fields) && existing.expected_description === direct) return null;
     const before = existing ? JSON.stringify({ ruleId: existing.rule_id, ruleVersion: existing.rule_version, connectionId: existing.connection_id,
       connectionVersion: existing.connection_version, model: existing.model, prompt: existing.prompt, fields: existing.input_fields, output: existing.output_configuration, direct: existing.expected_description }) : null;
@@ -83,46 +116,44 @@ export class AiDescriptionService {
   async enqueue(tx: AdminTransaction, actor: AdminActor, input: DescriptionInput) {
     if (!input.rule.aiDescription) return;
     const organizationId = integrationScope(actor), ai = input.rule.aiDescription;
-    if (input.invalidDirect || (input.direct?.length ?? 0) > 10000 || !input.fields.some(field => field.value !== null && String(field.value).trim()) || Buffer.byteLength(JSON.stringify(input.fields)) > 32768) {
-      const state = await this.defects.aiDescriptionState(tx, actor, input.defectId);
-      if (JSON.stringify(state.descriptionInput) !== JSON.stringify(input.fields)) {
-        const prepared = await this.defects.prepareAiDescription(tx, actor, input.defectId, randomUUID(), input.fields, state.descriptionDirect ?? state.description);
-        if (prepared.version !== prepared.previousVersion) await this.syncSourceVersion(tx, { organization_id: organizationId, defect_id: input.defectId }, prepared.previousVersion, prepared.version);
-        await this.defects.markAiDescription(tx, actor, input.defectId, prepared.revision, 'FAILED');
-        return prepared.version;
-      }
-      return state.version;
-    }
+    const rejected = rejectedDescriptionInput(input, ai.inputFields);
+    const fields = rejected ? [] : input.fields;
     let application = input.rule.aiApplication;
     if (!application) {
       const [currentRule] = await tx.$queryRaw<{ configuration: IngestionRule }[]>`SELECT configuration FROM integration_ingestion_rules WHERE organization_id=${organizationId}::uuid AND id=${input.ruleId}::uuid AND version=${input.ruleVersion}`;
       application = currentRule?.configuration.aiApplication;
     }
-    let connectionVersion = ai.connectionVersion ?? 1, unavailable: string | null = null;
-    try {
-      if (application) await this.applications.assertAvailable(tx, organizationId, application.applicationId, application.publishedVersion);
-      connectionVersion = (await this.connections.resolve(organizationId, ai.connectionId, tx)).version;
+    const terminalInputCode = rejected ?? (hasDescriptionInput(fields) ? null : emptyInputCode);
+    let connectionVersion = ai.connectionVersion ?? 1, unavailable: string | null = terminalInputCode;
+    if (!terminalInputCode) {
+      try {
+        if (application) await this.applications.assertAvailable(tx, organizationId, application.applicationId, application.publishedVersion);
+        connectionVersion = (await this.connections.resolve(organizationId, ai.connectionId, tx)).version;
+      } catch (error) { unavailable = failureCode(error); }
     }
-    catch (error) { unavailable = failureCode(error); }
-    const selectedIdentity = inputIdentity(input.fields);
+    const selectedIdentity = inputIdentity(fields);
     const digest = createHash('sha256').update(selectedIdentity).digest('hex');
     const identity = `${organizationId}:${input.defectId}:ai-description`;
     await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${identity},0))::text`;
     const state = await this.defects.aiDescriptionState(tx, actor, input.defectId);
-    const direct = input.direct ?? state.descriptionDirect ?? state.description;
+    const direct = (rejected ? null : input.direct) ?? state.descriptionDirect ?? state.description;
+    const expectedDescription = rejected ? '' : direct;
     const [existing] = await tx.$queryRaw<TaskRow[]>`SELECT * FROM integration_ai_description_tasks WHERE organization_id=${organizationId}::uuid AND defect_id=${input.defectId}::uuid AND id=${state.descriptionTaskId}::uuid AND input_revision=${state.descriptionInputVersion} AND rule_id=${input.ruleId}::uuid AND rule_version=${input.ruleVersion} AND connection_version=${connectionVersion}`;
-    if (existing && inputIdentity(existing.input_fields) === selectedIdentity && existing.expected_description === direct) return state.version;
+    if (existing && (terminalInputCodes.includes(existing.error_code ?? '') ? existing.error_code : null) === terminalInputCode
+      && inputIdentity(existing.input_fields) === selectedIdentity && existing.expected_description === expectedDescription) return state.version;
     const id = randomUUID();
-    const prepared = await this.defects.prepareAiDescription(tx, actor, input.defectId, id, input.fields, direct);
+    const prepared = await this.defects.prepareAiDescription(tx, actor, input.defectId, id, fields, direct);
     if (prepared.version !== prepared.previousVersion) await this.syncSourceVersion(tx, { organization_id: organizationId, defect_id: input.defectId }, prepared.previousVersion, prepared.version);
     const savedActor = { id: actor.id, organizationId: actor.organizationId, accountType: actor.accountType, sessionId: '', scopeOrganizationId: organizationId };
     await tx.$executeRaw`INSERT INTO integration_ai_description_tasks(id,organization_id,defect_id,rule_id,rule_version,connection_id,connection_version,input_digest,input_fields,prompt,model,output_configuration,actor_snapshot,expected_description,input_revision,status,error_code,application_id,application_version)
-      VALUES(${id}::uuid,${organizationId}::uuid,${input.defectId}::uuid,${input.ruleId}::uuid,${input.ruleVersion},${ai.connectionId}::uuid,${connectionVersion},${digest},${JSON.stringify(input.fields)}::jsonb,${ai.prompt},${ai.model},${JSON.stringify(ai.output)}::jsonb,${JSON.stringify(savedActor)}::jsonb,${direct},${prepared.revision},${unavailable ? 'FAILED' : 'PENDING'},${unavailable},${application?.applicationId ?? null}::uuid,${application?.publishedVersion ?? null})`;
+      VALUES(${id}::uuid,${organizationId}::uuid,${input.defectId}::uuid,${input.ruleId}::uuid,${input.ruleVersion},${ai.connectionId}::uuid,${connectionVersion},${digest},${JSON.stringify(fields)}::jsonb,${ai.prompt},${ai.model},${JSON.stringify(ai.output)}::jsonb,${JSON.stringify(savedActor)}::jsonb,${expectedDescription},${prepared.revision},${unavailable ? 'FAILED' : 'PENDING'},${unavailable},${application?.applicationId ?? null}::uuid,${application?.publishedVersion ?? null})`;
     if (unavailable) await this.defects.markAiDescription(tx, actor, input.defectId, prepared.revision, 'FAILED');
     return prepared.version;
   }
 
-  async preview(actor: AdminActor, input: { connectionId: string; model: string; prompt: string; fields: AiDescriptionField[]; output: AiDescriptionOutput; application?: AiApplicationBinding }): Promise<string> {
+  async preview(actor: AdminActor, input: { connectionId: string; model: string; prompt: string; fields: AiDescriptionField[]; inputFields?: AiApplicationBinding['inputFields']; output: AiDescriptionOutput; application?: AiApplicationBinding; invalidDirect?: boolean }): Promise<string> {
+    const rejected = rejectedDescriptionInput({ ...input, direct: null }, input.inputFields);
+    if (rejected) ingestionError(rejected);
     let applicationAvailability: number | undefined;
     const connection = await this.prisma.$transaction(async tx => {
       await this.access(tx, actor);
@@ -130,7 +161,7 @@ export class AiDescriptionService {
       return this.validateConnection(tx, actor, input.connectionId);
     });
     const result = await this.connections.generate(integrationScope(actor), input.connectionId, connection.version, { prompt: input.prompt, model: input.model, output: input.output,
-      selectedData: input.fields.map(field => ({ label: field.label || field.path, variable: field.variable, value: field.value === null ? '' : String(field.value) })) });
+      selectedData: providerSelectedData(input.fields, input.inputFields) });
     await this.prisma.$transaction(async tx => {
       await this.access(tx, actor);
       if (input.application) await this.applications.assertAvailable(tx, integrationScope(actor), input.application.applicationId, input.application.publishedVersion, applicationAvailability);
@@ -162,6 +193,7 @@ export class AiDescriptionService {
       const state = await this.defects.aiDescriptionState(tx, actor, task.defect_id);
       const [rule] = await tx.$queryRaw<{ version: number; configuration: IngestionRule }[]>`SELECT version,configuration FROM integration_ingestion_rules WHERE organization_id=${organizationId}::uuid AND id=${task.rule_id}::uuid`;
       if (state.descriptionInputVersion !== task.input_revision || rule?.version !== task.rule_version) ingestionError('CONCURRENCY_CONFLICT', 409);
+      if (!adopt && task.error_code && terminalInputCodes.includes(task.error_code)) ingestionError(task.error_code, 409);
       const application = taskApplication(task, rule.configuration);
       if (application) await this.applications.assertAvailable(tx, organizationId, application.applicationId, application.publishedVersion);
       let responseId = id;
@@ -197,7 +229,8 @@ export class AiDescriptionService {
 
   private async claim(): Promise<TaskRow | null> {
     return this.prisma.$transaction(async tx => {
-      await tx.$executeRaw`UPDATE integration_ai_description_tasks SET status='FAILED',error_code='AI_CONNECTION_TIMEOUT',claim_token=NULL,claimed_at=NULL,version=version+1,updated_at=clock_timestamp() WHERE status='PROCESSING' AND attempts>=3 AND claimed_at<clock_timestamp()-interval '2 minutes'`;
+      const expired = await tx.$queryRaw<Pick<TaskRow, 'organization_id' | 'defect_id' | 'id' | 'input_revision'>[]>`UPDATE integration_ai_description_tasks SET status='FAILED',error_code='AI_CONNECTION_TIMEOUT',claim_token=NULL,claimed_at=NULL,version=version+1,updated_at=clock_timestamp() WHERE status='PROCESSING' AND attempts>=3 AND claimed_at<clock_timestamp()-interval '2 minutes' RETURNING organization_id,defect_id,id,input_revision`;
+      for (const task of expired) await this.defects.expireAiDescription(tx, task.organization_id, task.defect_id, task.id, task.input_revision);
       const [task] = await tx.$queryRaw<TaskRow[]>`SELECT * FROM integration_ai_description_tasks WHERE (status IN ('PENDING','RETRY') AND next_attempt_at<=clock_timestamp() OR status='PROCESSING' AND claimed_at<clock_timestamp()-interval '2 minutes') AND attempts<3 ORDER BY next_attempt_at,id LIMIT 1 FOR UPDATE SKIP LOCKED`;
       if (!task) return null;
       const token = randomUUID();
@@ -219,11 +252,13 @@ export class AiDescriptionService {
           const [rule] = await tx.$queryRaw<{ version: number; configuration: IngestionRule }[]>`SELECT version,configuration FROM integration_ingestion_rules WHERE organization_id=${task.organization_id}::uuid AND id=${task.rule_id}::uuid`;
           const application = taskApplication(task, rule?.version === task.rule_version ? rule.configuration : undefined);
           if (application) applicationAvailability = await this.applications.assertAvailable(tx, task.organization_id, application.applicationId, application.publishedVersion);
-          return rule?.version === task.rule_version && state.descriptionInputVersion === task.input_revision && !state.archivedAt;
+          return rule?.version === task.rule_version && state.descriptionInputVersion === task.input_revision && !state.archivedAt ? rule.configuration : null;
         });
         if (fresh) {
+          const rejected = rejectedDescriptionInput({ fields: task.input_fields, direct: task.expected_description }, fresh.aiDescription?.inputFields);
+          if (rejected) ingestionError(rejected);
           const result = await this.connections.generate(task.organization_id, task.connection_id, task.connection_version, { prompt: task.prompt, model: task.model, output: task.output_configuration,
-            selectedData: task.input_fields.map(field => ({ label: field.label || field.path, variable: field.variable, value: field.value === null ? '' : String(field.value) })) });
+            selectedData: providerSelectedData(task.input_fields, fresh.aiDescription?.inputFields) });
           text = validateAiDescription(result.text);
         }
       } catch (error) { errorCode = failureCode(error); }

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import type { components } from '@qms/contracts';
@@ -19,7 +20,7 @@ const defect: components['schemas']['ProcessDefectDto'] = {
   ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null,
   evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL',
   materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: '一线', operationName: '贴片',
-  shift: 'DAY', operationSector: 'SMT', productSubcategory: '主板', projectStage: 'MASS_PRODUCTION', projectName: null,
+  shift: 'DAY', operationSector: 'SMT', productCategory: 'PCBA', productSubcategory: '主板', projectStage: 'MASS_PRODUCTION', projectName: null,
   pendingCompletion: false, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人',
 };
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:issues:issue'];
@@ -54,11 +55,65 @@ function listCalls() {
 }
 function latestQuery() { return new URL(listCalls().at(-1)?.[0] ?? '/', 'http://localhost').searchParams; }
 async function openPanel(label = '筛选条件') {
-  const trigger = screen.getAllByRole('button', { name: label })[0];
+  const trigger = screen.getAllByLabelText(label, { selector: 'button[aria-haspopup="dialog"]' })[0];
   fireEvent.click(trigger);
   const panel = await screen.findByLabelText('筛选面板');
   return { trigger, panel, queries: within(panel) };
 }
+
+it('displays the mapped product category even without a linked project and shows missing categories as unconfirmed', async () => {
+  const unmapped = { ...defect, id: '33333333-3333-4333-8333-333333333333', description: '历史记录', productCategory: null };
+  items = [defect, unmapped];
+  const { container } = mount();
+  const headers = within(container.querySelector('thead')!);
+  const category = headers.getByLabelText('产品类型', { selector: 'th' });
+  expect(category.nextElementSibling).toBe(headers.getByLabelText('细分类型', { selector: 'th' }));
+  const categoryIndex = (category as HTMLTableCellElement).cellIndex;
+  for (const [record, label] of [[defect, 'PCBA'], [unmapped, '未确认']] as const) {
+    const selection = await screen.findByLabelText(`选择制程不良 ${record.description}`);
+    expect(selection.closest('tr')?.cells[categoryIndex]).toHaveTextContent(label);
+  }
+});
+
+it.each([true, false])('inserts the category before the saved subcategory and follows its visibility (%s)', (showSubcategory) => {
+  const order = ['select', 'project', 'occurredAt', 'shift', 'productSubcategory', 'description', 'actions'];
+  const visible = order.filter(key => key !== 'shift' && (showSubcategory || key !== 'productSubcategory'));
+  const saved = JSON.stringify({ schema: 1, value: { order, visible, widths: { description: 390 } } });
+  localStorage.setItem(columnsKey, saved);
+  const { container } = mount();
+  const headers = within(container.querySelector('thead')!);
+  const expected = visible.flatMap(key => key === 'productSubcategory' ? ['productCategory', key] : [key]);
+  expect(headers.getAllByRole('columnheader').map(header => header.dataset.compactLedgerColumn).slice(0, expected.length)).toEqual(expected);
+  expect(Boolean(headers.queryByLabelText('产品类型', { selector: 'th' }))).toBe(showSubcategory);
+  expect(headers.queryByRole('columnheader', { name: '班次' })).not.toBeInTheDocument();
+  expect(within(headers.getByRole('columnheader', { name: '不良描述' })).getByRole('separator')).toHaveAttribute('aria-valuenow', '390');
+  expect(localStorage.getItem(columnsKey)).toBe(saved);
+});
+
+it('honors a previously configured category position and visibility', () => {
+  const order = ['select', 'productSubcategory', 'description', 'productCategory', 'actions'];
+  localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { order, visible: order.filter(key => key !== 'productSubcategory') } }));
+  const { container } = mount();
+  const headers = within(container.querySelector('thead')!);
+  expect(headers.getAllByRole('columnheader').map(header => header.dataset.compactLedgerColumn).slice(0, 4)).toEqual(['select', 'description', 'productCategory', 'actions']);
+});
+
+it('activates the description filter with the keyboard and returns focus after Escape', async () => {
+  const user = userEvent.setup();
+  const { container } = mount();
+  const header = within(container.querySelector('thead')!).getByRole('columnheader', { name: '不良描述' });
+  const trigger = within(header).getByLabelText('按不良描述筛选', { selector: 'button' });
+  trigger.focus();
+  await user.keyboard('{Enter}');
+  const panel = await screen.findByLabelText('筛选面板', { selector: '[role="dialog"]' });
+  const field = within(panel).getByLabelText('筛选字段 1');
+  expect(field).toHaveValue('description');
+  expect(field).toHaveFocus();
+  expect(trigger).toHaveAttribute('aria-expanded', 'true');
+  await user.keyboard('{Escape}');
+  expect(trigger).toHaveAttribute('aria-expanded', 'false');
+  expect(trigger).toHaveFocus();
+});
 
 it('keeps one 8D action and moves filters into the compact toolbar', async () => {
   items = [defect];
@@ -143,7 +198,7 @@ it('uses the same filter panel for the date header and submits a calendar date',
   localStorage.setItem(filtersKey, JSON.stringify({ schema: 1, value: { search: '', filters: { currentMonth: false, logic: 'ALL', items: [{ field: 'traceCode', operator: 'EQ', value: 'TRACE-SAVED' }] } } }));
   mount();
   await screen.findByLabelText('搜索制程不良');
-  const trigger = screen.getAllByRole('button', { name: '按发生时间筛选' })[0];
+  const trigger = screen.getAllByLabelText('按发生时间筛选', { selector: 'button' })[0];
   fireEvent.click(trigger);
   const queries = within(await screen.findByLabelText('筛选面板'));
   expect(queries.getByLabelText('筛选字段 1')).toHaveValue('traceCode');

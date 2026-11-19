@@ -50,13 +50,15 @@ it('AI description source inspection has no retry or adoption for an unauthorize
 it('AI description retries a failed task with the same body and idempotency key after an unknown result', async () => {
   const original = vi.mocked(apiRequest).getMockImplementation()!; let attempts = 0;
   vi.mocked(apiRequest).mockImplementation(async (path, init, ...args) => {
-    if (path.includes('/ai-tasks?')) return { items: [{ ...task, status: 'FAILED', result: null }] } as never;
+    if (path.includes('/ai-tasks?')) return { items: [{ ...task, status: 'FAILED', errorCode: 'AI_CONNECTION_TIMEOUT', result: null }] } as never;
     if (path.endsWith('/task-1/retry') && init?.method === 'POST') { attempts += 1; if (attempts === 1) throw new TypeError('network'); return { ...task, status: 'PENDING', version: 3 } as never; }
     return original(path, init, ...args);
   });
   mount(); await screen.findByText('人工保留的描述');
   fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   const sources = within(await screen.findByLabelText('描述来源'));
+  expect(await sources.findByText('AI 服务请求超时')).toBeVisible();
+  expect(sources.getByText(task.id)).toBeVisible();
   fireEvent.click(await sources.findByRole('button', { name: '重试AI整理' }));
   const retry = await sources.findByRole('button', { name: '重试原请求' });
   expect(retry).toBeEnabled(); fireEvent.click(retry);
@@ -94,7 +96,7 @@ it('AI description refresh reads the worker result into the existing ledger desc
   const refresh = sources.getByRole('button', { name: '刷新整理状态' });
   await waitFor(() => expect(refresh).not.toHaveClass('ant-btn-loading')); completed = true; await user.click(refresh);
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}?organizationId=${defect.organizationId}`, { signal: expect.any(AbortSignal) }));
-  const drawer = within(screen.getByText('来源详情', { selector: '.ant-drawer-title' }).closest('.ant-drawer-header') as HTMLElement);
+  const drawer = within(screen.getByText('不良品详情', { selector: '.ant-drawer-title' }).closest('.ant-drawer-header') as HTMLElement);
   await user.click(drawer.getByRole('button', { name: /关闭|close/i }));
   await waitFor(() => { const button = document.querySelector('main button.process-quality-detail-link'); expect(button).toHaveAccessibleName('AI整理后的正文'); expect(button).toBeVisible(); });
   expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);

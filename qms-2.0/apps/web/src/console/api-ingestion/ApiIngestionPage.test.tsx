@@ -14,7 +14,7 @@ import { ApiIngestionPage } from './ApiIngestionPage';
 import { ImportPreview } from './ImportPreview';
 import { RuleEditor } from './RuleEditor';
 import { JobList } from './JobList';
-import { IngestionError, type Rule } from './ingestion-ui';
+import { IngestionError, ingestionIssue, type Rule } from './ingestion-ui';
 import type { IntegrationScope } from '../api-integrations/integration-ui';
 
 const mocks = vi.hoisted(() => ({ context: {} as ConsoleContext, invalidate: vi.fn(), mutate: vi.fn() }));
@@ -302,7 +302,66 @@ it.each([
   ['INGESTION_PREVIEW_LIMIT_EXCEEDED', 'Temporary preview capacity is full. Retry later.'],
 ] as const)('explains the controlled %s failure in English', (code, message) => {
   localStorage.setItem('qms:locale:v1', 'en-US'); componentView(<IngestionError error={new ApiError({ code, message: 'Limit', fields: {}, traceId: 'trace' }, 429)} />);
-  expect(screen.getByRole('alert')).toHaveTextContent(message); expect(screen.getByRole('alert')).not.toHaveTextContent(code);
+  expect(screen.getByRole('alert')).toHaveTextContent(message); expect(screen.getByRole('alert')).toHaveTextContent(code);
+});
+it.each([
+  ['INGESTION_FIELD_TYPE', '来源字段类型与规则不符', 'A source field has an unexpected type'],
+  ['PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT', '来源明细编号已关联其他不良记录', 'The source detail ID is linked to another defect record'],
+  ['INGESTION_NOT_FOUND', '入库记录不存在或不可访问', 'The ingestion record does not exist or is unavailable'],
+  ['AI_APPLICATION_NOT_FOUND', '提示词应用或已发布版本不存在', 'The prompt application or its published revision does not exist'],
+  ['AI_CONNECTION_TIMEOUT', 'AI 服务请求超时', 'The AI service request timed out'],
+] as const)('uses the same bilingual catalog for persisted and request code %s', (code, zh, en) => {
+  localStorage.setItem('qms:locale:v1', 'en-US');
+  componentView(<><div>{ingestionIssue(code, false)}</div><IngestionError error={new ApiError({ code, message: 'private server diagnostic' }, 400)} /></>);
+  expect(screen.getByText(zh)).toBeVisible();
+  expect(screen.getByRole('alert')).toHaveTextContent(en);
+  expect(screen.getByRole('alert')).toHaveTextContent(code);
+  expect(screen.queryByText('private server diagnostic')).not.toBeInTheDocument();
+});
+it('shows request field names and a trace ID without disclosing field values or unsafe metadata', () => {
+  const traceId = 'aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa';
+  const fields = { 'conditions[0].path': ['private value'], api_token: ['private token'], 'payload=private-data': ['private payload'] };
+  componentView(<IngestionError error={new ApiError({ code: 'INGESTION_RULE_INVALID', message: 'private server diagnostic', fields, traceId }, 400)} />);
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveTextContent('conditions[0].path');
+  expect(alert).toHaveTextContent(traceId);
+  expect(alert).not.toHaveTextContent(/private|api_token/);
+});
+it.each([
+  { error: new ApiError({ code: 'constructor', message: 'private diagnostic', traceId: 'private-trace' }, 409), reason: '配置或档案已变化', status: 'HTTP_409' },
+  { error: new ApiError({ code: 'UNRECOGNIZED_PRIVATE_CODE', message: 'private diagnostic', fields: { privateKeyName: ['private value'] } }, 502), reason: '服务暂时不可用', status: 'HTTP_502' },
+  { error: new TypeError('Failed to fetch: private diagnostic'), reason: '请检查网络连接' },
+  { error: new SyntaxError('private diagnostic'), reason: '无法确定请求失败原因' },
+])('uses a safe fallback for $reason', ({ error, reason, status }) => {
+  componentView(<IngestionError error={error} />);
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveTextContent(reason);
+  if (status) expect(alert).toHaveTextContent(status);
+  expect(alert).not.toHaveTextContent(/private|constructor/i);
+});
+it('keeps the unknown import recovery wording ahead of transport diagnostics', () => {
+  componentView(<IngestionError unknown unknownTitle="请核对处理任务后再导入" error={new ApiError({ code: 'HTTP_504', message: 'private diagnostic' }, 504)} />);
+  const alert = screen.getByRole('alert');
+  expect(alert).toHaveTextContent('请核对处理任务后再导入');
+  expect(alert).toHaveTextContent('HTTP_504');
+  expect(alert).not.toHaveTextContent('private diagnostic');
+});
+it('explains an AI timeout returned in a successful trial response and retains the direct fallback', async () => {
+  const processRule = { ...rule, target: 'PROCESS_DEFECT', aiDescription: { connectionId: 'ai-1', prompt: '整理事实' } } as Rule;
+  mocks.mutate.mockResolvedValueOnce({ previewId: 'preview', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-16T00:00:00Z', action: 'INSERTED', fields: { description: '直接组合结果' }, differences: [] })
+    .mockResolvedValueOnce({ directDescription: '直接组合结果', inputFields: [], aiDescription: null, status: 'FAILED', errorCode: 'AI_CONNECTION_TIMEOUT', message: 'private provider diagnostic' });
+  componentView(<ImportPreview scope={verifiedScope()} rule={processRule} history={false} canReceipts close={vi.fn()} />);
+  const dialog = within(screen.getByRole('dialog'));
+  fireEvent.mouseDown(dialog.getByRole('combobox', { name: '接收记录' }));
+  fireEvent.click(await screen.findByText(/MSG001/, { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
+  const preview = within(await dialog.findByRole('region', { name: '入库预览' }));
+  fireEvent.click(preview.getByRole('button', { name: '试运行AI整理' }));
+  await dialog.findByText('AI 服务请求超时');
+  expect(dialog.getByText('AI_CONNECTION_TIMEOUT')).toBeVisible();
+  expect(within(dialog.getByRole('region', { name: '描述试运行结果' })).getByText('直接组合结果')).toBeVisible();
+  expect(dialog.queryByText('private provider diagnostic')).not.toBeInTheDocument();
+  expect(preview.getByRole('button', { name: '确认导入' })).toBeEnabled();
 });
 it.each([502, 408, 425])('freezes an unknown import command across repeated %s outcomes', async status => {
   const failure = new ApiError({ code: `HTTP_${status}`, message: 'Unknown', fields: {}, traceId: 'trace' }, status);
@@ -402,6 +461,36 @@ it('keeps stale item differences visible while disabling confirmation', async ()
   await waitFor(() => expect(stale).toBeVisible());
   expect(detail.getByRole('button', { name: '确认更新' })).toBeDisabled(); expect(detail.getByText('旧供应商')).toBeVisible(); expect(mocks.mutate).not.toHaveBeenCalled();
 });
+it.each([
+  { jobReceipt: null, parent: false, code: 'INTEGRATION_RECEIPT_NOT_FOUND', status: 404, reason: '原始接收记录已清理，无法计算差异' },
+  { jobReceipt: receiptId, parent: false, code: 'INTEGRATION_RECEIPT_NOT_FOUND', status: 404, reason: '原始接收记录不可用，可能已清理，无法计算差异' },
+  { jobReceipt: null, parent: true, code: 'INTEGRATION_RECEIPT_NOT_FOUND', status: 404, reason: '原始接收记录不可用，可能已清理，无法计算差异' },
+  { jobReceipt: receiptId, parent: false, code: 'INTEGRATION_PAYLOAD_EXPIRED', status: 410, reason: '原始接收正文已清理，无法计算差异' },
+] as const)('explains why completed process differences are unavailable ($code, receipt=$jobReceipt, parent=$parent)', async ({ jobReceipt, parent, code, status, reason }) => {
+  const jobId = '66666666-6666-4666-8666-666666666666'; const itemId = '77777777-7777-4777-8777-777777777777';
+  const job = { id: jobId, endpointId, receiptId: jobReceipt, parentJobId: null, planningPreviewId: parent ? 'preview-parent' : null, ruleId, ruleVersion: 2, target: 'PROCESS_DEFECT', source: parent ? 'HISTORY' : 'SINGLE', status: 'COMPLETED', sequence: 1, total: 1, pending: 0, succeeded: 1, skipped: 0, failed: 0, awaitingConfirmation: 0, errorCode: null, createdAt: '2026-11-14T02:00:00Z' };
+  const item = { id: itemId, jobId: parent ? '88888888-8888-4888-8888-888888888888' : jobId, receiptId, rowIndex: 0, status: 'INSERTED', errorCode: null, targetId: 'defect-one', targetVersion: 1, version: 3 };
+  read.mockImplementation(async path => {
+    if (path.includes(`/items/${itemId}?`)) throw new ApiError({ code, message: 'private receipt diagnostic' }, status);
+    if (path.includes(`/jobs/${jobId}/items`)) return { items: [item], total: 1, page: 1, limit: 20 } as never;
+    if (path.includes(`/jobs/${jobId}?`)) return job as never;
+    if (path.includes('/ingestion/jobs?')) return { items: [job], total: 1, page: 1, limit: 20 } as never;
+    throw new Error(`Unexpected read ${path}`);
+  });
+  jobsView(); fireEvent.click(await screen.findByLabelText('查看任务1'));
+  const jobDialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
+  await jobDialog.findByText('接收编号');
+  expect(await jobDialog.findByRole('link', { name: '查看台账' })).toHaveAttribute('href', `/app/process-quality?organizationId=${homeId}&defectId=defect-one`);
+  fireEvent.click(jobDialog.getByRole('button', { name: '查看差异' }));
+  const detail = within(await screen.findByRole('dialog', { name: '数组第1行' }));
+  const alert = await detail.findByRole('alert');
+  expect(alert).toHaveTextContent(reason);
+  expect(alert).toHaveTextContent(code);
+  expect(alert).not.toHaveTextContent('private receipt diagnostic');
+  expect(detail.getByRole('link', { name: '查看台账' })).toHaveAttribute('href', `/app/process-quality?organizationId=${homeId}&defectId=defect-one`);
+  expect(detail.queryByRole('button', { name: '确认更新' })).not.toBeInTheDocument();
+  expect(mocks.invalidate).not.toHaveBeenCalled();
+});
 it('allows retrying a blocked job even when failure occurred before selecting an item', async () => {
   const jobId = '66666666-6666-4666-8666-666666666666';
   const job = { id: jobId, endpointId, receiptId, ruleId, ruleVersion: 2, target: 'SUPPLIER', source: 'AUTO', status: 'BLOCKED', sequence: 1, total: 1, pending: 1, succeeded: 0, skipped: 0, failed: 0, awaitingConfirmation: 0, errorCode: 'INGESTION_AUTHORIZATION_REVOKED', createdAt: '2026-11-14T02:00:00Z' };
@@ -485,7 +574,7 @@ it('locates a failed preview using its controlled source field without displayin
   const dialog = previewView();
   fireEvent.mouseDown(dialog.getByRole('combobox', { name: '接收记录' })); fireEvent.click(await screen.findByText(/MSG001/, { selector: '.ant-select-item-option-content' })); fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
   const preview = within(await dialog.findByRole('region', { name: '入库预览' }));
-  expect(preview.getByText('supplier.code')).toBeVisible(); expect(preview.getByText('缺少必需来源字段')).toBeVisible(); expect(preview.queryByText('INGESTION_FIELD_MISSING')).not.toBeInTheDocument();
+  expect(preview.getByText('supplier.code')).toBeVisible(); expect(preview.getByText('缺少必需来源字段')).toBeVisible(); expect(preview.getByText('INGESTION_FIELD_MISSING')).toBeVisible();
   expect(preview.getByRole('button', { name: '确认导入' })).toBeDisabled(); expect(mocks.mutate).toHaveBeenCalledTimes(1);
 });
 it.each(['validation', 'duplicate'])('shows the %s item location or existing confirmation link without creating another confirmation', async kind => {
@@ -505,7 +594,7 @@ it.each(['validation', 'duplicate'])('shows the %s item location or existing con
   const summary = await jobDialog.findByText(kind === 'validation' ? 'supplier.name' : '已关联既有待确认项');
   await waitFor(() => expect(summary).toBeVisible());
   await act(async () => { fireEvent.click(jobDialog.getByRole('button', { name: '查看差异' })); }); const detail = within(await screen.findByRole('dialog', { name: '数组第1行' }));
-  if (kind === 'validation') { const field = await detail.findByText('supplier.name'); await waitFor(() => expect(field).toBeVisible()); expect(detail.getByText('来源字段类型与规则不符')).toBeVisible(); }
+  if (kind === 'validation') { const field = await detail.findByText('supplier.name'); await waitFor(() => expect(field).toBeVisible()); expect(detail.getByText('来源字段类型与规则不符')).toBeVisible(); expect(detail.getByText('INGESTION_FIELD_TYPE')).toBeVisible(); }
   else { const linked = await detail.findByText('已关联既有待确认项'); await waitFor(() => expect(linked).toBeVisible()); expect(detail.getByText(originalItemId)).toBeVisible(); expect(detail.queryByRole('button', { name: '确认更新' })).not.toBeInTheDocument(); expect(detail.queryByRole('button', { name: '跳过此项' })).not.toBeInTheDocument(); }
   expect(mocks.mutate).not.toHaveBeenCalled();
 });

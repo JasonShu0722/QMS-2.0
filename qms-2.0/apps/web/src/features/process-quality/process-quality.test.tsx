@@ -30,7 +30,9 @@ it('loads the defect ledger and opens source detail with linked issues', async (
   render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
   expect(await screen.findByText('表面划伤')).toBeVisible();
   fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
-  expect(await screen.findByText('来源详情')).toBeVisible();
+  const title = await screen.findByText('不良品详情', { selector: '.ant-drawer-title' });
+  expect(title.closest('[role="dialog"]')).toHaveAccessibleName('不良品详情');
+  expect(title).toBeVisible();
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}`, { signal: expect.any(AbortSignal) });
   expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}/issues`, { signal: expect.any(AbortSignal) });
 });
@@ -48,8 +50,9 @@ it('does not expose registration to a read-only user', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => path === '/api/v1/system/my-permissions' ? { permissions: ['process-quality:defects:read'] } : page);
   render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
   await screen.findByText('表面划伤');
-  expect(screen.queryByRole('button', { name: '登记不良' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
+  const toolbar = within(screen.getByLabelText('台账工具栏'));
+  expect(toolbar.queryByRole('button', { name: '登记不良' })).not.toBeInTheDocument();
+  expect(toolbar.queryByRole('button', { name: '发起问题' })).not.toBeInTheDocument();
 });
 
 it('protects an unfinished formal 8D when navigating away', async () => {
@@ -57,7 +60,7 @@ it('protects an unfinished formal 8D when navigating away', async () => {
   render(<MemoryRouter><UnsavedChangesProvider><ProcessDefectLedgerPage /><Link to="/app/workbench">返回工作台</Link></UnsavedChangesProvider></MemoryRouter>);
   await screen.findByText('表面划伤');
   fireEvent.click(screen.getByLabelText('选择制程不良 表面划伤'));
-  fireEvent.click(screen.getByRole('button', { name: '发起 8D' }));
+  fireEvent.click(within(screen.getByLabelText('台账工具栏')).getByRole('button', { name: '发起 8D' }));
   fireEvent.change(await screen.findByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
   fireEvent.click(screen.getByText('返回工作台'));
   const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });

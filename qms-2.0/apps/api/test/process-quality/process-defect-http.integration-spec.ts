@@ -166,6 +166,20 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     await request(app.getHttpServer()).get(`/api/v1/process-quality/defects?organizationId=${randomUUID()}`).set('Cookie', cookie).expect(403);
   });
 
+  it('allows routine defect writes with an active session after recent authentication expires', async () => {
+    await prisma.session.updateMany({ where: { userId }, data: { reauthenticatedAt: new Date(Date.now() - 600_000) } });
+    try {
+      await list({}).expect(200);
+      await send('post', 'defect-types', { code: 'RUNOUT', name: '跳动' }).expect(201);
+      const created = await send('post', 'defects', { defectTypeCode: 'RUNOUT', description: '跳动异常', defectQuantity: 2,
+        occurredAt: '2026-09-24T02:00:00Z', productCode: 'ACTIVE-P', traceCode: 'ACTIVE-T' }).expect(201);
+      await send('put', `defects/${created.body.id}`, { expectedVersion: 1, description: '复测跳动' }).expect(200);
+      await send('put', `defects/${created.body.id}/archive`, { expectedVersion: 2, reason: '确认删除' }).expect(200);
+    } finally {
+      await prisma.session.updateMany({ where: { userId }, data: { reauthenticatedAt: new Date() } });
+    }
+  });
+
   it('exposes protected formal issue creation with validated source selection', async () => {
     await send('post', 'issues', { sources: [] }).expect(400);
   });

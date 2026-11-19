@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import { aiApplicationTestMetadata } from './ai-application-test.read-model.js';
 
 export const SECURITY_AUDIT_ACTIONS = [
   'LOGIN_FAILED',
@@ -110,13 +111,15 @@ export class AuditLogService {
         resourceType: input.resourceType,
         resourceId: input.resourceId ?? null,
         outcome: input.outcome,
-        metadata: this.safeMetadata(input.metadata ?? {}),
+        metadata: this.safeMetadata(input.metadata ?? {}, input),
         traceId: input.traceId,
       },
     });
   }
 
-  safeMetadata(metadata: AuditMetadata): Prisma.InputJsonObject {
+  safeMetadata(metadata: AuditMetadata, event?: { action: string; resourceType: string; outcome: string }): Prisma.InputJsonObject {
+    const trialFields = event?.action === 'AI_APPLICATION_TESTED' && event.resourceType === 'AiApplication' && (event.outcome === 'SUCCESS' || event.outcome === 'FAILURE')
+      ? Object.entries(aiApplicationTestMetadata(metadata)).filter(([, value]) => value !== null) : [];
     return Object.fromEntries(
       Object.entries(metadata)
         .filter(([key, value]) => SAFE_METADATA_KEYS.has(key) && this.isSafeValue(value) && this.isSafeConfigurationValue(key, value)
@@ -124,7 +127,7 @@ export class AuditLogService {
           && (!['structureName', 'structurePreviousName'].includes(key) || (typeof value === 'string' && value.length <= 200 && /\S/.test(value)))
           && (key !== 'structureGovernorRoleId' || (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)))
           && (key !== 'changedFields' || (typeof value === 'string' && /^(fullName|phone|email)(,(fullName|phone|email))*$/.test(value))))
-        .map(([key, value]) => [key, value]),
+        .map(([key, value]) => [key, value]).concat(trialFields),
     ) as Prisma.InputJsonObject;
   }
 

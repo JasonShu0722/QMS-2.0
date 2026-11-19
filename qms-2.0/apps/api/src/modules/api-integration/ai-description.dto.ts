@@ -35,4 +35,6 @@ export class AiIngestionPreviewDto {
   @ApiProperty({ type: [AiDescriptionInputSnapshotDto] }) inputFields!: AiDescriptionInputSnapshotDto[];
   @ApiProperty({ nullable: true, type: String }) aiDescription!: string | null;
   @ApiProperty({ enum: ['SUCCEEDED', 'FAILED'] }) status!: string;
+  @ApiProperty({ nullable: true, type: String }) errorCode!: string | null;
+  @ApiPropertyOptional({ format: 'uuid' }) traceId?: string;
 }

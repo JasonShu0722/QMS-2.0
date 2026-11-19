@@ -16,7 +16,7 @@ beforeEach(() => {
 it('explains source field issues in the keyboard-focused tooltip without exposing internal codes', async () => {
   const record: Defect = {
     id: 'defect-hint', organizationId: 'org', description: '来源行', defectTypeCode: null, defectQuantity: 1, occurredAt: null,
-    lineName: null, operationName: null, shift: null, operationSector: null, productSubcategory: null, projectStage: null, projectName: null,
+    lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null,
     pendingCompletion: true, pendingConfiguration: false, registeredByName: null, traceCode: null, analysisProgress: null, responsibilityCategory: null,
     ledgerStatus: 'FOLLOWING', closedAt: null, closedById: null, sourceKind: 'IMS', version: 1,
     materials: [], materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0,

@@ -1,6 +1,7 @@
 {
   "version": 1,
   "allowedModuleDependencies": [
+    "ai-configuration -> api-integration",
     "ai-configuration -> authorization",
     "ai-configuration -> audit-log",
     "ai-configuration -> organization",

@@ -24,6 +24,35 @@ function Leave({ leave }: { leave: () => void }) { const guard = useNavigationGu
 function mount(permissions = organization.permissions, leave = vi.fn()) { return render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><AiApplications organization={{ ...organization, permissions }} /><Leave leave={leave} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>); }
 async function edit() { const row = (await screen.findByText(application.name, { selector: 'td' })).closest('tr')!; fireEvent.click(within(row).getByRole('button', { name: /^编\s*辑$/ })); return within(screen.getByRole('dialog', { name: '提示词应用' })); }
 
+const invocationPermissions = ['ai:applications:read', 'audit:read', 'ingestion:read', 'process-quality:defects:read'];
+it('opens paginated, organization-scoped call records for a read-only operator and distinguishes samples from runtime tasks', async () => {
+  const path = '/api/v1/admin/ai-applications/application-1/invocations?organizationId=org&page=1&limit=20';
+  vi.mocked(apiRequest).mockResolvedValueOnce({ items: [application], total: 1, page: 1, limit: 20 } as never)
+    .mockResolvedValueOnce({ items: [
+      { id: 'trial-event', organizationId: 'org', source: 'APPLICATION_TEST', applicationVersion: 2, status: 'SUCCESS', model: null, outputMode: null, connectionId: null, connectionVersion: null, attempts: null, errorCode: null, recordedAt: application.updatedAt, traceId: 'trial-trace', taskId: null },
+      { id: 'actual-task', organizationId: 'org', source: 'RUNTIME_TASK', applicationVersion: 1, status: 'FAILED', model: 'runtime-model', outputMode: 'JSON', connectionId: 'runtime-channel', connectionVersion: 3, attempts: 2, errorCode: 'AI_CONNECTION_TIMEOUT', recordedAt: application.updatedAt, traceId: null, taskId: 'actual-task' },
+    ], total: 2, page: 1, limit: 20 } as never);
+  mount(invocationPermissions);
+  const action = await screen.findByRole('button', { name: '调用记录' });
+  expect(apiRequest).not.toHaveBeenCalledWith(path, expect.anything());
+  fireEvent.click(action);
+  const dialog = within(await screen.findByRole('dialog', { name: '调用记录' }));
+  expect(await dialog.findByText('样本试运行')).toBeInTheDocument();
+  expect(dialog.getByText('实际运行任务')).toBeInTheDocument();
+  expect(dialog.getByText('runtime-model')).toBeInTheDocument();
+  expect(dialog.getByRole('columnheader', { name: '输出模式' })).toBeInTheDocument();
+  expect(dialog.getByRole('cell', { name: 'JSON' })).toBeInTheDocument();
+  expect(dialog.getByText('AI_CONNECTION_TIMEOUT')).toBeInTheDocument();
+  expect(dialog.getByText('actual-task')).toBeInTheDocument();
+  expect(apiRequest).toHaveBeenCalledWith(path, expect.anything());
+});
+it.each(invocationPermissions.slice(1))('keeps call records hidden without %s', async permission => {
+  mount(invocationPermissions.filter(code => code !== permission));
+  await screen.findByText(application.name, { selector: 'td' });
+  expect(screen.queryByRole('button', { name: '调用记录' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/invocations'))).toBe(false);
+});
+
 it('edits an application draft with scene variables and keeps publication a separate explicit action', async () => {
   mount(); const dialog = await edit();
   expect(dialog.getByLabelText('应用名称')).toHaveValue(application.name);

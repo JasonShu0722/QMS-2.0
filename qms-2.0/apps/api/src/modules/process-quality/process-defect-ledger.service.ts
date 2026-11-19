@@ -340,7 +340,7 @@ export class ProcessDefectLedgerService {
     const organizationId = this.scope(actor);
     const code = required(input.code, 64).toUpperCase();
     const name = required(input.name, 200);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_TYPE_CREATED', payload: { code, name }, permission: 'process-quality:defects:write' }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_TYPE_CREATED', payload: { code, name }, permission: 'process-quality:defects:write', authentication: 'active' }, async (tx) => {
       const type = await tx.processDefectType.create({ data: { organizationId, code, name, createdById: actor.id } });
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_TYPE_CREATED', resourceType: 'ProcessDefectType', resourceId: type.id, outcome: 'SUCCESS', traceId }, tx);
       return type;
@@ -359,7 +359,7 @@ export class ProcessDefectLedgerService {
     const organizationId = this.scope(actor);
     if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1 || typeof input.active !== 'boolean') reject('PROCESS_DEFECT_INPUT_INVALID', 400);
     const name = required(input.name, 200);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_TYPE_UPDATED', payload: { id, expectedVersion: input.expectedVersion, name, active: input.active }, permission: 'process-quality:defects:write' }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_TYPE_UPDATED', payload: { id, expectedVersion: input.expectedVersion, name, active: input.active }, permission: 'process-quality:defects:write', authentication: 'active' }, async (tx) => {
       const changed = await tx.processDefectType.updateMany({ where: { id, organizationId, version: input.expectedVersion }, data: { name, active: input.active, version: { increment: 1 } } });
       if (changed.count !== 1) reject('CONCURRENCY_CONFLICT', 409);
       const type = await tx.processDefectType.findUniqueOrThrow({ where: { id } });
@@ -376,7 +376,7 @@ export class ProcessDefectLedgerService {
     const facts = normalizeProcessDefectFacts(input, 'MANUAL');
     const materials = this.materialInput(input, []);
     if (materials?.some(item => item.id)) reject('PROCESS_DEFECT_MATERIALS_INVALID', 400);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_CREATED', payload: { ...facts, materials, occurredAt: facts.occurredAt?.toISOString() ?? null, sourceObservedAt: facts.sourceObservedAt?.toISOString() }, permission: 'process-quality:defects:write' }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_CREATED', payload: { ...facts, materials, occurredAt: facts.occurredAt?.toISOString() ?? null, sourceObservedAt: facts.sourceObservedAt?.toISOString() }, permission: 'process-quality:defects:write', authentication: 'active' }, async (tx) => {
       await this.validateReferences(tx, organizationId, facts);
       const derived = await this.completionFor(tx, organizationId, facts);
       const record = await tx.processDefect.create({ data: { ...facts, ...derived, registrationVersion: 1,
@@ -399,7 +399,7 @@ export class ProcessDefectLedgerService {
     if (input.externalSourceSystem !== undefined || input.sourceObservedAt !== undefined) reject('PROCESS_DEFECT_EXTERNAL_IDENTITY_IMMUTABLE', 409);
     const { externalRecordKey: supplementIdentity, ...updateInput } = input;
     normalizeProcessDefectFacts(updateInput, 'UPDATE');
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_UPDATED', payload: { id, ...input, occurredAt: input.occurredAt === undefined ? undefined : input.occurredAt?.toISOString() ?? null }, permission: 'process-quality:defects:write' }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_UPDATED', payload: { id, ...input, occurredAt: input.occurredAt === undefined ? undefined : input.occurredAt?.toISOString() ?? null }, permission: 'process-quality:defects:write', authentication: 'active' }, async (tx) => {
       if (supplementIdentity !== undefined) {
         const identity = `${organizationId}:IMS:${required(supplementIdentity ?? '', 200)}`;
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${identity}, 0))::text`;
@@ -490,7 +490,7 @@ export class ProcessDefectLedgerService {
   async deleteDefects(actor: AdminActor, input: { sources: DeletionSelection[]; reason: string; organizationId?: string }, traceId: string, key?: string) {
     const organizationId = this.scope(actor), sources = this.deletionSources(input, actor), reason = required(input.reason, 300);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECTS_DELETED', payload: { sources, reason },
-      permission: ['process-quality:defects:read', 'process-quality:defects:delete'], isolationLevel: 'ReadCommitted' }, async tx => {
+      permission: ['process-quality:defects:read', 'process-quality:defects:delete'], authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
       const items = await this.deletionItems(tx, actor, sources);
       if (items.some(item => item.blocked)) reject('PROCESS_DEFECT_DELETE_BLOCKED', 409);
       const changed = await tx.processDefect.updateMany({ where: { organizationId, id: { in: sources.map(source => source.defectId) }, archivedAt: null },
@@ -518,7 +518,7 @@ export class ProcessDefectLedgerService {
     version(input.expectedVersion);
     const reason = status === 'FOLLOWING' ? required(input.reason ?? '', 2000) : optional(input.reason, 2000);
     const action = status === 'CLOSED' ? 'PROCESS_DEFECT_CLOSED' : 'PROCESS_DEFECT_REOPENED';
-    return this.mutations.run({ actor, organizationId, key, traceId, action, payload: { id, expectedVersion: input.expectedVersion, reason }, permission: 'process-quality:defects:close' }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action, payload: { id, expectedVersion: input.expectedVersion, reason }, permission: 'process-quality:defects:close', authentication: 'active' }, async tx => {
       await this.lock(tx, organizationId, id);
       const current = await this.find(tx, organizationId, id);
       if (current.archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
@@ -542,7 +542,7 @@ export class ProcessDefectLedgerService {
       return { defectId: uuid(item.defectId), expectedVersion: version(item.expectedVersion) };
     });
     if (new Set(sources.map(item => item.defectId)).size !== sources.length) reject('PROCESS_DEFECT_CLASSIFICATION_INVALID', 400);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECTS_CLASSIFIED', payload: { sources, responsibilityCategory: input.responsibilityCategory }, permission: 'process-quality:defects:write' }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECTS_CLASSIFIED', payload: { sources, responsibilityCategory: input.responsibilityCategory }, permission: 'process-quality:defects:write', authentication: 'active' }, async tx => {
       const results = [];
       for (const source of [...sources].sort((a, b) => a.defectId.localeCompare(b.defectId))) {
         await this.lock(tx, organizationId, source.defectId);
@@ -572,7 +572,7 @@ export class ProcessDefectLedgerService {
       if (material.sqeUserId !== actor.id || !(await this.validSqe(tx, organizationId, actor.id))) reject('PROCESS_DEFECT_SQE_REQUIRED', 403);
       return material;
     };
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_MATERIAL_VERIFIED', payload: { id, materialId, expectedVersion: input.expectedVersion, verification: input.verification, verificationNotes }, permission: 'process-quality:materials:review' }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_MATERIAL_VERIFIED', payload: { id, materialId, expectedVersion: input.expectedVersion, verification: input.verification, verificationNotes }, permission: 'process-quality:materials:review', authentication: 'active' }, async tx => {
       await this.lock(tx, organizationId, id);
       const material = await designated(tx);
       const changed = await tx.processDefect.updateMany({ where: { id, organizationId, version: input.expectedVersion, archivedAt: null }, data: { updatedById: actor.id, version: { increment: 1 } } });
@@ -877,7 +877,7 @@ export class ProcessDefectLedgerService {
     const materials = await this.materials(tx, record.organizationId, record.id, materialVerificationHistory);
     const saved = processProjectSnapshot(record.projectSnapshot);
     const componentProject = saved ? { outcome: 'matched' as const, componentCode: saved.componentCode,
-      mapping: { ...saved.mapping, productSubcategory: record.productSubcategory }, project: saved.project,
+      mapping: { ...saved.mapping, productCategory: record.productCategory, productSubcategory: record.productSubcategory }, project: saved.project,
       issues: [] } : null;
     const duplicateCount = record.traceCode && record.operationCode ? await tx.processDefect.count({ where: { organizationId: record.organizationId,
       id: { not: record.id }, traceCode: record.traceCode, operationCode: record.operationCode, archivedAt: null } }) : 0;

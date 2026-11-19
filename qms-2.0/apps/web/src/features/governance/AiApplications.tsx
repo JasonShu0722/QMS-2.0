@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from 'react';
 import type { components } from '@qms/contracts';
-import { Alert, Button, Card, Form, Input, Modal, Select, Space, Switch, Tag } from 'antd';
+import { Alert, Button, Card, Form, Input, Modal, Select, Space, Switch, Table, Tag } from 'antd';
 import { useLanguage } from '../../i18n/Language';
 import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
@@ -15,8 +15,15 @@ type Application = components['schemas']['AiApplicationDto'];
 type Settings = components['schemas']['AiApplicationSettingsDto'];
 type Connection = components['schemas']['AiConnectionDto'];
 type Trial = components['schemas']['AiApplicationTestResultDto'];
+type InvocationPage = components['schemas']['AiApplicationInvocationPageDto'];
+type Invocation = InvocationPage['items'][number];
 type Rule = components['schemas']['IngestionRuleDto'];
 const applicationsPath = '/api/v1/admin/ai-applications';
+const invocationPermissions = ['audit:read', 'ingestion:read', 'process-quality:defects:read'];
+const invocationStatus: Record<Invocation['status'], [string, string]> = {
+  SUCCESS: ['成功', 'Succeeded'], PENDING: ['待处理', 'Pending'], PROCESSING: ['处理中', 'Processing'], RETRY: ['待重试', 'Awaiting retry'],
+  FAILED: ['失败', 'Failed'], APPLIED: ['已采用', 'Applied'], SUGGESTED: ['待采用', 'Suggested'], STALE: ['已失效', 'Stale'],
+};
 function ruleVariables(rule: Rule): Settings['variables'] {
   const fields: Array<{ label?: string; variable?: string }> = rule.descriptionComposition?.fields ?? [];
   const variables = fields.flatMap(({ variable, label }) => variable ? [{ variable, label: label ?? '' }] : []);
@@ -38,6 +45,7 @@ function ApplicationScope({ organization }: { organization: AdminOrganization })
 function ApplicationContent({ organization, scope }: { organization: AdminOrganization; scope: IntegrationScope }) {
   const { t } = useLanguage(); const text = useIngestionText(); const [form] = Form.useForm<Settings>(); const [sampleForm] = Form.useForm<components['schemas']['TestAiApplicationDto']>();
   const [editor, setEditor] = useState<{ record?: Application }>(); const [publishing, setPublishing] = useState<Application>(); const [trial, setTrial] = useState<Application>();
+  const [invocations, setInvocations] = useState<Application>();
   const [trialResult, setTrialResult] = useState<Trial>(); const [dirty, setDirty] = useState(false); const [showMutationError, setShowMutationError] = useState(false);
   const [page, setPage] = useState(1); const [pageSize, setPageSize] = useLedgerPageSize('ai-applications', organization.id); const [revision, setRevision] = useState(0);
   const [domain, setDomain] = useState<string>(); const [scene, setScene] = useState<string>();
@@ -54,6 +62,7 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
   const sourceVariables = sourceRule ? ruleVariables(sourceRule) : undefined;
   const variables = sourceVariables ?? editor?.record?.variables ?? [];
   const canReadRules = organization.permissions.includes('ingestion:read');
+  const canReadInvocations = organization.type === 'INTERNAL' && invocationPermissions.every(permission => organization.permissions.includes(permission));
   useUnsavedChanges(dirty || mutation.unknown);
   useEffect(() => {
     if (!editor || !readConnections) return;
@@ -81,7 +90,7 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
     })().catch(cause => { if (active && requests.current()) setRulesError(cause); }).finally(() => { if (active && requests.current()) setRulesLoading(false); });
     return () => { active = false; };
   }, [editor, organization.id, canReadRules, requests.read, requests.current, scope.deny, rulesRevision]);
-  function reset() { setEditor(undefined); setPublishing(undefined); setTrial(undefined); setTrialResult(undefined); setDirty(false); setShowMutationError(false); }
+  function reset() { setEditor(undefined); setPublishing(undefined); setTrial(undefined); setTrialResult(undefined); setInvocations(undefined); setDirty(false); setShowMutationError(false); }
   function close() { if (!locked) requestLeave(reset, true); }
   function refresh() { if (!locked) requestLeave(() => { reset(); setRevision(value => value + 1); }, true); }
   function open(record?: Application) {
@@ -140,8 +149,14 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
       { key: 'name', title: t('应用名称'), dataIndex: 'name' }, { key: 'domain', title: t('业务板块'), render: () => t('制程质量') }, { key: 'scene', title: t('应用场景'), render: () => t('不良描述整理') },
       { key: 'model', title: t('模型'), dataIndex: 'model' }, { key: 'enabled', title: t('状态'), render: (_, record) => t(record.enabled ? '启用' : '停用') },
       { key: 'version', title: t('草稿版本'), dataIndex: 'version' }, { key: 'publishedVersion', title: t('发布版本'), render: (_, record) => record.publishedVersion === null ? t('未发布') : `v${record.publishedVersion}` },
-      { key: 'actions', title: t('操作'), render: (_, record) => manage || canPublish || canTest ? <Space wrap>{manage ? <Button disabled={locked} onClick={() => open(record)}>{t('编辑')}</Button> : null}{canPublish ? <Button disabled={locked || !record.enabled} onClick={() => requestLeave(() => { reset(); setPublishing(record); }, true)}>{t('发布版本')}</Button> : null}{canTest ? <Button disabled={locked} onClick={() => requestLeave(() => { reset(); sampleForm.setFieldsValue({ samples: record.variables.map(variable => ({ variable: variable.variable, value: '' })) }); setTrial(record); }, true)}>{t('样本试运行')}</Button> : null}</Space> : t('只读') },
+      { key: 'actions', title: t('操作'), render: (_, record) => manage || canPublish || canTest || canReadInvocations ? <Space wrap>
+        {manage ? <Button disabled={locked} onClick={() => open(record)}>{t('编辑')}</Button> : null}
+        {canPublish ? <Button disabled={locked || !record.enabled} onClick={() => requestLeave(() => { reset(); setPublishing(record); }, true)}>{t('发布版本')}</Button> : null}
+        {canTest ? <Button disabled={locked} onClick={() => requestLeave(() => { reset(); sampleForm.setFieldsValue({ samples: record.variables.map(variable => ({ variable: variable.variable, value: '' })) }); setTrial(record); }, true)}>{t('样本试运行')}</Button> : null}
+        {canReadInvocations ? <Button disabled={locked} onClick={() => requestLeave(() => { reset(); setInvocations(record); }, true)}>{text('调用记录', 'Call records')}</Button> : null}
+      </Space> : t('只读') },
     ]} />
+    {canReadInvocations && invocations ? <InvocationHistory key={invocations.id} scope={scope} application={invocations} close={() => setInvocations(undefined)} /> : null}
     <Modal open={!!editor} title={t('提示词应用')} width={820} footer={null} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden>
       {feedback}<IngestionError error={connectionError} />
       {connectionError ? <Button disabled={locked} onClick={() => setEditor(value => value ? { ...value } : value)}>{t('重试')}</Button> : null}
@@ -192,4 +207,34 @@ function ApplicationContent({ organization, scope }: { organization: AdminOrgani
       {trialResult ? <section aria-label={t('样本结果')}><Tag color={trialResult.status === 'SUCCESS' ? 'success' : 'warning'}>{t(trialResult.status === 'SUCCESS' ? '试运行成功' : '试运行失败，请检查应用和渠道')}</Tag>{trialResult.text !== null ? <p style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{trialResult.text}</p> : null}</section> : null}
     </Modal>
   </Card>;
+}
+
+function InvocationHistory({ scope, application, close }: { scope: IntegrationScope; application: Application; close: () => void }) {
+  const { locale } = useLanguage();
+  const text = useIngestionText();
+  const [page, setPage] = useState(1);
+  const [revision, setRevision] = useState(0);
+  const limit = 20;
+  const list = useIngestionPage<InvocationPage>(scope, `${applicationsPath}/${encodeURIComponent(application.id)}/invocations`, page, limit, revision);
+  return <Modal open title={text('调用记录', 'Call records')} width={1120} onCancel={close} footer={<Button onClick={close}>{text('关闭', 'Close')}</Button>}>
+    <Space wrap>
+      <strong>{application.name}</strong>
+      <Button disabled={list.loading} onClick={() => setRevision(value => value + 1)}>{list.error ? text('重试', 'Retry') : text('刷新', 'Refresh')}</Button>
+    </Space>
+    <IngestionError error={list.error} />
+    <Table<Invocation> size="small" rowKey={record => `${record.source}:${record.id}`} loading={list.loading} dataSource={list.data?.items ?? []} scroll={{ x: 1140 }}
+      locale={{ emptyText: list.loading || list.error ? '—' : text('暂无调用记录', 'No call records') }}
+      pagination={{ current: page, pageSize: limit, total: Math.min(list.data?.total ?? 0, limit * 10000), showSizeChanger: false, onChange: setPage }} columns={[
+        { title: text('记录时间', 'Recorded time'), key: 'recordedAt', render: (_, record) => new Date(record.recordedAt).toLocaleString(locale) },
+        { title: text('来源', 'Source'), key: 'source', render: (_, record) => record.source === 'APPLICATION_TEST' ? text('样本试运行', 'Sample test') : text('实际运行任务', 'Runtime task') },
+        { title: text('应用版本', 'Application version'), key: 'applicationVersion', render: (_, record) => record.applicationVersion === null ? '—' : record.source === 'APPLICATION_TEST' ? text(`草稿 v${record.applicationVersion}`, `Draft v${record.applicationVersion}`) : text(`发布 v${record.applicationVersion}`, `Published v${record.applicationVersion}`) },
+        { title: text('渠道编号', 'Channel ID'), key: 'connectionId', width: 135, ellipsis: true, render: (_, record) => record.connectionId ? `${record.connectionId}${record.connectionVersion === null ? '' : ` / v${record.connectionVersion}`}` : '—' },
+        { title: text('模型', 'Model'), key: 'model', width: 125, ellipsis: true, render: (_, record) => record.model ?? '—' },
+        { title: text('输出模式', 'Output mode'), dataIndex: 'outputMode', render: (mode: components['schemas']['AiApplicationOutputDto']['mode'] | null) => mode ?? '—' },
+        { title: text('状态', 'Status'), key: 'status', render: (_, record) => text(...invocationStatus[record.status]) },
+        { title: text('当前尝试次数', 'Current attempts'), key: 'attempts', render: (_, record) => record.attempts ?? '—' },
+        { title: text('错误码', 'Error code'), key: 'errorCode', width: 145, ellipsis: true, render: (_, record) => record.errorCode ?? '—' },
+        { title: text('任务 / 追踪编号', 'Task / trace ID'), key: 'identifier', width: 160, ellipsis: true, render: (_, record) => record.taskId ?? record.traceId ?? '—' },
+      ]} />
+  </Modal>;
 }

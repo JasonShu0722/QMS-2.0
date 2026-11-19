@@ -18,6 +18,16 @@ describe('process registration snapshots and real bounded Worker completion', ()
 
   async function due(id: string) { await fixture.prisma.processDefect.update({ where: { id }, data: { completionNextAttemptAt: null } }); }
 
+  it('allows routine configuration with an active session after recent authentication expires', async () => {
+    await fixture.prisma.session.update({ where: { id: fixture.actor.sessionId }, data: { reauthenticatedAt: new Date(Date.now() - 600_000) } });
+    const { component } = await mapping('ACTIVE-CONFIG');
+    expect(component.productCategory).toBe('产品类别');
+    const sector = await fixture.sectors.create(fixture.actor, { operationName: '跳动测试', sectorName: '装配' }, randomUUID(), randomUUID());
+    expect(sector.sectorName).toBe('装配');
+    await fixture.prisma.session.update({ where: { id: fixture.actor.sessionId }, data: { expiresAt: new Date(Date.now() - 60_000) } });
+    await expect(mapping('EXPIRED-CONFIG')).rejects.toMatchObject({ response: { code: 'AUTH_SESSION_REQUIRED' } });
+  });
+
   async function completePending(id: string) {
     const pendingCount = await fixture.prisma.processDefect.count({ where: { registrationVersion: 1, pendingConfiguration: true, archivedAt: null } });
     for (let cycle = 0; cycle <= Math.ceil(pendingCount / 100); cycle++) {
@@ -27,28 +37,101 @@ describe('process registration snapshots and real bounded Worker completion', ()
     throw new Error('The bounded Worker did not reach the pending fixture');
   }
 
-  it('freezes a first project stage and later fills only the independent missing subtype', async () => {
+  it('freezes the first project stage and fills missing product classification independently', async () => {
     const mapped = await mapping('00001');
     await fixture.prisma.$executeRaw`UPDATE component_project_mappings SET product_category = NULL WHERE id = ${mapped.component.id}::uuid`;
     const first = await fixture.manual({ operationName: '工序甲' });
-    expect(first).toMatchObject({ projectStage: 'NEW_PRODUCT', productSubcategory: null });
+    expect(first).toMatchObject({ projectStage: 'NEW_PRODUCT', productCategory: null, productSubcategory: null });
     const saved = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: first.id } });
     expect(saved.projectSnapshot).not.toHaveProperty('project.createdByUserId');
     expect(saved.projectSnapshot).not.toHaveProperty('project.projectEngineerAssignmentId');
     await fixture.mappings.updateProject(fixture.actor, fixture.actor.organizationId, mapped.project.id,
       { expectedVersion: 1, stage: 'MASS_PRODUCTION', name: '已转量产' }, randomUUID(), randomUUID());
     await fixture.mappings.updateMapping(fixture.actor, fixture.actor.organizationId, mapped.component.id,
-      { expectedVersion: 1, productSubcategory: '细分类' }, randomUUID(), randomUUID());
+      { expectedVersion: 1, productCategory: '产品类别', productSubcategory: '细分类' }, randomUUID(), randomUUID());
     await fixture.sectors.create(fixture.actor, { operationName: ' 工序甲 ', sectorName: '制造板块' }, randomUUID(), randomUUID());
     await completePending(first.id);
     const completed = await fixture.ledger.detail(fixture.actor, first.id);
-    expect(completed).toMatchObject({ projectStage: 'NEW_PRODUCT', projectName: '初始项目', productSubcategory: '细分类', operationSector: '制造板块', pendingConfiguration: false });
+    expect(completed).toMatchObject({ projectStage: 'NEW_PRODUCT', projectName: '初始项目', productCategory: '产品类别', productSubcategory: '细分类', operationSector: '制造板块', pendingConfiguration: false });
+    expect(completed.componentProject?.mapping.productCategory).toBe('产品类别');
     expect(completed.componentProject?.project?.stage).toBe('NEW_PRODUCT');
     const next = await fixture.manual({ operationName: '工序甲' });
     expect(next).toMatchObject({ projectStage: 'MASS_PRODUCTION', projectName: '已转量产' });
     const restarted = new ProcessDefectCompletionService(fixture.prisma, fixture.audit, fixture.mappings);
     await restarted.processDue(100);
     expect((await fixture.ledger.detail(fixture.actor, first.id)).version).toBe(completed.version);
+  });
+
+  it('captures and backfills the first active mapping product type even without a project', async () => {
+    const productCode = 'NO-PROJECT';
+    await fixture.mappings.importComponents(fixture.actor, fixture.actor.organizationId,
+      { rows: [{ rowNumber: 1, componentCode: productCode, componentName: '成品' }] }, randomUUID(), randomUUID());
+    const [mappingRow] = await fixture.prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM component_project_mappings
+      WHERE organization_id = ${fixture.actor.organizationId}::uuid AND component_code = ${productCode}`;
+    const first = await fixture.manual({ productCode });
+    expect(first).toMatchObject({ productCategory: null, componentProject: null, pendingConfiguration: true });
+    await fixture.mappings.updateMapping(fixture.actor, fixture.actor.organizationId, mappingRow!.id,
+      { expectedVersion: 1, productCategory: '首次类别', status: 'DISABLED' }, randomUUID(), randomUUID());
+    await fixture.completion.processDue(100);
+    expect(await fixture.ledger.detail(fixture.actor, first.id)).toMatchObject({ productCategory: null, version: first.version });
+
+    await fixture.mappings.updateMapping(fixture.actor, fixture.actor.organizationId, mappingRow!.id,
+      { expectedVersion: 2, status: 'ACTIVE' }, randomUUID(), randomUUID());
+    const registered = await fixture.manual({ productCode });
+    expect(registered.productCategory).toBe('首次类别');
+    await due(first.id);
+    await fixture.completion.processDue(100);
+    expect(await fixture.ledger.detail(fixture.actor, first.id)).toMatchObject({ productCategory: '首次类别', componentProject: null,
+      productSubcategory: null, pendingConfiguration: true, version: first.version + 1 });
+    const histories = await fixture.prisma.$queryRaw<Array<{ before: string | null; after: string }>>`SELECT
+      before_facts ->> 'productCategory' AS "before", after_facts ->> 'productCategory' AS "after"
+      FROM process_defect_registration_history WHERE defect_id = ${first.id}::uuid AND action = 'AUTO_COMPLETED'`;
+    expect(histories).toEqual([{ before: null, after: '首次类别' }]);
+
+    await fixture.mappings.updateMapping(fixture.actor, fixture.actor.organizationId, mappingRow!.id,
+      { expectedVersion: 3, productCategory: '新版类别' }, randomUUID(), randomUUID());
+    await due(first.id);
+    await fixture.completion.processDue(100);
+    const listed = await fixture.ledger.list(fixture.actor, { page: 1, pageSize: 10, productCode });
+    expect(listed.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: first.id, productCategory: '首次类别', version: first.version + 1 }),
+      expect.objectContaining({ id: registered.id, productCategory: '首次类别' }),
+    ]));
+    expect((await fixture.manual({ productCode })).productCategory).toBe('新版类别');
+  });
+
+  it('recalculates product type only when the record product code changes', async () => {
+    const original = await mapping('00001', '甲类');
+    const replacement = await mapping('REPLACEMENT', '乙类');
+    await fixture.mappings.updateMapping(fixture.actor, fixture.actor.organizationId, replacement.component.id,
+      { expectedVersion: 1, productCategory: '替代类别' }, randomUUID(), randomUUID());
+    const first = await fixture.manual();
+    await fixture.mappings.updateMapping(fixture.actor, fixture.actor.organizationId, original.component.id,
+      { expectedVersion: 1, productCategory: '变更类别' }, randomUUID(), randomUUID());
+    const edited = await fixture.ledger.update(fixture.actor, first.id, { expectedVersion: first.version, description: '补充说明' }, randomUUID(), randomUUID());
+    expect(edited.productCategory).toBe('产品类别');
+    const corrected = await fixture.ledger.update(fixture.actor, first.id, { expectedVersion: edited.version, productCode: 'REPLACEMENT' }, randomUUID(), randomUUID());
+    expect(corrected).toMatchObject({ productCategory: '替代类别', productSubcategory: '乙类' });
+    const unmapped = await fixture.ledger.update(fixture.actor, first.id, { expectedVersion: corrected.version, productCode: 'UNMAPPED' }, randomUUID(), randomUUID());
+    expect(unmapped).toMatchObject({ productCategory: null, productSubcategory: null, pendingConfiguration: true });
+  });
+
+  it('completes product type as the only missing configuration on an upgrade-queued record', async () => {
+    const productCode = 'CATEGORY-UPGRADE';
+    const mapped = await mapping(productCode, '历史细类');
+    await fixture.prisma.$executeRaw`UPDATE component_project_mappings SET product_category = NULL WHERE id = ${mapped.component.id}::uuid`;
+    await fixture.sectors.create(fixture.actor, { operationName: '升级工序', sectorName: '历史板块' }, randomUUID(), randomUUID());
+    const before = await fixture.manual({ productCode, operationName: '升级工序' });
+    await fixture.prisma.processDefect.update({ where: { id: before.id }, data: { pendingConfiguration: false } });
+    await fixture.mappings.updateMapping(fixture.actor, fixture.actor.organizationId, mapped.component.id,
+      { expectedVersion: 1, productCategory: '补录类别', productSubcategory: '新版细类' }, randomUUID(), randomUUID());
+    await fixture.completion.processDue(100);
+    expect(await fixture.ledger.detail(fixture.actor, before.id)).toMatchObject({ productCategory: null, pendingConfiguration: false, version: before.version });
+    await fixture.prisma.processDefect.update({ where: { id: before.id }, data: { pendingConfiguration: true, completionNextAttemptAt: null } });
+
+    await completePending(before.id);
+    expect(await fixture.ledger.detail(fixture.actor, before.id)).toMatchObject({ productCategory: '补录类别', productSubcategory: '历史细类',
+      projectName: '初始项目', projectStage: 'NEW_PRODUCT', operationSector: '历史板块', pendingConfiguration: false, version: before.version + 1 });
   });
 
   it('completes only pending active nonarchived records and does not invent legacy facts', async () => {

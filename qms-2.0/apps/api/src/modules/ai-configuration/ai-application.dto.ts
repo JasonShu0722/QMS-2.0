@@ -67,3 +67,26 @@ export class AiApplicationTestResultDto {
   @ApiProperty() code!: string;
   @ApiProperty({ type: String, nullable: true }) text!: string | null;
 }
+export class AiApplicationInvocationDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty({ enum: ['APPLICATION_TEST', 'RUNTIME_TASK'] }) source!: 'APPLICATION_TEST' | 'RUNTIME_TASK';
+  @ApiProperty({ type: Number, nullable: true, description: 'Draft version for tests, published version for runtime tasks.' }) applicationVersion!: number | null;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) connectionId!: string | null;
+  @ApiProperty({ type: Number, nullable: true }) connectionVersion!: number | null;
+  @ApiProperty({ type: String, nullable: true }) model!: string | null;
+  @ApiProperty({ type: String, enum: ['TEXT', 'JSON'], nullable: true }) outputMode!: AiApplicationOutputDto['mode'] | null;
+  @ApiProperty({ enum: ['SUCCESS', 'PENDING', 'PROCESSING', 'RETRY', 'FAILED', 'APPLIED', 'SUGGESTED', 'STALE'] })
+  status!: 'SUCCESS' | 'PENDING' | 'PROCESSING' | 'RETRY' | 'FAILED' | 'APPLIED' | 'SUGGESTED' | 'STALE';
+  @ApiProperty({ type: Number, nullable: true, description: 'Current task attempt counter, which resets on manual retry. Unavailable for tests.' }) attempts!: number | null;
+  @ApiProperty({ type: String, nullable: true }) errorCode!: string | null;
+  @ApiProperty({ format: 'date-time', description: 'Audit event time for tests, latest update time for runtime tasks.' }) recordedAt!: string;
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) taskId!: string | null;
+  @ApiProperty({ type: String, nullable: true }) traceId!: string | null;
+}
+export class AiApplicationInvocationPageDto {
+  @ApiProperty({ type: [AiApplicationInvocationDto] }) items!: AiApplicationInvocationDto[];
+  @ApiProperty() total!: number;
+  @ApiProperty() page!: number;
+  @ApiProperty() limit!: number;
+}

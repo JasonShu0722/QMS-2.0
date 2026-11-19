@@ -33,7 +33,7 @@ export class AuditQueryService {
       const last = visible.at(-1);
       return {
         total,
-        items: visible.map((entry) => ({ id: entry.id, organizationId: entry.organizationId!, actorUserId: entry.actorUserId, action: entry.action, actionLabel: auditActionLabel(entry.action), actorSummary: auditActorSummary(entry), resourceType: entry.resourceType, resourceId: entry.resourceId, outcome: entry.outcome, traceId: entry.traceId, createdAt: entry.createdAt.toISOString(), metadata: this.audit.safeMetadata(entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata) ? entry.metadata as Prisma.InputJsonObject : {}) })),
+        items: visible.map((entry) => ({ id: entry.id, organizationId: entry.organizationId!, actorUserId: entry.actorUserId, action: entry.action, actionLabel: auditActionLabel(entry.action), actorSummary: auditActorSummary(entry), resourceType: entry.resourceType, resourceId: entry.resourceId, outcome: entry.outcome, traceId: entry.traceId, createdAt: entry.createdAt.toISOString(), metadata: this.audit.safeMetadata(entry.metadata && typeof entry.metadata === 'object' && !Array.isArray(entry.metadata) ? entry.metadata as Prisma.InputJsonObject : {}, entry) })),
         nextCursor: more && last ? Buffer.from(JSON.stringify([last.createdAt.toISOString(), last.id])).toString('base64url') : null,
       };
     }, { isolationLevel: 'RepeatableRead' });

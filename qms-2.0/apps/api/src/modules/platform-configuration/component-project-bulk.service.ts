@@ -79,7 +79,7 @@ export class ComponentProjectBulkService {
 
   async apply(actor: AdminActor, organizationId: string, input: ComponentProjectBulkApplyDto, traceId: string, key?: string): Promise<ComponentProjectBulkApplyResultDto> {
     const dto = await this.input(ComponentProjectBulkApplyDto, input, organizationId);
-    return this.mutations.run({ actor, organizationId, permission: 'component-project:manage', action: 'COMPONENT_PROJECT_BULK_UPDATED',
+    return this.mutations.run({ actor, organizationId, permission: 'component-project:manage', authentication: 'active', action: 'COMPONENT_PROJECT_BULK_UPDATED',
       payload: { organizationId, selection: byId(dto.selection), changes: dto.changes, previewToken: dto.previewToken }, traceId, key, isolationLevel: 'Serializable' }, async (transaction) => {
       try {
         const snapshot = await this.snapshot(transaction, organizationId, dto, true);
