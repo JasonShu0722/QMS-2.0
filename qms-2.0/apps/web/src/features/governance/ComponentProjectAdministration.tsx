@@ -32,7 +32,7 @@ type BulkPreviewInput = components['schemas']['ComponentProjectBulkPreviewDto'];
 type BulkApplyInput = components['schemas']['ComponentProjectBulkApplyDto'];
 type BulkPreviewResult = components['schemas']['ComponentProjectBulkPreviewResultDto'];
 type BulkApplyResult = components['schemas']['ComponentProjectBulkApplyResultDto'];
-type Editor = { kind: 'project'; record?: Project } | { kind: 'mapping'; record?: Mapping } | { kind: 'projects' };
+type Editor = { kind: 'project'; record?: Project } | { kind: 'mapping'; record?: Mapping } | { kind: 'project-loading' };
 type Attempt = { path: string; method: 'POST' | 'PATCH'; body: CreateProject | UpdateProject | CreateMapping | UpdateMapping };
 type PickerProps = { organizationId: string; id?: string; value?: string | null; onChange?: (value: string | null) => void; disabled?: boolean; onReady: (ready: boolean) => void; onUnauthorized: (error: unknown) => void };
 
@@ -58,6 +58,7 @@ const english: Record<string, string> = {
   '已选择 {count} / 1000': 'Selected {count} / 1000', '清除选择': 'Clear selection',
   '批量设置最多100条': 'Bulk changes support up to 100 records',
   '查看项目': 'View project', '关闭编辑器': 'Close editor',
+  '项目清单': 'Project list', '无项目清单读取权限': 'You cannot read the project list.', '查看组件': 'View component',
   '批量设置': 'Bulk changes', '预览影响': 'Preview impact', '确认应用': 'Confirm and apply', '请至少选择一个批量字段': 'Enable at least one field',
   '设置关联项目': 'Set project', '设置项目阶段': 'Set project stage', '设置客户质量工程师': 'Set customer quality engineer', '设置项目质量工程师': 'Set project quality engineer',
   '使用项目编码 {code}': 'Use project code {code}', '输入项目编码或选择项目': 'Enter a project code or select a project',
@@ -96,13 +97,30 @@ function assignmentLabel(assignment: Assignment, t: (text: string) => string) {
   return personLabel(assignment, true, t('姓名未填写') === 'Name not provided' ? 'en-US' : 'zh-CN');
 }
 
+function LedgerValue({ value }: { value: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [clipped, setClipped] = useState(false);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    const measure = () => setClipped(element.scrollWidth > element.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [value]);
+  return <Tooltip title={clipped ? value : undefined} trigger={['hover', 'focus', 'click']}>
+    <span ref={ref} tabIndex={clipped ? 0 : undefined} style={{ display: 'block', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
+  </Tooltip>;
+}
+
 function EngineerCell({ assignment, label }: { assignment: Assignment; label: string }) {
   const t = useCopy();
   if (!assignment.assignmentId) return <Typography.Text type="secondary">{t('未配置')}</Typography.Text>;
   const identity = assignmentLabel(assignment, t);
   const reason = assignment.issues.map(issue => t(assignmentIssues[issue] ?? '任职资料不可用')).join('；');
   return <span style={{ display: 'flex', alignItems: 'center', minWidth: 0, gap: 4 }}>
-    <Typography.Text ellipsis={{ tooltip: identity }} style={{ flex: 1, minWidth: 0 }}>{identity}</Typography.Text>
+    <LedgerValue value={identity} />
     {!assignment.valid && <Tooltip trigger={['hover', 'focus', 'click']} title={`${reason} ${t('请在项目资料中重新选择或清空该任职。')}`}>
       <Button type="text" size="small" aria-label={`${label}${t('任职已失效')}`} style={{ flexShrink: 0 }} icon={<CircleAlert size={16} aria-hidden="true" />} />
     </Tooltip>}
@@ -153,7 +171,7 @@ function EngineerPicker({ organizationId, id, value, onChange, disabled, onReady
 
 const useTypedProjectCode = 'use-typed-project-code';
 
-function ProjectPicker({ organizationId, id, value, onChange, disabled, onReady, onUnauthorized, initialProject, includeDisabled = true, allowClear = false, onRecord, onUseCode }: PickerProps & { initialProject?: ProjectDisplay | null; includeDisabled?: boolean; allowClear?: boolean; onRecord?: (record: Project | undefined) => void; onUseCode?: (code: string) => void }) {
+function ProjectPicker({ organizationId, id, value, onChange, disabled, onReady, onUnauthorized, initialProject, includeDisabled = true, onRecord, onUseCode }: PickerProps & { initialProject?: ProjectDisplay | null; includeDisabled?: boolean; onRecord?: (record: Project | undefined) => void; onUseCode?: (code: string) => void }) {
   const t = useCopy();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -201,10 +219,9 @@ function ProjectPicker({ organizationId, id, value, onChange, disabled, onReady,
   return <div className="governance-panel">
     <Select id={id} aria-label={t('关联项目')} value={value ?? null} disabled={disabled} loading={loading || selectedLoading} virtual={false}
       showSearch={{ filterOption: false, onSearch: next => { setSearch(next); setPage(1); } }}
-      allowClear={allowClear} onClear={() => { onReady(false); onRecord?.(undefined); onChange?.(null); }}
       onChange={next => {
         if (next === useTypedProjectCode && onUseCode) { onUseCode(typedCode); return; }
-        const choice = choices.find(item => item.id === next); setSelected(choice); onReady(false); onChange?.(next ?? null);
+        const choice = choices.find(item => item.id === next); setSelected(choice); onReady(false); onRecord?.(undefined); onChange?.(next ?? null);
       }}
       placeholder={t(onUseCode ? '输入项目编码或选择项目' : '请选择关联项目')} options={[
         ...(onUseCode && typedCode ? [{ value: useTypedProjectCode, label: t('使用项目编码 {code}').replace('{code}', () => typedCode) }] : []),
@@ -219,13 +236,21 @@ function ProjectPicker({ organizationId, id, value, onChange, disabled, onReady,
 }
 
 export function ComponentProjectAdministration({ organization }: { organization: AdminOrganization }) {
+  return <ComponentProjectWorkspace organization={organization} />;
+}
+
+export function ProjectRecordAdministration({ organization }: { organization: AdminOrganization }) {
+  return <ComponentProjectWorkspace organization={organization} projectsOnly />;
+}
+
+function ComponentProjectWorkspace({ organization, projectsOnly = false }: { organization: AdminOrganization; projectsOnly?: boolean }) {
   const session = useWorkTabsStore(state => state.sessionScope);
   const epoch = useLedgerSessionEpoch();
   const wasBound = useRef(!!session);
   if (session) wasBound.current = true;
   // Session reset can render before the login navigation commits; do not remount readers in that gap.
   if (wasBound.current && !session) return null;
-  return <ComponentProjectScope key={JSON.stringify([session, epoch, organization.id, [...organization.permissions].sort()])} organization={organization} />;
+  return <ComponentProjectScope key={JSON.stringify([session, epoch, organization.id, [...organization.permissions].sort()])} organization={organization} projectsOnly={projectsOnly} />;
 }
 
 function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange, onUnauthorized }: {
@@ -403,8 +428,9 @@ function BulkEditor({ organizationId, selection, onClose, onSaved, onBusyChange,
   </Modal>;
 }
 
-function ComponentProjectScope({ organization }: { organization: AdminOrganization }) {
-  const [preferredPageSize, setPageSize] = useLedgerPageSize('component-project-mappings', organization.id, 1000);
+function ComponentProjectScope({ organization, projectsOnly }: { organization: AdminOrganization; projectsOnly: boolean }) {
+  const ledgerId = projectsOnly ? 'component-project-records' : 'component-project-mappings';
+  const [preferredPageSize, setPageSize] = useLedgerPageSize(ledgerId, organization.id, projectsOnly ? 100 : 1000);
   const t = useCopy();
   const navigate = useNavigate();
   const requestLeave = useNavigationGuard();
@@ -413,12 +439,12 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   const [query, setQuery] = useState({ search: '', configuration: '', page: 1, pageSize: preferredPageSize });
   const [searchInput, setSearchInput] = useState('');
   const [revision, setRevision] = useState(0);
-  const [mappings, setMappings] = useState<MappingsPage>();
+  const [records, setRecords] = useState<{ total: number; items: (Mapping | Project)[] }>();
+  const mappings = records?.items.filter((record): record is Mapping => 'componentCode' in record) ?? [];
   const [selection, setSelection] = useState<Record<string, Pick<Mapping, 'id' | 'version'>>>({});
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [notice, setNotice] = useState<BulkApplyResult>();
-  const [projectId, setProjectId] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project>();
   const [projectLoading, setProjectLoading] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -442,7 +468,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   const projectController = useRef<AbortController | undefined>(undefined);
   const read = organization.permissions.includes('component-project:read');
   const manage = read && organization.permissions.includes('component-project:manage');
-  const deletion = useMasterDataBulkDelete({ organizationId: organization.id, allowed: manage && !sessionEnded, disabled: loading || saving || projectLoading || bulkOpen || bulkBusy || Boolean(editor), path: configurationPath(organization.id, 'component-project-mappings/bulk-delete').split('?')[0], noun: '组件项目映射', selection, setSelection, label: id => { const row = mappings?.items.find(item => item.id === id); return row ? `${row.componentCode} · ${row.componentName ?? ''}` : id; }, onDeleted: () => { if (current()) setRevision(next => next + 1); }, onDenied: cause => { setMappings(undefined); setSelection({}); setEditor(undefined); setSessionEnded(true); reportError(cause); } });
+  const deletion = useMasterDataBulkDelete({ organizationId: organization.id, allowed: !projectsOnly && manage && !sessionEnded, disabled: loading || saving || projectLoading || bulkOpen || bulkBusy || Boolean(editor), path: configurationPath(organization.id, 'component-project-mappings/bulk-delete').split('?')[0], noun: '组件项目映射', selection, setSelection, label: id => { const row = mappings.find(item => item.id === id); return row ? `${row.componentCode} · ${row.componentName ?? ''}` : id; }, onDeleted: () => { if (current()) setRevision(next => next + 1); }, onDenied: cause => { setRecords(undefined); setSelection({}); setEditor(undefined); setSessionEnded(true); reportError(cause); } });
   const current = () => alive.current && !ending.current && session === useWorkTabsStore.getState().sessionScope;
   useUnsavedChanges(!!editor && (dirty || !!uncertain));
   const busy = saving || projectLoading || bulkBusy || deletion.busy;
@@ -452,7 +478,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
     const unsubscribe = useWorkTabsStore.subscribe(state => {
       if (state.sessionScope === session) return;
       ending.current = true; lifetime.current?.abort(); projectController.current?.abort(); editorGeneration.current++;
-      setSessionEnded(true); setEditor(undefined); setMappings(undefined); setSelection({}); setSelectedProject(undefined); setDirty(false); setUncertain(undefined); form.resetFields();
+      setSessionEnded(true); setEditor(undefined); setRecords(undefined); setSelection({}); setSelectedProject(undefined); setDirty(false); setUncertain(undefined); form.resetFields();
     });
     return () => { alive.current = false; editorGeneration.current++; lifetime.current?.abort(); projectController.current?.abort(); unsubscribe(); };
   }, []);
@@ -460,7 +486,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
     if (!alive.current || ending.current || session !== useWorkTabsStore.getState().sessionScope) return;
     if (cause instanceof ApiError && cause.status === 401) {
       ending.current = true; editorGeneration.current++;
-      setEditor(undefined); setDirty(false); setUncertain(undefined); form.resetFields(); setMappings(undefined); setSelection({}); setSelectedProject(undefined);
+      setEditor(undefined); setDirty(false); setUncertain(undefined); form.resetFields(); setRecords(undefined); setSelection({}); setSelectedProject(undefined);
       completeSessionNavigation(() => { useWorkTabsStore.getState().reset(); navigate('/login', { replace: true }); });
     } else setError(cause);
   }, [session, form, completeSessionNavigation, navigate]);
@@ -469,14 +495,19 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
     let active = true;
     const controller = new AbortController();
     const valid = () => active && alive.current && !ending.current && session === useWorkTabsStore.getState().sessionScope;
-    setLoading(true); setError(undefined); setMappings(undefined);
+    setLoading(true); setError(undefined); setRecords(undefined);
     const params = new URLSearchParams({ search: query.search, page: String(query.page), pageSize: String(query.pageSize) });
     if (query.configuration) params.set('configuration', query.configuration);
-    const path = configurationPath(organization.id, 'component-project-mappings');
-    const request = apiRequest<MappingsPage>(`${path}&${params}`, { signal: controller.signal }).then(next => { if (valid()) { setMappings({ ...next, items: next.items.filter(item => item.organizationId === organization.id) }); const lastPage = Math.max(1, Math.ceil(next.total / query.pageSize)); if (query.page > lastPage) setQuery(previous => ({ ...previous, page: lastPage })); } });
+    const path = configurationPath(organization.id, ledgerId);
+    const request = apiRequest<MappingsPage | ProjectsPage>(`${path}&${params}`, { signal: controller.signal }).then(next => {
+      if (!valid()) return;
+      setRecords({ total: next.total, items: next.items.filter(item => item.organizationId === organization.id) });
+      const lastPage = Math.max(1, Math.ceil(next.total / query.pageSize));
+      if (query.page > lastPage) setQuery(previous => ({ ...previous, page: lastPage }));
+    });
     void request.catch(cause => { if (valid()) reportError(cause); }).finally(() => { if (valid()) setLoading(false); });
     return () => { active = false; controller.abort(); };
-  }, [organization.id, read, query, revision, session, reportError]);
+  }, [organization.id, ledgerId, read, query, revision, session, reportError]);
 
   function clearEditor() { editorGeneration.current++; setEditor(undefined); setDirty(false); setUncertain(undefined); form.resetFields(); setError(undefined); }
   function leave(action: () => void, closing = false) {
@@ -492,7 +523,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
       setCustomerReady(next.kind !== 'project' || !next.record?.customerEngineerAssignmentId);
       setEngineerReady(next.kind !== 'project' || !next.record?.projectEngineerAssignmentId);
       setProjectReady(false);
-      setProjectId(null); setSelectedProject(undefined);
+      setSelectedProject(undefined);
       if (next.kind === 'project') form.setFieldsValue(next.record ?? { status: 'ACTIVE' });
       if (next.kind === 'mapping') form.setFieldsValue(next.record
         ? { ...next.record, projectRecordId: next.record.projectRecordId ?? undefined, productCategory: next.record.productCategory ?? undefined }
@@ -502,7 +533,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
   }
   function editProject(id: string, target: HTMLElement) {
     leave(() => {
-      trigger.current = target; setEditor({ kind: 'projects' }); setProjectLoading(true);
+      trigger.current = target; setEditor({ kind: 'project-loading' }); setProjectLoading(true);
       const generation = editorGeneration.current;
       projectController.current?.abort(); const controller = new AbortController(); projectController.current = controller;
       void apiRequest<Project>(configurationPath(organization.id, `component-project-records/${encodeURIComponent(id)}`), { signal: controller.signal }).then(record => {
@@ -528,7 +559,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
     } finally { pending.current = false; if (current()) setSaving(false); }
   }
   function save(values: CreateProject & CreateMapping) {
-    if (!editor || editor.kind === 'projects' || !manage || pending.current || uncertain) return;
+    if (!editor || editor.kind === 'project-loading' || !manage || pending.current || uncertain) return;
     if (editor.kind === 'project') {
       if (!customerReady || !engineerReady) return;
       const body: CreateProject = { code: values.code.trim(), name: values.name.trim(), stage: values.stage, customerEngineerAssignmentId: values.customerEngineerAssignmentId ?? null, projectEngineerAssignmentId: values.projectEngineerAssignmentId ?? null, status: values.status };
@@ -559,42 +590,50 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
     }
   }
   if (sessionEnded) return null;
-  if (!read) return <Alert type="info" showIcon title={t('无组件项目映射读取权限')} />;
+  if (!read) return <Alert type="info" showIcon title={t(projectsOnly ? '无项目清单读取权限' : '无组件项目映射读取权限')} />;
   const statusOptions = [{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }];
   const empty = error ? t('加载失败') : query.search ? t('无匹配结果') : t('暂无数据');
-  const pagination = { current: query.page, pageSize: query.pageSize, total: mappings?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100, 500, 1000], disabled: busy || loading, onChange: (page: number, pageSize: number) => { if (!busy) leave(() => { setPageSize(pageSize); setQuery(previous => ({ ...previous, page: pageSize === previous.pageSize ? page : 1, pageSize })); }); } };
-  const text = (value: string) => <Typography.Text ellipsis={{ tooltip: value }} style={{ maxWidth: '100%' }}>{value}</Typography.Text>;
+  const pagination = { current: query.page, pageSize: query.pageSize, total: records?.total ?? 0, showSizeChanger: true, pageSizeOptions: projectsOnly ? [10, 20, 50, 100] : [10, 20, 50, 100, 500, 1000], disabled: busy || loading, onChange: (page: number, pageSize: number) => { if (!busy) leave(() => { setPageSize(pageSize); setQuery(previous => ({ ...previous, page: pageSize === previous.pageSize ? page : 1, pageSize })); }); } };
+  const text = (value: string) => <LedgerValue value={value} />;
   const required = [{ required: true, whitespace: true, message: t('请填写必填内容') }];
   const frozen = busy || !!uncertain;
-  return <section className={`governance-panel ${deletion.selectedClass ?? ''}`} aria-label={t('组件项目映射')} style={{ minWidth: 0 }}>
+  const searchLabel = t(projectsOnly ? '搜索项目' : '搜索组件');
+  const tableProps = { ledgerId, organizationId: organization.id, rowKey: 'id', loading, pagination, locale: { emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty} /> } };
+  return <section className={`governance-panel ${deletion.selectedClass ?? ''}`} aria-label={t(projectsOnly ? '项目清单' : '组件项目映射')} style={{ minWidth: 0 }}>
     {deletion.feedback}{deletion.controls}
     {notice && <Typography.Paragraph role="status">{t('已更新 {mappings} 条组件资料、{projects} 个项目；影响 {affected} 条组件。').replace('{mappings}', String(notice.updatedMappingCount)).replace('{projects}', String(notice.updatedProjectCount)).replace('{affected}', String(notice.affectedComponentCount))}</Typography.Paragraph>}
     {!editor && <GovernanceFeedback error={error} retry={loading || busy ? undefined : refresh} />}
     <div className="governance-toolbar">
-      {manage && <Button type="primary" disabled={loading || busy} onClick={event => open({ kind: 'mapping' }, event.currentTarget)}>{t('新增组件')}</Button>}
-      <Button disabled={busy} onClick={event => open({ kind: 'projects' }, event.currentTarget)}>{t('项目资料')}</Button>
-      {manage && <Form component={false} disabled={busy || !!editor}><ComponentProjectImport organizationId={organization.id} onUnauthorized={reportError} onImported={() => { if (current()) setRevision(next => next + 1); }} /></Form>}
+      {manage && <Button type="primary" disabled={loading || busy} onClick={event => open(projectsOnly ? { kind: 'project' } : { kind: 'mapping' }, event.currentTarget)}>{t(projectsOnly ? '新增项目' : '新增组件')}</Button>}
+      {!projectsOnly && manage && <Form component={false} disabled={busy || !!editor}><ComponentProjectImport organizationId={organization.id} onUnauthorized={reportError} onImported={() => { if (current()) setRevision(next => next + 1); }} /></Form>}
       <Button disabled={loading || busy} onClick={refresh}>{t('刷新')}</Button>
-      <Input.Search aria-label={t('搜索组件')} maxLength={200} value={searchInput} disabled={busy} allowClear style={{ width: 'min(100%, 320px)' }}
+      <Input.Search aria-label={searchLabel} maxLength={200} value={searchInput} disabled={busy} allowClear style={{ width: 'min(100%, 320px)' }}
         onChange={event => setSearchInput(event.target.value)} onSearch={search => leave(() => setQuery({ ...query, search: search.trim(), page: 1 }))} />
-      <Select aria-label={t('配置状态')} value={query.configuration} disabled={busy} style={{ minWidth: 140 }} options={[{ value: '', label: t('全部配置状态') }, { value: 'PENDING', label: t('待配置') }, { value: 'CONFIGURED', label: t('已配置') }]} onChange={configuration => leave(() => setQuery({ ...query, configuration, page: 1 }))} />
+      {!projectsOnly && <Select aria-label={t('配置状态')} value={query.configuration} disabled={busy} style={{ minWidth: 140 }} options={[{ value: '', label: t('全部配置状态') }, { value: 'PENDING', label: t('待配置') }, { value: 'CONFIGURED', label: t('已配置') }]} onChange={configuration => leave(() => setQuery({ ...query, configuration, page: 1 }))} />}
       {!manage && <Typography.Text>{t('只读')}</Typography.Text>}
     </div>
-    {manage && <Space wrap><Typography.Text aria-live="polite">{t('已选择 {count} / 1000').replace('{count}', String(Object.keys(selection).length))}</Typography.Text><Tooltip title={Object.keys(selection).length > 100 ? t('批量设置最多100条') : undefined}><Button disabled={busy || bulkOpen || !Object.keys(selection).length || Object.keys(selection).length > 100} onClick={() => leave(() => setBulkOpen(true))}>{t('批量设置')}</Button></Tooltip><Button disabled={busy || bulkOpen || !Object.keys(selection).length} onClick={() => setSelection({})}>{t('清除选择')}</Button></Space>}
-    <LedgerTable<Mapping> ledgerId="component-project-mappings" organizationId={organization.id} requiredColumnKeys={['componentCode', 'actions']} rowKey="id" loading={loading} dataSource={mappings?.items ?? []} scroll={{ x: 1550 }} pagination={pagination}
-      rowSelection={deletion.rowSelection(mappings?.items ?? [], true)}
-      locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty} /> }} columns={[
-        { key: 'componentCode', title: t('组件编码'), dataIndex: 'componentCode', width: 160, render: text },
-        { key: 'componentName', title: t('组件名称'), dataIndex: 'componentName', width: 200, render: value => value ? text(value) : '—' },
-        { key: 'configuration', title: t('配置状态'), width: 120, render: (_, record) => t(!record.projectRecordId || !record.productCategory?.trim() ? '待配置' : '已配置') },
-        { key: 'project', title: t('关联项目'), width: 230, render: (_, record) => record.project ? text(`${record.project.code} · ${record.project.name}`) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('尚未关联项目，可稍后完善映射。')}><Button type="text" size="small" aria-label={t('未映射')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> },
-        { key: 'productCategory', title: t('产品大类'), dataIndex: 'productCategory', width: 140, render: value => value ? text(value) : <Space>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('产品大类未配置，可稍后完善。')}><Button type="text" size="small" aria-label={t('产品大类未配置')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> }, { key: 'productSubcategory', title: t('产品细分'), dataIndex: 'productSubcategory', width: 140, render: value => value ? text(value) : '—' },
-        { key: 'stage', title: t('项目状态'), width: 100, render: (_, record) => record.project ? t(record.project.stage === 'NEW_PRODUCT' ? '新品' : '量产') : '—' },
-        { key: 'customerEngineer', title: t('客户质量工程师'), width: 160, render: (_, record) => record.project ? <EngineerCell assignment={record.project.customerEngineer} label={t('客户质量工程师')} /> : '—' },
-        { key: 'projectEngineer', title: t('项目质量工程师'), width: 160, render: (_, record) => record.project ? <EngineerCell assignment={record.project.projectEngineer} label={t('项目质量工程师')} /> : '—' },
+    {!projectsOnly && manage && <Space wrap><Typography.Text aria-live="polite">{t('已选择 {count} / 1000').replace('{count}', String(Object.keys(selection).length))}</Typography.Text><Tooltip title={Object.keys(selection).length > 100 ? t('批量设置最多100条') : undefined}><Button disabled={busy || bulkOpen || !Object.keys(selection).length || Object.keys(selection).length > 100} onClick={() => leave(() => setBulkOpen(true))}>{t('批量设置')}</Button></Tooltip><Button disabled={busy || bulkOpen || !Object.keys(selection).length} onClick={() => setSelection({})}>{t('清除选择')}</Button></Space>}
+    {projectsOnly ? <LedgerTable<Project> {...tableProps} requiredColumnKeys={['code', 'actions']}
+      dataSource={records?.items.filter((record): record is Project => 'stage' in record) ?? []} columns={[
+        { key: 'code', title: t('项目编码'), dataIndex: 'code', width: 140, ellipsis: true, render: text },
+        { key: 'name', title: t('项目名称'), dataIndex: 'name', width: 240, ellipsis: true, render: text },
+        { key: 'stage', title: t('项目阶段'), dataIndex: 'stage', width: 120, render: stage => t(stage === 'NEW_PRODUCT' ? '新品' : '量产') },
         { key: 'status', title: t('状态'), dataIndex: 'status', width: 100, render: status => t(status === 'ACTIVE' ? '启用' : '停用') },
-        { key: 'actions', title: t('操作'), width: 200, render: (_, record) => <Space wrap>{manage ? <Button disabled={busy} aria-label={`${t('编辑组件')} ${record.componentCode}`} onClick={event => open({ kind: 'mapping', record }, event.currentTarget)}>{t('编辑')}</Button> : t('只读')}{record.project && <Button disabled={busy} aria-label={`${t(manage ? '编辑项目' : '查看项目')} ${record.project.code}`} onClick={event => editProject(record.project!.id, event.currentTarget)}>{t('项目资料')}</Button>}</Space> },
-      ]} />
+        { key: 'actions', title: t('操作'), width: 100, render: (_, record) => <Button type="link" size="small" disabled={busy} aria-label={`${t(manage ? '编辑项目' : '查看项目')} ${record.code}`} onClick={event => editProject(record.id, event.currentTarget)}>{t(manage ? '编辑' : '查看')}</Button> },
+      ]} /> : <LedgerTable<Mapping> {...tableProps} compactLayout compactHeaders requiredColumnKeys={['componentCode', 'actions']} dataSource={mappings}
+      rowSelection={deletion.rowSelection(mappings, true)} columns={[
+        { key: 'componentCode', title: t('组件编码'), dataIndex: 'componentCode', width: 120, render: text },
+        { key: 'componentName', title: t('组件名称'), dataIndex: 'componentName', width: 150, render: value => value ? text(value) : '—' },
+        { key: 'configuration', title: t('配置状态'), width: 100, render: (_, record) => text(t(!record.projectRecordId || !record.productCategory?.trim() ? '待配置' : '已配置')) },
+        { key: 'project', title: t('关联项目'), width: 170, render: (_, record) => record.project ? text(`${record.project.code} · ${record.project.name}`) : <Space size={2}>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('尚未关联项目，可稍后完善映射。')}><Button type="text" size="small" aria-label={t('未映射')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> },
+        { key: 'productCategory', title: t('产品大类'), dataIndex: 'productCategory', width: 110, render: value => value ? text(value) : <Space size={2}>—<Tooltip trigger={['hover', 'focus', 'click']} title={t('产品大类未配置，可稍后完善。')}><Button type="text" size="small" aria-label={t('产品大类未配置')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Space> },
+        { key: 'productSubcategory', title: t('产品细分'), dataIndex: 'productSubcategory', width: 120, render: value => value ? text(value) : '—' },
+        { key: 'stage', title: t('项目状态'), width: 100, render: (_, record) => record.project ? text(t(record.project.stage === 'NEW_PRODUCT' ? '新品' : '量产')) : '—' },
+        { key: 'customerEngineer', title: t('客户质量工程师'), width: 150, render: (_, record) => record.project ? <EngineerCell assignment={record.project.customerEngineer} label={t('客户质量工程师')} /> : '—' },
+        { key: 'projectEngineer', title: t('项目质量工程师'), width: 150, render: (_, record) => record.project ? <EngineerCell assignment={record.project.projectEngineer} label={t('项目质量工程师')} /> : '—' },
+        { key: 'status', title: t('状态'), dataIndex: 'status', width: 72, render: status => text(t(status === 'ACTIVE' ? '启用' : '停用')) },
+        { key: 'actions', title: t('操作'), width: 76, render: (_, record) => manage || record.project ? <Button type="link" size="small" style={{ paddingInline: 0 }} disabled={busy} aria-label={`${t(manage ? '编辑组件' : '查看组件')} ${record.componentCode}`} onClick={event => open({ kind: 'mapping', record }, event.currentTarget)}>{t(manage ? '编辑' : '查看')}</Button> : t('只读') },
+      ]} />}
     {bulkOpen && manage && <BulkEditor organizationId={organization.id} selection={Object.values(selection).map(record => ({ id: record.id, expectedVersion: record.version }))}
       onClose={() => { if (current()) setBulkOpen(false); }} onBusyChange={setBulkBusy} onUnauthorized={reportError}
       onSaved={result => { if (current()) { setBulkOpen(false); setSelection({}); setNotice(result); setRevision(next => next + 1); } }} />}
@@ -605,10 +644,7 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
         <GovernanceFeedback error={error} />
         {uncertain && <><Typography.Paragraph role="status">{t('保存结果尚未确认，请使用原请求重试。')}</Typography.Paragraph><Button disabled={saving} loading={saving} onClick={() => void send(uncertain)}>{t('重试原请求')}</Button></>}
         {error instanceof ApiError && error.status === 409 && <Button disabled={saving} onClick={refresh}>{t('放弃并刷新')}</Button>}
-        {projectLoading ? <Spin aria-label={t('加载中')} /> : editor.kind === 'projects' ? <div className="governance-panel">
-          <label>{t('选择项目')}</label><ProjectPicker organizationId={organization.id} allowClear disabled={busy} value={projectId} onChange={setProjectId} onReady={setProjectReady} onRecord={setSelectedProject} onUnauthorized={reportError} />
-          <Space wrap>{selectedProject && <Button disabled={!projectReady} onClick={event => open({ kind: 'project', record: selectedProject }, event.currentTarget)}>{t(manage ? '编辑项目资料' : '查看项目资料')}</Button>}{manage && <Button onClick={event => open({ kind: 'project' }, event.currentTarget)}>{t('新增项目')}</Button>}</Space>
-        </div> : editor.kind === 'project' ? <>
+        {editor.kind === 'project-loading' ? projectLoading && <Spin aria-label={t('加载中')} /> : editor.kind === 'project' ? <>
           <Form.Item name="code" label={t('项目编码')} rules={required}><Input maxLength={100} autoFocus /></Form.Item>
           <Form.Item name="name" label={t('项目名称')} rules={required}><Input maxLength={200} /></Form.Item>
           <Form.Item name="stage" label={t('项目阶段')} rules={[{ required: true, message: t('请选择项目阶段') }]}><Select aria-label={t('项目阶段')} virtual={false} options={[{ value: 'NEW_PRODUCT', label: t('新品') }, { value: 'MASS_PRODUCTION', label: t('量产') }]} /></Form.Item>
@@ -617,15 +653,16 @@ function ComponentProjectScope({ organization }: { organization: AdminOrganizati
         </> : <>
           <Form.Item name="componentCode" label={t('组件编码')} rules={required}><Input maxLength={100} autoFocus /></Form.Item>
           <Form.Item name="componentName" label={t('组件名称')}><Input maxLength={200} /></Form.Item>
-          <Form.Item name="projectRecordId" label={t('关联项目')} rules={editor.record ? [] : [{ required: true, message: t('请选择关联项目') }]}><ProjectPicker organizationId={organization.id} initialProject={editor.record?.project} disabled={frozen} onReady={setProjectReady} onUnauthorized={reportError} /></Form.Item>
+          <Form.Item name="projectRecordId" label={t('关联项目')} rules={editor.record ? [] : [{ required: true, message: t('请选择关联项目') }]}><ProjectPicker organizationId={organization.id} initialProject={editor.record?.project} disabled={!manage || frozen} onReady={setProjectReady} onRecord={setSelectedProject} onUnauthorized={reportError} /></Form.Item>
+          {selectedProject && <Button disabled={!projectReady || frozen} onClick={event => open({ kind: 'project', record: selectedProject }, event.currentTarget)}>{t(manage ? '编辑项目资料' : '查看项目资料')}</Button>}
           <Form.Item name="productCategory" label={t('产品大类')} rules={!editor.record || editor.record.productCategory ? required : []}><Input maxLength={100} /></Form.Item>
           <Form.Item name="productSubcategory" label={t('产品细分')}><Input maxLength={100} /></Form.Item>
         </>}
-        {editor.kind !== 'projects' && !projectLoading && <Form.Item name="status" label={t('状态')} rules={[{ required: true }]}><Select virtual={false} options={statusOptions} /></Form.Item>}
+        {editor.kind !== 'project-loading' && <Form.Item name="status" label={t('状态')} rules={[{ required: true }]}><Select virtual={false} options={statusOptions} /></Form.Item>}
         {editor.kind === 'project' && editor.record && manage && !projectLoading && <Typography.Paragraph>{t('修改将影响同项目的全部组件。')}</Typography.Paragraph>}
         <div className="qms-dialog-actions">
           <Button aria-label={t('关闭编辑器')} disabled={busy} onClick={() => leave(() => {}, true)}>{t('关闭')}</Button>
-          {editor.kind !== 'projects' && !projectLoading && <Button type="primary" htmlType="submit" loading={saving} disabled={!manage || frozen || (editor.kind === 'project' ? !customerReady || !engineerReady : !editor.record && !projectReady)}>{t('保存')}</Button>}
+          {manage && editor.kind !== 'project-loading' && <Button type="primary" htmlType="submit" loading={saving} disabled={frozen || (editor.kind === 'project' ? !customerReady || !engineerReady : !editor.record && !projectReady)}>{t('保存')}</Button>}
         </div>
         </>}
       </Form>

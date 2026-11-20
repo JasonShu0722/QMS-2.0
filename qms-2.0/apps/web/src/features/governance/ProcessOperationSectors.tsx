@@ -67,25 +67,28 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
   }
   function save(values: Update) {
     if (locked) return;
-    const facts: Create = { organizationId: organization.id, operationName: values.operationName.trim(), sectorName: values.sectorName.trim() };
+    const facts: Create = { organizationId: organization.id, operationCode: values.operationCode?.trim() || null, operationName: values.operationName.trim(), sectorName: values.sectorName?.trim() || null };
     void execute(editor?.record ? { path: `${sectorPath}/${editor.record.id}?organizationId=${encodeURIComponent(organization.id)}`, method: 'PUT', body: { ...facts, active: values.active, expectedVersion: editor.record.version } } : { path: sectorPath, method: 'POST', body: facts });
   }
   function close() { if (!locked) requestLeave(() => { setDirty(false); setEditor(undefined); setRemoving(undefined); form.resetFields(); }, true); }
   if (retired) return <Alert type="warning" title={t('会话或配置权限已变化，请重新进入。')} />;
   if (!organization.permissions.includes('process-quality:configuration:read')) return null;
   const feedback = <><GovernanceFeedback error={error} />{unknown ? <Alert type="warning" title={t('操作结果未知，输入已保留，请重试原请求。')} /> : null}</>;
-  return <Card title={t('工序板块规则')}>
+  return <Card title={t('工序主数据')}>
     <Space wrap><Button disabled={locked || loading} onClick={() => requestLeave(() => setRevision(value => value + 1))}>{t('刷新规则')}</Button>{manage ? <Button disabled={locked} onClick={() => { form.resetFields(); form.setFieldsValue({ active: true }); setError(undefined); setEditor({}); }}>{t('新建板块规则')}</Button> : null}</Space>
     {!editor && !removing ? feedback : null}
     <LedgerTable<Sector> ledgerId="process-operation-sectors" organizationId={organization.id} requiredColumnKeys={['operationName', 'actions']} rowKey="id" loading={loading} dataSource={items} scroll={{ x: 620 }} pagination={{ current: page, pageSize, disabled: locked, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} columns={[
-      { key: 'operationName', title: t('工序名称'), dataIndex: 'operationName' }, { key: 'sectorName', title: t('板块名称'), dataIndex: 'sectorName' },
+      { key: 'operationCode', title: t('工序编码'), dataIndex: 'operationCode', ellipsis: true }, { key: 'operationName', title: t('工序名称'), dataIndex: 'operationName', ellipsis: true }, { key: 'sectorName', title: t('板块名称'), dataIndex: 'sectorName', ellipsis: true },
       { key: 'active', title: t('状态'), dataIndex: 'active', render: value => t(value ? '启用' : '停用') }, { key: 'version', title: t('版本'), dataIndex: 'version' },
       { key: 'actions', title: t('操作'), render: (_, record) => manage ? <Space wrap><Button disabled={locked} onClick={() => { form.setFieldsValue(record); setError(undefined); setEditor({ record }); }}>{t('编辑')}</Button><Button danger disabled={locked} onClick={() => { setError(undefined); setRemoving(record); }}>{t('删除')}</Button></Space> : t('只读') },
     ]} />
-    <Modal open={!!editor} title={t('工序板块规则')} footer={null} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden>
+    <Modal open={!!editor} title={t('工序主数据')} footer={null} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden>
       {feedback}<Form form={form} layout="vertical" disabled={locked} onValuesChange={() => setDirty(true)} onFinish={save}>
+        <Form.Item name="operationCode" label={t('工序编码')}><Input maxLength={100} readOnly={!!editor?.record?.operationCode} /></Form.Item>
         <Form.Item name="operationName" label={t('工序名称')} rules={[{ required: true, whitespace: true }]}><Input maxLength={200} /></Form.Item>
-        <Form.Item name="sectorName" label={t('板块名称')} rules={[{ required: true, whitespace: true }]}><Input maxLength={200} /></Form.Item>
+        <Form.Item name="sectorName" label={t('板块名称')} dependencies={['operationCode']} rules={[({ getFieldValue }) => ({ validator: async (_, value?: string) => {
+          if (!getFieldValue('operationCode')?.trim() && !value?.trim()) throw new Error(t('未填写工序编码时，请填写板块名称。'));
+        } })]}><Input maxLength={200} /></Form.Item>
         {editor?.record ? <Form.Item name="active" label={t('启用')} valuePropName="checked"><Switch /></Form.Item> : null}
         <Space><Button disabled={locked} onClick={close}>{t('取消')}</Button>{unknown ? <Button type="primary" disabled={busy} loading={busy} onClick={() => void execute()}>{t('重试原请求')}</Button> : <Button type="primary" htmlType="submit" loading={busy}>{t('保存')}</Button>}</Space>
       </Form>

@@ -12,8 +12,8 @@ const modulePermissions: Partial<Record<ConsoleModuleDto['key'], string[]>> = {
   'api-integrations': INTEGRATION_PERMISSIONS,
   users: [...ADMIN_PERMISSIONS.filter(code => code.startsWith('account:users:')), 'account:users:delete'],
   organizations: [...ADMIN_PERMISSIONS.filter(code => code.startsWith('organization:') || code.startsWith('account:roles:')), 'organization:read', 'organization:force-delete', 'organization:departments:force-delete'],
-  'master-data': [...masterMaintenance, 'material-master:read', 'component-project:read', 'customer-quality:complaints:read', 'supplier-quality:profiles:read'],
-  configuration: ['configuration:read', 'configuration:manage', ...PROCESS_CONFIGURATION_PERMISSIONS],
+  'master-data': [...masterMaintenance, 'material-master:read', 'component-project:read', 'customer-quality:complaints:read', 'supplier-quality:profiles:read', ...PROCESS_CONFIGURATION_PERMISSIONS],
+  configuration: ['configuration:read', 'configuration:manage'],
   'ai-connections': AI_CONFIGURATION_PERMISSIONS.filter(code => code.startsWith('ai:connections:') || code === 'ai:credentials:manage'),
   'ai-applications': AI_CONFIGURATION_PERMISSIONS.filter(code => code.startsWith('ai:applications:')),
   audit: ['audit:read', 'audit:export'],
@@ -31,8 +31,9 @@ function targetModules(permissions: string[], organization: Pick<ConsoleOrganiza
       || (platformAdministrator ? PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES.includes(code)
         : code === 'organization:manage' || code === 'organization:read' && permissions.includes('organization:manage'))));
   return Object.entries(modulePermissions).flatMap(([key, codes]) => {
-    const granted = usable.filter(code => codes.includes(code));
-    if (!granted.length || key === 'master-data' && !granted.some(code => masterMaintenance.includes(code))) return [];
+    const ordinaryMasterAccess = key !== 'master-data' || usable.some(code => masterMaintenance.includes(code));
+    const granted = usable.filter(code => codes.includes(code) && (ordinaryMasterAccess || PROCESS_CONFIGURATION_PERMISSIONS.includes(code)));
+    if (!granted.length) return [];
     return [{ key: key as ConsoleModuleDto['key'], scope: 'TARGET' as const, coverage: 'ORGANIZATION' as const, organizationId: organization.id, permissions: granted }];
   });
 }

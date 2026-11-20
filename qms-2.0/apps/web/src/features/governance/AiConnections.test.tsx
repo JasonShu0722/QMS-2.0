@@ -33,16 +33,16 @@ function mount(permissions: string[] = [...organization.permissions], leave?: ()
   return render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><AiConnections organization={{ ...organization, permissions }} />{leave ? <NavigationProbe leave={leave} /> : null}</UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
 }
 
-it('platform configuration retains process mappings and does not mount model channels', async () => {
+it('platform configuration leaves process mappings and model channels on their own pages', async () => {
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ConfigurationAdministration organization={{ ...organization, permissions: ['configuration:read', 'process-quality:configuration:read'] }} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   await screen.findByText('系统参数');
   expect(screen.queryByText('AI连接')).not.toBeInTheDocument();
-  expect(screen.getByText('工序板块规则')).toBeInTheDocument();
+  expect(screen.queryByText('工序板块规则')).not.toBeInTheDocument();
   expect(apiRequest).not.toHaveBeenCalledWith(expect.stringContaining('/ai-connections'), expect.anything());
 });
-it('opens only process mappings for a specialist without fetching platform settings', async () => {
+it('does not open platform settings for an operation specialist', async () => {
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ConfigurationAdministration organization={{ ...organization, permissions: ['process-quality:configuration:read'] }} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
-  expect(screen.getByText('工序板块规则')).toBeInTheDocument();
+  expect(screen.queryByText('工序板块规则')).not.toBeInTheDocument();
   expect(screen.queryByText('系统参数')).not.toBeInTheDocument();
   expect(apiRequest).not.toHaveBeenCalled();
 });

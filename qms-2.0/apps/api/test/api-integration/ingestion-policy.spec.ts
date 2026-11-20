@@ -4,6 +4,16 @@ import { evaluateIngestionRow, normalizeIngestionRule, selectedDescriptionInput 
 const rule = { name: '供应商', endpointId: '550e8400-e29b-41d4-a716-446655440000', target: 'SUPPLIER', enabled: true, match: 'ALL', conditions: [{ path: 'kind', operator: 'EQ', value: 'supplier' }], mapping: { code: 'code', name: 'name', contactName: 'contact.name' }, mode: 'UPDATE', updateFields: ['name', 'contactName'] };
 
 describe('API ingestion rule policy', () => {
+  it('maps operation identity and name from configurable paths and permits only name updates', () => {
+    const operation = { ...rule, target: 'OPERATION', conditions: [], mapping: { operationCode: 'station.id', operationName: 'title' }, updateFields: ['operationName'] };
+    const normalized = normalizeIngestionRule(operation);
+    expect(evaluateIngestionRow(normalized, { station: { id: ' 0001 ' }, title: ' 测试工序 ', sectorName: '不应入库' })).toEqual({ matched: true, fields: { operationCode: '0001', operationName: '测试工序' }, sourceUpdatedAt: null });
+    expect(() => evaluateIngestionRow(normalized, { station: { id: '0001' } })).toThrow('INGESTION_FIELD_MISSING');
+    expect(() => evaluateIngestionRow(normalized, { station: { id: 1 }, title: '测试' })).toThrow('INGESTION_FIELD_TYPE');
+    expect(() => normalizeIngestionRule({ ...operation, mapping: { operationName: 'title' } })).toThrow('INGESTION_RULE_INVALID');
+    expect(() => normalizeIngestionRule({ ...operation, mapping: { ...operation.mapping, sectorName: 'sector' } })).toThrow('INGESTION_RULE_INVALID');
+    expect(() => normalizeIngestionRule({ ...operation, updateFields: ['operationCode'] })).toThrow('INGESTION_RULE_INVALID');
+  });
   it('retains an explicit published application binding and rejects unsafe or foreign-scene input shapes', () => {
     const binding = { applicationId: '550e8400-e29b-41d4-a716-446655440001', publishedVersion: 2, inputFields: [{ path: 'ims.fact', variable: 'fact' }] };
     const input = { ...rule, target: 'PROCESS_DEFECT', conditions: [], mapping: { description: 'direct' }, updateFields: ['description'], aiApplication: binding };

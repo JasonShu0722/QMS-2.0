@@ -1,7 +1,9 @@
 import type { AdminActor, AdminTransaction } from './security/admin-mutation.service.js';
 
 export type MasterDataIntegrationTarget = 'SUPPLIER' | 'CUSTOMER' | 'MATERIAL' | 'COMPONENT';
-export type IntegrationTarget = MasterDataIntegrationTarget | 'PROCESS_DEFECT';
+export type IntegrationTarget = MasterDataIntegrationTarget | 'OPERATION' | 'PROCESS_DEFECT';
+
+export type OperationIntegrationFields = { operationCode: string; operationName: string };
 
 export type IntegrationFields = {
   code: string;

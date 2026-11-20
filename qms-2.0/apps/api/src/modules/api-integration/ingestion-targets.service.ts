@@ -1,14 +1,15 @@
 import { HttpException, Injectable, Optional } from '@nestjs/common';
 import type { AdminActor, AdminTransaction } from '../../common/security/admin-mutation.service.js';
-import type { IntegrationFields, IntegrationExpected, IntegrationMasterDataAdapter, IntegrationTarget, IntegrationRecord, MasterDataIntegrationTarget, ProcessDefectIntegrationFields, ProcessDefectIntegrationRecord } from '../../common/integration-master-data.js';
+import type { IntegrationFields, IntegrationExpected, IntegrationMasterDataAdapter, IntegrationTarget, IntegrationRecord, MasterDataIntegrationTarget, OperationIntegrationFields, ProcessDefectIntegrationFields, ProcessDefectIntegrationRecord } from '../../common/integration-master-data.js';
 import { SupplierProfileIngestionAdapter } from '../supplier-quality/supplier-profile-ingestion.adapter.js';
 import { CustomerMasterIngestionAdapter } from '../customer-quality/customer-master-ingestion.adapter.js';
 import { MaterialMasterIngestionAdapter } from '../material-master/material-master-ingestion.adapter.js';
 import { ComponentProjectIngestionAdapter } from '../platform-configuration/component-project-ingestion.adapter.js';
 import { ProcessDefectIngestionAdapter } from '../process-quality/process-defect-ingestion.adapter.js';
+import { ProcessOperationSectorService } from '../process-quality/process-operation-sector.service.js';
 
-export type IngestionTargetRecord = IntegrationRecord | ProcessDefectIntegrationRecord;
-export type IngestionTargetFields = IntegrationFields | ProcessDefectIntegrationFields;
+export type IngestionTargetRecord = IntegrationRecord | (IntegrationRecord<OperationIntegrationFields> & { manualNameChangedAt?: Date | null }) | ProcessDefectIntegrationRecord;
+export type IngestionTargetFields = IntegrationFields | OperationIntegrationFields | ProcessDefectIntegrationFields;
 export type IngestionTargetResult = { id: string; pendingCompletion: boolean; pendingConfiguration: boolean; defectQuantity: number | null };
 
 @Injectable()
@@ -19,12 +20,14 @@ export class IngestionTargetsService {
     private readonly materials: MaterialMasterIngestionAdapter,
     private readonly components: ComponentProjectIngestionAdapter,
     @Optional() private readonly processDefects?: ProcessDefectIngestionAdapter,
+    @Optional() private readonly operations?: ProcessOperationSectorService,
   ) {}
 
   inspect(transaction: AdminTransaction, actor: AdminActor, target: MasterDataIntegrationTarget, fields: IntegrationFields): Promise<IntegrationRecord | null>;
-  inspect(transaction: AdminTransaction, actor: AdminActor, target: IntegrationTarget, fields: IngestionTargetFields, linkedTargetId?: string): Promise<IngestionTargetRecord | null>;
-  async inspect(transaction: AdminTransaction, actor: AdminActor, target: IntegrationTarget, fields: IngestionTargetFields, linkedTargetId?: string): Promise<IngestionTargetRecord | null> {
+  inspect(transaction: AdminTransaction, actor: AdminActor, target: IntegrationTarget, fields: IngestionTargetFields, linkedTargetId?: string, lockOperation?: boolean): Promise<IngestionTargetRecord | null>;
+  async inspect(transaction: AdminTransaction, actor: AdminActor, target: IntegrationTarget, fields: IngestionTargetFields, linkedTargetId?: string, lockOperation = false): Promise<IngestionTargetRecord | null> {
     if (target === 'PROCESS_DEFECT' && this.processDefects) return this.processDefects.inspect(transaction, actor, fields as ProcessDefectIntegrationFields, linkedTargetId);
+    if (target === 'OPERATION' && this.operations) return this.operations.inspectForIngestion(transaction, actor, fields as OperationIntegrationFields, lockOperation);
     return this.adapter(target).inspect(transaction, actor, fields as IntegrationFields);
   }
 
@@ -32,6 +35,7 @@ export class IngestionTargetsService {
   write(transaction: AdminTransaction, actor: AdminActor, target: IntegrationTarget, fields: IngestionTargetFields, expected: IntegrationExpected, traceId: string, confirmed?: boolean): Promise<IngestionTargetRecord>;
   async write(transaction: AdminTransaction, actor: AdminActor, target: IntegrationTarget, fields: IngestionTargetFields, expected: IntegrationExpected, traceId: string, confirmed = false): Promise<IngestionTargetRecord> {
     if (target === 'PROCESS_DEFECT' && this.processDefects) return this.processDefects.write(transaction, actor, fields as ProcessDefectIntegrationFields, expected, traceId, confirmed);
+    if (target === 'OPERATION' && this.operations) return this.operations.writeForIngestion(transaction, actor, fields as OperationIntegrationFields, expected, traceId);
     return this.adapter(target).write(transaction, actor, fields as IntegrationFields, expected, traceId);
   }
 

@@ -74,7 +74,7 @@ afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState({}, '', '/'
 
 const managementPaths = [
   '/console/users', '/console/organizations', '/console/master-data/suppliers', '/console/master-data/customers',
-  '/console/master-data/materials', '/console/master-data/component-projects', '/console/configuration', '/console/audit-log',
+  '/console/master-data/materials', '/console/master-data/component-projects', '/console/master-data/projects', '/console/master-data/operations', '/console/configuration', '/console/audit-log',
   '/console/outbox', '/console/reconfiguration', '/console/problem-reconfiguration', '/console/supplier-accounts',
 ];
 it('registers the API monitoring page outside the business layout', async () => {

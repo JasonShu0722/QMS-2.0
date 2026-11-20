@@ -10,6 +10,7 @@ export type LedgerTableProps<RecordType extends object> = TableProps<RecordType>
   ledgerId: string; organizationId?: string; viewId?: string; requiredColumnKeys?: string[];
   resizableSelection?: boolean;
   compactHeaders?: boolean;
+  compactLayout?: boolean;
   toolbarContent?: ReactNode;
   columnOrder?: string[]; visibleColumnKeys?: string[];
   defaultVisibleColumnKeys?: string[];
@@ -33,7 +34,7 @@ function WidthInput({ value, minimum, label, onCommit }: { value: number; minimu
   }
   return <input aria-label={label} type="number" min={minimum} max={MAX_WIDTH} step={10} value={draft ?? value} onChange={event => setDraft(event.target.value)} onBlur={submit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); submit(); } else if (event.key === 'Escape') { event.preventDefault(); setDraft(undefined); } }} />;
 }
-export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, defaultVisibleColumnKeys, insertNewColumnBefore, resetColumnsLabel, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, compactHeaders = false, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
+export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, defaultVisibleColumnKeys, insertNewColumnBefore, resetColumnsLabel, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, className, components, expandable, rowSelection, resizableSelection = false, compactHeaders = false, compactLayout = false, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
   const { locale } = useLanguage();
   const text = (chinese: string, english: string) => locale === 'en-US' ? english : chinese;
   const scope = useLedgerScope(organizationId);
@@ -99,7 +100,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   const clampWidth = (key: string, value: unknown, fallback = DEFAULT_WIDTH) => boundedWidth(value, fallback, minimumFor(key));
   const widthFor = (key: string) => preview && preview.epoch === sessionEpoch && preview.scope === stateKey && preview.key === key ? preview.width : clampWidth(key, isSelectionColumn(key) && saved.widths[key] === 64 ? undefined : saved.widths[key], key === SELECTION_WIDTH_KEY ? clampWidth(key, rowSelection?.columnWidth, 44) : boundedWidth(getColumn(key)?.width, isSelectionColumn(key) ? 40 : DEFAULT_WIDTH, isSelectionColumn(key) ? MIN_SELECTION_WIDTH : MIN_WIDTH));
   const businessWidth = keys.filter(key => visible.includes(key) || required.includes(key)).reduce((total, key) => total + widthFor(key), 0);
-  const fitSelection = Boolean(rowSelection && resizableSelection && businessWidth);
+  const fitSelection = Boolean(!compactLayout && rowSelection && resizableSelection && businessWidth);
   const selectionWidth = widthFor(SELECTION_WIDTH_KEY);
   const columnWidth = (key: string) => fitSelection && key !== SELECTION_WIDTH_KEY ? `${widthFor(key) / businessWidth * 100}%` : widthFor(key);
   function commit(next: Preferences) { save(normalize({ ...next, fixed: resolveFixed(next.fixed, columnOrder ?? next.order) })); }
@@ -251,8 +252,13 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
     <Button size="small" onClick={resetAll}>{resetColumnsLabel ?? text('恢复全部列', 'Reset all columns')}</Button>
   </div>;
   const expansion = expandable?.expandedRowRender ? { ...expandable, columnTitle: expandable.columnTitle === undefined ? text('明细', 'Details') : expandable.columnTitle, columnWidth: expandable.columnWidth ?? 64, showExpandColumn: expandable.showExpandColumn ?? (tableProps.dataSource?.some(record => !expandable.rowExpandable || expandable.rowExpandable(record)) ?? false) } : expandable;
-  return <div ref={tableRoot} className={`qms-ledger${compactHeaders ? ' qms-ledger--compact-headers' : ''}${toolbarContent == null && tableProps.pagination !== false ? ' qms-ledger--native-pagination' : ''}`}>
+  const nativeSelectionWidth = selection?.columnWidth ?? rowSelection?.columnWidth ?? 32;
+  const compactWidth = businessWidth + (rowSelection ? Number(nativeSelectionWidth) || 32 : 0) + (expansion?.showExpandColumn ? Number(expansion.columnWidth) || 64 : 0);
+  const tableScroll = { x: 'max-content', ...scroll };
+  if (compactLayout && businessWidth) tableScroll.x = compactWidth;
+  else if (fitSelection) tableScroll.x = `max(100%, ${businessWidth + selectionWidth}px)`;
+  return <div ref={tableRoot} className={`qms-ledger${compactHeaders ? ' qms-ledger--compact-headers' : ''}${compactLayout ? ' qms-ledger--compact-layout' : ''}${toolbarContent == null && tableProps.pagination !== false ? ' qms-ledger--native-pagination' : ''}`}>
     <div className="qms-ledger__tools">{toolbarContent}<Popover content={settings} trigger="click" placement="bottomRight"><Button size="small" icon={<Settings2 size={13} />} disabled={!keys.length && !selection}>{text('列设置', 'Columns')}</Button></Popover></div>
-    <HeaderCellComponent value={{ Cell: (components?.header?.cell ?? 'th') as ElementType, selectionResize: selection ? resizeHandle(SELECTION_WIDTH_KEY, selectionName) : undefined }}><Table<RecordType> {...tableProps} pagination={tableProps.pagination === false ? false : { placement: tableProps.pagination?.position ? undefined : ['topStart'], size: 'small', showTotal: total => text(`共 ${total} 条`, `${total} records`), showQuickJumper: true, ...tableProps.pagination }} tableLayout={fitSelection ? 'fixed' : tableProps.tableLayout} className={className} columns={decorate(columns)} rowSelection={selection ?? rowSelection} scroll={{ x: 'max-content', ...scroll, ...(fitSelection ? { x: `max(100%, ${businessWidth + selectionWidth}px)` } : {}) }} expandable={expansion} components={{ ...components, header: { ...components?.header, cell: LedgerHeaderCell } }} /></HeaderCellComponent>
+    <HeaderCellComponent value={{ Cell: (components?.header?.cell ?? 'th') as ElementType, selectionResize: selection ? resizeHandle(SELECTION_WIDTH_KEY, selectionName) : undefined }}><Table<RecordType> {...tableProps} pagination={tableProps.pagination === false ? false : { placement: tableProps.pagination?.position ? undefined : ['topStart'], size: 'small', showTotal: total => text(`共 ${total} 条`, `${total} records`), showQuickJumper: true, ...tableProps.pagination }} tableLayout={compactLayout || fitSelection ? 'fixed' : tableProps.tableLayout} className={className} columns={decorate(columns)} rowSelection={selection ?? rowSelection} scroll={tableScroll} expandable={expansion} components={{ ...components, header: { ...components?.header, cell: LedgerHeaderCell } }} /></HeaderCellComponent>
   </div>;
 }

@@ -11,8 +11,9 @@ export class ProcessScopeDto {
 }
 
 export class ProcessOperationSectorInputDto extends ProcessScopeDto {
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) operationCode?: string | null;
   @ApiProperty({ maxLength: 200 }) @IsString() @IsNotEmpty() @MaxLength(200) operationName!: string;
-  @ApiProperty({ maxLength: 200 }) @IsString() @IsNotEmpty() @MaxLength(200) sectorName!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) sectorName?: string | null;
 }
 
 export class UpdateProcessOperationSectorDto extends ProcessOperationSectorInputDto {
@@ -27,8 +28,9 @@ export class DeleteProcessOperationSectorDto extends ProcessScopeDto {
 export class ProcessOperationSectorDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
+  @ApiProperty({ type: String, nullable: true }) operationCode!: string | null;
   @ApiProperty() operationName!: string;
-  @ApiProperty() sectorName!: string;
+  @ApiProperty({ type: String, nullable: true }) sectorName!: string | null;
   @ApiProperty() active!: boolean;
   @ApiProperty() version!: number;
 }

@@ -29,6 +29,7 @@ import { ProcessQualityModule } from '../../src/modules/process-quality/process-
 import { ProcessDefectLedgerService } from '../../src/modules/process-quality/process-defect-ledger.service.js';
 import type { MasterDataIntegrationTarget } from '../../src/common/integration-master-data.js';
 import { ProcessDefectCompletionService } from '../../src/modules/process-quality/process-defect-completion.service.js';
+import { ProcessOperationSectorService } from '../../src/modules/process-quality/process-operation-sector.service.js';
 import { ComponentProjectService } from '../../src/modules/platform-configuration/component-project.service.js';
 import { MaterialMasterService } from '../../src/modules/material-master/material-master.service.js';
 
@@ -94,6 +95,84 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     const result = await service.submitImport(item.actor, { previewId: preview.previewId, confirmed: true }, trace(), key());
     return { preview, result, jobId: result.jobIds[0]! };
   }
+
+  it('automatically ingests an operation by organization and code, preserving the board on rename', async () => {
+    const item = await fixture();
+    const foreign = await fixture();
+    const operation: SaveIngestionRuleDto = { name: '工序入库', endpointId: item.endpointId, target: 'OPERATION', enabled: true, match: 'ALL', conditions: [],
+      mapping: { operationCode: 'station.id', operationName: 'station.title' }, mode: 'UPDATE', updateFields: ['operationName'] };
+    const configuration = await service.saveRule(item.actor, operation, trace(), key());
+    await service.saveRule(foreign.actor, { ...operation, endpointId: foreign.endpointId }, trace(), key());
+    const sectors = app.get(ProcessOperationSectorService);
+    const send = (owner: Fixture, operationName?: string) => machine(owner, [{ station: { id: '001', title: operationName }, sectorName: '来源不能设板块' }]);
+    expect((await send(item, '初始工序')).status).toBe(200);
+    await worker.processDue(10);
+    const [created] = await sectors.list(item.actor);
+    expect(created).toMatchObject({ operationCode: '001', operationName: '初始工序', sectorName: null, version: 1 });
+    await sectors.update(item.actor, created!.id,
+      { expectedVersion: 1, operationName: '初始工序', sectorName: '人工板块', active: true }, trace(), key());
+    const proposed = await received(item, [{ station: { id: '001', title: '更名工序' } }]);
+    expect(await service.preview(item.actor, { ruleId: configuration.id, ruleVersion: configuration.version, receiptId: proposed, rowIndex: 0 }, trace(), key()))
+      .toMatchObject({ action: 'UPDATED', fields: { operationCode: '001', operationName: '更名工序' }, differences: [{ field: 'operationName', before: '初始工序', after: '更名工序' }] });
+    await send(item, '更名工序');
+    await send(item, '更名工序');
+    await send(item);
+    await send(foreign, '其他组织工序');
+    await worker.processDue(30);
+    expect(await sectors.list(item.actor)).toEqual([expect.objectContaining({ id: created!.id, operationCode: '001', operationName: '更名工序', sectorName: '人工板块', version: 3 })]);
+    expect(await sectors.list(foreign.actor)).toEqual([expect.objectContaining({ operationCode: '001', operationName: '其他组织工序', sectorName: null })]);
+    const states = await prisma.$queryRaw<Array<{ status: string }>>`SELECT status FROM integration_ingestion_items WHERE organization_id=${item.organizationId}::uuid`;
+    expect(states.map(state => state.status).sort()).toEqual(['INSERTED', 'UNCHANGED', 'UPDATED', 'VALIDATION_FAILED']);
+    const actions = await prisma.auditEvent.findMany({ where: { organizationId: item.organizationId, resourceId: created!.id }, select: { action: true } });
+    expect(actions.map(event => event.action).sort()).toEqual(['PROCESS_OPERATION_SECTOR_CREATED', 'PROCESS_OPERATION_SECTOR_UPDATED', 'PROCESS_OPERATION_SECTOR_UPDATED']);
+  });
+
+  it.each(['disable', 'delete'] as const)('settles obsolete automatic operation jobs and releases shared endpoint FIFO on %s', async change => {
+    const item = await fixture();
+    const operation: SaveIngestionRuleDto = { name: '工序入库关闭', endpointId: item.endpointId, target: 'OPERATION', enabled: true, match: 'ALL', conditions: [],
+      mapping: { operationCode: 'code', operationName: 'name' }, mode: 'UPDATE', updateFields: ['operationName'] };
+    const configuration = await service.saveRule(item.actor, operation, trace(), key());
+    expect((await machine(item, [{ code: '001', name: '已处理' }, { code: '002', name: '关闭前待处理' }])).status).toBe(200);
+    await worker.processDue(1);
+    expect((await machine(item, [{ code: '003', name: '尚未展开' }])).status).toBe(200);
+    const [waiting] = await prisma.$queryRaw<Array<{ id: string }>>`SELECT id FROM integration_ingestion_jobs WHERE organization_id=${item.organizationId}::uuid ORDER BY sequence DESC LIMIT 1`;
+    await service.controlJob(item.actor, waiting!.id, { action: 'PAUSE', reason: '人工暂停等待来源核对' }, trace(), key());
+    if (change === 'disable') await service.saveRule(item.actor, { ...operation, enabled: false, expectedVersion: configuration.version }, trace(), key(), configuration.id);
+    else await service.deleteRule(item.actor, configuration.id, { expectedVersion: configuration.version }, trace(), key());
+    await rule(item, 'MATERIAL');
+    expect((await machine(item, [{ code: 'successor', name: '同接收接口后续物料' }])).status).toBe(200);
+    await worker.processDue(20);
+    expect(await app.get(ProcessOperationSectorService).list(item.actor)).toEqual([expect.objectContaining({ operationCode: '001' })]);
+    expect((await inspect(item, 'MATERIAL', 'successor'))?.values.name).toBe('同接收接口后续物料');
+    const jobs = await prisma.$queryRaw<Array<{ id: string; status: string }>>`SELECT id,status FROM integration_ingestion_jobs WHERE organization_id=${item.organizationId}::uuid ORDER BY sequence`;
+    expect(jobs.map(job => job.status)).toEqual(['CANCELLED', 'CANCELLED', 'COMPLETED']);
+    const rows = await prisma.$queryRaw<Array<{ status: string }>>`SELECT status FROM integration_ingestion_items WHERE job_id=${jobs[0]!.id}::uuid ORDER BY row_index`;
+    expect(rows.map(row => row.status)).toEqual(['INSERTED', 'CANCELLED']);
+    const cancelled = await prisma.auditEvent.findMany({ where: { organizationId: item.organizationId, action: 'INGESTION_AUTO_OPERATION_CANCELLED' } });
+    expect(cancelled).toEqual([expect.objectContaining({ resourceId: configuration.id, actorUserId: item.userId, metadata: {
+      action: 'CANCEL', endpointId: item.endpointId, target: 'OPERATION', reasonCode: change === 'disable' ? 'RULE_DISABLED' : 'RULE_DELETED', cancelledJobCount: 2,
+    } })]);
+  });
+
+  it('protects a manual operation rename after receipt and lets a subsequent receipt sync through board-only edits', async () => {
+    const item = await fixture();
+    const sectors = app.get(ProcessOperationSectorService);
+    const initial = await sectors.create(item.actor, { operationCode: '001', operationName: '原工序' }, trace(), key());
+    const operation: SaveIngestionRuleDto = { name: '工序更名保护', endpointId: item.endpointId, target: 'OPERATION', enabled: true, match: 'ALL', conditions: [],
+      mapping: { operationCode: 'code', operationName: 'name' }, mode: 'UPDATE', updateFields: ['operationName'] };
+    await service.saveRule(item.actor, operation, trace(), key());
+    expect((await machine(item, [{ code: '001', name: '排队中的旧名称' }])).status).toBe(200);
+    const renamed = await sectors.update(item.actor, initial.id, { operationName: '人工名称', expectedVersion: initial.version, active: true }, trace(), key());
+    await sectors.update(item.actor, initial.id, { operationName: '人工名称', sectorName: '人工板块', expectedVersion: renamed.version, active: true }, trace(), key());
+    await worker.processDue(10);
+    expect(await sectors.list(item.actor)).toEqual([expect.objectContaining({ operationName: '人工名称', sectorName: '人工板块' })]);
+    const items = await prisma.$queryRaw<Array<{ status: string }>>`SELECT status FROM integration_ingestion_items WHERE organization_id=${item.organizationId}::uuid`;
+    expect(items).toEqual([{ status: 'AWAITING_CONFIRMATION' }]);
+    expect((await machine(item, [{ code: '001', name: '人工更名后的新消息' }])).status).toBe(200);
+    await sectors.update(item.actor, initial.id, { operationName: '人工名称', sectorName: '更新板块', expectedVersion: renamed.version + 1, active: true }, trace(), key());
+    await worker.processDue(10);
+    expect(await sectors.list(item.actor)).toEqual([expect.objectContaining({ operationName: '人工更名后的新消息', sectorName: '更新板块' })]);
+  });
 
   it('previews without business writes, explicitly imports one row, and reuses repeated submissions', async () => {
     const item = await fixture(), configuration = await rule(item, 'MATERIAL', 'UPDATE', false);

@@ -18,6 +18,19 @@ describe('process registration snapshots and real bounded Worker completion', ()
 
   async function due(id: string) { await fixture.prisma.processDefect.update({ where: { id }, data: { completionNextAttemptAt: null } }); }
 
+  it('accepts old API sector inserts after the operation master migration', async () => {
+    const id = randomUUID();
+    const { actor, prisma } = fixture;
+    const operationName = '旧接口新增工序';
+    const insertLegacy = () => prisma.$executeRaw`INSERT INTO process_operation_sectors
+      (id, organization_id, operation_name, sector_name, created_by_id, updated_by_id)
+      VALUES (${id}::uuid, ${actor.organizationId}::uuid, ${operationName}, '旧板块', ${actor.id}::uuid, ${actor.id}::uuid)
+      ON CONFLICT (organization_id, operation_name) DO NOTHING`;
+    expect(await insertLegacy()).toBe(1);
+    expect(await insertLegacy()).toBe(0);
+    expect(await fixture.sectors.list(actor)).toContainEqual(expect.objectContaining({ id, operationName, operationCode: null, sectorName: '旧板块' }));
+  });
+
   it('allows routine configuration with an active session after recent authentication expires', async () => {
     await fixture.prisma.session.update({ where: { id: fixture.actor.sessionId }, data: { reauthenticatedAt: new Date(Date.now() - 600_000) } });
     const { component } = await mapping('ACTIVE-CONFIG');
@@ -36,6 +49,96 @@ describe('process registration snapshots and real bounded Worker completion', ()
     }
     throw new Error('The bounded Worker did not reach the pending fixture');
   }
+
+  it('uses code before name, leaves names ambiguous, and freezes completed board snapshots', async () => {
+    await mapping('00001', '细分类');
+    const legacy = await fixture.sectors.create(fixture.actor, { operationName: '重名工序', sectorName: '历史板块' }, randomUUID(), randomUUID());
+    const onlyName = await fixture.manual({ operationName: '重名工序' });
+    expect(onlyName.operationSector).toBe('历史板块');
+    const initial = await fixture.manual({ operationCode: 'OP-1', operationName: '重名工序' });
+    expect(initial.operationSector).toBeNull();
+    const bound = await fixture.sectors.update(fixture.actor, legacy.id,
+      { operationCode: 'OP-1', operationName: '重名工序', sectorName: '现行板块', expectedVersion: 1, active: true }, randomUUID(), randomUUID());
+    expect(bound).toMatchObject({ id: legacy.id, operationCode: 'OP-1' });
+    await fixture.sectors.create(fixture.actor, { operationCode: 'OP-2', operationName: '重名工序', sectorName: null }, randomUUID(), randomUUID());
+    expect((await fixture.manual({ operationName: '重名工序' })).operationSector).toBeNull();
+    expect((await fixture.manual({ operationCode: 'UNKNOWN', operationName: '重名工序' })).operationSector).toBeNull();
+    await completePending(initial.id);
+    const completed = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: initial.id } });
+    expect(completed).toMatchObject({ operationSector: '现行板块', sectorSnapshot: { ruleId: legacy.id, operationCode: 'OP-1', ruleVersion: 2 } });
+    const renamed = await fixture.ledger.update(fixture.actor, initial.id, { expectedVersion: completed.version, operationName: '同步后的名称' }, randomUUID(), randomUUID());
+    expect(renamed.operationSector).toBe('现行板块');
+    expect((await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: initial.id } })).sectorSnapshot).toEqual(completed.sectorSnapshot);
+    expect((await fixture.ledger.detail(fixture.actor, onlyName.id)).operationSector).toBe('历史板块');
+  });
+
+  it('rejects duplicate and changed codes and honors optional manual board updates', async () => {
+    const sector = await fixture.sectors.create(fixture.actor, { operationCode: 'A', operationName: '工序甲', sectorName: '板块' }, randomUUID(), randomUUID());
+    await expect(fixture.sectors.create(fixture.actor, { operationCode: ' A ', operationName: '同编码' }, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ response: { code: 'PROCESS_OPERATION_CODE_CONFLICT' } });
+    const legacy = await fixture.sectors.create(fixture.actor, { operationName: '历史工序', sectorName: '板块' }, randomUUID(), randomUUID());
+    await expect(fixture.sectors.update(fixture.actor, legacy.id, { operationCode: 'A', operationName: '历史工序', expectedVersion: 1, active: true }, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ response: { code: 'PROCESS_OPERATION_CODE_CONFLICT' } });
+    const patch = { operationName: '工序甲', expectedVersion: sector.version, active: true };
+    await expect(fixture.sectors.update(fixture.actor, sector.id, { ...patch, operationCode: 'B' }, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ response: { code: 'PROCESS_OPERATION_CODE_IMMUTABLE' } });
+    const preserved = await fixture.sectors.update(fixture.actor, sector.id, patch, randomUUID(), randomUUID());
+    expect(preserved).toMatchObject({ operationCode: 'A', sectorName: '板块' });
+    expect(await fixture.sectors.update(fixture.actor, sector.id, { ...patch, expectedVersion: preserved.version, sectorName: null }, randomUUID(), randomUUID()))
+      .toMatchObject({ operationCode: 'A', sectorName: null });
+  });
+
+  it('preserves a frozen board when enriching a same-name defect with a code, and rematches a corrected code', async () => {
+    await fixture.sectors.create(fixture.actor, { operationName: '同一工序', sectorName: '历史板块' }, randomUUID(), randomUUID());
+    const first = await fixture.manual({ operationName: '同一工序' });
+    const before = await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: first.id } });
+    await fixture.sectors.create(fixture.actor, { operationCode: 'NEW-CODE', operationName: '同一工序', sectorName: '现行板块' }, randomUUID(), randomUUID());
+    await fixture.sectors.create(fixture.actor, { operationCode: 'OTHER-CODE', operationName: '同一工序', sectorName: '其他板块' }, randomUUID(), randomUUID());
+    const enriched = await fixture.ledger.update(fixture.actor, first.id,
+      { expectedVersion: first.version, operationCode: 'NEW-CODE', operationName: ' 同一工序 ' }, randomUUID(), randomUUID());
+    expect(enriched).toMatchObject({ operationCode: 'NEW-CODE', operationSector: '历史板块' });
+    expect((await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: first.id } })).sectorSnapshot).toEqual(before.sectorSnapshot);
+    const corrected = await fixture.ledger.update(fixture.actor, first.id, { expectedVersion: enriched.version, operationCode: 'OTHER-CODE' }, randomUUID(), randomUUID());
+    expect(corrected).toMatchObject({ operationCode: 'OTHER-CODE', operationSector: '其他板块' });
+  });
+
+  it('keeps legacy boards frozen and defers uncoded matches when ingestion creates same-name operations', async () => {
+    const operationName = '旧规则与同步工序同名';
+    await fixture.sectors.create(fixture.actor, { operationName, sectorName: '旧板块' }, randomUUID(), randomUUID());
+    const frozen = await fixture.manual({ operationName });
+    const imported = await fixture.prisma.$transaction(tx => fixture.sectors.writeForIngestion(tx, fixture.actor,
+      { operationCode: 'IMS-1', operationName }, null, randomUUID()));
+    const pending = await fixture.manual({ operationName });
+    expect(pending).toMatchObject({ operationSector: null, pendingConfiguration: true });
+    await fixture.prisma.$transaction(tx => fixture.sectors.writeForIngestion(tx, fixture.actor,
+      { operationCode: 'IMS-2', operationName }, null, randomUUID()));
+    await fixture.sectors.update(fixture.actor, imported.id, { operationName, sectorName: '已核对板块', active: true, expectedVersion: 1 }, randomUUID(), randomUUID());
+    expect((await fixture.manual({ operationName })).operationSector).toBeNull();
+    expect((await fixture.manual({ operationCode: 'IMS-2', operationName })).operationSector).toBeNull();
+    const identified = await fixture.ledger.update(fixture.actor, pending.id, { expectedVersion: pending.version, operationCode: 'IMS-1' }, randomUUID(), randomUUID());
+    expect(identified.operationSector).toBe('已核对板块');
+    expect((await fixture.ledger.detail(fixture.actor, frozen.id)).operationSector).toBe('旧板块');
+  });
+
+  it('requires operation permissions at the transactional ingestion boundary and keeps source names out of audit metadata', async () => {
+    const fields = { operationCode: 'AUTH-A', operationName: '来源名称应留在业务记录' };
+    const actor = { ...fixture.actor, id: randomUUID() };
+    await expect(fixture.prisma.$transaction(tx => fixture.sectors.inspectForIngestion(tx, actor, fields)))
+      .rejects.toMatchObject({ response: { code: 'AUTH_SESSION_REQUIRED' } });
+    const record = await fixture.prisma.$transaction(tx => fixture.sectors.writeForIngestion(tx, fixture.actor, fields, null, randomUUID()));
+    const events = await fixture.prisma.auditEvent.findMany({ where: { resourceId: record.id } });
+    expect(events).toHaveLength(1);
+    expect(events[0]?.metadata).toEqual({ resourceVersion: 1, target: 'OPERATION' });
+  });
+
+  it('returns a null code when replaying a pre-migration sector mutation', async () => {
+    const key = randomUUID();
+    const input = { operationName: '历史重试工序', sectorName: '板块' };
+    const record = await fixture.sectors.create(fixture.actor, input, randomUUID(), key);
+    await fixture.prisma.$executeRaw`UPDATE admin_mutations SET response = response #- '{value,operationCode}'
+      WHERE actor_user_id = ${fixture.actor.id}::uuid AND key = ${key}`;
+    expect(await fixture.sectors.create(fixture.actor, input, randomUUID(), key)).toEqual({ ...record, operationCode: null });
+  });
 
   it('freezes the first project stage and fills missing product classification independently', async () => {
     const mapped = await mapping('00001');

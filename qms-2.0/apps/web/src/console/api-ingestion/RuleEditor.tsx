@@ -14,6 +14,7 @@ type DescriptionField = { path: string; label?: string; variable?: string };
 type Values = Omit<Save, 'conditions' | 'aiDescription' | 'descriptionComposition'> & { conditions: ConditionValues[]; descriptionMode: 'single' | 'multiple'; aiEnabled: boolean; componentNameSource: 'EXTERNAL' | 'MATERIAL'; descriptionComposition?: { fields: DescriptionField[]; separator: string } };
 const operators: Condition['operator'][] = ['EQ', 'NE', 'IN', 'NOT_IN', 'EMPTY', 'NOT_EMPTY'];
 const processFields = ['occurredAt', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey'];
+const operationFields = ['operationCode', 'operationName'];
 
 export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, saved }: { scope: IntegrationScope; rule?: Rule; endpoints: Endpoint[]; endpointsLoading: boolean; close: () => void; saved: () => void }) {
   const text = useIngestionText(); const english = text('zh', 'en') === 'en';
@@ -81,8 +82,9 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
       ...(['EMPTY', 'NOT_EMPTY'].includes(condition.operator) ? {} : { value: ['IN', 'NOT_IN'].includes(condition.operator)
         ? (condition.valueText ?? '').split(/\r?\n/).map(value => parse(value, condition.valueType)) : condition.valueType === 'boolean' ? condition.scalar === 'true' : condition.scalar }) }));
     const process = values.target === 'PROCESS_DEFECT';
-    const allowedFields = process ? processFields.filter(field => field !== 'externalRecordKey') : ['name', ...(values.target === 'SUPPLIER' ? ['contactName', 'contactEmail'] : [])];
-    const mapping: Save['mapping'] = process ? Object.fromEntries(processFields.filter(field => !(field === 'description' && values.descriptionMode === 'multiple') && values.mapping[field]?.trim()).map(field => [field, values.mapping[field].trim()])) : values.target === 'COMPONENT' && values.componentNameSource === 'MATERIAL' ? { code: values.mapping.code.trim() } : { code: values.mapping.code.trim(), name: values.mapping.name.trim() };
+    const operation = values.target === 'OPERATION';
+    const allowedFields = process ? processFields.filter(field => field !== 'externalRecordKey') : operation ? ['operationName'] : ['name', ...(values.target === 'SUPPLIER' ? ['contactName', 'contactEmail'] : [])];
+    const mapping: Save['mapping'] = process || operation ? Object.fromEntries((process ? processFields : operationFields).filter(field => !(field === 'description' && values.descriptionMode === 'multiple') && values.mapping[field]?.trim()).map(field => [field, values.mapping[field].trim()])) : values.target === 'COMPONENT' && values.componentNameSource === 'MATERIAL' ? { code: values.mapping.code.trim() } : { code: values.mapping.code.trim(), name: values.mapping.name.trim() };
     if (values.target === 'SUPPLIER') for (const field of ['contactName', 'contactEmail']) if (values.mapping[field]?.trim()) mapping[field] = values.mapping[field].trim();
     const compositionFields = (values.descriptionComposition?.fields ?? []).map(field => ({ path: field.path.trim(), ...(field.label?.trim() ? { label: field.label.trim() } : {}), ...(field.variable?.trim() ? { variable: field.variable.trim() } : {}) }));
     const variables = compositionFields.flatMap(field => field.variable ? [field.variable] : []);
@@ -112,14 +114,17 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
       : { path: `${ingestionPath}/rules`, method: 'POST' as const, body };
     void mutation.execute<Rule>(command, () => { setDirty(false); saved(); });
   }
-  const fieldOptions = (target === 'PROCESS_DEFECT' ? processFields.filter(field => field !== 'externalRecordKey') : ['name', ...(target === 'SUPPLIER' ? ['contactName', 'contactEmail'] : [])]).map(value => ({ value, label: label(value, english) }));
+  const fieldOptions = (target === 'PROCESS_DEFECT' ? processFields.filter(field => field !== 'externalRecordKey') : target === 'OPERATION' ? ['operationName'] : ['name', ...(target === 'SUPPLIER' ? ['contactName', 'contactEmail'] : [])]).map(value => ({ value, label: label(value, english) }));
   const operatorLabel = (value: string) => ({ EQ: text('等于', 'Equals'), NE: text('不等于', 'Not equal'), IN: text('属于', 'In'), NOT_IN: text('不属于', 'Not in'), EMPTY: text('为空', 'Empty'), NOT_EMPTY: text('不为空', 'Not empty') })[value];
   return <Modal open title={text(rule ? '编辑入库规则' : '新增入库规则', rule ? 'Edit ingestion rule' : 'New ingestion rule')} width={850} footer={null} destroyOnHidden mask={{ closable: false }} closable={!mutation.locked} keyboard={!mutation.locked} onCancel={() => { if (!mutation.locked) requestLeave(close, true); }}>
     <Form className="qms-ingestion-form" form={form} layout="vertical" initialValues={initial} disabled={mutation.locked} onValuesChange={() => { setDirty(true); setBindingError(undefined); }} onFinish={save}>
       <div className="qms-ingestion-grid">
         <Form.Item name="name" label={text('规则名称', 'Rule name')} rules={[{ required: true, whitespace: true }]}><Input maxLength={120} /></Form.Item>
         <Form.Item name="endpointId" label={text('接收接口', 'Receiving interface')} rules={[{ required: true }]}><Select disabled={!!rule || mutation.locked} showSearch optionFilterProp="label" loading={endpointsLoading} options={endpoints.map(endpoint => ({ value: endpoint.id, label: endpoint.name }))} /></Form.Item>
-        <Form.Item name="target" label={text('目标档案', 'Target record')} rules={[{ required: true }]}><Select disabled={!!rule || mutation.locked} onChange={() => form.setFieldValue('updateFields', [])} options={['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'PROCESS_DEFECT'].map(value => ({ value, label: label(value, english) }))} /></Form.Item>
+        <Form.Item name="target" label={text('目标档案', 'Target record')} rules={[{ required: true }]}><Select disabled={!!rule || mutation.locked} onChange={value => {
+          if (value === 'OPERATION') form.setFieldsValue({ mode: 'UPDATE', updateFields: ['operationName'] });
+          else form.setFieldValue('updateFields', []);
+        }} options={['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'OPERATION', 'PROCESS_DEFECT'].map(value => ({ value, label: label(value, english) }))} /></Form.Item>
         <Form.Item name="enabled" label={text('启用自动入库', 'Enable automatic ingestion')} valuePropName="checked"><Switch /></Form.Item>
       </div>
       <Form.Item name="match" label={text('条件关系', 'Condition matching')}><Select options={[{ value: 'ALL', label: text('全部满足', 'All conditions') }, { value: 'ANY', label: text('任一满足', 'Any condition') }]} /></Form.Item>
@@ -147,7 +152,7 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
           <Form.Item name="sourceTimezone" label={text('来源时区', 'Source timezone')} rules={[{ validator: async (_, value: string) => { if (!value?.trim()) return; try { new Intl.DateTimeFormat('en', { timeZone: value.trim() }); } catch { throw new Error(text('请填写有效的IANA时区', 'Enter a valid IANA timezone')); } } }]}><Input maxLength={100} placeholder="Asia/Shanghai" /></Form.Item>
           <Form.Item name="descriptionMode" label={text('不良描述来源', 'Description source')}><Select options={[{ value: 'single', label: text('单字段', 'Single field') }, { value: 'multiple', label: text('多字段组合', 'Ordered fields') }]} /></Form.Item>
           {descriptionMode === 'single' && <Form.Item name={['mapping', 'description']} label={text('不良描述来源字段', 'Description source field')}><Input maxLength={200} /></Form.Item>}
-        </> : <><Form.Item name={['mapping', 'code']} label={text('编码来源字段', 'Code source field')} rules={[{ required: true, whitespace: true }]}><Input maxLength={200} /></Form.Item>
+        </> : target === 'OPERATION' ? operationFields.map(field => <Form.Item key={field} name={['mapping', field]} label={text(`${label(field, false)}来源字段`, `${label(field, true)} source field`)} rules={[{ required: true, whitespace: true }]}><Input maxLength={200} /></Form.Item>) : <><Form.Item name={['mapping', 'code']} label={text('编码来源字段', 'Code source field')} rules={[{ required: true, whitespace: true }]}><Input maxLength={200} /></Form.Item>
         {target === 'COMPONENT' ? <>
           <Form.Item name="componentNameSource" label={text('名称来源方式', 'Name source')}><Select options={[{ value: 'EXTERNAL', label: text('接口报文字段', 'Interface field') }, { value: 'MATERIAL', label: text('内部物料主数据', 'Internal material master'), disabled: !canReadMaterial && !rule?.componentNameLookup }]} onChange={value => { if (value === 'MATERIAL') form.setFieldValue(['mapping', 'name'], undefined); }} /></Form.Item>
           {componentNameSource === 'MATERIAL' ? <Form.Item label={text('物料主数据字段', 'Material master field')}><Select aria-label={text('物料主数据字段', 'Material master field')} value="materialName" options={[{ value: 'materialName', label: text('物料名称', 'Material name') }]} disabled /></Form.Item>

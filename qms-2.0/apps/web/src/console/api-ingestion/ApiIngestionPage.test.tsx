@@ -72,6 +72,16 @@ beforeEach(() => {
   });
 });
 afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); localStorage.clear(); });
+it('binds operation code and name and updates only the name on repeat ingestion', async () => {
+  mocks.mutate.mockResolvedValue({});
+  const dialog = editorView({ ...rule, target: 'OPERATION', mapping: { operationCode: 'step.code', operationName: 'step.name' }, mode: 'UPDATE', updateFields: ['operationName'] } as Rule);
+  expect(dialog.getByLabelText('工序编码来源字段')).toHaveValue('step.code');
+  fireEvent.change(dialog.getByLabelText('工序名称来源字段'), { target: { value: 'step.label' } });
+  expect(dialog.queryByLabelText('板块名称来源字段')).not.toBeInTheDocument();
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(mocks.mutate).toHaveBeenCalled());
+  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ target: 'OPERATION', mapping: { operationCode: 'step.code', operationName: 'step.label' }, mode: 'UPDATE', updateFields: ['operationName'] });
+});
 it('edits process source fields and ordered description composition without exposing derived update fields', async () => {
   mocks.mutate.mockResolvedValue({});
   const processRule = { ...rule, target: 'PROCESS_DEFECT', mapping: { productCode: 'product', traceCode: 'barcode' }, updateFields: ['description'], sourceTimezone: 'Asia/Shanghai', descriptionComposition: { fields: [{ path: 'fault', label: '现象' }, { path: 'position', label: '位置' }], separator: '\n' } } as Rule;

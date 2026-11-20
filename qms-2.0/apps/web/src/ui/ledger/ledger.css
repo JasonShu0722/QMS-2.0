@@ -30,6 +30,8 @@
 .qms-ledger__heading--drop { box-shadow: inset 2px 0 var(--qms-accent); }
 .qms-ledger--compact-headers .qms-ledger__heading { display: block; }
 .qms-ledger--compact-headers .qms-ledger__title { display: inline-block; width: max-content; vertical-align: middle; white-space: nowrap; }
+.qms-ledger--compact-layout > .ant-table-wrapper .ant-table-container > :is(.ant-table-content, .ant-table-body, .ant-table-header) > table { min-width: 0 !important; }
+.qms-ledger--compact-layout > .ant-table-wrapper .ant-table-container > :is(.ant-table-content, .ant-table-body, .ant-table-header) > table > :is(thead, tbody) > tr:not(.ant-table-expanded-row) > .ant-table-cell { padding-inline: 4px; white-space: nowrap; }
 .qms-ledger__header-cell--movable { cursor: grab; user-select: none; }
 .qms-ledger__header-cell--movable:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: -2px; }
 .qms-ledger__settings { max-width: min(580px, calc(100vw - 64px)); max-height: min(480px, 65vh); overflow: auto; color: var(--qms-text); }

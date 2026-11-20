@@ -58,7 +58,7 @@ const configurationDateKeys = new Set(['validFrom', 'validTo', 'previousValidFro
 const SAFE_METADATA_KEYS = new Set([
   'protocol', 'publishedVersion',
   'materialId', 'materialVersion', 'materialMatched',
-  'rowIndex', 'ruleVersion', 'receiptCount', 'rowCount', 'result', 'target', 'action', 'enabled', 'reprocessed',
+  'rowIndex', 'ruleVersion', 'receiptCount', 'rowCount', 'cancelledJobCount', 'result', 'target', 'action', 'enabled', 'reprocessed',
   ...Object.keys(configurationTextLimits), ...configurationIdKeys,
   'componentProjectStage', 'previousComponentProjectStage', 'previousStatus',
   ...configurationDateKeys, 'responsibility', 'bindingVersion', 'previousResourceVersion',
@@ -136,10 +136,10 @@ export class AuditLogService {
     if (key === 'publishedVersion') return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= 2147483647;
     if (key === 'enabled' || key === 'reprocessed') return typeof value === 'boolean';
     if (key === 'receiptCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 100000;
-    if (key === 'rowCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+    if (key === 'rowCount' || key === 'cancelledJobCount') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
     if (key === 'rowIndex') return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 2147483647;
     if (key === 'ruleVersion') return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= 2147483647;
-    if (key === 'target') return ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT'].includes(String(value));
+    if (key === 'target') return ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'OPERATION'].includes(String(value));
     if (key === 'action') return ['PAUSE', 'RESUME', 'CANCEL', 'RETRY'].includes(String(value));
     if (key === 'result') return ['INSERTED', 'UPDATED', 'UNCHANGED', 'FILTERED', 'EXISTING_SKIPPED', 'AWAITING_CONFIRMATION', 'VALIDATION_FAILED', 'PROCESSING_FAILED', 'SKIPPED', 'CANCELLED'].includes(String(value));
     if (key === 'returnReceipt') return typeof value === 'boolean';

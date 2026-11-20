@@ -25,6 +25,8 @@ const items: (ConsoleNavigationItem & { permissions?: string[] })[] = [
   { path: '/console/master-data/customers', label: '客户档案', english: 'Customer profiles', group: 'master-data', icon: ContactRound, module: 'master-data', permissions: ['customer-quality:complaints:read', 'customer-quality:complaints:write'] },
   { path: '/console/master-data/materials', label: '物料主数据', english: 'Material master', group: 'master-data', icon: Package, module: 'master-data', permissions: ['material-master:read', 'material-master:write', 'material-master:import'] },
   { path: '/console/master-data/component-projects', label: '组件项目映射', english: 'Component project mapping', group: 'master-data', icon: Link2, module: 'master-data', permissions: ['component-project:read', 'component-project:manage'] },
+  { path: '/console/master-data/projects', label: '项目清单', english: 'Projects', group: 'master-data', icon: ClipboardList, module: 'master-data', permissions: ['component-project:read'] },
+  { path: '/console/master-data/operations', label: '工序主数据', english: 'Operation master', group: 'master-data', icon: Factory, module: 'master-data', permissions: ['process-quality:configuration:read'] },
   { path: '/console/configuration', label: '平台配置', english: 'Platform configuration', group: 'configuration', icon: Settings, module: 'configuration' },
   { path: '/console/ai-connections', label: '模型渠道', english: 'Model channels', group: 'ai', icon: Bot, module: 'ai-connections', permissions: ['ai:connections:read'] },
   { path: '/console/ai-applications', label: '提示词应用', english: 'Prompt applications', group: 'ai', icon: MessageSquareText, module: 'ai-applications', permissions: ['ai:applications:read'] },

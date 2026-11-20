@@ -40,6 +40,6 @@ import { ProcessOperationSectorController } from './process-operation-sector.con
     ProcessEightDReadAdapter, ProcessEightDFileAdapter, ProcessEightDTaskService, ProcessEightDReminderService, ProcessEightDReportService,
     ProcessDefectCompletionService, ProcessDefectIngestionAdapter, ProcessOperationSectorService],
   exports: [ProcessDefectLedgerService, ProcessIssueService, ProcessProductionService, ProcessShipmentReportService,
-    ProcessEightDService, ProcessEightDReminderService, ProcessDefectCompletionService, ProcessDefectIngestionAdapter],
+    ProcessEightDService, ProcessEightDReminderService, ProcessDefectCompletionService, ProcessDefectIngestionAdapter, ProcessOperationSectorService],
 })
 export class ProcessQualityModule {}
