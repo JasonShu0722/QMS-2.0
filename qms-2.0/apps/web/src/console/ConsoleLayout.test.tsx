@@ -216,12 +216,12 @@ it('opens a group from the icon rail and shares expansion with the mobile drawer
   expect(within(await screen.findByRole('dialog', { name: '管理导航' })).getByRole('link', { name: '流程管理' })).toHaveAttribute('aria-current', 'page');
 });
 it('renders semantic icons for every menu and reserves the gear for platform configuration', async () => {
-  const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
+  const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'process-quality:configuration:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
   getContext.mockResolvedValue({ ...context(), modules: (['users', 'organizations', 'supplier-accounts', 'reconfiguration', 'problem-reconfiguration', 'master-data', 'configuration', 'workflows', 'audit', 'outbox', 'api-monitoring', 'data-exchanges', 'services'] as const).map(key => ({ key, scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: 'a', permissions })) });
   renderLayout('/console');
   await screen.findByText('受保护内容');
   const links = screen.getByRole('navigation', { name: '管理导航' }).querySelectorAll('a');
-  expect(links).toHaveLength(17);
+  expect(links).toHaveLength(19);
   links.forEach(link => {
     const icon = link.querySelector('svg');
     expect(icon).toHaveAttribute('aria-hidden', 'true');
@@ -232,6 +232,8 @@ it('renders semantic icons for every menu and reserves the gear for platform con
   fireEvent.click(screen.getByRole('button', { name: '主数据' }));
   expect(screen.getByRole('link', { name: '物料主数据' }).querySelector('svg')).toHaveClass('lucide-package');
   expect(screen.getByRole('link', { name: '组件项目映射' }).querySelector('svg')).toHaveClass('lucide-link2');
+  expect(screen.getByRole('link', { name: '项目清单' })).toHaveAttribute('href', expect.stringContaining('/console/master-data/projects'));
+  expect(screen.getByRole('link', { name: '工序主数据' })).toHaveAttribute('href', expect.stringContaining('/console/master-data/operations'));
 });
 it('verifies scope before rendering real children and navigates without writing business tabs', async () => {
   let resolve!: (value: ConsoleContext) => void;
