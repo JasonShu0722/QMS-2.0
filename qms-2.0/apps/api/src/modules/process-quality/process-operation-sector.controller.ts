@@ -6,7 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { ProcessOperationSectorService } from './process-operation-sector.service.js';
-import { DeletedProcessOperationSectorDto, DeleteProcessOperationSectorDto, ProcessOperationSectorDto, ProcessOperationSectorInputDto, ProcessScopeDto, UpdateProcessOperationSectorDto } from './process-quality.dto.js';
+import { BulkCreateProcessOperationSectorsDto, DeletedProcessOperationSectorDto, DeleteProcessOperationSectorDto, ProcessOperationSectorDto, ProcessOperationSectorInputDto, ProcessScopeDto, UpdateProcessOperationSectorDto } from './process-quality.dto.js';
 
 function actor(request: Request) {
   const authorized = request as AuthorizedRequest;
@@ -31,6 +31,13 @@ export class ProcessOperationSectorController {
   @RequireAccess({ featurePermission: 'process-quality:configuration:manage', organizationScope: bodyScope })
   create(@Req() request: Request, @Body() body: ProcessOperationSectorInputDto, @Headers('idempotency-key') key?: string) {
     return this.service.create(actor(request), body, requestTraceId(request), key);
+  }
+
+  @Post('bulk-create') @ApiCreatedResponse({ type: [ProcessOperationSectorDto] })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:configuration:manage', organizationScope: bodyScope })
+  bulkCreate(@Req() request: Request, @Body() body: BulkCreateProcessOperationSectorsDto, @Headers('idempotency-key') key?: string) {
+    return this.service.bulkCreate(actor(request), body.items, requestTraceId(request), key);
   }
 
   @Put(':id') @ApiOkResponse({ type: ProcessOperationSectorDto })
