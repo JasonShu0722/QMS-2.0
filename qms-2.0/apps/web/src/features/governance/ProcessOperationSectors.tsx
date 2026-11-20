@@ -14,8 +14,11 @@ type Sector = components['schemas']['ProcessOperationSectorDto'];
 type Create = components['schemas']['ProcessOperationSectorInputDto'];
 type Update = components['schemas']['UpdateProcessOperationSectorDto'];
 type BulkCreate = components['schemas']['BulkCreateProcessOperationSectorsDto'];
-type Command = { path: string; method: 'POST' | 'PUT' | 'DELETE'; body?: Create | Update | BulkCreate };
+type BulkSector = components['schemas']['BulkUpdateProcessOperationSectorsDto'];
+type Command = { path: string; method: 'POST' | 'PUT' | 'DELETE'; body?: Create | Update | BulkCreate | BulkSector };
 const sectorPath = '/api/v1/process-quality/operation-sectors';
+const bulkSectorPath = `${sectorPath}/bulk-sector`;
+const bulkSectorLimit = 1000;
 function parseBatch(text: string) {
   const rows: { cells: string[]; number: number }[] = [];
   const pattern = /(?:"((?:[^"]|"")*)"|((?!")[^\t\n]*))(\t|\n|$)/gy;
@@ -44,6 +47,9 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
   const { t } = useLanguage(); const [form] = Form.useForm<Update>();
   const [items, setItems] = useState<Sector[]>([]); const [editor, setEditor] = useState<{ record?: Sector }>(); const [removing, setRemoving] = useState<Sector>();
   const [batchOpen, setBatchOpen] = useState(false); const [batchText, setBatchText] = useState('');
+  const [search, setSearch] = useState(''); const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkSector, setBulkSector] = useState<string>();
+  const [bulkRefreshRequired, setBulkRefreshRequired] = useState(false);
   const [batchIssues, setBatchIssues] = useState<string[]>([]);
   const batchLineNumbers = useRef<number[]>([]);
   const [page, setPage] = useState(1); const [pageSize, setPageSize] = useLedgerPageSize('process-operation-sectors', organization.id);
@@ -56,7 +62,7 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
   useUnsavedChanges(dirty || unknown); useNavigationBusy(busy);
   const current = () => alive.current && !invalidated.current && useWorkTabsStore.getState().sessionScope === initialScope.current && getLedgerSessionEpoch() === initialEpoch.current;
   function clearBatch() { setBatchOpen(false); setBatchText(''); setBatchIssues([]); batchLineNumbers.current = []; }
-  function retire() { invalidated.current = true; controller.current?.abort(); setRetired(true); setItems([]); setEditor(undefined); setRemoving(undefined); clearBatch(); setDirty(false); setUnknown(false); setBusy(false); frozen.current = undefined; }
+  function retire() { invalidated.current = true; controller.current?.abort(); setRetired(true); setItems([]); setSelectedIds([]); setBulkSector(undefined); setEditor(undefined); setRemoving(undefined); clearBatch(); setDirty(false); setUnknown(false); setBusy(false); frozen.current = undefined; }
   useEffect(() => {
     alive.current = true; controller.current = new AbortController();
     const unsubscribe = useWorkTabsStore.subscribe(() => { if (!current()) retire(); });
@@ -68,7 +74,7 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
     void apiRequest<Sector[]>(`${sectorPath}?organizationId=${encodeURIComponent(organization.id)}`, { signal: controller.current?.signal }).then(value => {
       if (!active || !current()) return;
       if (!Array.isArray(value) || value.some(item => item.organizationId !== organization.id)) { retire(); return; }
-      setItems(value);
+      setItems(value); setBulkRefreshRequired(false);
     }).catch(cause => { if (active && current()) { if (cause instanceof ApiError && [401, 403].includes(cause.status ?? 0)) retire(); else setError(cause); } }).finally(() => { if (active && current()) setLoading(false); });
     return () => { active = false; };
   }, [organization.id, revision]);
@@ -79,7 +85,10 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
     try {
       const result = await mutate<Sector | Sector[] | components['schemas']['DeletedProcessOperationSectorDto']>(attempt.path, attempt.method, attempt.body, controller.current?.signal);
       if (!current()) return;
-      if (attempt.method === 'DELETE' && !Array.isArray(result)) setItems(previous => previous.filter(item => item.id !== result.id));
+      if (attempt.method === 'DELETE' && !Array.isArray(result)) {
+        setItems(previous => previous.filter(item => item.id !== result.id));
+        setSelectedIds(previous => previous.filter(id => id !== result.id));
+      }
       else {
         const rows = Array.isArray(result) ? result : [result];
         if (!rows.every((row): row is Sector => 'organizationId' in row && row.organizationId === organization.id)) { retire(); return; }
@@ -87,12 +96,14 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
         setItems(previous => [...previous.filter(item => !added.has(item.id)), ...rows].sort((first, second) => first.operationName.localeCompare(second.operationName)));
       }
       if (editor) form.resetFields();
+      if (attempt.path === bulkSectorPath) { setSelectedIds([]); setBulkSector(undefined); }
       frozen.current = undefined; setUnknown(false); setDirty(false); setEditor(undefined); setRemoving(undefined); clearBatch();
     } catch (cause) {
       if (!current()) return;
       if (cause instanceof ApiError && cause.code !== 'AUTH_REAUTHENTICATION_REQUIRED' && [401, 403].includes(cause.status ?? 0)) { retire(); return; }
       const known = cause instanceof ApiError && (cause.code === 'CLIENT_REAUTHENTICATION_COMPLETED' || cause.status !== undefined && cause.status >= 400 && cause.status < 500 && ![408, 425].includes(cause.status));
       if (known) frozen.current = undefined;
+      if (attempt.path === bulkSectorPath && cause instanceof ApiError && cause.code === 'CONCURRENCY_CONFLICT') setBulkRefreshRequired(true);
       if (attempt.path === `${sectorPath}/bulk-create` && cause instanceof ApiError) {
         const reason = cause.code === 'PROCESS_OPERATION_CODE_CONFLICT' ? t('工序编码重复，请核对本批数据和现有清单。') : t('请核对工序编码和工序名称。');
         const lines = new Set<number>();
@@ -147,18 +158,36 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
     batchLineNumbers.current = rows.map(row => row.number);
     void execute({ path: `${sectorPath}/bulk-create`, method: 'POST', body: { organizationId: organization.id, items: entries } });
   }
-  function close() { if (!locked) requestLeave(() => { if (editor) form.resetFields(); setDirty(false); setEditor(undefined); setRemoving(undefined); clearBatch(); }, true); }
+  function close() { if (!locked) requestLeave(() => { if (editor) form.resetFields(); setDirty(false); setEditor(undefined); setRemoving(undefined); setBulkSector(undefined); clearBatch(); }, true); }
+  function refresh() { requestLeave(() => { setSelectedIds([]); setRevision(value => value + 1); }); }
   if (retired) return <Alert type="warning" title={t('会话或配置权限已变化，请重新进入。')} />;
   if (!organization.permissions.includes('process-quality:configuration:read')) return null;
+  const keyword = search.trim().toLowerCase();
+  const filtered = keyword ? items.filter(item => [item.operationCode, item.operationName, item.sectorName].some(value => value?.toLowerCase().includes(keyword))) : items;
+  const selected = new Set(selectedIds);
+  const selectedItems = filtered.filter(item => selected.has(item.id));
+  const bulkConflict = error instanceof ApiError && error.code === 'CONCURRENCY_CONFLICT';
+  function saveBulkSector() {
+    const value = bulkSector?.trim();
+    if (locked || loading || bulkRefreshRequired || !value || !selectedItems.length || selectedItems.length > bulkSectorLimit) return;
+    void execute({ path: bulkSectorPath, method: 'POST', body: { organizationId: organization.id, sectorName: value, items: selectedItems.map(item => ({ id: item.id, expectedVersion: item.version })) } });
+  }
+  function reloadAfterConflict() {
+    setBulkSector(undefined); setDirty(false); setSelectedIds([]); setRevision(value => value + 1);
+  }
   const feedback = <><GovernanceFeedback error={error} />{unknown ? <Alert type="warning" title={t('操作结果未知，输入已保留，请重试原请求。')} /> : null}</>;
   return <Card title={t('工序主数据')}>
     <Space wrap>
+      <Input aria-label={t('搜索工序')} placeholder={t('搜索工序编码、名称或板块')} allowClear maxLength={200} disabled={locked} value={search} onChange={event => { setSearch(event.target.value); setSelectedIds([]); setPage(1); }} />
       {manage && <><Button type="primary" disabled={locked} onClick={() => { form.resetFields(); form.setFieldsValue({ active: true }); setError(undefined); setEditor({}); }}>{t('新增工序')}</Button>
-      <Button disabled={locked} onClick={() => { setError(undefined); setBatchOpen(true); }}>{t('批量新增')}</Button></>}
-      <Button disabled={locked || loading} onClick={() => requestLeave(() => setRevision(value => value + 1))}>{t('刷新')}</Button>
+      <Button disabled={locked} onClick={() => { setError(undefined); setBatchOpen(true); }}>{t('批量新增')}</Button>
+      <Button disabled={locked || loading || bulkRefreshRequired || !selectedItems.length || selectedItems.length > bulkSectorLimit} onClick={() => { setError(undefined); setBulkSector(''); }}>{t('批量配置板块')}</Button></>}
+      <Button disabled={locked || loading} onClick={refresh}>{t('刷新')}</Button>
+      {manage && selectedItems.length > 0 && <><span aria-live="polite">{t('已选 {count} 条').replace('{count}', String(selectedItems.length))}</span><Button disabled={locked} onClick={() => setSelectedIds([])}>{t('取消选择')}</Button></>}
     </Space>
-    {!editor && !removing && !batchOpen ? feedback : null}
-    <LedgerTable<Sector> ledgerId="process-operation-sectors" organizationId={organization.id} requiredColumnKeys={['operationName', 'actions']} rowKey="id" loading={loading} dataSource={items} scroll={{ x: 620 }} pagination={{ current: page, pageSize, disabled: locked, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} columns={[
+    {selectedItems.length > bulkSectorLimit && <Alert type="warning" title={t('每次最多配置 1000 条工序，请缩小选择范围。')} />}
+    {!editor && !removing && !batchOpen && bulkSector === undefined ? feedback : null}
+    <LedgerTable<Sector> ledgerId="process-operation-sectors" organizationId={organization.id} requiredColumnKeys={['operationName', 'actions']} rowKey="id" loading={loading} dataSource={filtered} scroll={{ x: 620 }} rowSelection={manage ? { selectedRowKeys: selectedIds, preserveSelectedRowKeys: true, onChange: keys => setSelectedIds(keys.map(String)), getCheckboxProps: () => ({ disabled: locked || loading || bulkRefreshRequired }) } : undefined} pagination={{ current: Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize))), pageSize, disabled: locked, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} columns={[
       { key: 'operationCode', title: t('工序编码'), dataIndex: 'operationCode', ellipsis: true }, { key: 'operationName', title: t('工序名称'), dataIndex: 'operationName', ellipsis: true }, { key: 'sectorName', title: t('板块名称'), dataIndex: 'sectorName', ellipsis: true },
       { key: 'active', title: t('状态'), dataIndex: 'active', render: value => t(value ? '启用' : '停用') }, { key: 'version', title: t('版本'), dataIndex: 'version' },
       { key: 'actions', title: t('操作'), render: (_, record) => manage ? <Space wrap><Button disabled={locked} onClick={() => { form.setFieldsValue(record); setError(undefined); setEditor({ record }); }}>{t('编辑')}</Button><Button danger disabled={locked} onClick={() => { setError(undefined); setRemoving(record); }}>{t('删除')}</Button></Space> : t('只读') },
@@ -172,6 +201,16 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
         } })]}><Input maxLength={200} /></Form.Item>
         {editor?.record ? <Form.Item name="active" label={t('启用')} valuePropName="checked"><Switch /></Form.Item> : null}
         <Space><Button disabled={locked} onClick={close}>{t('取消')}</Button>{unknown ? <Button type="primary" disabled={busy} loading={busy} onClick={() => void execute()}>{t('重试原请求')}</Button> : <Button type="primary" htmlType="submit" loading={busy}>{t('保存')}</Button>}</Space>
+      </Form>
+    </Modal>
+    <Modal open={bulkSector !== undefined} title={t('批量配置板块')} footer={null} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden>
+      {feedback}
+      <Form layout="vertical" onFinish={saveBulkSector}>
+        <p>{t('将所选 {count} 条工序的板块名称统一设置为以下值，已有板块将被替换。').replace('{count}', String(selectedItems.length))}</p>
+        <Form.Item label={t('板块名称')} htmlFor="operation-bulk-sector" required>
+          <Input id="operation-bulk-sector" autoFocus disabled={locked} maxLength={200} value={bulkSector ?? ''} onChange={event => { setBulkSector(event.target.value); setDirty(!!event.target.value.trim()); }} />
+        </Form.Item>
+        <Space wrap><Button disabled={locked} onClick={close}>{t('取消')}</Button>{unknown ? <Button type="primary" loading={busy} onClick={() => void execute()}>{t('重试原请求')}</Button> : bulkConflict ? <Button onClick={reloadAfterConflict}>{t('刷新后重新选择')}</Button> : <Button type="primary" htmlType="submit" disabled={!bulkSector?.trim()} loading={busy}>{t('保存')}</Button>}</Space>
       </Form>
     </Modal>
     <Modal open={batchOpen} title={t('批量新增工序')} footer={null} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden>

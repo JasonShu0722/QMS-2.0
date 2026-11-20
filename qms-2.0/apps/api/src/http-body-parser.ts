@@ -7,7 +7,7 @@ export function configureHttpBodyParser(app: NestExpressApplication): void {
   // Up to 100 raw rows of 64000 bytes plus row metadata; ordinary writes retain the 100 kB limit.
   app.use(['/api/v1/customer-quality/ledger/import/preview', '/api/v1/customer-quality/ledger/import/commit'], json({ limit: '7mb' }));
   app.use('/api/v1/admin/configuration/component-project-mappings/import', json({ limit: '512kb' }));
-  app.use('/api/v1/process-quality/operation-sectors/bulk-create', json({ limit: '256kb' }));
+  app.use(['/api/v1/process-quality/operation-sectors/bulk-create', '/api/v1/process-quality/operation-sectors/bulk-sector'], json({ limit: '256kb' }));
   app.useBodyParser('json', { limit: '100kb' });
   app.useBodyParser('urlencoded', { extended: true, limit: '100kb' });
 }

@@ -7,8 +7,9 @@ import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
-import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { AuditLogService, type RecordAuditEventInput } from '../audit-log/audit-log.service.js';
 import { readOrganizationRuntime, type OrganizationRuntime } from '../organization/organization-runtime.read-model.js';
+import type { BulkUpdateProcessOperationSectorsDto } from './process-quality.dto.js';
 
 function fail(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
 function rowError(code: 'PROCESS_OPERATION_SECTOR_INPUT_INVALID' | 'PROCESS_OPERATION_CODE_CONFLICT', path: string): never {
@@ -89,6 +90,35 @@ export class ProcessOperationSectorService {
         records[index] = await this.insert(tx, actor, organizationId, { ...operation, sectorName: null }, traceId, false, index);
       }
       return records;
+    }, tx => this.requireActiveOrganization(tx, organizationId, true));
+  }
+
+  async bulkUpdateSector(actor: AdminActor, input: BulkUpdateProcessOperationSectorsDto, traceId: string, key?: string) {
+    const organizationId = this.scope(actor), sectorName = name(input.sectorName, 200, 'sectorName');
+    const { items } = input;
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTORS_BULK_UPDATED',
+      permission: 'process-quality:configuration:manage', payload: { sectorName, items }, authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
+      const selection = JSON.stringify(items);
+      const records = new Map<string, OperationSector>();
+      for (const [table, projection] of [[Prisma.sql`process_operation_master`, columns], [Prisma.sql`process_operation_sectors`, legacyColumns]] as const) {
+        const updated = await tx.$queryRaw<OperationSector[]>`WITH matched AS (
+          SELECT operation.id FROM ${table} AS operation
+          JOIN jsonb_to_recordset(${selection}::jsonb) AS requested(id uuid, "expectedVersion" integer)
+            ON requested.id = operation.id AND requested."expectedVersion" = operation.version
+          WHERE operation.organization_id = ${organizationId}::uuid AND operation.version < 2147483647
+          ORDER BY operation.id FOR UPDATE OF operation
+        ) UPDATE ${table} SET sector_name = ${sectorName}, version = version + 1,
+          updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP
+        WHERE id IN (SELECT id FROM matched) RETURNING ${projection}`;
+        for (const record of updated) {
+          if (records.has(record.id)) fail('CONCURRENCY_CONFLICT', 409);
+          records.set(record.id, record);
+        }
+      }
+      if (records.size !== items.length) fail('CONCURRENCY_CONFLICT', 409);
+      const result = items.map(({ id }) => records.get(id)!);
+      await this.audit.recordMany(result.map(record => this.operationAuditEvent(actor, record, 'PROCESS_OPERATION_SECTOR_UPDATED', traceId)), tx);
+      return result;
     }, tx => this.requireActiveOrganization(tx, organizationId, true));
   }
 
@@ -201,7 +231,11 @@ export class ProcessOperationSectorService {
   }
 
   private async auditChange(tx: AdminTransaction, actor: AdminActor, record: OperationSector, action: string, traceId: string, automatic = false) {
-    await this.audit.record({ actorUserId: actor.id, organizationId: record.organizationId, action, resourceType: 'ProcessOperationSector', resourceId: record.id,
-      outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version, ...(automatic ? { target: 'OPERATION' } : { structureName: record.operationName }) } }, tx);
+    await this.audit.record(this.operationAuditEvent(actor, record, action, traceId, automatic), tx);
+  }
+
+  private operationAuditEvent(actor: AdminActor, record: OperationSector, action: string, traceId: string, automatic = false): RecordAuditEventInput {
+    return { actorUserId: actor.id, organizationId: record.organizationId, action, resourceType: 'ProcessOperationSector', resourceId: record.id,
+      outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version, ...(automatic ? { target: 'OPERATION' } : { structureName: record.operationName }) } };
   }
 }

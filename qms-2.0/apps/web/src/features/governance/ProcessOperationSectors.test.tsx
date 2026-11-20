@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ApiError, apiRequest, createAdminMutation } from '../../api/client';
 import { UnsavedChangesProvider, useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { LanguageProvider } from '../../i18n/Language';
+import { preferenceKey } from '../../ui/ledger/model';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessOperationSectors } from './ProcessOperationSectors';
 
@@ -22,6 +23,96 @@ afterEach(() => vi.unstubAllEnvs());
 function mount(permissions: string[] = [...organization.permissions]) {
   return render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessOperationSectors organization={{ ...organization, permissions }} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
 }
+it('searches all rows, retains checks across pages and submits only selected versions', async () => {
+  const pageSizeKey = preferenceKey({ sessionScope: 'INTERNAL:org:user', organizationId: 'org', portal: 'business' }, 'process-operation-sectors', 'pageSize')!;
+  localStorage.setItem(pageSizeKey, JSON.stringify({ schema: 1, value: 10 }));
+  const records = Array.from({ length: 11 }, (_, index) => ({ ...sector, id: `operation-${index}`, operationCode: `SOP${index === 10 ? 20 : index}`, operationName: `工序 ${index === 10 ? 20 : index}`, sectorName: index ? null : '装配' }));
+  vi.mocked(apiRequest).mockResolvedValue(records);
+  mutate.mockResolvedValue([{ ...records[0], sectorName: '电测', version: 3 }, { ...records[10], sectorName: '电测', version: 3 }]);
+  mount();
+  await screen.findByText('SOP0');
+  const search = screen.getByRole('textbox', { name: '搜索工序' });
+  for (const [term, expected] of [['sop20', 'SOP20'], ['工序 20', 'SOP20'], ['装配', 'SOP0']]) {
+    fireEvent.change(search, { target: { value: term } });
+    expect(screen.getByText(expected)).toBeInTheDocument();
+    expect(screen.queryByText(term === '装配' ? 'SOP20' : 'SOP0')).not.toBeInTheDocument();
+  }
+  fireEvent.change(search, { target: { value: '' } });
+  fireEvent.click(within(screen.getByText('SOP0').closest('tr')!).getByRole('checkbox'));
+  fireEvent.click(screen.getByTitle('2'));
+  fireEvent.click(within(screen.getByText('SOP20').closest('tr')!).getByRole('checkbox'));
+  expect(screen.getByText('已选 2 条')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '批量配置板块' }));
+  const dialog = within(screen.getByRole('dialog', { name: '批量配置板块' }));
+  fireEvent.change(dialog.getByLabelText('板块名称'), { target: { value: ' 电测 ' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(mutate.mock.calls[0]?.slice(0, 3)).toEqual(['/api/v1/process-quality/operation-sectors/bulk-sector', 'POST', { organizationId: 'org', sectorName: '电测', items: [{ id: 'operation-0', expectedVersion: 2 }, { id: 'operation-10', expectedVersion: 2 }] }]));
+  await waitFor(() => expect(screen.getByRole('button', { name: '批量配置板块' })).toBeDisabled());
+  expect(screen.queryByText('已选 2 条')).not.toBeInTheDocument();
+  fireEvent.change(search, { target: { value: '电测' } });
+  expect(screen.getAllByText('电测', { selector: 'td' })).toHaveLength(2);
+  expect(screen.getByText('SOP0')).toBeInTheDocument();
+  expect(screen.getByText('SOP20')).toBeInTheDocument();
+});
+
+it('clears hidden selection on search and keeps read-only search available', async () => {
+  const view = mount();
+  const row = (await screen.findByText('终检', { selector: 'td' })).closest('tr')!;
+  fireEvent.click(within(row).getByRole('checkbox'));
+  expect(screen.getByRole('button', { name: '批量配置板块' })).toBeEnabled();
+  fireEvent.change(screen.getByRole('textbox', { name: '搜索工序' }), { target: { value: '不存在' } });
+  expect(screen.getByRole('button', { name: '批量配置板块' })).toBeDisabled();
+  view.unmount();
+  mount(['process-quality:configuration:read']);
+  expect(screen.getByRole('textbox', { name: '搜索工序' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '批量配置板块' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+});
+
+it('reloads newer versions and requires reselection after a batch conflict', async () => {
+  mutate.mockRejectedValueOnce(new ApiError({ code: 'CONCURRENCY_CONFLICT', message: '' }, 409));
+  vi.mocked(apiRequest).mockResolvedValueOnce([sector]).mockResolvedValueOnce([{ ...sector, sectorName: '新板块', version: 3 }]);
+  mount();
+  await screen.findByText('终检', { selector: 'td' });
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select all' }));
+  fireEvent.click(screen.getByRole('button', { name: '批量配置板块' }));
+  const dialog = within(screen.getByRole('dialog', { name: '批量配置板块' }));
+  fireEvent.change(dialog.getByLabelText('板块名称'), { target: { value: '电测' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  const reload = await dialog.findByRole('button', { name: '刷新后重新选择' });
+  await act(async () => { fireEvent.submit(reload.closest('form')!); });
+  expect(mutate).toHaveBeenCalledTimes(1);
+  fireEvent.click(reload);
+  expect(await screen.findByText('新板块', { selector: 'td' })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '批量配置板块' })).toBeDisabled();
+  expect(mutate).toHaveBeenCalledTimes(1);
+});
+
+it('blocks batch configuration after a conflict until a refresh succeeds', async () => {
+  mutate.mockRejectedValueOnce(new ApiError({ code: 'CONCURRENCY_CONFLICT', message: '' }, 409));
+  vi.mocked(apiRequest).mockResolvedValueOnce([sector]).mockRejectedValueOnce(new TypeError('network')).mockResolvedValueOnce([{ ...sector, sectorName: '新板块', version: 3 }]);
+  mount();
+  const row = (await screen.findByText('终检', { selector: 'td' })).closest('tr')!;
+  const batch = screen.getByRole('button', { name: '批量配置板块' });
+  fireEvent.click(within(row).getByRole('checkbox'));
+  fireEvent.click(batch);
+  const dialog = within(screen.getByRole('dialog', { name: '批量配置板块' }));
+  fireEvent.change(dialog.getByLabelText('板块名称'), { target: { value: '电测' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await dialog.findByRole('button', { name: '刷新后重新选择' });
+  fireEvent.click(dialog.getByRole('button', { name: /^取\s*消$/ }));
+  fireEvent.click(await screen.findByRole('button', { name: '放弃修改并关闭' }));
+  expect(batch).toBeDisabled();
+  const refresh = screen.getByRole('button', { name: /^刷\s*新$/ });
+  fireEvent.click(refresh);
+  await waitFor(() => expect(refresh).toBeEnabled());
+  expect(batch).toBeDisabled();
+  fireEvent.click(refresh);
+  const refreshed = (await screen.findByText('新板块', { selector: 'td' })).closest('tr')!;
+  expect(batch).toBeDisabled();
+  fireEvent.click(within(refreshed).getByRole('checkbox'));
+  expect(batch).toBeEnabled();
+}, 20_000);
 it('requires code and name on manual creation and preserves leading zeroes', async () => {
   mount();
   fireEvent.click(screen.getByRole('button', { name: '新增工序' }));

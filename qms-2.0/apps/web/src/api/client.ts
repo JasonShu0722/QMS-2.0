@@ -109,7 +109,7 @@ type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schem
   components['schemas']['CreateAiConnectionDto'] | components['schemas']['UpdateAiConnectionDto'] |
   components['schemas']['AiApplicationSettingsDto'] | components['schemas']['UpdateAiApplicationDto'] | components['schemas']['TestAiApplicationDto'] |
   components['schemas']['AiConnectionVersionDto'] | components['schemas']['AiDescriptionTaskActionDto'] |
-  components['schemas']['ProcessOperationSectorInputDto'] | components['schemas']['UpdateProcessOperationSectorDto'] | components['schemas']['BulkCreateProcessOperationSectorsDto'] |
+  components['schemas']['ProcessOperationSectorInputDto'] | components['schemas']['UpdateProcessOperationSectorDto'] | components['schemas']['BulkCreateProcessOperationSectorsDto'] | components['schemas']['BulkUpdateProcessOperationSectorsDto'] |
   components['schemas']['SaveIngestionRuleDto'] | components['schemas']['UpdateIngestionRuleDto'] |
   components['schemas']['DeleteIngestionRuleDto'] | components['schemas']['IngestionPreviewInputDto'] |
   components['schemas']['IngestionHistoryPreviewInputDto'] | components['schemas']['SubmitIngestionImportDto'] |
