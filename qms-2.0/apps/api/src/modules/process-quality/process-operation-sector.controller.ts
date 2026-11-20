@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Headers, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Headers, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
@@ -6,7 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { ProcessOperationSectorService } from './process-operation-sector.service.js';
-import { BulkCreateProcessOperationSectorsDto, DeletedProcessOperationSectorDto, DeleteProcessOperationSectorDto, ProcessOperationSectorDto, ProcessOperationSectorInputDto, ProcessScopeDto, UpdateProcessOperationSectorDto } from './process-quality.dto.js';
+import { BulkCreateProcessOperationSectorsDto, BulkUpdateProcessOperationSectorsDto, DeletedProcessOperationSectorDto, DeleteProcessOperationSectorDto, ProcessOperationSectorDto, ProcessOperationSectorInputDto, ProcessScopeDto, UpdateProcessOperationSectorDto } from './process-quality.dto.js';
 
 function actor(request: Request) {
   const authorized = request as AuthorizedRequest;
@@ -38,6 +38,13 @@ export class ProcessOperationSectorController {
   @RequireAccess({ featurePermission: 'process-quality:configuration:manage', organizationScope: bodyScope })
   bulkCreate(@Req() request: Request, @Body() body: BulkCreateProcessOperationSectorsDto, @Headers('idempotency-key') key?: string) {
     return this.service.bulkCreate(actor(request), body.items, requestTraceId(request), key);
+  }
+
+  @Post('bulk-sector') @HttpCode(200) @ApiOkResponse({ type: [ProcessOperationSectorDto] })
+  @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:configuration:manage', organizationScope: bodyScope })
+  bulkUpdateSector(@Req() request: Request, @Body() body: BulkUpdateProcessOperationSectorsDto, @Headers('idempotency-key') key?: string) {
+    return this.service.bulkUpdateSector(actor(request), body, requestTraceId(request), key);
   }
 
   @Put(':id') @ApiOkResponse({ type: ProcessOperationSectorDto })

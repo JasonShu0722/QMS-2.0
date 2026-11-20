@@ -103,18 +103,24 @@ export class AuditLogService {
 
   async record(input: RecordAuditEventInput, transaction?: AuditEventWriter): Promise<unknown> {
     const writer = transaction ?? this.prisma;
-    return writer.auditEvent.create({
-      data: {
-        organizationId: input.organizationId ?? null,
-        actorUserId: input.actorUserId ?? null,
-        action: input.action,
-        resourceType: input.resourceType,
-        resourceId: input.resourceId ?? null,
-        outcome: input.outcome,
-        metadata: this.safeMetadata(input.metadata ?? {}, input),
-        traceId: input.traceId,
-      },
-    });
+    return writer.auditEvent.create({ data: this.eventData(input) });
+  }
+
+  async recordMany(inputs: readonly RecordAuditEventInput[], transaction: Pick<Prisma.TransactionClient, 'auditEvent'>): Promise<void> {
+    await transaction.auditEvent.createMany({ data: inputs.map(input => this.eventData(input)) });
+  }
+
+  private eventData(input: RecordAuditEventInput) {
+    return {
+      organizationId: input.organizationId ?? null,
+      actorUserId: input.actorUserId ?? null,
+      action: input.action,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId ?? null,
+      outcome: input.outcome,
+      metadata: this.safeMetadata(input.metadata ?? {}, input),
+      traceId: input.traceId,
+    };
   }
 
   safeMetadata(metadata: AuditMetadata, event?: { action: string; resourceType: string; outcome: string }): Prisma.InputJsonObject {

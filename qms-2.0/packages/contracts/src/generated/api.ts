@@ -5255,6 +5255,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/process-quality/operation-sectors/bulk-sector": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcessOperationSectorController_bulkUpdateSector"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/process-quality/operation-sectors/{id}": {
         parameters: {
             query?: never;
@@ -15038,6 +15054,17 @@ export interface components {
             /** Format: uuid */
             organizationId?: string;
             items: components["schemas"]["CreateProcessOperationSectorItemDto"][];
+        };
+        UpdateProcessOperationSectorItemDto: {
+            /** Format: uuid */
+            id: string;
+            expectedVersion: number;
+        };
+        BulkUpdateProcessOperationSectorsDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            sectorName: string;
+            items: components["schemas"]["UpdateProcessOperationSectorItemDto"][];
         };
         UpdateProcessOperationSectorDto: {
             /** Format: uuid */
@@ -31690,6 +31717,41 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessOperationSectorDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessOperationSectorController_bulkUpdateSector: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkUpdateProcessOperationSectorsDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };

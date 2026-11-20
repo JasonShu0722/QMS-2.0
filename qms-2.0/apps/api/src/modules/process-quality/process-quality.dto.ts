@@ -34,6 +34,22 @@ export class BulkCreateProcessOperationSectorsDto extends ProcessScopeDto {
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) items!: CreateProcessOperationSectorItemDto[];
 }
 
+class UpdateProcessOperationSectorItemDto {
+  @ApiProperty({ format: 'uuid' }) @Transform(({ value }) => typeof value === 'string' ? value.toLowerCase() : value) @IsUUID() id!: string;
+  @ApiProperty({ minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
+}
+
+export class BulkUpdateProcessOperationSectorsDto extends ProcessScopeDto {
+  @ApiProperty({ minLength: 1, maxLength: 200 })
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @IsNotEmpty() @MaxLength(200) sectorName!: string;
+
+  @ApiProperty({ type: [UpdateProcessOperationSectorItemDto], minItems: 1, maxItems: 1000 })
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(1000) @ArrayUnique((item?: UpdateProcessOperationSectorItemDto) => item?.id)
+  @IsObject({ each: true }) @ValidateNested({ each: true }) @Type(() => UpdateProcessOperationSectorItemDto)
+  items!: UpdateProcessOperationSectorItemDto[];
+}
+
 export class DeleteProcessOperationSectorDto extends ProcessScopeDto {
   @ApiProperty({ minimum: 1 }) @Type(() => Number) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
 }

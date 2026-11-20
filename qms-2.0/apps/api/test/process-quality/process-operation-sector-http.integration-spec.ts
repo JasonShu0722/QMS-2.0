@@ -20,8 +20,9 @@ if (!isDisposableLoopbackPostgres(process.env.DATABASE_URL) || process.env.QMS_D
 
 const path = '/api/v1/process-quality/operation-sectors';
 const bulkPath = `${path}/bulk-create`;
+const bulkSectorPath = `${path}/bulk-sector`;
 
-describe('manual operation creation through the API and PostgreSQL', () => {
+describe('manual operation management through the API and PostgreSQL', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let manager: Awaited<ReturnType<typeof login>>;
@@ -195,5 +196,181 @@ describe('manual operation creation through the API and PostgreSQL', () => {
     await send(bulkPath, { items }).expect(201);
     const scoped = await send(bulkPath, { items, organizationId: ordinary.actor.organizationId }, randomUUID(), administrator.cookie).expect(201);
     expect(scoped.body[0]).toMatchObject({ organizationId: ordinary.actor.organizationId, operationCode: 'SCOPED' });
+  });
+
+  it('documents the bulk sector request and typed array response', () => {
+    const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+    expect(document.components!.schemas!.BulkUpdateProcessOperationSectorsDto).toMatchObject({
+      required: expect.arrayContaining(['sectorName', 'items']),
+      properties: { organizationId: { format: 'uuid' }, sectorName: { maxLength: 200 }, items: { minItems: 1, maxItems: 1000 } },
+    });
+    expect(document.paths[bulkSectorPath]!.post!.responses['200']).toMatchObject({ content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/ProcessOperationSectorDto' } } } } });
+  });
+
+  it('changes only the sector and update metadata for coded and legacy rows and replays without duplicate audits', async () => {
+    const { actor } = manager;
+    const editor = await login('process-quality:configuration:manage', actor.organizationId);
+    const created = await send(path, { operationCode: 'BULK-SECTOR-MIXED', operationName: 'Coded', sectorName: 'Original' }).expect(201);
+    const codedId: string = created.body.id;
+    const legacyId = randomUUID();
+    await prisma.$executeRaw`INSERT INTO process_operation_sectors (id, organization_id, operation_name, sector_name, active, created_by_id, updated_by_id)
+      VALUES (${legacyId}::uuid, ${actor.organizationId}::uuid, 'Legacy', 'Legacy board', false, ${actor.id}::uuid, ${actor.id}::uuid)`;
+    const snapshot = { ruleId: codedId, operationCode: created.body.operationCode, ruleVersion: 1 };
+    const defect = await prisma.processDefect.create({ data: { organizationId: actor.organizationId, createdById: actor.id, updatedById: actor.id,
+      description: 'Historical defect', operationCode: created.body.operationCode, operationName: 'Coded', operationSector: 'Original', sectorSnapshot: snapshot } });
+    const readCoded = async () => (await prisma.$queryRaw<Record<string, unknown>[]>`SELECT * FROM process_operation_master WHERE id = ${codedId}::uuid`)[0]!;
+    const readLegacy = async () => (await prisma.$queryRaw<Record<string, unknown>[]>`SELECT * FROM process_operation_sectors WHERE id = ${legacyId}::uuid`)[0]!;
+    const beforeCoded = await readCoded(), beforeLegacy = await readLegacy();
+    const key = randomUUID();
+    const body = { sectorName: '  新板块  ', items: [{ id: legacyId, expectedVersion: 1 }, { id: codedId, expectedVersion: 1 }] };
+    const [first, replay] = await Promise.all([send(bulkSectorPath, body, key, editor.cookie).expect(200), send(bulkSectorPath, body, key, editor.cookie).expect(200)]);
+    expect(first.body).toMatchObject([
+      { id: legacyId, operationCode: null, operationName: 'Legacy', sectorName: '新板块', active: false, version: 2 },
+      { ...created.body, sectorName: '新板块', version: 2 },
+    ]);
+    expect(replay.body).toEqual(first.body);
+    expect((await send(bulkSectorPath, { ...body, sectorName: 'Different' }, key, editor.cookie).expect(409)).body.code).toBe('IDEMPOTENCY_REPLAY');
+    for (const [before, after] of [[beforeCoded, await readCoded()], [beforeLegacy, await readLegacy()]] as const) {
+      expect(after).toEqual({ ...before, sector_name: '新板块', version: 2, updated_by_id: editor.actor.id, updated_at: expect.any(Date) });
+      expect((after.updated_at as Date).getTime()).toBeGreaterThan((before.updated_at as Date).getTime());
+    }
+    expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: defect.id } })).toEqual(defect);
+    const audits = await prisma.auditEvent.findMany({ where: { resourceId: { in: [codedId, legacyId] }, action: 'PROCESS_OPERATION_SECTOR_UPDATED' } });
+    expect(audits).toHaveLength(2);
+    expect(audits).toEqual(expect.arrayContaining([codedId, legacyId].map(id => expect.objectContaining({ resourceId: id, actorUserId: editor.actor.id, outcome: 'SUCCESS', metadata: expect.objectContaining({ resourceVersion: 2 }) }))));
+  });
+
+  it('rejects invalid sector names, duplicate UUIDs and malformed selections', async () => {
+    const item = { id: randomUUID(), expectedVersion: 1 };
+    for (const body of [
+      { items: [item] }, { sectorName: '　 ', items: [item] }, { sectorName: 'X\u0000X', items: [item] },
+      { sectorName: '工'.repeat(201), items: [item] }, { sectorName: 'Valid', items: [] },
+      { sectorName: 'Valid', items: [item, { ...item, id: item.id.toUpperCase() }] },
+      { sectorName: 'Valid', items: [{ ...item, active: false }] }, { sectorName: 'Valid', items: [null] },
+      { sectorName: 'Valid', items: [{ ...item, id: 'not-a-uuid' }] }, { sectorName: 'Valid', items: [{ ...item, expectedVersion: '1' }] },
+      { sectorName: 'Valid', items: [{ ...item, expectedVersion: 0 }] },
+      { sectorName: 'Valid', items: Array.from({ length: 1001 }, () => ({ ...item, id: randomUUID() })) },
+    ]) await send(bulkSectorPath, body).expect(400);
+  });
+
+  it('rolls back the whole selection and receipt on stale, missing, or out-of-scope records', async () => {
+    const other = await login('process-quality:configuration:manage');
+    const created = await send(path, { operationCode: 'BULK-SECTOR-LOCAL', operationName: 'Local' }).expect(201);
+    const stale = await send(path, { operationCode: 'BULK-SECTOR-STALE', operationName: 'Stale' }).expect(201);
+    const foreign = await send(path, { operationCode: 'BULK-SECTOR-FOREIGN', operationName: 'Foreign' }, randomUUID(), other.cookie).expect(201);
+    const local = { id: created.body.id, expectedVersion: 1 };
+    const body = { sectorName: 'New sector' };
+    const key = randomUUID();
+    for (const invalid of [{ id: stale.body.id, expectedVersion: 9 }, { id: randomUUID(), expectedVersion: 1 }, { id: foreign.body.id, expectedVersion: 1 }]) {
+      const failed = await send(bulkSectorPath, { ...body, items: [local, invalid] }, key).expect(409);
+      expect(failed.body.code).toBe('CONCURRENCY_CONFLICT');
+      expect(await prisma.auditEvent.count({ where: { traceId: failed.body.traceId, action: 'PROCESS_OPERATION_SECTOR_UPDATED' } })).toBe(0);
+    }
+    expect(await prisma.$queryRaw`SELECT version, sector_name FROM process_operation_master WHERE id IN (${local.id}::uuid, ${foreign.body.id}::uuid)`).toEqual([
+      { version: 1, sector_name: null }, { version: 1, sector_name: null },
+    ]);
+    await send(bulkSectorPath, { ...body, items: [local] }, key).expect(200);
+  });
+
+  it('allows only one of two overlapping batches with the same record versions to commit', async () => {
+    const { actor } = manager;
+    const other = await login('process-quality:configuration:manage', actor.organizationId);
+    const coded = await send(path, { operationCode: 'BULK-SECTOR-RACE', operationName: 'Race coded' }).expect(201);
+    const legacyId = randomUUID();
+    await prisma.$executeRaw`INSERT INTO process_operation_sectors (id, organization_id, operation_name, sector_name, created_by_id, updated_by_id)
+      VALUES (${legacyId}::uuid, ${actor.organizationId}::uuid, 'Race legacy', 'Original', ${actor.id}::uuid, ${actor.id}::uuid)`;
+    const items = [{ id: coded.body.id, expectedVersion: 1 }, { id: legacyId, expectedVersion: 1 }];
+    const results = await Promise.all([
+      send(bulkSectorPath, { sectorName: 'First', items }),
+      send(bulkSectorPath, { sectorName: 'Second', items: [...items].reverse() }, randomUUID(), other.cookie),
+    ]);
+    expect(results.map(result => result.status).sort()).toEqual([200, 409]);
+    expect(results.find(result => result.status === 409)?.body.code).toBe('CONCURRENCY_CONFLICT');
+    const winner = results.find(result => result.status === 200)!;
+    expect(winner.body).toHaveLength(2);
+    expect(winner.body[0]).toMatchObject({ version: 2, sectorName: winner === results[0] ? 'First' : 'Second' });
+    expect(winner.body[1]).toMatchObject({ version: 2, sectorName: winner.body[0].sectorName });
+    expect(await prisma.auditEvent.count({ where: { action: 'PROCESS_OPERATION_SECTOR_UPDATED', resourceId: { in: items.map(item => item.id) } } })).toBe(2);
+  });
+
+  it.each(['promotion', 'bulk update'] as const)('preserves exactly one identity when %s reaches a locked legacy row first', async first => {
+    const { actor } = manager;
+    const other = await login('process-quality:configuration:manage', actor.organizationId);
+    const id = randomUUID();
+    const operationCode = `PROMOTION-${id}`, operationName = `Legacy ${id}`;
+    await prisma.$executeRaw`INSERT INTO process_operation_sectors (id, organization_id, operation_name, sector_name, created_by_id, updated_by_id)
+      VALUES (${id}::uuid, ${actor.organizationId}::uuid, ${operationName}, 'Original', ${actor.id}::uuid, ${actor.id}::uuid)`;
+    const promote = () => send(`${path}/${id}`, { operationCode, operationName, active: true, expectedVersion: 1 }, randomUUID(), manager.cookie, 'put');
+    const configure = () => send(bulkSectorPath, { sectorName: 'New board', items: [{ id, expectedVersion: 1 }] }, randomUUID(), other.cookie);
+    const [startWinner, startLoser] = first === 'promotion' ? [promote, configure] : [configure, promote];
+    const pending: Promise<request.Response>[] = [];
+    try {
+      await prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM process_operation_sectors WHERE id = ${id}::uuid FOR UPDATE`;
+        const [blocker] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+        pending.push(startWinner().then(response => response));
+        for (let attempt = 0; attempt < 200; attempt++) {
+          await tx.$queryRaw`SELECT pg_stat_clear_snapshot()::text`;
+          const [waiting] = await tx.$queryRaw<{ count: number }[]>`SELECT count(*)::int AS count FROM pg_stat_activity
+            WHERE datname = current_database() AND ${blocker!.pid} = ANY(pg_blocking_pids(pid)) AND query LIKE '%process_operation_sectors%FOR UPDATE%'`;
+          if (waiting?.count === 1) {
+            pending.push(startLoser().then(response => response));
+            return;
+          }
+          await delay(10);
+        }
+        throw new Error('First request did not reach the legacy row lock');
+      });
+    } finally {
+      await Promise.all(pending);
+    }
+    const [winner, loser] = await Promise.all(pending);
+    expect(winner?.status).toBe(200);
+    expect(loser?.status).toBe(409);
+    expect(loser?.body.code).toBe('CONCURRENCY_CONFLICT');
+    const rows = await prisma.$queryRaw`SELECT operation_code, sector_name, version FROM process_operation_master WHERE id = ${id}::uuid
+      UNION ALL SELECT NULL, sector_name, version FROM process_operation_sectors WHERE id = ${id}::uuid`;
+    expect(rows).toEqual([first === 'promotion'
+      ? { operation_code: operationCode, sector_name: 'Original', version: 2 }
+      : { operation_code: null, sector_name: 'New board', version: 2 }]);
+    expect(await prisma.auditEvent.count({ where: { action: 'PROCESS_OPERATION_SECTOR_UPDATED', resourceId: id } })).toBe(1);
+  });
+
+  it('enforces CSRF, idempotency and organization permissions including on replay', async () => {
+    const reader = await login('process-quality:configuration:read', manager.actor.organizationId);
+    const administrator = await login('platform:admin');
+    const created = await send(path, { operationCode: 'BULK-SECTOR-AUTH', operationName: 'Auth' }).expect(201);
+    const key = randomUUID();
+    const body = { sectorName: 'Allowed', organizationId: manager.actor.organizationId, items: [{ id: created.body.id, expectedVersion: 1 }] };
+    await send(bulkSectorPath, body, key, reader.cookie).expect(403);
+    await send(bulkSectorPath, { ...body, organizationId: administrator.actor.organizationId }).expect(403);
+    await request(app.getHttpServer()).post(bulkSectorPath).set('Cookie', manager.cookie).set('Idempotency-Key', key).send(body).expect(403);
+    await request(app.getHttpServer()).post(bulkSectorPath).set('Cookie', manager.cookie).set('x-csrf-token', csrf).send(body).expect(400);
+    await send(bulkSectorPath, body, key, administrator.cookie).expect(200);
+    await prisma.organization.update({ where: { id: body.organizationId }, data: { status: 'DISABLED', configurationRequired: true } });
+    try { await send(bulkSectorPath, body, key, administrator.cookie).expect(403); }
+    finally { await prisma.organization.update({ where: { id: body.organizationId }, data: { status: 'ACTIVE', configurationRequired: false } }); }
+  });
+
+  it('accepts 1000 records in one transaction and returns them in request order', async () => {
+    const { actor } = manager;
+    const items = Array.from({ length: 1000 }, () => ({ id: randomUUID(), expectedVersion: 1 }));
+    const codedIds = items.filter((_item, index) => index % 2 === 0).map(item => item.id);
+    const legacyIds = items.filter((_item, index) => index % 2 !== 0).map(item => item.id);
+    await prisma.$executeRaw`INSERT INTO process_operation_master (id, organization_id, operation_code, operation_name, created_by_id, updated_by_id)
+      SELECT ids.id, ${actor.organizationId}::uuid, ids.id::text, 'Large batch', ${actor.id}::uuid, ${actor.id}::uuid
+      FROM unnest(${codedIds}::uuid[]) AS ids(id)`;
+    await prisma.$executeRaw`INSERT INTO process_operation_sectors (id, organization_id, operation_name, sector_name, created_by_id, updated_by_id)
+      SELECT ids.id, ${actor.organizationId}::uuid, ids.id::text, 'Original', ${actor.id}::uuid, ${actor.id}::uuid
+      FROM unnest(${legacyIds}::uuid[]) AS ids(id)`;
+    const sectorName = '工'.repeat(200), key = randomUUID();
+    const response = await send(bulkSectorPath, JSON.stringify({ sectorName, items }, null, 2), key).expect(200);
+    expect(response.body.map((row: { id: string }) => row.id)).toEqual(items.map(item => item.id));
+    expect(response.body.every((row: { sectorName: string; version: number }) => row.sectorName === sectorName && row.version === 2)).toBe(true);
+    expect(await prisma.$queryRaw`SELECT count(*)::int FROM process_operation_master WHERE id = ANY(${codedIds}::uuid[]) AND sector_name = ${sectorName} AND version = 2
+      UNION ALL SELECT count(*)::int FROM process_operation_sectors WHERE id = ANY(${legacyIds}::uuid[]) AND sector_name = ${sectorName} AND version = 2`)
+      .toEqual([{ count: 500 }, { count: 500 }]);
+    expect(await prisma.auditEvent.count({ where: { action: 'PROCESS_OPERATION_SECTOR_UPDATED', resourceId: { in: items.map(item => item.id) }, outcome: 'SUCCESS' } })).toBe(1000);
+    expect(await prisma.adminMutation.count({ where: { actorUserId: actor.id, organizationId: actor.organizationId, key } })).toBe(1);
   });
 });
