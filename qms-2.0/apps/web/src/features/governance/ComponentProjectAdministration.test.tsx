@@ -8,7 +8,7 @@ import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import type { AdminOrganization } from '../admin/admin';
-import { ComponentProjectAdministration } from './ComponentProjectAdministration';
+import { ComponentProjectAdministration, ProjectRecordAdministration } from './ComponentProjectAdministration';
 
 vi.setConfig({ testTimeout: 30000 });
 const originalAsyncTimeout = getConfig().asyncUtilTimeout;
@@ -38,7 +38,7 @@ function server(options: { projects?: Project[]; mappings?: Mapping[]; failure?:
   const writes: Array<{ url: URL; init: RequestInit; body: Record<string, unknown> }> = [];
   const reads: URL[] = [];
   const projects = [...(options.projects ?? [project])];
-  const mappings = [...(options.mappings ?? [mapping])];
+  const mappings = (options.mappings ?? [mapping]).map(row => ({ ...row }));
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(String(input), 'http://localhost');
     if ((!init.method || init.method === 'GET') && !url.pathname.endsWith('/csrf')) reads.push(url);
@@ -52,6 +52,9 @@ function server(options: { projects?: Project[]; mappings?: Mapping[]; failure?:
         const input: CreateProject = body;
         const result: Project = { ...project, ...input, id: init.method === 'PATCH' ? project.id : 'created', version: 8 };
         projects.splice(0, projects.length, result);
+        for (const row of mappings) {
+          if (row.project?.id === result.id) row.project = { ...row.project, code: result.code, name: result.name, stage: result.stage, status: result.status };
+        }
         return json(result);
       }
       const input: CreateMapping = body;
@@ -68,13 +71,14 @@ function server(options: { projects?: Project[]; mappings?: Mapping[]; failure?:
   vi.stubGlobal('fetch', fetchMock);
   return { writes, reads, fetchMock };
 }
-function workspace(org: AdminOrganization) {
+function workspace(org: AdminOrganization, projectsOnly = false) {
   return <ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MemoryRouter><UnsavedChangesProvider><Routes>
-    <Route path="/" element={<ComponentProjectAdministration organization={org} />} />
+    <Route path="/" element={projectsOnly ? <ProjectRecordAdministration organization={org} /> : <ComponentProjectAdministration organization={org} />} />
     <Route path="/login" element={<h1>登录页</h1>} />
   </Routes></UnsavedChangesProvider></MemoryRouter></LanguageProvider></ConfigProvider>;
 }
 function mount(org = organization) { return render(workspace(org)); }
+function mountProjects(org = organization) { return render(workspace(org, true)); }
 
 it('uses the existing component selection for mapping deletion and never deletes shared project records', async () => {
   let removed = false;
@@ -100,9 +104,15 @@ function componentToolbar() {
   return within(panel.querySelector<HTMLElement>('.governance-toolbar')!);
 }
 async function openProject() {
-  fireEvent.click(await componentToolbar().findByRole('button', { name: '项目资料' }));
-  const projects = await screen.findByRole('dialog', { name: '项目资料' });
-  fireEvent.click(await within(projects).findByRole('button', { name: '新增项目' }));
+  const add = await screen.findByRole('button', { name: '新增项目' });
+  await waitFor(() => expect(add).toBeEnabled());
+  fireEvent.click(add);
+  return screen.findByRole('dialog', { name: '项目资料' });
+}
+async function openLinkedProject() {
+  fireEvent.click(await screen.findByRole('button', { name: '编辑组件 COMP-001' }));
+  const mappingDialog = await screen.findByRole('dialog', { name: '组件映射' });
+  fireEvent.click(await within(mappingDialog).findByRole('button', { name: '编辑项目资料' }));
   return screen.findByRole('dialog', { name: '项目资料' });
 }
 async function confirmationButton(name: string) {
@@ -117,6 +127,95 @@ async function choose(label: string, text: string) {
   fireEvent.click(await screen.findByRole('option', { name: text }));
 }
 function submit(dialog: HTMLElement) { fireEvent.submit(dialog.querySelector('form')!); }
+
+it('opens linked project maintenance only through the mapping editor and guards unsaved mapping changes', async () => {
+  const { writes } = server(); mount();
+  const edit = await screen.findByRole('button', { name: '编辑组件 COMP-001' });
+  expect(componentToolbar().queryByRole('button', { name: '项目资料' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '编辑项目 P001' })).not.toBeInTheDocument();
+  fireEvent.click(edit);
+  const mappingDialog = await screen.findByRole('dialog', { name: '组件映射' });
+  const componentName = within(mappingDialog).getByLabelText('组件名称');
+  fireEvent.change(componentName, { target: { value: '未保存组件' } });
+  const editProject = await within(mappingDialog).findByRole('button', { name: '编辑项目资料' });
+  fireEvent.click(editProject);
+  fireEvent.click(await confirmationButton('继续编辑'));
+  expect(componentName).toHaveValue('未保存组件');
+  fireEvent.click(editProject);
+  fireEvent.click(await confirmationButton('放弃修改'));
+  const projectDialog = await screen.findByRole('dialog', { name: '项目资料' });
+  expect(within(projectDialog).getByLabelText('项目编码')).toHaveValue(project.code);
+  expect(writes).toHaveLength(0);
+});
+
+it('uses compact header minimums and exposes clipped mapping values by focus or tap', async () => {
+  const longName = '用于检查组件名称完整内容的长文本';
+  const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(60);
+  const scroll = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.textContent === longName ? 180 : 60;
+  });
+  try {
+    server({ mappings: [{ ...mapping, componentName: longName }] }); mount();
+    const value = await screen.findByText(longName);
+    expect(screen.getByRole('columnheader', { name: '客户质量工程师' })).toHaveAttribute('data-compact-ledger-column', 'customerEngineer');
+    expect(screen.getByText('COMP-001')).not.toHaveAttribute('tabindex');
+    expect(value).toHaveAttribute('tabindex', '0');
+    fireEvent.focus(value);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(longName);
+    fireEvent.blur(value);
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+    fireEvent.click(value);
+    expect(await screen.findByRole('tooltip')).toHaveTextContent(longName);
+  } finally { width.mockRestore(); scroll.mockRestore(); }
+});
+
+it('searches and pages project records on the server without loading component mappings', async () => {
+  const { reads } = server({ intercept: url => {
+    if (!url.pathname.endsWith('/component-project-records')) return undefined;
+    const page = Number(url.searchParams.get('page'));
+    return Promise.resolve(json({ items: [{ ...project, status: 'DISABLED', name: page === 2 ? '第二页项目' : project.name }], total: 45, page, pageSize: 20 }));
+  } });
+  mountProjects();
+  const list = within(screen.getByRole('region', { name: '项目清单' }));
+  await list.findByText(project.name);
+  expect(list.getByText('停用')).toBeInTheDocument();
+  const search = list.getByRole('searchbox', { name: '搜索项目' });
+  fireEvent.change(search, { target: { value: '  P00  ' } });
+  fireEvent.keyDown(search, { key: 'Enter', code: 'Enter' });
+  await waitFor(() => expect(reads.some(url => url.searchParams.get('search') === 'P00' && url.searchParams.get('page') === '1')).toBe(true));
+  await list.findByText(project.name);
+  fireEvent.click(list.getByTitle('2'));
+  expect(await list.findByText('第二页项目')).toBeInTheDocument();
+  expect(reads.at(-1)?.searchParams.get('pageSize')).toBe('20');
+  expect(reads.every(url => url.pathname.endsWith('/component-project-records') && url.searchParams.get('organizationId') === organization.id)).toBe(true);
+});
+
+it('uses current project detail to edit from the standalone list and rereads after saving', async () => {
+  const { reads, writes } = server(); mountProjects();
+  fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
+  const dialog = within(await screen.findByRole('dialog', { name: '项目资料' }));
+  fireEvent.change(await dialog.findByLabelText('项目名称'), { target: { value: '独立清单更新' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  expect(await within(screen.getByRole('table')).findByText('独立清单更新')).toBeInTheDocument();
+  expect(reads.some(url => url.pathname.endsWith('/component-project-records/project-a'))).toBe(true);
+  expect(writes[0].body).toMatchObject({ name: '独立清单更新', expectedVersion: project.version });
+});
+
+it('retires standalone project details when organization permissions change', async () => {
+  const pending = deferred<Response>();
+  const { fetchMock, writes } = server({ intercept: url => url.pathname.endsWith('/component-project-records/project-a') ? pending.promise : undefined });
+  const view = mountProjects({ ...organization, permissions: ['component-project:read'] });
+  fireEvent.click(await screen.findByRole('button', { name: '查看项目 P001' }));
+  expect(screen.queryByRole('button', { name: '新增项目' })).not.toBeInTheDocument();
+  await waitFor(() => expect(fetchMock.mock.calls.some(([path]) => String(path).includes('/component-project-records/project-a'))).toBe(true));
+  fetchMock.mockClear();
+  view.rerender(workspace({ ...organization, id: 'org-b', permissions: ['component-project:manage'] }, true));
+  await act(async () => pending.resolve(json(project)));
+  expect(screen.getByText('无项目清单读取权限')).toBeInTheDocument();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(fetchMock).not.toHaveBeenCalled();
+  expect(writes).toHaveLength(0);
+});
 
 it('offers mapping columns without remounting an unsaved component editor', async () => {
   server(); mount();
@@ -138,8 +237,7 @@ it('queries pending configuration on the server without changing bulk selection 
 });
 
 it('retires an open personnel editor after a batched session A to B to A transition', async () => {
-  server(); mount();
-  await screen.findByText('驱动总成');
+  server(); mountProjects();
   await openProject();
   await waitFor(() => expect(screen.getByRole('combobox', { name: '客户质量工程师' })).toBeEnabled());
   act(() => { useWorkTabsStore.getState().bindSession('other'); useWorkTabsStore.getState().bindSession('INTERNAL:org-a:user-a'); });
@@ -147,8 +245,7 @@ it('retires an open personnel editor after a batched session A to B to A transit
 });
 
 it('requires an explicit project stage and creates a project with nullable engineers using the platform mutation', async () => {
-  const { writes } = server({ projects: [] }); mount();
-  await screen.findByText('驱动总成');
+  const { writes } = server({ projects: [] }); mountProjects();
   expect(screen.queryByText('修改将影响同项目的全部组件。')).not.toBeInTheDocument();
   const dialog = await openProject();
   expect(within(dialog).queryByText('修改将影响同项目的全部组件。')).not.toBeInTheDocument();
@@ -164,24 +261,24 @@ it('requires an explicit project stage and creates a project with nullable engin
   expect(writes[0].url.searchParams.get('organizationId')).toBe(organization.id);
   expect(writes[0].init.headers).toMatchObject({ 'x-csrf-token': 'token', 'Idempotency-Key': expect.any(String) });
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(await within(screen.getByRole('table')).findByText('新项目')).toBeInTheDocument();
 });
 
 it('edits stage only in the shared project and sends its expected version', async () => {
-  const { writes } = server(); mount();
-  fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
-  const dialog = await screen.findByRole('dialog', { name: '项目资料' });
+  const { writes } = server({ mappings: [{ ...mapping }, { ...mapping, id: 'mapping-b', componentCode: 'COMP-002' }] }); mount();
+  const dialog = await openLinkedProject();
   expect(await within(dialog).findByText('修改将影响同项目的全部组件。')).toBeInTheDocument();
   await choose('项目阶段', '量产'); submit(dialog);
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(writes[0].init.method).toBe('PATCH');
   expect(writes[0].url.pathname).toMatch(/component-project-records\/project-a$/);
   expect(writes[0].body).toMatchObject({ stage: 'MASS_PRODUCTION', expectedVersion: 7 });
+  await waitFor(() => expect(within(screen.getByRole('table')).getAllByText('量产')).toHaveLength(2));
 });
 
 it.each([409, 422, 503])('keeps the project draft and stable retry identity after HTTP %s', async failure => {
   const { writes } = server({ failure }); mount();
-  fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
-  const dialog = await screen.findByRole('dialog', { name: '项目资料' });
+  const dialog = await openLinkedProject();
   const input = within(dialog).getByLabelText('项目名称');
   fireEvent.change(input, { target: { value: '保留的名称' } }); submit(dialog);
   await within(dialog).findAllByRole('alert');
@@ -194,8 +291,7 @@ it.each([409, 422, 503])('keeps the project draft and stable retry identity afte
 
 it('uses async named appointments, preserves selected identities and allows clearing', async () => {
   const { writes, reads } = server({ projects: [{ ...project, customerEngineerAssignmentId: engineer.assignmentId }] }); mount();
-  fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
-  const dialog = await screen.findByRole('dialog', { name: '项目资料' });
+  const dialog = await openLinkedProject();
   await within(dialog).findByText('张三 / 项目质量室（zhangsan） · 质量工程师');
   expect(reads.some(url => url.searchParams.get('selectedAssignmentId') === engineer.assignmentId)).toBe(true);
   fireEvent.click(within(dialog).getByRole('button', { name: '清空客户质量工程师' }));
@@ -227,7 +323,7 @@ it('ignores late list responses after organization, session or permission scope 
 });
 
 it('protects cancel until explicit discard', async () => {
-  server(); mount(); const dialog = await openProject();
+  server(); mountProjects(); const dialog = await openProject();
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '未保存' } });
   fireEvent.click(within(dialog).getByRole('button', { name: '关闭编辑器' }));
   fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
@@ -238,7 +334,7 @@ it('protects cancel until explicit discard', async () => {
 });
 
 it('protects a refresh and completes only the confirmed discard in the single-table workspace', async () => {
-  server(); mount(); const dialog = await openProject();
+  server(); mount(); const dialog = await openLinkedProject();
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '未保存' } });
   fireEvent.click(componentToolbar().getByRole('button', { name: /^刷\s*新$/ }));
   fireEvent.click(await confirmationButton('继续编辑'));
@@ -269,8 +365,7 @@ it('creates a component mapping through paged named project options without copy
 it('freezes inputs during a write and does not run an old completion after session replacement', async () => {
   const late = deferred<Response>();
   const { fetchMock } = server({ intercept: (_url, init) => init.method === 'PATCH' ? late.promise : undefined });
-  mount(); fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
-  const dialog = await screen.findByRole('dialog', { name: '项目资料' });
+  mount(); const dialog = await openLinkedProject();
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '在途输入' } }); submit(dialog);
   await waitFor(() => expect(within(dialog).getByLabelText('项目名称')).toBeDisabled());
   expect(within(dialog).getByRole('button', { name: '关闭编辑器' })).toBeDisabled();
@@ -286,8 +381,7 @@ it('freezes inputs during a write and does not run an old completion after sessi
 
 it('clears the full workspace and draft on a current 401 without a discard prompt', async () => {
   server({ intercept: (url, init) => init.method === 'PATCH' && url.pathname.includes('component-project-records') ? Promise.resolve(json({ code: 'AUTH_SESSION_REQUIRED' }, 401)) : undefined });
-  mount(); fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }, { timeout: 5000 }));
-  const dialog = await screen.findByRole('dialog', { name: '项目资料' });
+  mount(); const dialog = await openLinkedProject();
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '未保存' } }); submit(dialog);
   await screen.findByRole('heading', { name: '登录页' });
   expect(useWorkTabsStore.getState().sessionScope).toBeUndefined();
@@ -323,8 +417,7 @@ it('retains a missing selected project with a readable error instead of silently
 it('shows invalid appointments without dropping the selection and permits explicit clearing', async () => {
   const invalid = { ...engineer, valid: false, issues: ['ASSIGNMENT_ENDED'] };
   const { writes } = server({ projects: [{ ...project, customerEngineerAssignmentId: engineer.assignmentId }], intercept: url => url.pathname.endsWith('/engineer-assignments') ? Promise.resolve(json({ items: [], selected: url.searchParams.has('selectedAssignmentId') ? invalid : null, total: 0, page: 1, pageSize: 20 })) : undefined }); mount();
-  fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
-  const dialog = await screen.findByRole('dialog', { name: '项目资料' });
+  const dialog = await openLinkedProject();
   await within(dialog).findByText('已选任职失效，请重新选择或清空');
   fireEvent.click(within(dialog).getByRole('button', { name: '清空客户质量工程师' }));
   submit(dialog);
@@ -333,7 +426,7 @@ it('shows invalid appointments without dropping the selection and permits explic
 
 it('reports candidate API failure with a retry and keeps the project draft', async () => {
   let fail = true;
-  server({ intercept: url => url.pathname.endsWith('/engineer-assignments') && fail ? Promise.resolve(json({ code: 'HTTP_503' }, 503)) : undefined }); mount();
+  server({ intercept: url => url.pathname.endsWith('/engineer-assignments') && fail ? Promise.resolve(json({ code: 'HTTP_503' }, 503)) : undefined }); mountProjects();
   const dialog = await openProject();
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '保留草稿' } });
   await within(dialog).findAllByRole('alert'); fail = false;
@@ -360,8 +453,7 @@ it('retries an unknown write with the unchanged payload and key rather than allo
     attempts.push(init);
     return fail ? Promise.reject(new TypeError('network')) : Promise.resolve(json({ ...project, version: 8 }));
   } }); mount();
-  fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
-  const dialog = await screen.findByRole('dialog', { name: '项目资料' });
+  const dialog = await openLinkedProject();
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '结果未知' } }); submit(dialog);
   await within(dialog).findByText('保存结果尚未确认，请使用原请求重试。');
   expect(within(dialog).getByLabelText('项目名称')).toBeDisabled();
@@ -693,10 +785,7 @@ it('disambiguates same-name valid appointment options and table identities by us
   }); mount();
   await screen.findByText('驱动总成');
   const table = screen.getByRole('table');
-  const dialog = await openProject();
-  fireEvent.change(within(dialog).getByLabelText('项目编码'), { target: { value: 'P-IDENTITY' } });
-  fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '同名任职验证' } });
-  await choose('项目阶段', '新品');
+  const dialog = await openLinkedProject();
   fireEvent.mouseDown(within(dialog).getByRole('combobox', { name: '客户质量工程师' }));
   expect(await screen.findByRole('option', { name: '张三 / 项目质量室（zhangsan） · 质量工程师' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('option', { name: '张三 / 项目质量室（zhangsan02） · 质量工程师' }));
@@ -719,7 +808,11 @@ it.each([
 it('keeps read-only project engineers disabled without allowing selection, clearing, dirty state or writes', async () => {
   const { writes } = server({ projects: [{ ...project, customerEngineerAssignmentId: engineer.assignmentId, projectEngineerAssignmentId: engineer.assignmentId }] });
   mount({ ...organization, permissions: ['component-project:read'] });
-  fireEvent.click(await screen.findByRole('button', { name: '查看项目 P001' }));
+  expect(screen.queryByRole('button', { name: '查看项目 P001' })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: '查看组件 COMP-001' }));
+  const mappingDialog = await screen.findByRole('dialog', { name: '组件映射' });
+  expect(within(mappingDialog).getByLabelText('组件名称')).toBeDisabled();
+  fireEvent.click(await within(mappingDialog).findByRole('button', { name: '查看项目资料' }));
   const dialog = await screen.findByRole('dialog', { name: '项目资料' });
   await waitFor(() => expect(within(dialog).getAllByText('张三 / 项目质量室（zhangsan） · 质量工程师')).toHaveLength(2));
   for (const label of ['客户质量工程师', '项目质量工程师']) {
@@ -744,8 +837,7 @@ it('does not dispatch a single old-scope mutation when CSRF resolves after the s
     waiting = true; signal = init.signal; return token.promise;
   } });
   const view = mount();
-  fireEvent.click(await screen.findByRole('button', { name: '编辑项目 P001' }));
-  const dialog = await screen.findByRole('dialog', { name: '项目资料' });
+  const dialog = await openLinkedProject();
   fireEvent.change(within(dialog).getByLabelText('项目名称'), { target: { value: '等待 CSRF' } }); submit(dialog);
   await waitFor(() => expect(waiting).toBe(true));
   view.rerender(workspace({ ...organization, id: 'org-b', permissions: [] }));

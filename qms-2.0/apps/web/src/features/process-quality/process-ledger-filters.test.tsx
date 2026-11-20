@@ -87,6 +87,22 @@ it('starts the six compact columns narrower and preserves individually saved wid
   expect(localStorage.getItem(columnsKey)).toBe(saved);
 });
 
+it('places the single controlled paginator before the defect table', async () => {
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation((path, init) => path.includes('/defects?')
+    ? Promise.resolve({ items: [defect], total: 32, page: 1, pageSize: 20 })
+    : read(path, init));
+  const { container } = mount();
+  await screen.findByText('共 32 条');
+  const ledger = container.querySelector('.qms-ledger')!;
+  const pagination = ledger.querySelector('.ant-table-pagination')!;
+  const table = ledger.querySelector('table')!;
+  expect(ledger.querySelectorAll('.ant-table-pagination')).toHaveLength(1);
+  expect(pagination.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  fireEvent.click(within(pagination as HTMLElement).getByText('2'));
+  expect(latestQuery().get('page')).toBe('2');
+});
+
 it('keeps configuration prompts in detail completion and puts permitted record actions in the header', async () => {
   const pending = { ...defect, operationSector: null, productSubcategory: null, pendingConfiguration: true, issues: ['PROJECT_MAPPING_PENDING', 'OPERATION_SECTOR_PENDING', 'PRODUCT_SUBCATEGORY_PENDING', 'SOURCE_IDENTITY_INCOMPLETE', 'DEFECT_TYPE_UNKNOWN'] };
   items = [pending];
@@ -164,7 +180,7 @@ it('keeps one 8D action and moves filters into the compact toolbar', async () =>
   expect(within(toolbar).queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
   expect(within(toolbar).getByRole('button', { name: '筛选条件' })).toBeInTheDocument();
   expect(within(toolbar).getByRole('button', { name: '登记不良' })).toBeInTheDocument();
-  expect(within(toolbar.parentElement!).getByRole('button', { name: '列设置' })).toBeInTheDocument();
+  expect(within(toolbar.parentElement!.querySelector<HTMLElement>('.qms-ledger__tools')!).getByRole('button', { name: '列设置' })).toBeInTheDocument();
   expect(screen.queryByLabelText('台账批量操作')).not.toBeInTheDocument();
   expect(latestQuery().get('occurredFrom')).toBe(monthFrom);
   expect(latestQuery().get('occurredTo')).toBe(monthTo);

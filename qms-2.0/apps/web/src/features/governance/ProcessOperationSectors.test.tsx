@@ -26,18 +26,29 @@ it('maintains an exact operation name with version protection in the selected or
   mount();
   const row = (await screen.findByText('终检', { selector: 'td' })).closest('tr')!;
   fireEvent.click(within(row).getByRole('button', { name: /^编\s*辑$/ }));
-  const dialog = within(screen.getByRole('dialog', { name: '工序板块规则' }));
+  const dialog = within(screen.getByRole('dialog', { name: '工序主数据' }));
   fireEvent.change(dialog.getByLabelText('工序名称'), { target: { value: '  终检  ' } });
   fireEvent.change(dialog.getByLabelText('板块名称'), { target: { value: '电测' } });
   fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
   await waitFor(() => expect(mutate).toHaveBeenCalled());
-  expect(mutate.mock.calls[0].slice(0, 3)).toEqual(['/api/v1/process-quality/operation-sectors/sector-1?organizationId=org', 'PUT', { organizationId: 'org', expectedVersion: 2, operationName: '终检', sectorName: '电测', active: true }]);
+  expect(mutate.mock.calls[0].slice(0, 3)).toEqual(['/api/v1/process-quality/operation-sectors/sector-1?organizationId=org', 'PUT', { organizationId: 'org', expectedVersion: 2, operationCode: null, operationName: '终检', sectorName: '电测', active: true }]);
+});
+it('shows the imported code and allows clearing its board', async () => {
+  vi.mocked(apiRequest).mockResolvedValueOnce([{ ...sector, operationCode: 'OP-001' }]);
+  mount();
+  const row = (await screen.findByText('OP-001')).closest('tr')!;
+  fireEvent.click(within(row).getByRole('button', { name: /^编\s*辑$/ }));
+  const dialog = within(screen.getByRole('dialog', { name: '工序主数据' }));
+  expect(dialog.getByLabelText('工序编码')).toHaveAttribute('readonly');
+  fireEvent.change(dialog.getByLabelText('板块名称'), { target: { value: '' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(mutate.mock.calls[0]?.[2]).toMatchObject({ operationCode: 'OP-001', sectorName: null }));
 });
 it('keeps a conflicting edit and offers the exact request after an unknown result', async () => {
   mutate.mockRejectedValueOnce(new TypeError('network')).mockResolvedValueOnce({ ...sector, version: 3 });
   mount();
   fireEvent.click(within((await screen.findByText('终检', { selector: 'td' })).closest('tr')!).getByRole('button', { name: /^编\s*辑$/ }));
-  const dialog = within(screen.getByRole('dialog', { name: '工序板块规则' }));
+  const dialog = within(screen.getByRole('dialog', { name: '工序主数据' }));
   fireEvent.change(dialog.getByLabelText('板块名称'), { target: { value: '保留输入' } });
   fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
   fireEvent.click(await dialog.findByRole('button', { name: '重试原请求' }));

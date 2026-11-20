@@ -637,6 +637,14 @@ describe('LedgerTable', () => {
     fireEvent.pointerUp(separator, { clientX: 60, pointerId: 1 });
     expect(write).not.toHaveBeenCalled();
   });
+  it('sizes a compact table from its visible columns and native selection', () => {
+    const { container } = render(<LedgerTable ledgerId="compact-width" compactLayout columns={[{ ...columns[0], width: 100 }, { ...columns[1], width: 160 }]} rowSelection={{ columnWidth: 40 }} dataSource={data} />);
+    const table = container.querySelector('table')!;
+    expect(table).toHaveStyle({ width: '300px', tableLayout: 'fixed' });
+    fireEvent.keyDown(within(screen.getByRole('columnheader', { name: String(columns[0].title) })).getByRole('separator'), { key: 'ArrowLeft' });
+    expect(table).toHaveStyle({ width: '290px' });
+  });
+
   it('applies each column minimum to cached widths, keyboard, typed and pointer changes', () => {
     const key = preferenceKey({ sessionScope: 'INTERNAL:home:user', portal: 'business' }, 'minimum', 'columns')!;
     localStorage.setItem(key, JSON.stringify({ schema: 1, value: { order: ['a'], visible: ['a'], widths: { a: 80 }, fixed: {} } }));

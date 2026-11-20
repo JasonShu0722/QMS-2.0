@@ -75,7 +75,7 @@ describe('REQ0032 console context with real HTTP sessions and PostgreSQL authori
   it.each([
     ['ai:connections:read', 'ai-connections', '/api/v1/admin/ai-connections'],
     ['ai:applications:read', 'ai-applications', '/api/v1/admin/ai-applications'],
-    ['process-quality:configuration:read', 'configuration', '/api/v1/process-quality/operation-sectors'],
+    ['process-quality:configuration:read', 'master-data', '/api/v1/process-quality/operation-sectors'],
   ])('reaches the actual management page with the standalone %s permission', async (code, module, resource) => {
     const specialist = await fixture();
     await grant(specialist.user.id, specialist.home.id, [code]);

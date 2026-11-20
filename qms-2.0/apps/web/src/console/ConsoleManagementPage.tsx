@@ -8,7 +8,8 @@ import { UserAdministration } from '../features/admin/UserAdministration';
 import { UserForceDelete } from '../features/admin/UserForceDelete';
 import { AdminSupplierAccounts } from '../features/admin/AdminSupplierAccounts';
 import { OrganizationWorkspace } from '../features/governance/OrganizationWorkspace';
-import { ComponentProjectAdministration } from '../features/governance/ComponentProjectAdministration';
+import { ComponentProjectAdministration, ProjectRecordAdministration } from '../features/governance/ComponentProjectAdministration';
+import { ProcessOperationSectors } from '../features/governance/ProcessOperationSectors';
 import { ConfigurationAdministration } from '../features/governance/ConfigurationAdministration';
 import { AiConnections } from '../features/governance/AiConnections';
 import { AiApplications } from '../features/governance/AiApplications';
@@ -34,7 +35,8 @@ const required: Record<string, string[]> = {
   users: ['account:users:read', 'account:users:create'], organizations: ['organization:read', 'organization:structure:read', 'account:roles:read'],
   suppliers: ['supplier-quality:profiles:read', 'supplier-quality:profiles:write'], customers: ['customer-quality:complaints:read', 'customer-quality:complaints:write'],
   materials: ['material-master:read', 'material-master:write', 'material-master:import'], 'component-projects': ['component-project:read', 'component-project:manage'],
-  configuration: ['configuration:read', 'process-quality:configuration:read'], 'audit-log': ['audit:read'], outbox: ['outbox:read'], reconfiguration: ['organization:reconfigure'],
+  projects: ['component-project:read'], operations: ['process-quality:configuration:read'],
+  configuration: ['configuration:read'], 'audit-log': ['audit:read'], outbox: ['outbox:read'], reconfiguration: ['organization:reconfigure'],
   'ai-connections': ['ai:connections:read'], 'ai-applications': ['ai:applications:read'],
   'problem-reconfiguration': ['organization:reconfigure'], 'supplier-accounts': ['account:users:delete'],
 };
@@ -130,7 +132,7 @@ function ManagementScope({ context, sourceId, section, session, search, invalida
   const organization: AdminOrganization = { ...selected, permissions: selected.permissions.filter(code =>
     (management.targetOrganizationStatus === 'ACTIVE' && !management.targetConfigurationRequired || management.permissions.includes(code))
     && (!lifecycle.has(code) || management.hasPlatformAdministrator && management.permissions.includes(code))) };
-  const internalOnly = ['suppliers', 'materials', 'component-projects'].includes(section);
+  const internalOnly = ['suppliers', 'materials', 'component-projects', 'projects', 'operations'].includes(section);
   if (internalOnly && organization.type !== 'INTERNAL' || !required[section]!.some(code => organization.permissions.includes(code))) return <Alert type="warning" showIcon role="alert" title={t('无权访问此管理模块')} />;
   const query = new URLSearchParams(search);
   const changed = () => { if (current()) onDirectoryChange(); };
@@ -145,6 +147,8 @@ function ManagementScope({ context, sourceId, section, session, search, invalida
     case 'customers': return <CustomerMasterSection organizationId={organization.id} organizationPermissions={organization.permissions} embedded />;
     case 'materials': return <MaterialMasterPage organizationId={organization.id} organizationPermissions={organization.permissions} />;
     case 'component-projects': return <ComponentProjectAdministration organization={organization} />;
+    case 'projects': return <ProjectRecordAdministration organization={organization} />;
+    case 'operations': return <ProcessOperationSectors organization={organization} />;
     case 'configuration': return <ConfigurationAdministration organization={organization} />;
     case 'ai-connections': return <AiConnections organization={organization} />;
     case 'ai-applications': return <AiApplications organization={organization} />;

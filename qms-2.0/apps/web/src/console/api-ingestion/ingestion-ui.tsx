@@ -18,7 +18,7 @@ export function useIngestionText() {
 }
 export function label(value: string, english: boolean) {
   const labels: Record<string, [string, string]> = {
-    SUPPLIER: ['供应商档案', 'Supplier profiles'], CUSTOMER: ['客户档案', 'Customer profiles'], MATERIAL: ['物料主数据', 'Material master'], COMPONENT: ['组件项目映射', 'Component mapping'], PROCESS_DEFECT: ['制程不良品台账', 'Process defect ledger'],
+    SUPPLIER: ['供应商档案', 'Supplier profiles'], CUSTOMER: ['客户档案', 'Customer profiles'], MATERIAL: ['物料主数据', 'Material master'], COMPONENT: ['组件项目映射', 'Component mapping'], OPERATION: ['工序主数据', 'Operation master'], PROCESS_DEFECT: ['制程不良品台账', 'Process defect ledger'],
     INSERT_ONLY: ['仅新增，已有跳过', 'Insert only'], UPDATE: ['新增并更新指定字段', 'Insert and update selected fields'], CONFIRM: ['新增，变更人工确认', 'Insert and confirm changes'],
     PENDING: ['待处理', 'Pending'], PAUSED: ['已暂停', 'Paused'], BLOCKED: ['已阻塞', 'Blocked'], COMPLETED: ['已完成', 'Completed'], CANCELLED: ['已取消', 'Cancelled'],
     INSERTED: ['已新增', 'Inserted'], UPDATED: ['已更新', 'Updated'], UNCHANGED: ['无变化', 'Unchanged'], FILTERED: ['筛选跳过', 'Filtered'], EXISTING_SKIPPED: ['已有跳过', 'Existing skipped'],
@@ -54,6 +54,8 @@ const issueMessages: Record<string, [string, string]> = {
   INTEGRATION_MESSAGE_INVALID: ['接收正文格式无效，或指定数组行不存在', 'The received payload has an invalid format or does not contain the specified row'],
   INTEGRATION_ACCESS_DENIED: ['接收接口已停用或不可访问', 'The receiving interface is disabled or unavailable'],
   INTEGRATION_INPUT_INVALID: ['接口请求或目标档案字段无效', 'The integration request or target record fields are invalid'],
+  PROCESS_OPERATION_CODE_CONFLICT: ['该组织已存在此工序编码，请检查目标工序后重试', 'This operation code already exists in the organization. Check the target operation and retry.'],
+  PROCESS_OPERATION_CODE_IMMUTABLE: ['工序编码绑定后不能修改', 'An assigned operation code cannot be changed'],
   PROCESS_DEFECT_ARCHIVED: ['目标不良记录已归档，无法更新', 'The target defect record is archived and cannot be updated'],
   PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT: ['来源明细编号已关联其他不良记录', 'The source detail ID is linked to another defect record'],
   PROCESS_DEFECT_MANUAL_CONFIRMATION_REQUIRED: ['来源变更涉及人工维护字段，请核对并确认差异', 'The source changes affect manually maintained fields. Review and confirm the differences.'],

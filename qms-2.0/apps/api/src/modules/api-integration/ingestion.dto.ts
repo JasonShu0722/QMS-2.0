@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { IntegrationPageQueryDto, IntegrationScopeDto } from './integration-admin.dto.js';
-import type { IngestionTarget } from './ingestion.policy.js';
+import { ingestionTargets, type IngestionTarget } from './ingestion.policy.js';
 
 export class IngestionConditionDto {
   @ApiProperty({ maxLength: 200 }) @IsString() @MaxLength(200) path!: string;
@@ -47,7 +47,7 @@ export class ComponentNameLookupDto {
 export class SaveIngestionRuleDto extends IntegrationScopeDto {
   @ApiProperty({ maxLength: 120 }) @IsString() @MaxLength(120) name!: string;
   @ApiProperty({ format: 'uuid' }) @IsUUID() endpointId!: string;
-  @ApiProperty({ enum: ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'PROCESS_DEFECT'] }) @IsIn(['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'PROCESS_DEFECT']) target!: IngestionTarget;
+  @ApiProperty({ enum: ingestionTargets }) @IsIn(ingestionTargets) target!: IngestionTarget;
   @ApiProperty() @IsBoolean() enabled!: boolean;
   @ApiProperty({ enum: ['ALL', 'ANY'] }) @IsIn(['ALL', 'ANY']) match!: 'ALL' | 'ANY';
   @ApiProperty({ type: [IngestionConditionDto], maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionConditionDto) conditions!: IngestionConditionDto[];
@@ -150,7 +150,7 @@ export class IngestionJobDto {
   @ApiProperty({ format: 'uuid', nullable: true, type: String }) planningPreviewId!: string | null;
   @ApiProperty({ format: 'uuid' }) ruleId!: string;
   @ApiProperty() ruleVersion!: number;
-  @ApiProperty({ enum: ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'PROCESS_DEFECT'] }) target!: IngestionTarget;
+  @ApiProperty({ enum: ingestionTargets }) target!: IngestionTarget;
   @ApiProperty({ enum: ['AUTO', 'SINGLE', 'HISTORY'] }) source!: string;
   @ApiProperty({ enum: ['PENDING', 'PAUSED', 'BLOCKED', 'COMPLETED', 'CANCELLED'] }) status!: string;
   @ApiProperty() sequence!: number;

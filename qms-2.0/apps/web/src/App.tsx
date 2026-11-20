@@ -52,7 +52,7 @@ function AppRoutes() {
           <Route path="services" element={<ServiceOperationsPage />} />
           <Route path="api-integrations" element={<ApiIntegrationsPage />} />
           <Route path="api-ingestion" element={<ApiIngestionPage />} />
-          {['users', 'organizations', 'master-data/suppliers', 'master-data/customers', 'master-data/materials', 'master-data/component-projects', 'configuration', 'ai-connections', 'ai-applications', 'audit-log', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts'].map(path => <Route key={path} path={path} element={<ConsoleManagementPage />} />)}
+          {['users', 'organizations', 'master-data/suppliers', 'master-data/customers', 'master-data/materials', 'master-data/component-projects', 'master-data/projects', 'master-data/operations', 'configuration', 'ai-connections', 'ai-applications', 'audit-log', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts'].map(path => <Route key={path} path={path} element={<ConsoleManagementPage />} />)}
           <Route path="workflows/*" element={<ConsoleWorkflowPage />} />
         </Route>
         <Route

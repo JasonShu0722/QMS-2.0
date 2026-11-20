@@ -13,8 +13,8 @@ export type ProcessProjectSnapshot = {
   mapping: Pick<ComponentProjectMappingDto, 'id' | 'version' | 'status' | 'componentCode' | 'componentName' | 'projectRecordId' | 'productCategory' | 'productSubcategory'>;
   project: Pick<ComponentProjectRecordDto, 'id' | 'version' | 'status' | 'code' | 'name' | 'stage'>;
 };
-type RegistrationFacts = { productCode: string | null; operationName: string | null; occurredAt: Date | null; traceCode: string | null; description: string };
-export type ProcessOperationSector = { id: string; organizationId: string; operationName: string; sectorName: string; active: boolean; version: number };
+type RegistrationFacts = { productCode: string | null; operationCode: string | null; operationName: string | null; occurredAt: Date | null; traceCode: string | null; description: string };
+type SectorCandidate = { id: string; operationCode: string | null; operationName: string; sectorName: string | null; active: boolean; version: number };
 export type ProcessCompletionVersion = { id: string; organizationId: string; previousVersion: number; version: number };
 
 export function processProjectSnapshot(value: unknown): ProcessProjectSnapshot | null {
@@ -42,7 +42,10 @@ export class ProcessDefectCompletionService {
 
   async derive(tx: AdminTransaction, organizationId: string, facts: RegistrationFacts, previous?: ProcessDefect, correctedFields: readonly string[] = []): Promise<ProcessDefectDerivedFacts> {
     const productChanged = previous !== undefined && previous.productCode !== facts.productCode;
-    const operationChanged = previous !== undefined && previous.operationName !== facts.operationName;
+    const operationCode = facts.operationCode?.trim();
+    const operationName = facts.operationName?.trim();
+    const previousCode = previous?.operationCode?.trim();
+    const operationChanged = previous !== undefined && (previousCode ? previousCode !== operationCode : previous.operationName?.trim() !== operationName);
     const captureProductCategory = !previous || productChanged || previous.pendingConfiguration;
     let projectSnapshot = productChanged ? null : processProjectSnapshot(previous?.projectSnapshot ?? null);
     let productCategory = productChanged ? null : previous?.productCategory ?? null;
@@ -71,13 +74,22 @@ export class ProcessDefectCompletionService {
         }
       }
     }
-    if (!operationSector && facts.operationName) {
-      const [rule] = await tx.$queryRaw<ProcessOperationSector[]>`SELECT id, organization_id AS "organizationId", operation_name AS "operationName",
-        sector_name AS "sectorName", active, version FROM process_operation_sectors
-        WHERE organization_id = ${organizationId}::uuid AND operation_name = ${facts.operationName.trim()} AND active FOR SHARE`;
-      if (rule) {
+    if (!operationSector && (operationCode || operationName)) {
+      const scope = Prisma.sql`organization_id = ${organizationId}::uuid`;
+      const fields = Prisma.sql`id, operation_name AS "operationName", sector_name AS "sectorName", active, version`;
+      const byName = Prisma.sql`${scope} AND operation_name = ${operationName ?? null}`;
+      const rules = operationCode
+        ? await tx.$queryRaw<SectorCandidate[]>`SELECT ${fields}, operation_code AS "operationCode" FROM process_operation_master
+            WHERE ${scope} AND operation_code = ${operationCode} FOR SHARE`
+        : await tx.$queryRaw<SectorCandidate[]>`WITH coded AS (
+            SELECT ${fields}, operation_code AS "operationCode" FROM process_operation_master WHERE ${byName} LIMIT 2 FOR SHARE
+          ), legacy AS (
+            SELECT ${fields}, NULL::text AS "operationCode" FROM process_operation_sectors WHERE ${byName} FOR SHARE
+          ) SELECT * FROM coded UNION ALL SELECT * FROM legacy`;
+      const [rule] = rules;
+      if (rules.length === 1 && rule?.active && rule.sectorName) {
         operationSector = rule.sectorName;
-        sectorSnapshot = { ruleId: rule.id, ruleVersion: rule.version, operationName: rule.operationName, associatedAt: now };
+        sectorSnapshot = { ruleId: rule.id, ruleVersion: rule.version, operationCode: rule.operationCode, operationName: rule.operationName, associatedAt: now };
       }
     }
     const priorIssues = previous?.registrationIssues.filter(issue => {

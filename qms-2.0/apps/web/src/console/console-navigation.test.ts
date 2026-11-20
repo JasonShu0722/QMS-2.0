@@ -8,11 +8,13 @@ const module = (key: ConsoleModule['key'], permissions: string[] = []): ConsoleM
 const context = (...modules: ConsoleModule[]): ConsoleContext => ({ actor: { id: 'actor', accountType: 'INTERNAL', homeOrganization: organization }, targetOrganization: organization, organizations: [organization], hasPlatformAdministrator: false, modules });
 
 it('exposes AI and process mappings only through their dedicated read capabilities', () => {
-  const value = context(module('ai-connections', ['ai:connections:read']), module('ai-applications', ['ai:applications:read']), module('configuration', ['process-quality:configuration:read']));
+  const value = context(module('ai-connections', ['ai:connections:read']), module('ai-applications', ['ai:applications:read']), module('master-data', ['process-quality:configuration:read']));
   expect(consoleNavigation(value).filter(item => item.group === 'ai').map(item => [item.path, item.label])).toEqual([
     ['/console/ai-connections', '模型渠道'], ['/console/ai-applications', '提示词应用'],
   ]);
-  expect(consoleNavigation(value).find(item => item.path === '/console/configuration')).toBeDefined();
+  expect(consoleNavigation(value).find(item => item.path === '/console/master-data/operations')).toMatchObject({ group: 'master-data' });
+  expect(consoleRoute('/console/configuration', value).status).toBe('forbidden');
+  expect(consoleRoute('/console/master-data/projects', value).status).toBe('forbidden');
   expect(consoleRoute('/console/process-configuration', value).status).toBe('not-found');
   for (const path of ['/console/ai-connections', '/console/ai-applications']) {
     expect(consoleRoute(path, value).status).toBe('allowed');
@@ -25,7 +27,7 @@ it('provides explicit icons for all authorized paths with a gear only for config
   const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
   const value = context(...(['users', 'organizations', 'supplier-accounts', 'reconfiguration', 'problem-reconfiguration', 'master-data', 'configuration', 'workflows', 'audit', 'outbox', 'api-monitoring', 'data-exchanges', 'services'] as const).map(key => module(key, permissions)));
   const entries = consoleNavigation(value);
-  expect(entries).toHaveLength(17);
+  expect(entries).toHaveLength(18);
   for (const entry of entries) {
     expect(entry).toHaveProperty('icon');
     if (entry.path === '/console/configuration') expect(entry.icon).toBe(Settings);

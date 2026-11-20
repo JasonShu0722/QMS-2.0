@@ -558,11 +558,11 @@
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.tsx",
-            "sha256": "9683ca9a1839950d4fe79e76e31c28433983016ed9b445d20b94d4c08fbaaea8"
+            "sha256": "0561fc4883dbd320cc9c35664e250b3caf872499bdf3c7e0adb8a062ec16a3f0"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.test.tsx",
-            "sha256": "a650dd7f3f04e99a05ab141d1d791d5617a36e386e727db430d05e5af4376591"
+            "sha256": "d68dec8ffbd1b89c30541d3e262dcdd47a85adc41333d7db057dd91d8edab0cd"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectImport.tsx",
@@ -698,7 +698,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/index.tsx",
-            "sha256": "3ce81b161ed7003ad7eb7b1dc11dccf3232511ad9bd6fd04dd1da02861724386"
+            "sha256": "98673133f7ecaca5c8d1a24a918968f7a490e23ce950909faac8dcc58714d96d"
           },
           {
             "path": "apps/web/src/ui/ledger/model.ts",
@@ -710,11 +710,11 @@
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.css",
-            "sha256": "df247147aec8e48be2d9fd1542e82fb8fe4777dabdd90ed75f1faa1b550dc290"
+            "sha256": "3af077c336668798f412a202379176802da365ddccc014208c3794ce9ad21008"
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.test.tsx",
-            "sha256": "228d14447658669e6a1a6e31fa62456d3ef9dbd8e32c41528267976ac848c649"
+            "sha256": "156cd2aea3755800f39a018ebde1e77385e592d7436fd0ea2665977f60448348"
           },
           {
             "path": "apps/web/src/ui/ledger/model.test.ts",

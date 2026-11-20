@@ -1,22 +1,23 @@
 import { HttpException } from '@nestjs/common';
 import { isISO8601, isUUID } from 'class-validator';
-import type { IntegrationFields, IntegrationTarget, ProcessDefectIntegrationFields } from '../../common/integration-master-data.js';
+import type { IntegrationFields, IntegrationTarget, OperationIntegrationFields, ProcessDefectIntegrationFields } from '../../common/integration-master-data.js';
 import type { AiDescriptionOutput } from '../../common/ai-description.js';
 import { normalizeAiOutput } from '../ai-configuration/ai-connection.policy.js';
 import type { AiApplicationBinding } from '../ai-configuration/ai-application.service.js';
 export { aiDescriptionDisposition } from '../../common/ai-description.js';
 
 export type IngestionTarget = IntegrationTarget;
-export type IngestionFields = IntegrationFields | Omit<ProcessDefectIntegrationFields, 'receiptId' | 'rowIndex'>;
+export type IngestionFields = IntegrationFields | OperationIntegrationFields | Omit<ProcessDefectIntegrationFields, 'receiptId' | 'rowIndex'>;
 export type IngestionDescriptionComposition = { fields: { path: string; label?: string; variable?: string }[]; separator: string };
 export type ComponentNameLookup = { source: 'MATERIAL'; field: 'materialName' };
 export type IngestionCondition = { path: string; operator: 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'EMPTY' | 'NOT_EMPTY'; value?: string | number | boolean | null | (string | number | boolean)[] };
 export type IngestionRule = { name: string; endpointId: string; target: IngestionTarget; enabled: boolean; match: 'ALL' | 'ANY'; conditions: IngestionCondition[]; mapping: Record<string, string>; componentNameLookup?: ComponentNameLookup; mode: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM'; updateFields: string[]; sourceUpdatedAtField?: string; sourceTimezone?: string; descriptionComposition?: IngestionDescriptionComposition; aiApplication?: AiApplicationBinding; aiDescription?: { connectionId: string; model: string; prompt: string; inputFields: { path: string; label?: string; variable: string }[]; output: AiDescriptionOutput; connectionVersion?: number } };
 export const processDefectSourceFields = ['occurredAt', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey'];
+export const ingestionTargets = ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'OPERATION', 'PROCESS_DEFECT'] satisfies IngestionTarget[];
 
 export function ingestionError(code: string, status = 400, field?: string): never { throw new HttpException({ code, message: code, ...(field ? { field } : {}) }, status); }
 export function ingestionTargetPermission(target: IngestionTarget): string {
-  return { SUPPLIER: 'supplier-quality:profiles:write', CUSTOMER: 'customer-quality:complaints:write', MATERIAL: 'material-master:write', COMPONENT: 'component-project:manage', PROCESS_DEFECT: 'process-quality:defects:write' }[target];
+  return { SUPPLIER: 'supplier-quality:profiles:write', CUSTOMER: 'customer-quality:complaints:write', MATERIAL: 'material-master:write', COMPONENT: 'component-project:manage', OPERATION: 'process-quality:configuration:manage', PROCESS_DEFECT: 'process-quality:defects:write' }[target];
 }
 const scalar = (value: unknown) => value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number' && Number.isFinite(value);
 const validPath = (value: unknown): value is string => typeof value === 'string' && value.length <= 200 && value.split('.').length <= 8 && value.split('.').every(part => /^[A-Za-z0-9_-]{1,64}$/.test(part) && !['__proto__', 'prototype', 'constructor'].includes(part));
@@ -25,6 +26,8 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return ingestionError('INGESTION_RULE_INVALID');
   const rule = input as IngestionRule;
   const process = rule.target === 'PROCESS_DEFECT';
+  const operation = rule.target === 'OPERATION';
+  const codeField = operation ? 'operationCode' : 'code', nameField = operation ? 'operationName' : 'name';
   if (rule.aiApplication !== undefined) {
     const binding = rule.aiApplication;
     if (!process || !binding || !isUUID(binding.applicationId) || !Number.isSafeInteger(binding.publishedVersion) || binding.publishedVersion < 1 || binding.publishedVersion > 2147483647
@@ -33,7 +36,7 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
         || field.label !== undefined && (typeof field.label !== 'string' || field.label.length > 100 || /[\u0000]/u.test(field.label)))
       || new Set(binding.inputFields.map(field => field.variable)).size !== binding.inputFields.length) ingestionError('INGESTION_RULE_INVALID');
   }
-  const fields = process ? processDefectSourceFields : rule.target === 'SUPPLIER' ? ['code', 'name', 'contactName', 'contactEmail'] : ['code', 'name'];
+  const fields = process ? processDefectSourceFields : rule.target === 'SUPPLIER' ? ['code', 'name', 'contactName', 'contactEmail'] : [codeField, nameField];
   const componentLookup = rule.componentNameLookup;
   if (componentLookup !== undefined && (rule.target !== 'COMPONENT' || !componentLookup || Object.keys(componentLookup).some(key => !['source', 'field'].includes(key)) || componentLookup.source !== 'MATERIAL' || componentLookup.field !== 'materialName')) ingestionError('INGESTION_RULE_INVALID');
   if (componentLookup && rule.mapping?.name !== undefined) ingestionError('INGESTION_RULE_INVALID');
@@ -51,11 +54,11 @@ export function normalizeIngestionRule(input: unknown): IngestionRule {
     if ([...ai.prompt.matchAll(/\{\{\s*([^{}]*?)\s*\}\}/g)].some(match => !variables.has(match[1]!.trim()))) ingestionError('INGESTION_RULE_INVALID');
   }
   if (typeof rule.name !== 'string' || !rule.name.trim() || rule.name.trim().length > 120
-    || !['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'PROCESS_DEFECT'].includes(rule.target) || typeof rule.enabled !== 'boolean'
+    || !ingestionTargets.includes(rule.target) || typeof rule.enabled !== 'boolean'
     || !['ALL', 'ANY'].includes(rule.match) || !['INSERT_ONLY', 'UPDATE', 'CONFIRM'].includes(rule.mode)
     || !Array.isArray(rule.conditions) || rule.conditions.length > 20 || !Array.isArray(rule.updateFields)
-    || new Set(rule.updateFields).size !== rule.updateFields.length || rule.updateFields.some(field => ['code', 'externalRecordKey'].includes(field) || !fields.includes(field))
-    || !rule.mapping || typeof rule.mapping !== 'object' || Array.isArray(rule.mapping) || !process && (!validPath(rule.mapping.code) || (rule.target !== 'COMPONENT' || !componentLookup) && !validPath(rule.mapping.name))
+    || new Set(rule.updateFields).size !== rule.updateFields.length || rule.updateFields.some(field => [codeField, 'externalRecordKey'].includes(field) || !fields.includes(field))
+    || !rule.mapping || typeof rule.mapping !== 'object' || Array.isArray(rule.mapping) || !process && (!validPath(rule.mapping[codeField]) || !componentLookup && !validPath(rule.mapping[nameField]))
     || Object.entries(rule.mapping).some(([field, path]) => !fields.includes(field) || !validPath(path))
     || rule.sourceUpdatedAtField !== undefined && !validPath(rule.sourceUpdatedAtField)) return ingestionError('INGESTION_RULE_INVALID');
   if (!process && (rule.descriptionComposition !== undefined || rule.sourceTimezone !== undefined)) ingestionError('INGESTION_RULE_INVALID');
@@ -170,11 +173,11 @@ export function evaluateIngestionRow(rule: IngestionRule, row: unknown): { match
   for (const [field, path] of Object.entries(rule.mapping)) {
     const value = pathValue(row, path);
     if (value === undefined || value === null || value === '') {
-      if (field === 'code' || field === 'name') ingestionError('INGESTION_FIELD_MISSING', 400, path);
+      if (['code', 'name', 'operationCode', 'operationName'].includes(field)) ingestionError('INGESTION_FIELD_MISSING', 400, path);
       continue;
     }
     if (typeof value !== 'string') ingestionError('INGESTION_FIELD_TYPE', 400, path);
-    const maximum = field === 'code' ? 100 : field === 'name' ? 200 : field === 'contactEmail' ? 254 : 100;
+    const maximum = field === 'name' || field === 'operationName' ? 200 : field === 'contactEmail' ? 254 : 100;
     if (!value.trim() || value.trim().length > maximum || /[\u0000\uD800-\uDFFF]/u.test(value) || field === 'contactEmail' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) ingestionError('INGESTION_FIELD_INVALID', 400, path);
     fields[field] = value.trim();
   }

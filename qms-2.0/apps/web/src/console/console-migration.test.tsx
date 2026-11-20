@@ -30,11 +30,11 @@ vi.mock('../features/governance/OrganizationWorkspace', () => ({ OrganizationWor
 vi.mock('../features/supplier-quality/SupplierProfilesPage', () => ({ SupplierProfilesPage: page('suppliers') }));
 vi.mock('../features/customer-quality/CustomerMasterSection', () => ({ CustomerMasterSection: page('customers') }));
 vi.mock('../features/material-master/MaterialMasterPage', () => ({ MaterialMasterPage: page('materials') }));
-vi.mock('../features/governance/ComponentProjectAdministration', () => ({ ComponentProjectAdministration: page('component-projects') }));
+vi.mock('../features/governance/ComponentProjectAdministration', () => ({ ComponentProjectAdministration: page('component-projects'), ProjectRecordAdministration: page('projects') }));
 vi.mock('../features/governance/ConfigurationAdministration', () => ({ ConfigurationAdministration: vi.fn(page('configuration')) }));
 vi.mock('../features/governance/AiConnections', () => ({ AiConnections: page('ai-connections') }));
 vi.mock('../features/governance/AiApplications', () => ({ AiApplications: page('ai-applications') }));
-vi.mock('../features/governance/ProcessOperationSectors', () => ({ ProcessOperationSectors: () => null }));
+vi.mock('../features/governance/ProcessOperationSectors', () => ({ ProcessOperationSectors: page('operations') }));
 vi.mock('../features/governance/AuditAdministration', () => ({ AuditAdministration: page('audit-log') }));
 vi.mock('../features/governance/OutboxAdministration', () => ({ OutboxAdministration: page('outbox') }));
 vi.mock('../features/governance/AdministrativeReconfiguration', () => ({ AdministrativeReconfiguration: page('reconfiguration') }));
@@ -52,6 +52,7 @@ type Management = components['schemas']['AdminOrganizationContextDto'];
 const home = { id: homeId, code: 'HOME', name: 'Home', type: 'INTERNAL', status: 'ACTIVE', configurationRequired: false } as const;
 const target = { ...home, id: targetId, code: 'TARGET', name: 'Target' };
 const permissions = ['account:users:read', 'account:users:create', 'account:users:delete', 'organization:read', 'organization:structure:read', 'organization:force-delete', 'organization:departments:force-delete', 'organization:reconfigure', 'supplier-quality:profiles:read', 'supplier-quality:profiles:write', 'customer-quality:complaints:read', 'customer-quality:complaints:write', 'material-master:read', 'material-master:write', 'component-project:read', 'component-project:manage', 'configuration:read', 'ai:connections:read', 'ai:applications:read', 'audit:read', 'outbox:read'];
+permissions.push('process-quality:configuration:read');
 const directory: Organization[] = [{ ...home, permissions: [...permissions] }, { ...target, permissions: [...permissions] }];
 const fixed = ['reconfiguration', 'problem-reconfiguration', 'supplier-accounts'];
 function context(): ConsoleContext {
@@ -91,7 +92,7 @@ it('dispatches the real user component only after directory and matching managem
 });
 
 it.each([
-  ['organizations', 'organizations'], ['master-data/suppliers', 'suppliers'], ['master-data/customers', 'customers'], ['master-data/materials', 'materials'], ['master-data/component-projects', 'component-projects'], ['configuration', 'configuration'], ['ai-connections', 'ai-connections'], ['ai-applications', 'ai-applications'], ['audit-log', 'audit-log'], ['outbox', 'outbox'], ['reconfiguration', 'reconfiguration'], ['problem-reconfiguration', 'problem-reconfiguration'], ['supplier-accounts', 'supplier-accounts'],
+  ['organizations', 'organizations'], ['master-data/suppliers', 'suppliers'], ['master-data/customers', 'customers'], ['master-data/materials', 'materials'], ['master-data/component-projects', 'component-projects'], ['master-data/projects', 'projects'], ['master-data/operations', 'operations'], ['configuration', 'configuration'], ['ai-connections', 'ai-connections'], ['ai-applications', 'ai-applications'], ['audit-log', 'audit-log'], ['outbox', 'outbox'], ['reconfiguration', 'reconfiguration'], ['problem-reconfiguration', 'problem-reconfiguration'], ['supplier-accounts', 'supplier-accounts'],
 ])('routes %s to its standalone existing domain component', async (path, name) => {
   view(`/console/${path}?organizationId=${targetId}`);
   await screen.findByTestId(name);
