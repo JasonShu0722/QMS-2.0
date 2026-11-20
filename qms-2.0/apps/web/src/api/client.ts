@@ -109,7 +109,7 @@ type AdminBody = components['schemas']['CreateAdminUserDto'] | components['schem
   components['schemas']['CreateAiConnectionDto'] | components['schemas']['UpdateAiConnectionDto'] |
   components['schemas']['AiApplicationSettingsDto'] | components['schemas']['UpdateAiApplicationDto'] | components['schemas']['TestAiApplicationDto'] |
   components['schemas']['AiConnectionVersionDto'] | components['schemas']['AiDescriptionTaskActionDto'] |
-  components['schemas']['ProcessOperationSectorInputDto'] | components['schemas']['UpdateProcessOperationSectorDto'] |
+  components['schemas']['ProcessOperationSectorInputDto'] | components['schemas']['UpdateProcessOperationSectorDto'] | components['schemas']['BulkCreateProcessOperationSectorsDto'] |
   components['schemas']['SaveIngestionRuleDto'] | components['schemas']['UpdateIngestionRuleDto'] |
   components['schemas']['DeleteIngestionRuleDto'] | components['schemas']['IngestionPreviewInputDto'] |
   components['schemas']['IngestionHistoryPreviewInputDto'] | components['schemas']['SubmitIngestionImportDto'] |
@@ -201,6 +201,8 @@ export function safeAccountError(cause: unknown): string {
     ADMIN_USER_ORGANIZATION_IN_USE: '该用户仍关联业务记录，无法变更主组织',
     ADMIN_ROLE_IN_USE: '角色仍在使用，请先解除用户分配',
     ADMIN_USER_DUPLICATE: '用户名或邮箱已存在',
+    PROCESS_OPERATION_CODE_CONFLICT: '工序编码重复，请核对本批数据和现有清单。',
+    PROCESS_OPERATION_SECTOR_INPUT_INVALID: '请核对工序编码和工序名称。',
     ADMIN_ROLE_DUPLICATE: '角色代码已存在',
     CONCURRENCY_CONFLICT: '记录已被其他用户更新，请刷新后重试',
     ADMIN_PERMISSION_BASELINE_REQUIRED: '请重新加载角色权限后再保存',

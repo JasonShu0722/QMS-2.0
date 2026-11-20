@@ -5239,6 +5239,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/process-quality/operation-sectors/bulk-create": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcessOperationSectorController_bulkCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/process-quality/operation-sectors/{id}": {
         parameters: {
             query?: never;
@@ -15010,9 +15026,18 @@ export interface components {
         ProcessOperationSectorInputDto: {
             /** Format: uuid */
             organizationId?: string;
-            operationCode?: string | null;
+            operationCode: string;
             operationName: string;
             sectorName?: string | null;
+        };
+        CreateProcessOperationSectorItemDto: {
+            operationCode: string;
+            operationName: string;
+        };
+        BulkCreateProcessOperationSectorsDto: {
+            /** Format: uuid */
+            organizationId?: string;
+            items: components["schemas"]["CreateProcessOperationSectorItemDto"][];
         };
         UpdateProcessOperationSectorDto: {
             /** Format: uuid */
@@ -31635,6 +31660,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessOperationSectorDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessOperationSectorController_bulkCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkCreateProcessOperationSectorsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessOperationSectorDto"][];
                 };
             };
             default: {

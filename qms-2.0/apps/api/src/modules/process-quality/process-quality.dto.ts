@@ -11,14 +11,27 @@ export class ProcessScopeDto {
 }
 
 export class ProcessOperationSectorInputDto extends ProcessScopeDto {
-  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) operationCode?: string | null;
-  @ApiProperty({ maxLength: 200 }) @IsString() @IsNotEmpty() @MaxLength(200) operationName!: string;
+  @ApiProperty({ type: String, maxLength: 100 }) @IsOptional() @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(100) operationCode?: string | null;
+  @ApiProperty({ maxLength: 200 }) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(200) operationName!: string;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) sectorName?: string | null;
 }
 
-export class UpdateProcessOperationSectorDto extends ProcessOperationSectorInputDto {
+export class UpdateProcessOperationSectorDto extends ProcessScopeDto {
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) operationCode?: string | null;
+  @ApiProperty({ maxLength: 200 }) @IsString() @IsNotEmpty() @MaxLength(200) operationName!: string;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) sectorName?: string | null;
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
   @ApiProperty() @IsBoolean() active!: boolean;
+}
+
+class CreateProcessOperationSectorItemDto {
+  @ApiProperty({ maxLength: 100 }) operationCode!: string;
+  @ApiProperty({ maxLength: 200 }) operationName!: string;
+}
+
+export class BulkCreateProcessOperationSectorsDto extends ProcessScopeDto {
+  @ApiProperty({ type: [CreateProcessOperationSectorItemDto], minItems: 1, maxItems: 100 })
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) items!: CreateProcessOperationSectorItemDto[];
 }
 
 export class DeleteProcessOperationSectorDto extends ProcessScopeDto {

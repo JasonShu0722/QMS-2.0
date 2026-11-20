@@ -1,17 +1,26 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import { ControlledValidationException } from '../../common/contracts/controlled-validation.exception.js';
+import { PLATFORM_ERROR_MESSAGES } from '../../common/contracts/platform-error.js';
 import type { IntegrationExpected, IntegrationRecord, OperationIntegrationFields } from '../../common/integration-master-data.js';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
-import { readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
+import { readOrganizationRuntime, type OrganizationRuntime } from '../organization/organization-runtime.read-model.js';
 
 function fail(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
-function name(value: unknown, maximum = 200): string {
-  if (typeof value !== 'string' || !value.trim() || value.trim().length > maximum || /[\u0000\uD800-\uDFFF]/u.test(value)) fail('PROCESS_OPERATION_SECTOR_INPUT_INVALID', 400);
-  return value.trim();
+function rowError(code: 'PROCESS_OPERATION_SECTOR_INPUT_INVALID' | 'PROCESS_OPERATION_CODE_CONFLICT', path: string): never {
+  throw new ControlledValidationException(code, [{ path, message: PLATFORM_ERROR_MESSAGES[code] }]);
+}
+function name(value: unknown, maximum = 200, path?: string): string {
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed || trimmed.length > maximum || /[\u0000\uD800-\uDFFF]/u.test(trimmed)) {
+    if (path) rowError('PROCESS_OPERATION_SECTOR_INPUT_INVALID', path);
+    fail('PROCESS_OPERATION_SECTOR_INPUT_INVALID', 400);
+  }
+  return trimmed;
 }
 
 type SectorInput = { operationCode?: string | null; operationName: string; sectorName?: string | null };
@@ -46,14 +55,41 @@ export class ProcessOperationSectorService {
     const organizationId = this.scope(actor), operationName = name(input.operationName);
     const operationCode = input.operationCode == null ? null : name(input.operationCode, 100);
     const sectorName = input.sectorName == null ? null : name(input.sectorName);
-    if (!operationCode && !sectorName) fail('PROCESS_OPERATION_SECTOR_INPUT_INVALID', 400);
-    const record = await this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTOR_CREATED', permission: 'process-quality:configuration:manage',
+    const record = await this.mutations.run<OperationSector>({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTOR_CREATED', permission: 'process-quality:configuration:manage',
       payload: { ...(operationCode ? { operationCode } : {}), operationName, sectorName }, authentication: 'active' },
     async tx => {
+      if (!operationCode) fail('PROCESS_OPERATION_SECTOR_INPUT_INVALID', 400);
       await this.requireActiveOrganization(tx, organizationId, true);
       return this.insert(tx, actor, organizationId, { operationCode, operationName, sectorName }, traceId);
     });
     return { ...record, operationCode: record.operationCode ?? null };
+  }
+
+  async bulkCreate(actor: AdminActor, items: readonly unknown[], traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    const operations = items.map((item, index) => {
+      const path = `items[${index}]`;
+      if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).some(field => field !== 'operationCode' && field !== 'operationName')) {
+        rowError('PROCESS_OPERATION_SECTOR_INPUT_INVALID', path);
+      }
+      const fields = item as Partial<OperationIntegrationFields>;
+      return { operationCode: name(fields.operationCode, 100, `${path}.operationCode`), operationName: name(fields.operationName, 200, `${path}.operationName`) };
+    });
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_OPERATION_SECTORS_BULK_CREATED', permission: 'process-quality:configuration:manage',
+      payload: operations, authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
+      const seen = new Set<string>();
+      operations.forEach(({ operationCode }, index) => {
+        if (seen.has(operationCode)) rowError('PROCESS_OPERATION_CODE_CONFLICT', `items[${index}].operationCode`);
+        seen.add(operationCode);
+      });
+      const ordered = operations.map((operation, index) => ({ operation, index })).sort((first, second) =>
+        first.operation.operationCode < second.operation.operationCode ? -1 : 1);
+      const records: CodedOperation[] = [];
+      for (const { operation, index } of ordered) {
+        records[index] = await this.insert(tx, actor, organizationId, { ...operation, sectorName: null }, traceId, false, index);
+      }
+      return records;
+    }, tx => this.requireActiveOrganization(tx, organizationId, true));
   }
 
   async update(actor: AdminActor, id: string, input: SectorInput & { expectedVersion: number; active: boolean }, traceId: string, key?: string) {
@@ -142,21 +178,24 @@ export class ProcessOperationSectorService {
   }
 
   private async requireActiveOrganization(tx: AdminTransaction, organizationId: string, lock = false) {
-    const organization = await readOrganizationRuntime(tx, organizationId, lock);
+    const organization = lock
+      ? (await tx.$queryRaw<Omit<OrganizationRuntime, 'id'>[]>`SELECT type, status, deleted_at AS "deletedAt", configuration_required AS "configurationRequired"
+          FROM organizations WHERE id = ${organizationId}::uuid FOR SHARE`)[0]
+      : await readOrganizationRuntime(tx, organizationId);
     if (organization?.type !== 'INTERNAL') fail('ORGANIZATION_SCOPE_DENIED', 403);
     if (organization.status !== 'ACTIVE' || organization.deletedAt || organization.configurationRequired) fail('ORGANIZATION_DISABLED', 403);
   }
 
-  private async insert<Code extends string | null>(tx: AdminTransaction, actor: AdminActor, organizationId: string,
-    fields: { operationCode: Code; operationName: string; sectorName: string | null }, traceId: string, automatic = false) {
-    const table = fields.operationCode ? Prisma.sql`process_operation_master` : Prisma.sql`process_operation_sectors`;
-    const codeColumns = fields.operationCode ? Prisma.sql`operation_code, manual_name_changed_at,` : Prisma.empty;
-    const codeValues = fields.operationCode ? Prisma.sql`${fields.operationCode}, ${automatic ? Prisma.sql`NULL` : Prisma.sql`clock_timestamp()`},` : Prisma.empty;
-    const [record] = await tx.$queryRaw<Array<OperationSector & { operationCode: Code }>>`INSERT INTO ${table}
-      (id, organization_id, ${codeColumns} operation_name, sector_name, created_by_id, updated_by_id)
-      VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${codeValues} ${fields.operationName}, ${fields.sectorName}, ${actor.id}::uuid, ${actor.id}::uuid)
-      ON CONFLICT DO NOTHING RETURNING ${fields.operationCode ? columns : legacyColumns}`;
-    if (!record) fail(fields.operationCode ? 'PROCESS_OPERATION_CODE_CONFLICT' : 'PROCESS_OPERATION_SECTOR_NAME_CONFLICT', 409);
+  private async insert(tx: AdminTransaction, actor: AdminActor, organizationId: string,
+    fields: { operationCode: string; operationName: string; sectorName: string | null }, traceId: string, automatic = false, rowIndex?: number) {
+    const [record] = await tx.$queryRaw<CodedOperation[]>`INSERT INTO process_operation_master
+      (id, organization_id, operation_code, manual_name_changed_at, operation_name, sector_name, created_by_id, updated_by_id)
+      VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${fields.operationCode}, ${automatic ? Prisma.sql`NULL` : Prisma.sql`clock_timestamp()`}, ${fields.operationName}, ${fields.sectorName}, ${actor.id}::uuid, ${actor.id}::uuid)
+      ON CONFLICT DO NOTHING RETURNING ${columns}`;
+    if (!record) {
+      if (rowIndex !== undefined) rowError('PROCESS_OPERATION_CODE_CONFLICT', `items[${rowIndex}].operationCode`);
+      fail('PROCESS_OPERATION_CODE_CONFLICT', 409);
+    }
     await this.auditChange(tx, actor, record, 'PROCESS_OPERATION_SECTOR_CREATED', traceId, automatic);
     return record;
   }

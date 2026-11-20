@@ -4,6 +4,10 @@ import ts from 'typescript';
 import { auditActionLabel } from '../../src/modules/audit-log/audit-event-read-model.js';
 
 describe('audit action label coverage (source contract, not PostgreSQL evidence)', () => {
+  it('labels the operation bulk creation action', () => {
+    expect(auditActionLabel('PROCESS_OPERATION_SECTORS_BULK_CREATED')).toBe('批量创建工序');
+  });
+
   it.each([
     ['LEGACY_AUTHORIZATION_MIGRATED', '迁移兼容授权'],
     ['LEGACY_AUTHORIZATION_REMOVED', '清理兼容授权'],
