@@ -663,6 +663,24 @@ model AccountBatchRow {
   @@map("account_batch_rows")
 }
 
+enum WorkbenchGraphNodeStatus {
+  idea
+  development
+  live
+
+  @@map("workbench_graph_node_status")
+}
+
+model WorkbenchGraphStatus {
+  nodeId    String                   @id @map("node_id") @db.VarChar(128)
+  status    WorkbenchGraphNodeStatus
+  version   Int
+  evidence  String?                  @db.VarChar(500)
+  updatedAt DateTime                 @map("updated_at") @db.Timestamptz(3)
+
+  @@map("workbench_graph_statuses")
+}
+
 model AuditEvent {
   id             String        @id @default(uuid()) @db.Uuid
   organizationId String?       @map("organization_id") @db.Uuid

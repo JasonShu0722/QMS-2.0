@@ -40,7 +40,7 @@ const ingestionTargets = [
   ['process-defect-ledger', '不良品台账'],
 ] as const;
 const searchBox = (page: Page) => page.getByRole('searchbox', { name: '搜索功能与联动' });
-const directory = (page: Page) => page.getByRole('region', { name: '图谱目录' });
+const results = (page: Page) => page.locator('.qms-workbench-graph__results');
 const graphCanvas = (page: Page) => page.locator('.qms-graph-scene canvas');
 
 function syntheticGrowth(graph: Graph): Graph {
@@ -139,7 +139,16 @@ test('workbench graph traces all six direct API ingestion edges from both ends',
   const response = page.waitForResponse(entry => new URL(entry.url()).pathname === graphPath && entry.status() === 200);
   await page.getByRole('button', { name: '功能图谱', exact: true }).click();
   const graph = await (await response).json() as Graph;
-  await expect(directory(page).getByRole('status')).toHaveText(`${graph.nodes.length + graph.relations.length} 项`);
+  expect(graph.nodes.length + graph.relations.length).toBeGreaterThan(0);
+  await expect(results(page)).toHaveCount(0);
+  const toolbar = page.locator('.qms-workbench-graph__toolbar');
+  const controlRows = await toolbar.locator('input[type="search"], select, button').evaluateAll(items =>
+    items.filter(item => item.getBoundingClientRect().width > 0).map(item => {
+      const rect = item.getBoundingClientRect();
+      return rect.y + rect.height / 2;
+    }));
+  expect(controlRows.length).toBeGreaterThanOrEqual(5);
+  expect(Math.max(...controlRows) - Math.min(...controlRows)).toBeLessThan(5);
   const canvas = graphCanvas(page);
   await expect(canvas).toBeVisible({ timeout: 25_000 });
   await dragCanvas(page);
@@ -149,10 +158,20 @@ test('workbench graph traces all six direct API ingestion edges from both ends',
   await search.press('Enter');
   const details = page.getByRole('complementary', { name: ingestionName, exact: true });
   await expect(details).toBeVisible();
+  await expect(results(page)).toHaveCount(0);
+  await expect(details.getByRole('button', { name: '调整状态' })).toHaveCount(graph.canEditStatus ? 1 : 0);
+  await expect(details.getByText('/console/api-ingestion', { exact: true })).toHaveCount(0);
   await canvas.click({ position: { x: 8, y: 8 } });
   await expect(details).toHaveCount(0);
   await search.press('Enter');
-  await expect(details.getByRole('heading', { name: '使用指南' })).toBeVisible();
+  await expect(details.getByText('使用指南', { exact: true })).toBeVisible();
+  const heading = details.getByRole('heading', { name: ingestionName, exact: true });
+  const beforeScroll = (await heading.boundingBox())!.y;
+  const scrollBody = details.locator('.qms-workbench-graph__detail-body');
+  await scrollBody.evaluate(body => { body.scrollTop = body.scrollHeight; });
+  expect(await scrollBody.evaluate(body => body.scrollTop)).toBeGreaterThan(0);
+  expect((await heading.boundingBox())!.y).toBeCloseTo(beforeScroll, 0);
+  await scrollBody.evaluate(body => { body.scrollTop = 0; });
   const downstream = details.getByRole('list', { name: '直接下游' });
   for (const [targetId, target] of ingestionTargets) {
     await test.step(`${ingestionName} → ${target} and back`, async () => {
@@ -164,7 +183,6 @@ test('workbench graph traces all six direct API ingestion edges from both ends',
       await expect(page).toHaveURL(new URL(`/app/workbench?graphRelation=${edge!.id}`, baseURL).href);
       await expect(relation.getByRole('img', { name: '流向' })).toBeVisible();
       await expect(relation.getByText(edge!.content, { exact: true })).toBeVisible();
-      await expect(relation.getByRole('heading', { name: '关联使用指南' })).toBeVisible();
       const labels = page.locator('.qms-graph-scene__labels');
       await expect(labels.getByText(ingestionName, { exact: true })).toBeVisible();
       await expect(labels.getByText(target, { exact: true })).toBeVisible();
@@ -187,7 +205,7 @@ test('workbench graph traces all six direct API ingestion edges from both ends',
   for (const width of [1024, 390]) {
     await page.setViewportSize({ width, height: 844 });
     await search.fill('制程问题跟进');
-    await expect(page.getByRole('region', { name: '图谱目录' }).getByRole('button', { name: '制程问题跟进', exact: true })).toBeVisible();
+    await expect(results(page).getByRole('button', { name: '制程问题跟进', exact: true })).toBeVisible();
     await search.press('ArrowDown');
     await expect(page.getByRole('button', { name: '制程问题跟进', exact: true })).toBeFocused();
     await page.keyboard.press('Enter');
@@ -209,9 +227,7 @@ test('synthetic growth from authenticated HTTP retains canvas, theme and reset b
   const graph = syntheticGrowth(await response.json() as Graph);
   await page.route(new URL(graphPath, baseURL).href, route => route.fulfill({ json: graph }));
   await page.getByRole('button', { name: '功能图谱', exact: true }).click();
-  await expect(directory(page).getByText(`目录版本 ${graph.version}`, { exact: true })).toBeVisible();
-  const count = directory(page).getByRole('status');
-  await expect(count).toHaveText(`${graph.nodes.length + graph.relations.length} 项`);
+  await expect(results(page)).toHaveCount(0);
   const canvas = graphCanvas(page);
   await expect(canvas).toBeVisible({ timeout: 25_000 });
   const originalCanvas = await canvas.elementHandle();
@@ -230,8 +246,7 @@ test('synthetic growth from authenticated HTTP retains canvas, theme and reset b
 
   const search = searchBox(page);
   const filters = [['领域', 'API 接入'], ['功能状态', 'development'], ['联动类型', 'data']] as const;
-  const filterControl = (name: string) => page.getByRole('group', { name: '目录筛选' })
-    .locator('label').filter({ hasText: new RegExp(`^${name}`) }).getByRole('combobox');
+  const filterControl = (name: string) => page.getByRole('combobox', { name, exact: true });
   const reset = page.getByRole('button', { name: '复位', exact: true });
   await expect(reset).toHaveCSS('transition-property', 'none');
   await search.fill('API入库衔接 · 扩容样本 1');
@@ -241,24 +256,24 @@ test('synthetic growth from authenticated HTTP retains canvas, theme and reset b
   await expanded.getByRole('button', { name: '展开第二跳' }).click();
   await expect(expanded.getByRole('list', { name: '第二跳联动' })).toBeVisible();
   for (const [filter, value] of filters) await filterControl(filter).selectOption(value);
-  await expect(count).not.toHaveText(`${graph.nodes.length + graph.relations.length} 项`);
   await reset.press('Enter');
   await expect(expanded).toHaveCount(0);
   await expect(search).toBeFocused();
   await expect(search).toHaveValue('');
   for (const [filter] of filters) await expect(filterControl(filter)).toHaveValue('');
   await expect(page).toHaveURL(new URL('/app/workbench', baseURL).href);
-  await expect(count).toHaveText(`${graph.nodes.length + graph.relations.length} 项`);
+  await expect(results(page)).toHaveCount(0);
   await expect.poll(labelPositions).toEqual(initialPositions);
 
-  const directoryBorder = () => directory(page).evaluate(element => getComputedStyle(element).borderTopColor);
   await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', 'light');
-  const lightBorder = await directoryBorder();
+  const scene = page.locator('.qms-graph-scene');
+  const lightSky = await scene.evaluate(element => getComputedStyle(element).backgroundImage);
+  expect(lightSky).not.toBe('none');
   await page.getByRole('button', { name: '外观设置', exact: true }).click();
   await page.getByRole('radio', { name: '深色', exact: true }).press('Space');
   await page.getByRole('dialog', { name: '外观设置' }).getByRole('button', { name: /close|关闭/i }).click();
   await expect(page.locator('html')).toHaveAttribute('data-qms-appearance', 'dark');
-  await expect.poll(directoryBorder).not.toEqual(lightBorder);
+  await expect(scene).toHaveCSS('background-image', lightSky);
   await expect.poll(labelPositions).toEqual(initialPositions);
   await measureInputToDetails(page, graph, ['API入库衔接 · 扩容样本 1', '工序主数据 · 扩容样本 1'], 'synthetic growth (browser only)');
   expect(await canvas.evaluate((element, initial) => element === initial, originalCanvas)).toBe(true);
@@ -273,9 +288,65 @@ test('no WebGL keeps workbench graph deep links, relations and guides available'
     } as typeof native;
   });
   await login(page, '/app/workbench?graphNode=process-defect-ledger');
-  await expect(page.getByText('三维视图不可用，请使用图谱目录。')).toBeVisible();
+  await expect(page.getByText(/三维视图不可用/)).toBeVisible();
   await expect(page.locator('.qms-graph-scene canvas')).toHaveCount(0);
   const detail = page.getByRole('complementary', { name: '不良品台账' });
-  await expect(detail.getByRole('heading', { name: '使用指南' })).toBeVisible();
+  await expect(detail.getByText('使用指南', { exact: true })).toBeVisible();
   await expect(detail.getByRole('list', { name: '直接下游' })).toContainText('不良品台账 → 制程问题跟进');
+  await searchBox(page).fill('制程问题跟进');
+  await results(page).getByRole('button', { name: '制程问题跟进', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: '制程问题跟进', exact: true })).toBeVisible();
+});
+
+test('status controls respect real permissions and admin writes survive a reload', async ({ page }) => {
+  const admin = process.env.QMS_GRAPH_EXPECT_ADMIN === 'true';
+  const target = '/app/workbench?graphNode=api-ingestion';
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await login(page, target);
+  const detail = page.getByRole('complementary', { name: ingestionName, exact: true });
+  await expect(detail).toBeVisible();
+  const control = detail.getByRole('button', { name: '调整状态' });
+  const current = await page.request.get(graphPath);
+  expect(current.status()).toBe(200);
+  const graph = await current.json() as Graph;
+  expect(graph.canEditStatus).toBe(admin);
+  const baseline = graph.nodes.find(node => node.id === 'api-ingestion');
+  expect(baseline?.status).toBe('development');
+  if (!admin) {
+    await expect(control).toHaveCount(0);
+    return;
+  }
+  await control.click();
+  await detail.getByRole('combobox', { name: '调整为' }).selectOption('idea');
+  const focusedLabel = page.locator('.qms-graph-scene__labels span').filter({ hasText: new RegExp(`^${ingestionName}$`) });
+  const labelPosition = async () => focusedLabel.evaluate(element => {
+    const style = getComputedStyle(element);
+    if (style.visibility !== 'visible' || style.transform === 'none') return null;
+    const transform = new DOMMatrixReadOnly(style.transform);
+    return [Math.round(transform.m41), Math.round(transform.m42)];
+  });
+  await expect(focusedLabel).toBeVisible();
+  const originalPosition = await labelPosition();
+  expect(originalPosition).not.toBeNull();
+  await dragCanvas(page);
+  await expect.poll(labelPosition).not.toEqual(originalPosition);
+  let rotatedPosition: number[] | null = null;
+  await expect.poll(async () => {
+    const position = await labelPosition();
+    const stable = position !== null && JSON.stringify(position) === JSON.stringify(rotatedPosition);
+    rotatedPosition = position;
+    return stable;
+  }).toBe(true);
+  const change = page.waitForResponse(entry => new URL(entry.url()).pathname.endsWith('/api-ingestion/status') && entry.request().method() === 'PATCH');
+  await detail.getByRole('button', { name: '保存状态' }).click();
+  expect((await change).status()).toBe(200);
+  await expect(detail.getByText('构想中', { exact: true })).toBeVisible();
+  await expect.poll(labelPosition).toEqual(rotatedPosition);
+  await page.reload();
+  await expect(detail.getByText('构想中', { exact: true })).toBeVisible();
+  const persisted = await (await page.request.get(graphPath)).json() as Graph;
+  expect(persisted.nodes.find(node => node.id === 'api-ingestion')).toMatchObject({
+    status: 'idea', statusVersion: (baseline?.statusVersion ?? 0) + 1,
+  });
 });

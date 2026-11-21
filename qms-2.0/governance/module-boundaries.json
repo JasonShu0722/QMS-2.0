@@ -180,7 +180,9 @@
     "supplier-barcode -> supplier-quality",
     "supplier-asn -> supplier-quality",
     "supplier-admission -> supplier-quality",
-    "workbench-graph -> authorization"
+    "workbench-graph -> audit-log",
+    "workbench-graph -> authorization",
+    "workbench-graph -> organization"
   ],
   "forbiddenImportFileSuffixes": [
     ".controller.ts",

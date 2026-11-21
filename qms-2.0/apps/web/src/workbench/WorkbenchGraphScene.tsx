@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import ForceGraph3D, { type ForceGraphMethods, type NodeObject } from 'react-force-graph-3d';
-import { theme } from 'antd';
 import type { components } from '@qms/contracts';
 import { domainCenters, focusFrame, parallelCurvatures, type Position } from './workbench-graph-scene-layout';
 import { nodeStatusColors } from './workbench-graph';
 import './workbench-graph-scene.css';
 
 type Graph = components['schemas']['WorkbenchGraphDto'];
-type LayoutNode = Graph['nodes'][number] & Position & { center: Position };
-type LayoutEdge = Graph['relations'][number] & { source: string; target: string; curve: number; crosses: boolean };
+type SceneNode = Pick<Graph['nodes'][number], 'id' | 'name' | 'domain'>;
+type SceneRelation = Pick<Graph['relations'][number], 'id' | 'from' | 'to' | 'name' | 'kind' | 'status'>;
+type LayoutNode = SceneNode & Position & { center: Position };
+type LayoutEdge = SceneRelation & { source: string; target: string; curve: number; crosses: boolean };
 
 export type WorkbenchGraphSceneProps = {
   graph: Graph;
@@ -26,6 +27,7 @@ export type WorkbenchGraphSceneProps = {
 
 const cameraStart = { x: 120, y: 105, z: 415 };
 const origin = { x: 0, y: 0, z: 0 };
+const skyColors = { mutedNode: '#475c77', focusedLink: '#81c8ff', crossDomainLink: '#a0b4d2', mutedLink: '#677c98' };
 
 function tooltip(text: string) {
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
@@ -50,27 +52,42 @@ function sceneData(graph: Graph) {
   const domains = new Map(graph.nodes.map(node => [node.id, node.domain]));
   const centers = domainCenters([...domains.values()], graph.relations.filter(edge => edge.status !== 'planned').map(edge => ({ from: domains.get(edge.from)!, to: domains.get(edge.to)! })));
   const ordinal = new Map<string, number>();
-  const nodes = graph.nodes.map(node => {
-    const center = centers.get(node.domain)!;
-    const index = ordinal.get(node.domain) ?? 0;
-    ordinal.set(node.domain, index + 1);
+  const nodes = graph.nodes.map(({ id, name, domain }) => {
+    const center = centers.get(domain)!;
+    const index = ordinal.get(domain) ?? 0;
+    ordinal.set(domain, index + 1);
     const angle = (index + 1) * Math.PI * (3 - Math.sqrt(5));
     const radius = 6 + 4 * Math.cbrt(index + 1);
-    return { ...node, center, x: center.x + Math.cos(angle) * radius, y: center.y + (index % 5 - 2) * 7, z: center.z + Math.sin(angle) * radius };
+    return { id, name, domain, center, x: center.x + Math.cos(angle) * radius, y: center.y + (index % 5 - 2) * 7, z: center.z + Math.sin(angle) * radius };
   });
   const curves = parallelCurvatures(graph.relations);
-  const links = graph.relations.map(edge => ({ ...edge, source: edge.from, target: edge.to, curve: curves.get(edge.id) ?? 0, crosses: domains.get(edge.from) !== domains.get(edge.to) }));
+  const links = graph.relations.map(({ id, from, to, name, kind, status }) => ({
+    id, from, to, name, kind, status, source: from, target: to, curve: curves.get(id) ?? 0, crosses: domains.get(from) !== domains.get(to),
+  }));
   return { nodes, links, centers };
 }
 
+function matchesScene(data: ReturnType<typeof sceneData>, graph: Graph) {
+  return data.nodes.length === graph.nodes.length && data.links.length === graph.relations.length
+    && graph.nodes.every((node, index) => {
+      const point = data.nodes[index];
+      return point.id === node.id && point.name === node.name && point.domain === node.domain;
+    }) && graph.relations.every((relation, index) => {
+      const link = data.links[index];
+      return link.id === relation.id && link.from === relation.from && link.to === relation.to
+        && link.name === relation.name && link.kind === relation.kind && link.status === relation.status;
+    });
+}
+
 export function WorkbenchGraphScene({ graph, selection, depth, resetKey, relationKind, visibleNodeIds, visibleRelationIds, fallback, onNode, onRelation, onBackground }: WorkbenchGraphSceneProps) {
-  const { token } = theme.useToken();
   const [available, setAvailable] = useState(supportsWebGL);
   const [width, setWidth] = useState(0);
   const host = useRef<HTMLDivElement>(null);
   const labels = useRef(new Map<string, HTMLSpanElement>());
   const renderer = useRef<ForceGraphMethods<LayoutNode, LayoutEdge> | undefined>(undefined);
-  const data = useMemo(() => sceneData(graph), [graph]);
+  const [data, setData] = useState(() => sceneData(graph));
+  if (!matchesScene(data, graph)) setData(sceneData(graph));
+  const colors = useMemo(() => new Map(graph.nodes.map(node => [node.id, nodeStatusColors[node.status]])), [graph.nodes]);
   const height = width < 550 ? 350 : 520;
   const wide = width >= 550;
   const hasWidth = width > 0;
@@ -184,19 +201,18 @@ export function WorkbenchGraphScene({ graph, selection, depth, resetKey, relatio
     || edge.status !== 'planned' && (!relationKind || edge.kind === relationKind)
       && (highlighted(edge) || ((!visibleRelationIds || visibleRelationIds.has(edge.id)) && nodeIsVisible(edge.from) && nodeIsVisible(edge.to))),
   [highlighted, nodeIsVisible, relationKind, selectionId, selectionType, visibleRelationIds]);
-  const nodeColor = useCallback((node: LayoutNode) => selectionId && !nearby.has(node.id) ? token.colorTextQuaternary : nodeStatusColors[node.status],
-    [nearby, selectionId, token.colorTextQuaternary]);
+  const nodeColor = useCallback((node: LayoutNode) => selectionId && !nearby.has(node.id) ? skyColors.mutedNode : colors.get(node.id) ?? skyColors.mutedNode,
+    [colors, nearby, selectionId]);
   const nodeVal = useCallback((node: LayoutNode) => selectionType === 'node' && selectionId === node.id ? 2.5 : 1, [selectionId, selectionType]);
-  const linkColor = useCallback((edge: LayoutEdge) => highlighted(edge) ? token.colorPrimary
-    : edge.crosses && !selectionId ? token.colorTextSecondary : token.colorTextQuaternary,
-  [highlighted, selectionId, token.colorPrimary, token.colorTextQuaternary, token.colorTextSecondary]);
+  const linkColor = useCallback((edge: LayoutEdge) => highlighted(edge) ? skyColors.focusedLink
+    : edge.crosses && !selectionId ? skyColors.crossDomainLink : skyColors.mutedLink, [highlighted, selectionId]);
   const linkArrowLength = useCallback((edge: LayoutEdge) => highlighted(edge) ? 4 : edge.crosses && !selectionId ? 2.6 : 0, [highlighted, selectionId]);
 
   if (!available) return fallback ?? null;
   if (!data.nodes.length) return null;
   return <div className="qms-graph-scene" ref={host} style={{ height }} aria-label="三维功能图谱">
     {width > 0 && <ForceGraph3D<LayoutNode, LayoutEdge>
-      ref={renderer} graphData={data} width={width} height={height} backgroundColor={token.colorBgLayout}
+      ref={renderer} graphData={data} width={width} height={height} backgroundColor="rgba(0, 0, 0, 0)"
       numDimensions={3} controlType="orbit" showNavInfo={false} enableNodeDrag={false} nodeResolution={10} nodeRelSize={4} cooldownTicks={112}
       nodeVisibility={showNode} nodeColor={nodeColor} nodeVal={nodeVal} nodeLabel={nodeLabel}
       linkLabel={linkLabel} linkVisibility={showEdge} linkColor={linkColor} linkOpacity={.55} linkWidth={linkWidth}
