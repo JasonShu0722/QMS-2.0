@@ -1,0 +1,23 @@
+.qms-graph-scene {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.qms-graph-scene__labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.qms-graph-scene__labels span {
+  position: absolute;
+  visibility: hidden;
+  padding: 1px 6px;
+  border: 1px solid var(--ant-color-border, #53677a);
+  border-radius: 5px;
+  color: var(--ant-color-text, #ebf4ff);
+  background: var(--ant-color-bg-elevated, #162437);
+  font-size: 12px;
+  white-space: nowrap;
+}

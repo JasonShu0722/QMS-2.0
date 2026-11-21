@@ -104,7 +104,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
+            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -190,7 +190,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
+            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -212,7 +212,7 @@
         "sources": [
           {
             "path": "package.json",
-            "sha256": "4dc69ab6c2d01cf4f61efc193cd7630a28346cdace085db61edc7ae4d8edc018"
+            "sha256": "19dbfe488f5b1149cec31e63a51cbfc97216eaf7126d93df460b5e1e1cf6e50f"
           },
           {
             "path": "docs/DATA-PROTECTION.md",
@@ -266,7 +266,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
+            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
           },
           {
             "path": ".agents/skills/qms-start-development/SKILL.md",
@@ -996,7 +996,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
+            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -1102,7 +1102,7 @@
           },
           {
             "path": "package.json",
-            "sha256": "4dc69ab6c2d01cf4f61efc193cd7630a28346cdace085db61edc7ae4d8edc018"
+            "sha256": "19dbfe488f5b1149cec31e63a51cbfc97216eaf7126d93df460b5e1e1cf6e50f"
           },
           {
             "path": "scripts/operations-alerts.mjs",
@@ -1128,7 +1128,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
+            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
@@ -1162,7 +1162,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
+            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -1238,7 +1238,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "e564eb30d179d3c67957a1ac434f4ff8263ea4f181d87f9299fd4911e5deebb8"
+            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
           },
           {
             "path": ".agents/skills/qms-feature-delivery/SKILL.md",

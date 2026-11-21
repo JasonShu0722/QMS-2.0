@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { authRedirect, readReturnTo } from './return-to';
 
+it('preserves exactly one safe graph locator only on the internal workbench', () => {
+  const target = '/app/workbench?graphRelation=api-ingestion-to-operation-master';
+  expect(readReturnTo({ returnTo: target }, 'INTERNAL')).toBe(target);
+  expect(readReturnTo({ returnTo: target }, 'SUPPLIER')).toBeUndefined();
+  expect(readReturnTo({ returnTo: '/app/workbench?graphNode=workbench&graphRelation=ambiguous' })).toBeUndefined();
+  expect(readReturnTo({ returnTo: '/app/workbench?graphNode=%2Fconsole' })).toBeUndefined();
+  expect(readReturnTo({ returnTo: '/app/account?graphNode=workbench' })).toBe('/app/account');
+});
+
+it.each(['graphNode', 'graphRelation'])('accepts only graph IDs of up to 128 characters for %s', (key) => {
+  const valid = `/app/workbench?${key}=${'a'.repeat(128)}`;
+  expect(readReturnTo({ returnTo: valid }, 'INTERNAL')).toBe(valid);
+  expect(readReturnTo({ returnTo: `${valid}a` }, 'INTERNAL')).toBeUndefined();
+});
+
 const id = '2c7b3607-1d6d-4304-9a72-f595c8467d88';
 const audit = `/console/audit-log?organizationId=${id}&section=audit-log&resourceType=USER&resourceId=${id}`;
 const internal = { accountType: 'INTERNAL', landingPath: '/app/workbench', securityState: 'AUTHENTICATED' } as const;

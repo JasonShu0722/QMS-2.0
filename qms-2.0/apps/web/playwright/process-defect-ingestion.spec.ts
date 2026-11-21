@@ -128,7 +128,7 @@ test('administrator imports incomplete IMS rows and real Worker fills only missi
   expect(partlyUpdated.pendingCompletion).toBe(true);
   const project = await positionWrite<Schema['ComponentProjectRecordDto']>(page.request, '/api/v1/admin/configuration/component-project-records', 'POST', { code: `PROJECT_${suffix}`, name: '登记时新品项目', stage: 'NEW_PRODUCT' }, 201);
   await positionWrite(page.request, '/api/v1/admin/configuration/component-project-mappings', 'POST', { componentCode: productCode, componentName: '验收成品', projectRecordId: project.id, productCategory: '控制器', productSubcategory: '细分控制器' }, 201);
-  await positionWrite(page.request, '/api/v1/process-quality/operation-sectors', 'POST', { operationName: `焊接${suffix}`, sectorName: '电子板块' }, 201);
+  await positionWrite(page.request, '/api/v1/process-quality/operation-sectors', 'POST', { operationCode: `OP_${suffix}`, operationName: `焊接${suffix}`, sectorName: '电子板块' }, 201);
   await expect.poll(async () => {
     await worker();
     return (await positionRead<Schema['ProcessDefectDto']>(page.request, `/api/v1/process-quality/defects/${first.id}`)).pendingConfiguration;
