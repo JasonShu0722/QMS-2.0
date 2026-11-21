@@ -1447,6 +1447,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workbench/graph": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WorkbenchGraphController_getGraph"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/audit-events": {
         parameters: {
             query?: never;
@@ -10241,6 +10257,48 @@ export interface components {
             assignments: components["schemas"]["AccountAssignmentDto"][];
             effectiveRoles: components["schemas"]["AccountEffectiveRoleDto"][];
             permissions: string[];
+        };
+        WorkbenchGraphGuideDto: {
+            title: string;
+            version: string;
+            role: string;
+            prerequisites: string;
+            steps: string[];
+            result: string;
+            exceptions: string;
+        };
+        WorkbenchGraphNodeDto: {
+            id: string;
+            name: string;
+            domain: string;
+            entry: string;
+            aliases: string[];
+            /** @enum {string} */
+            status: "idea" | "development" | "live";
+            /** Format: date */
+            statusUpdatedOn: string;
+            summary: string;
+            plan: string;
+            guide: components["schemas"]["WorkbenchGraphGuideDto"];
+        };
+        WorkbenchGraphRelationDto: {
+            id: string;
+            from: string;
+            to: string;
+            name: string;
+            /** @enum {string} */
+            kind: "data" | "configuration" | "handoff";
+            /** @enum {string} */
+            status: "effective" | "configuration" | "planned" | "unverified";
+            trigger: string;
+            content: string;
+            result: string;
+            exceptions: string;
+        };
+        WorkbenchGraphDto: {
+            version: string;
+            nodes: components["schemas"]["WorkbenchGraphNodeDto"][];
+            relations: components["schemas"]["WorkbenchGraphRelationDto"][];
         };
         AuditActorSummaryDto: {
             username: string;
@@ -22157,6 +22215,33 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AccountOverviewDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkbenchGraphController_getGraph: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkbenchGraphDto"];
                 };
             };
             default: {

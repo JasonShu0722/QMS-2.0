@@ -9,6 +9,11 @@
 .qms-workbench__entry strong { font-size: 16px; }
 .qms-workbench__entry:hover { background: var(--qms-surface-tint); color: var(--qms-accent-text); }
 .qms-workbench a:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: -3px; }
+.qms-workbench__graph { min-width: 0; border: 1px solid var(--qms-border); border-radius: 10px; background: var(--qms-surface); }
+.qms-workbench__graph h2 { margin-bottom: 0; }
+.qms-workbench__graph-toggle.ant-btn { justify-content: flex-start; font-size: 16px; font-weight: 600; color: var(--qms-text); }
+.qms-workbench__graph-toggle > svg:last-child { margin-inline-start: auto; }
+.qms-workbench__graph-toggle[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
 .qms-workbench__overview { border: 1px solid var(--qms-border); border-radius: 10px; background: var(--qms-surface); }
 .qms-workbench__overview h2 { margin-bottom: 8px; }
 .qms-workbench__overview dl { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--qms-display-card-gap); margin: var(--qms-display-card-gap) 0 0; padding-top: var(--qms-display-card-gap); border-top: 1px solid var(--qms-border); }

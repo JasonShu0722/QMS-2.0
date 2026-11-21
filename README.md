@@ -230,5 +230,6 @@ fi
 - [开发治理与验收要求](qms-2.0/docs/DEVELOPMENT-GOVERNANCE.md)
 - [文档导航](qms-2.0/docs/README.md)
 - [总体设计](docs/superpowers/specs/2026-09-18-qms-2.0-redesign-design.md)
+- [工作台功能图谱实施策划](docs/superpowers/plans/2026-11-21-qms-workbench-capability-graph.md)
 
 所有实现、测试和 Docker 构建从 `qms-2.0/` 执行；秘密、环境文件、上传文件、日志和备份均留在 Git 外。API DTO 变化应重新生成并检查 Swagger 契约；阶段验收使用一次性真实资源，结果记录在对应阶段文档。

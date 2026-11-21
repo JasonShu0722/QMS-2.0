@@ -51,6 +51,7 @@ import { internalEightDReminderHandler } from './common/eight-d/internal-eight-d
 import { SystemManagementModule } from './modules/system-management/system-management.module.js';
 import { ApiIntegrationModule } from './modules/api-integration/api-integration.module.js';
 import { AiConnectionsModule } from './modules/ai-configuration/ai-connections.module.js';
+import { WorkbenchGraphModule } from './modules/workbench-graph/workbench-graph.module.js';
 
 @Module({
   controllers: [AdministrativeReconfigurationController, AdministrativeProblemReconfigurationController],
@@ -64,6 +65,7 @@ import { AiConnectionsModule } from './modules/ai-configuration/ai-connections.m
     IdentityModule,
     OrganizationModule,
     AuthorizationModule,
+    WorkbenchGraphModule,
     AuditLogModule,
     AuditQueryModule,
     PlatformConfigurationModule,

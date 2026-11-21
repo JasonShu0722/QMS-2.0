@@ -4,6 +4,7 @@ import { legacyConsoleTarget } from '../navigation/legacy-console-route';
 
 const uuidSource = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const uuid = new RegExp(`^${uuidSource}$`, 'i');
+const graphId = /^[a-z][a-z0-9-]{0,127}$/;
 const paths = new Set([
   ...internalNavigation.map(item => item.path), ...supplierNavigation.map(item => item.path),
   '/app', '/app/workbench', '/app/admin', '/app/workflow-designer',
@@ -39,6 +40,11 @@ export function readReturnTo(state: unknown, accountType?: AccountType): string 
   if (accountType === 'SUPPLIER' && !pathname.startsWith('/supplier/') || accountType === 'INTERNAL' && pathname.startsWith('/supplier/')) return undefined;
   const query = new URLSearchParams(search);
   const accepted = new URLSearchParams();
+  if (pathname === '/app' || pathname === '/app/workbench') {
+    const locator = [...query.getAll('graphNode'), ...query.getAll('graphRelation')];
+    if (locator.length > 1 || locator.length === 1 && !graphId.test(locator[0])) return undefined;
+    if (locator.length === 1) accepted.set(query.has('graphNode') ? 'graphNode' : 'graphRelation', locator[0]);
+  }
   for (const [key, value] of query) {
     if (!Object.hasOwn(queryRules, key)) continue;
     if (query.getAll(key).length !== 1 || !queryRules[key]!.test(value)) return undefined;

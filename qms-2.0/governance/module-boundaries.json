@@ -179,7 +179,8 @@
     "supplier-inspection-standards -> supplier-quality",
     "supplier-barcode -> supplier-quality",
     "supplier-asn -> supplier-quality",
-    "supplier-admission -> supplier-quality"
+    "supplier-admission -> supplier-quality",
+    "workbench-graph -> authorization"
   ],
   "forbiddenImportFileSuffixes": [
     ".controller.ts",
