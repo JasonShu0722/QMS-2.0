@@ -618,7 +618,7 @@
           },
           {
             "path": "apps/web/src/features/tasks/MyTasksPage.tsx",
-            "sha256": "5bc09f3e8bd643678019d4855764e568351bd6c8346f193a3c1613c99d37e0f2"
+            "sha256": "b684d13135c40913d5d1843ca71612f36483db1e37aacec5a18c82a3c93b4304"
           },
           {
             "path": "apps/web/src/features/tasks/ClosureTaskInbox.tsx",
@@ -638,7 +638,7 @@
           },
           {
             "path": "apps/web/src/features/supplier-pcn/SupplierPcnPage.test.tsx",
-            "sha256": "2cc4a888a9cd9cfa02363b4e1ea50f8e4d0763b9e0486a79ab0a5a045d89592b"
+            "sha256": "b4a51aecc4d6033678614b0c5cef1a2c33f7c3acd53b9a774685e6330d883d44"
           },
           {
             "path": "apps/web/src/features/supplier-quality/SupplierUsersPanel.test.tsx",
@@ -738,7 +738,7 @@
           },
           {
             "path": "apps/web/src/styles/governance-layout.test.ts",
-            "sha256": "6d9c2775f541e32b0cf83bde2fe8daf056997a93e43c8cfa34045f11ba4a97f3"
+            "sha256": "48972de8258799149b435904843e8754d5bbd4365fb8a029712d936381a113ec"
           },
           {
             "path": "apps/web/src/layouts/InternalLayout.tsx",
@@ -770,7 +770,7 @@
           },
           {
             "path": "apps/web/src/console/console.css",
-            "sha256": "1145bc063b937c68ad10328e54d56428efbdb672181905802fc6cb7c679e6e52"
+            "sha256": "b707ba0f682e4864c3dfdd3777a78e7c74a249b846b957bc6fe4b7d76976627f"
           },
           {
             "path": "apps/web/playwright/sidebar-regression-fixture.tsx",

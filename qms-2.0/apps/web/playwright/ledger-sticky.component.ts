@@ -85,6 +85,14 @@ test('shared ledger keeps native controls and aligned columns during document sc
       ).length);
       expect(scrollable, 'only one native horizontal scroll track').toBe(1);
       await expect(ledger.locator('.ant-table-sticky-scroll:visible')).toHaveCount(0);
+      const body = ledger.locator('.ant-table-body');
+      await expect(body).toHaveAttribute('tabindex', '0');
+      await body.evaluate(element => element.focus({ preventScroll: true }));
+      await expect(body).toBeFocused();
+      await page.keyboard.press('ArrowRight');
+      await expect.poll(() => body.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+      await page.keyboard.press('ArrowLeft');
+      await expect.poll(() => body.evaluate(element => element.scrollLeft)).toBe(0);
       const left = (locator: typeof title) => locator.evaluate(element => element.getBoundingClientRect().left);
       const before = await left(firstTitle);
       const fixedLeft = await left(number);

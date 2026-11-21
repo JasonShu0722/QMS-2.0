@@ -2,22 +2,31 @@ import { useLayoutEffect, type RefObject } from 'react';
 
 const minimumBodyHeight = 120;
 
+function findChild<T extends Element = Element>(parent: Element | null, selector: string): T | null {
+  for (let child = parent?.firstElementChild; child; child = child.nextElementSibling) {
+    if (child.matches(selector)) return child as T;
+  }
+  return null;
+}
+
 export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>, enabled: boolean, hasActionBar: boolean, showHeader: boolean) {
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!enabled || !root) return;
-    const actionBar = root.querySelector<HTMLElement>(':scope > .qms-ledger__action-bar');
-    const tools = root.querySelector<HTMLElement>(':scope > .qms-ledger__tools');
-    const spin = root.querySelector(':scope > .ant-table-wrapper > .ant-spin > .ant-spin-container');
-    const container = spin?.querySelector(':scope > .ant-table > .ant-table-container');
-    const header = container?.querySelector(':scope > .ant-table-header');
-    const body = container?.querySelector<HTMLElement>(':scope > .ant-table-body');
-    const headerTable = header?.querySelector(':scope > table');
-    const bodyTable = body?.querySelector(':scope > table');
+    const actionBar = findChild(root, '.qms-ledger__action-bar');
+    const tools = findChild(root, '.qms-ledger__tools');
+    const wrapper = findChild(root, '.ant-table-wrapper');
+    const spin = findChild(findChild(wrapper, '.ant-spin'), '.ant-spin-container');
+    const container = findChild(findChild(spin, '.ant-table'), '.ant-table-container');
+    const header = findChild(container, '.ant-table-header');
+    const body = findChild<HTMLElement>(container, '.ant-table-body');
+    const headerTable = findChild(header, 'table');
+    const bodyTable = findChild(body, 'table');
     const semanticNodes = new Map<Element, string | null>();
     function setRole(element: Element, role: string) {
-      if (!semanticNodes.has(element)) semanticNodes.set(element, element.getAttribute('role'));
-      element.setAttribute('role', role);
+      const currentRole = element.getAttribute('role');
+      if (!semanticNodes.has(element)) semanticNodes.set(element, currentRole);
+      if (currentRole !== role) element.setAttribute('role', role);
     }
     function associateTable() {
       if (!container || !headerTable || !bodyTable) return;
@@ -25,12 +34,16 @@ export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>,
       setRole(container, 'table');
       for (const table of [headerTable, bodyTable]) {
         setRole(table, 'presentation');
-        for (const group of table.querySelectorAll(':scope > thead, :scope > tbody')) {
+        for (let group = table.firstElementChild; group; group = group.nextElementSibling) {
+          const isHeader = group.localName === 'thead';
+          if (!isHeader && group.localName !== 'tbody') continue;
           setRole(group, 'rowgroup');
-          for (const row of group.querySelectorAll(':scope > tr:not([aria-hidden="true"])')) {
+          for (let row = group.firstElementChild; row; row = row.nextElementSibling) {
+            if (row.localName !== 'tr' || row.getAttribute('aria-hidden') === 'true') continue;
             setRole(row, 'row');
-            for (const cell of row.querySelectorAll(':scope > th, :scope > td')) {
-              setRole(cell, group.tagName === 'THEAD' ? 'columnheader' : cell.tagName === 'TH' ? 'rowheader' : 'cell');
+            for (let cell = row.firstElementChild; cell; cell = cell.nextElementSibling) {
+              if (cell.localName !== 'th' && cell.localName !== 'td') continue;
+              setRole(cell, isHeader ? 'columnheader' : cell.localName === 'th' ? 'rowheader' : 'cell');
             }
           }
         }
@@ -52,7 +65,8 @@ export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>,
 
     function measure() {
       if (!root) return;
-      const nextPager = spin?.querySelector(':scope > .ant-table-pagination:first-child + .ant-table')?.previousElementSibling ?? null;
+      const first = spin?.firstElementChild;
+      const nextPager = first?.classList.contains('ant-table-pagination') && first.nextElementSibling?.classList.contains('ant-table') ? first : null;
       if (pager !== nextPager) {
         if (pager) observer?.unobserve(pager);
         if (nextPager) observer?.observe(nextPager);
@@ -71,8 +85,9 @@ export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>,
       root.style.setProperty('--qms-ledger-header-top', `${headerTop}px`);
       root.style.setProperty('--qms-ledger-stack-height', `${stackHeight}px`);
       root.toggleAttribute('data-ledger-sticky-flow', stackHeight + minimumBodyHeight > (viewport?.height ?? document.documentElement.clientHeight));
-      if (body && body.scrollWidth > body.clientWidth) body.tabIndex = 0;
-      else body?.removeAttribute('tabindex');
+      if (body && body.scrollWidth > body.clientWidth) {
+        if (body.getAttribute('tabindex') !== '0') body.tabIndex = 0;
+      } else if (body?.hasAttribute('tabindex')) body.removeAttribute('tabindex');
     }
 
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
@@ -102,6 +117,7 @@ export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>,
       body?.removeAttribute('tabindex');
       semanticsObserver.disconnect();
       for (const [element, role] of semanticNodes) {
+        if (element.getAttribute('role') === role) continue;
         if (role == null) element.removeAttribute('role');
         else element.setAttribute('role', role);
       }

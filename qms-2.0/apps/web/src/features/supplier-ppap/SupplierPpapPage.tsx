@@ -30,8 +30,8 @@ export function SupplierPpapPage() {
   return <main className="supplier-ppap-page">
     <h1 className="sr-only">PPAP 资料包</h1>
     <section className="supplier-ppap-card" aria-label="PPAP 资料包台账">
-      {error ? <Alert type="error" showIcon title={error} action={<Button onClick={refresh}>重试</Button>} /> : null}
-      <LedgerTable<Package> ledgerId="supplier-ppap" requiredColumnKeys={['title', 'actions']} rowKey="id" loading={loading} dataSource={loading || error ? [] : rows}
+      <LedgerTable<Package> ledgerId="supplier-ppap" requiredColumnKeys={['title', 'actions']} rowKey="id" dataSource={rows}
+        bodyFallback={loading ? <Spin /> : error ? <Alert type="error" showIcon title={error} action={<Button onClick={refresh}>重试</Button>} /> : undefined}
         actionBar={<Space wrap><Button onClick={refresh} loading={loading}>刷新</Button>{canWrite && <Button type="primary" onClick={() => setCreateOpen(true)}>新建 PPAP</Button>}</Space>}
         pagination={loading || error ? false : { current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!detailBusy) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} scroll={{ x: 680 }} locale={{ emptyText: error ? '—' : <Empty description="暂无 PPAP 资料包" /> }} columns={[{ key: 'title', title: '资料包', dataIndex: 'title' }, { key: 'partNumber', title: '零件号', dataIndex: 'partNumber' }, { key: 'level', title: '等级', render: (_, row) => `Level ${row.level}` }, { key: 'items', title: '条目', render: (_, row) => `${row.items.filter(item => ['PROVIDED', 'ACCEPTED'].includes(item.status)).length}/${row.items.length}` }, { key: 'status', title: '状态', dataIndex: 'status', render: (value: string) => <Tag>{statusLabels[value] ?? value}</Tag> }, { key: 'actions', title: '操作', render: (_, row) => <Button type="link" onClick={() => setSelectedId(row.id)}>查看与审核</Button> }]} />
     </section>

@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Select, Space, Tag, Typography } from 'antd';
+import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
@@ -144,8 +144,9 @@ export function SupplierPerformancePage() {
     {publishError ? <Alert type="error" showIcon title={publishError} /> : null}
     <section className="supplier-performance-card" aria-label="月度绩效卡台账">
       <Typography.Title level={2}>绩效卡台账</Typography.Title>
-      {error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => setRevision((current) => current + 1)}>重试</Button>} /> : null}
-      <LedgerTable<Card> ledgerId="supplier-performance" requiredColumnKeys={['supplierName', 'month', 'actions']} rowKey="id" loading={loading} dataSource={loading || error ? [] : cards} scroll={{ x: 850 }} actionBar={<Button onClick={() => setRevision((current) => current + 1)} loading={loading}>刷新</Button>} locale={{ emptyText: error ? '—' : <Empty description="暂无月度绩效卡" /> }} pagination={loading || error ? false : { current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!saving && !publishingId && !reviewBusy) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} columns={[
+      <LedgerTable<Card> ledgerId="supplier-performance" requiredColumnKeys={['supplierName', 'month', 'actions']} rowKey="id" dataSource={cards} scroll={{ x: 850 }} actionBar={<Button onClick={() => setRevision((current) => current + 1)} loading={loading}>刷新</Button>}
+        bodyFallback={loading ? <div className="supplier-performance-loading"><Spin /></div> : error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => setRevision((current) => current + 1)}>重试</Button>} /> : undefined}
+        locale={{ emptyText: <Empty description="暂无月度绩效卡" /> }} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!saving && !publishingId && !reviewBusy) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} columns={[
         { key: 'supplierName', title: '供应商', dataIndex: 'supplierName' }, { key: 'month', title: '月份', dataIndex: 'month' },
         { title: 'IQC 检验 / 合格', key: 'incoming', render: (_, card) => `${card.inspectionCount} / ${card.passCount}` },
         { key: 'incomingScore', title: '来料分', dataIndex: 'incomingScore' }, { key: 'cooperationScore', title: '配合度', dataIndex: 'cooperationScore' },

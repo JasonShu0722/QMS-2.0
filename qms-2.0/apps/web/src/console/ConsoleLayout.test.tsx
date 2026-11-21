@@ -490,7 +490,7 @@ it.each(['users', 'governance'])('removes only the first management %s child spa
     else await screen.findByRole('region', { name: '首项治理面板' });
     const content = screen.getByRole('main');
     const first = content.querySelector(kind === 'users' ? '.admin-toolbar' : '.governance-panel')!;
-    expect(first.previousElementSibling).toHaveClass('sr-only');
+    expect((first.closest('.qms-ledger') ?? first).previousElementSibling).toHaveClass('sr-only');
     const computed = getComputedStyle(first);
     expect(kind === 'users' ? computed.marginTop : computed.paddingTop || computed.paddingBlockStart || computed.paddingBlock).toBe('0px');
     expect(kind === 'users' ? computed.marginBottom : computed.paddingBottom || computed.paddingBlockEnd || computed.paddingBlock).toBe('6px');

@@ -29,7 +29,7 @@ it('passes the changed PCN page size to the server and resets page one', async (
   await userEvent.click(within(ledger).getByTitle('2'));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests?page=2&pageSize=20'));
   await screen.findByText('暂无 PCN 变更');
-  await userEvent.click(within(ledger).getByRole('combobox'));
+  await userEvent.click(within(ledger).getByRole('combobox', { name: '页码' }));
   await userEvent.click(await screen.findByRole('option', { name: /50/ }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests?page=1&pageSize=50'));
 });
@@ -104,7 +104,7 @@ it('does not offer to discard the PCN while approval is pending', async () => {
     const close = within(drawer).queryByRole('button', { name: '关闭' });
     if (close) fireEvent.click(close);
     expect(drawer).toBeVisible();
-    for (const button of document.querySelectorAll('button')) expect(button).not.toHaveAccessibleName('放弃修改并关闭');
+    expect(screen.queryByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' })).not.toBeInTheDocument();
   } finally { await act(async () => { finish(); await pending; }); }
 });
 

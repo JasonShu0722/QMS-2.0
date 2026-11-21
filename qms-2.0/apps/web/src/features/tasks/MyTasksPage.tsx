@@ -107,7 +107,7 @@ export function MyTasksPage() {
             ...(task.canRelease ? [<Button key="release" aria-label={t('释放')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/release`, task.id, task.version, tasks.refresh)}>{t('释放')}</Button>] : []),
             ...(task.canRetry ? [<Button key="retry" aria-label={t('失败重试')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/retry`, task.id, task.version, tasks.refresh)}>{t('失败重试')}</Button>] : []),
           ]}>
-            <List.Item.Meta title={<Link to={`/app/problem-workspace/${task.problemId}?instanceId=${encodeURIComponent(task.instanceId)}`}>{task.reportNumber}</Link>} description={<Space orientation="vertical">
+            <List.Item.Meta title={<Link to={`/app/problem-workspace/${task.problemId}?instanceId=${encodeURIComponent(task.instanceId)}`}>{task.reportNumber}</Link>} description={<Space orientation="vertical" size={6}>
               <span>{task.name}</span>
               <Space wrap className="task-inbox__filters"><Tag color={task.status === 'OVERDUE' ? 'red' : task.status === 'FAILED' ? 'volcano' : 'blue'}>{t(task.status === 'OVERDUE' ? '已逾期' : task.status === 'FAILED' ? '失败' : task.status === 'IN_PROGRESS' ? '处理中' : '待处理')}</Tag>
                 <span>{t(task.claimedByUserId ? task.canAct ? '我已领取' : task.canClaim ? '可重新领取' : '已由其他人领取' : '未领取')}</span>

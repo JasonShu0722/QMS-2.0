@@ -218,7 +218,10 @@ it.each([
   fireEvent.mouseDown(dialog.getByRole('combobox', { name: '接收记录' })); fireEvent.click(await screen.findByText(/MSG001/, { selector: '.ant-select-item-option-content' }));
   fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
   const source = within(await dialog.findByRole('region', { name: '名称来源' }));
-  expect(source.getByText('名称来源：内部物料主数据')).toBeVisible(); expect(source.getByText(status)).toBeVisible();
+  await waitFor(() => {
+    expect(source.getByText('名称来源：内部物料主数据')).toBeVisible();
+    expect(source.getByText(status)).toBeVisible();
+  });
   expect(dialog.getByRole('button', { name: '确认导入' })).toBeEnabled();
   expect(dialog.queryByRole('alert')).not.toBeInTheDocument();
 });

@@ -8,6 +8,7 @@ it('gives governance Cards and Tabs a shrinkable grid track', () => {
 });
 
 it('keeps wide governance tables locally scrollable without clipping page content', () => {
-  expect(css).toMatch(/\.governance-panel \.ant-table-wrapper\s*\{[^}]*max-width:\s*100%[^}]*overflow-x:\s*auto/);
+  expect(css).toMatch(/\.governance-panel \.ant-table-wrapper\s*\{[^}]*max-width:\s*100%/);
+  expect(css).toMatch(/\.governance-panel \.ant-table-wrapper:not\(\.qms-ledger > \*\)\s*\{[^}]*overflow-x:\s*auto/);
   expect(css).not.toMatch(/\.governance-panel\s*\{[^}]*overflow(?:-x)?:\s*(?:hidden|clip)/);
 });

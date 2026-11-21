@@ -30,11 +30,11 @@ it.each([false, true])('uses real document pagination and a local column setting
   expect(apiRequest).toHaveBeenCalledWith(`${base}?page=1&pageSize=20`);
   const ledger = screen.getByRole('region', { name: '质量资料台账' });
   expect(within(ledger).getByRole('button', { name: '列设置' })).toBeEnabled();
-  await userEvent.click(within(ledger).getByTitle('2'));
+  fireEvent.click(within(ledger).getByTitle('2'));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`${base}?page=2&pageSize=20`));
   await screen.findByText('暂无质量资料');
-  await userEvent.click(within(ledger).getByRole('combobox'));
-  await userEvent.click(await screen.findByRole('option', { name: /50/ }));
+  fireEvent.mouseDown(within(ledger).getByRole('combobox', { name: 'Page Size' }));
+  fireEvent.click(await screen.findByText('50 / page', { selector: '.ant-select-item-option-content' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`${base}?page=1&pageSize=50`));
 });
 
