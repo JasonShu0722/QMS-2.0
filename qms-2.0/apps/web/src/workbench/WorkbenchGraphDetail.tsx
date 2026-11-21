@@ -1,7 +1,7 @@
 import { Button, Tag } from 'antd';
 import type { components } from '@qms/contracts';
 import { ArrowRight, ExternalLink, X } from 'lucide-react';
-import { useEffect, useState, type Ref } from 'react';
+import { useEffect, useState, type ReactNode, type Ref } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
 import { getConsoleContext } from '../console/console-api';
@@ -54,10 +54,7 @@ function GraphEntry({ node, sessionScope, text }: { node: GraphNode; sessionScop
     : verifiesAccess && access === 'unavailable' ? text('暂时无法核验入口权限', 'Entry access could not be verified')
     : text('暂无可打开的入口', 'No entry is available');
   return <div className="qms-workbench-graph__entry">
-    {(isConsole || isBusiness || isSupplier) && <code>{entry}</code>}
     {allowed ? <Link to={entry}>{accessCheckedByDestination ? text('前往业务页', 'Go to business page') : text('打开入口', 'Open entry')} <ExternalLink size={14} aria-hidden="true" /></Link> : <span>{explanation}</span>}
-    {accessCheckedByDestination && <span>{text('访问权限由业务页核验', 'Access is checked on the destination page')}</span>}
-    {(accessCheckedByDestination || verifiesAccess && access === 'denied') && <span>{text('访问岗位：', 'Applicable roles: ')}{node.guide.role}</span>}
   </div>;
 }
 
@@ -69,15 +66,15 @@ type DetailProps = {
   sessionScope: string;
   depth: 0 | 1 | 2;
   headingRef: Ref<HTMLHeadingElement>;
+  statusControl?: ReactNode;
   select: (selection: GraphSelection) => void;
   setDepth: (depth: 1 | 2) => void;
   close: () => void;
   text: GraphText;
 };
 
-export function WorkbenchGraphDetail({ node, relation, nodes, relations, sessionScope, depth, headingRef, select, setDepth, close, text }: DetailProps) {
+export function WorkbenchGraphDetail({ node, relation, nodes, relations, sessionScope, depth, headingRef, statusControl, select, setDepth, close, text }: DetailProps) {
   const nodeName = (id: string) => nodes.get(id)?.name ?? id;
-  const relatedGuideNodes = relation ? [nodes.get(relation.from), nodes.get(relation.to)].filter(item => item !== undefined) : [];
   const upstream = node ? relations.filter(item => item.to === node.id) : [];
   const downstream = node ? relations.filter(item => item.from === node.id) : [];
   const neighbors = new Set([...upstream.map(item => item.from), ...downstream.map(item => item.to)]);
@@ -96,33 +93,32 @@ export function WorkbenchGraphDetail({ node, relation, nodes, relations, session
 
   return <aside className="qms-workbench-graph__detail" aria-labelledby="workbench-graph-detail-heading">
     <header>
-      <div>
-        <small>{node ? node.domain : relation && text(...relationKinds[relation.kind])}</small>
-        <h3 id="workbench-graph-detail-heading" tabIndex={-1} ref={headingRef}>{node?.name ?? relation?.name}</h3>
+      <div className="qms-workbench-graph__detail-title">
+        <div>
+          <small>{node ? node.domain : relation && text(...relationKinds[relation.kind])}</small>
+          <h3 id="workbench-graph-detail-heading" tabIndex={-1} ref={headingRef}>{node?.name ?? relation?.name}</h3>
+        </div>
+        <Button type="text" icon={<X size={16} aria-hidden="true" />} aria-label={text('关闭详情', 'Close details')} onClick={close} />
       </div>
-      <Button type="text" icon={<X size={16} aria-hidden="true" />} aria-label={text('关闭详情', 'Close details')} onClick={close} />
+      {node && <div className="qms-workbench-graph__detail-status">
+        <Tag color={node.status === 'live' ? 'success' : node.status === 'development' ? 'warning' : 'default'}>{text(...nodeStatuses[node.status])}</Tag>
+        {statusControl}
+      </div>}
     </header>
+    <div className="qms-workbench-graph__detail-body" key={node ? `node:${node.id}` : `relation:${relation?.id}`}>
     {node && <>
-      <Tag color={node.status === 'live' ? 'success' : node.status === 'development' ? 'processing' : 'default'}>{text(...nodeStatuses[node.status])}</Tag>
-      <small>{text('状态更新日期：', 'Status updated: ')}<time dateTime={node.statusUpdatedOn}>{node.statusUpdatedOn}</time></small>
       <p>{node.summary}</p>
       <GraphEntry key={node.id} node={node} sessionScope={sessionScope} text={text} />
-      <section>
-        <h4>{text('功能策划', 'Plan')}</h4>
-        <p>{node.plan}</p>
-      </section>
-      <section>
-        <h4>{text('使用指南', 'Guide')}</h4>
-        <strong>{node.guide.title}</strong>
+      <details className="qms-workbench-graph__guide">
+        <summary>{text('使用指南', 'Guide')}</summary>
         <dl>
-          <dt>{text('适用版本', 'Version')}</dt><dd>{node.guide.version}</dd>
-          <dt>{text('适用岗位', 'Role')}</dt><dd>{node.guide.role}</dd>
+          <dt>{text('适用岗位', 'Applicable roles')}</dt><dd>{node.guide.role}</dd>
           {node.guide.prerequisites && <><dt>{text('配置前置', 'Prerequisites')}</dt><dd>{node.guide.prerequisites}</dd></>}
           {!!node.guide.steps.length && <><dt>{text('操作步骤', 'Steps')}</dt><dd><ol>{node.guide.steps.map((item, index) => <li key={index}>{item}</li>)}</ol></dd></>}
           <dt>{text('操作结果', 'Result')}</dt><dd>{node.guide.result}</dd>
           {node.guide.exceptions && <><dt>{text('常见异常', 'Exceptions')}</dt><dd>{node.guide.exceptions}</dd></>}
         </dl>
-      </section>
+      </details>
       {renderRelations(text('直接上游', 'Direct upstream'), upstream)}
       {renderRelations(text('直接下游', 'Direct downstream'), downstream)}
       {(upstream.length > 0 || downstream.length > 0) && <Button aria-expanded={depth === 2} onClick={() => setDepth(depth === 2 ? 1 : 2)}>
@@ -143,16 +139,7 @@ export function WorkbenchGraphDetail({ node, relation, nodes, relations, session
         <dt>{text('目标结果', 'Outcome')}</dt><dd>{relation.result}</dd>
         {relation.exceptions && <><dt>{text('异常及未启用', 'Exceptions and inactive cases')}</dt><dd>{relation.exceptions}</dd></>}
       </dl>
-      <section>
-        <h4>{text('关联使用指南', 'Related guides')}</h4>
-        <ul className="qms-workbench-graph__linked">
-          {relatedGuideNodes.map(item => <li key={item.id}>
-            <button type="button" onClick={() => select({ type: 'node', id: item.id })}>
-              <strong>{item.guide.title}</strong><small>{item.name}</small>
-            </button>
-          </li>)}
-        </ul>
-      </section>
     </>}
+    </div>
   </aside>;
 }

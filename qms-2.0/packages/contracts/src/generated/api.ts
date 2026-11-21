@@ -1463,6 +1463,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workbench/graph/nodes/{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["WorkbenchGraphController_updateNodeStatus"];
+        trace?: never;
+    };
     "/api/v1/admin/audit-events": {
         parameters: {
             query?: never;
@@ -10277,6 +10293,7 @@ export interface components {
             status: "idea" | "development" | "live";
             /** Format: date */
             statusUpdatedOn: string;
+            statusVersion: number;
             summary: string;
             plan: string;
             guide: components["schemas"]["WorkbenchGraphGuideDto"];
@@ -10297,8 +10314,16 @@ export interface components {
         };
         WorkbenchGraphDto: {
             version: string;
+            canEditStatus: boolean;
             nodes: components["schemas"]["WorkbenchGraphNodeDto"][];
             relations: components["schemas"]["WorkbenchGraphRelationDto"][];
+        };
+        UpdateWorkbenchGraphStatusDto: {
+            /** @enum {string} */
+            status: "idea" | "development" | "live";
+            expectedVersion: number;
+            /** @description 发布和认可依据；状态为 live 时必填 */
+            evidence?: string;
         };
         AuditActorSummaryDto: {
             username: string;
@@ -22242,6 +22267,77 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkbenchGraphDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    WorkbenchGraphController_updateNodeStatus: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkbenchGraphStatusDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkbenchGraphNodeDto"];
+                };
+            };
+            /** @description 状态、版本或依据不合法 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 仅有效平台管理员可调整状态 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 节点不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description 状态版本冲突，请刷新后重试 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             default: {

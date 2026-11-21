@@ -104,7 +104,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
+            "sha256": "b19674f03e1c575568711c884032edd6728579af857f3237afa0516770e39f5e"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -190,7 +190,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
+            "sha256": "b19674f03e1c575568711c884032edd6728579af857f3237afa0516770e39f5e"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -266,7 +266,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
+            "sha256": "b19674f03e1c575568711c884032edd6728579af857f3237afa0516770e39f5e"
           },
           {
             "path": ".agents/skills/qms-start-development/SKILL.md",
@@ -996,7 +996,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
+            "sha256": "b19674f03e1c575568711c884032edd6728579af857f3237afa0516770e39f5e"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -1128,7 +1128,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
+            "sha256": "b19674f03e1c575568711c884032edd6728579af857f3237afa0516770e39f5e"
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
@@ -1162,7 +1162,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
+            "sha256": "b19674f03e1c575568711c884032edd6728579af857f3237afa0516770e39f5e"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -1238,7 +1238,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "11e512a3b24615a987d84406a816051defa10de625930605122b420949860caa"
+            "sha256": "b19674f03e1c575568711c884032edd6728579af857f3237afa0516770e39f5e"
           },
           {
             "path": ".agents/skills/qms-feature-delivery/SKILL.md",

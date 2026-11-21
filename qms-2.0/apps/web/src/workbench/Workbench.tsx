@@ -20,7 +20,8 @@ function GraphDisclosure({ sessionScope }: { sessionScope: string }) {
   const [params, setParams] = useSearchParams();
   const hasSelection = params.has('graphNode') || params.has('graphRelation');
   const [expanded, setExpanded] = useState(hasSelection);
-  const open = expanded || hasSelection;
+  const [saving, setSaving] = useState(false);
+  const open = expanded || hasSelection || saving;
   const title = locale === 'en-US' ? 'Capability graph' : '功能图谱';
   const toggle = () => {
     setExpanded(!open);
@@ -32,14 +33,14 @@ function GraphDisclosure({ sessionScope }: { sessionScope: string }) {
   };
   return <section className="qms-workbench__graph qms-display-card" aria-labelledby="workbench-graph-title">
     <h2 id="workbench-graph-title">
-      <Button block type="text" className="qms-workbench__graph-toggle" icon={<Network size={18} aria-hidden="true" />} aria-expanded={open} aria-controls="workbench-graph-panel" onClick={toggle}>
+      <Button block type="text" className="qms-workbench__graph-toggle" icon={<Network size={18} aria-hidden="true" />} aria-expanded={open} aria-controls="workbench-graph-panel" disabled={saving} onClick={toggle}>
         {title}<ChevronDown size={16} aria-hidden="true" />
       </Button>
     </h2>
     <div id="workbench-graph-panel" hidden={!open}>
       {open && <WorkbenchGraphBoundary fallback={<p role="alert">{locale === 'en-US' ? 'The capability graph could not start. Reload the page to try again.' : '功能图谱无法打开，请刷新页面重试。'}</p>}>
         <Suspense fallback={<p role="status">{locale === 'en-US' ? 'Loading capability graph…' : '正在加载功能图谱…'}</p>}>
-          <GraphPanel sessionScope={sessionScope} keepOpen={() => setExpanded(true)} />
+          <GraphPanel sessionScope={sessionScope} keepOpen={() => setExpanded(true)} onSavingChange={setSaving} />
         </Suspense>
       </WorkbenchGraphBoundary>}
     </div>
