@@ -465,7 +465,10 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       {viewTotal > 100 ? <Space className="problem-center__view-pages"><Button disabled={viewOffset === 0} onClick={() => setViewOffset(Math.max(0, viewOffset - 100))}>{t('上一页')}</Button><span>{viewOffset + 1}–{Math.min(viewOffset + 100, viewTotal)} / {viewTotal}</span><Button disabled={viewOffset + 100 >= viewTotal} onClick={() => setViewOffset(viewOffset + 100)}>{t('下一页')}</Button></Space> : null}
     </Card>
 
-    <Card title={t('筛选与排序')}>
+    <section aria-label={t('问题列表')}>
+      {result?.statusCounts.length ? <Space wrap className="problem-center__counts">{result.statusCounts.map((entry) => <Tag key={entry.status}>{t(statusLabels[entry.status])}: {entry.count}</Tag>)}</Space> : null}
+      <Feedback error={resultError} t={t} />
+      <LedgerTable<ProblemItem> actionBar={<details className="problem-center__query" open={true}><summary>{t('筛选与排序')}</summary>
       <div className="problem-center__filters">
         <label>{t('报告编号检索')}<Input aria-label={t('报告编号检索')} value={filters.search ?? ''} onChange={(event) => setFilters((current) => ({ ...current, search: event.target.value || undefined }))} /></label>
         {!processQuality ? <label>{t('领域代码')}<Input aria-label={t('领域代码')} value={filters.domainCode ?? ''} onChange={(event) => setFilters((current) => ({ ...current, domainCode: event.target.value || undefined }))} /></label> : null}
@@ -484,12 +487,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
         <Button type="primary" onClick={() => { setAppliedFilters({ ...filters }); setPage(1); }}>{t('查询')}</Button>
         <Button onClick={() => applyConfiguration(defaultConfiguration, '')}>{t('重置')}</Button>
       </Space>
-    </Card>
-
-    <section aria-label={t('问题列表')}>
-      {result?.statusCounts.length ? <Space wrap className="problem-center__counts">{result.statusCounts.map((entry) => <Tag key={entry.status}>{t(statusLabels[entry.status])}: {entry.count}</Tag>)}</Space> : null}
-      <Feedback error={resultError} t={t} />
-      {!resultError ? <LedgerTable<ProblemItem> ledgerId={ledgerId} organizationId={organizationId} viewId={selectedViewId || 'default'} toolbarContent={result ? <><Typography.Text>{t('总数')}: {result.total}</Typography.Text><Pagination current={page} pageSize={pageSize} total={result.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPageSize(nextPageSize); setPage(Math.min(10001, nextPageSize === pageSize ? nextPage : 1)); }} /></> : null} requiredColumnKeys={processQuality ? ['reportNumber', 'processStage', 'processDeadlines'] : ['reportNumber']} columnOrder={columnOrder} visibleColumnKeys={visibleColumns} onColumnOrderChange={keys => changeColumnLayout({ order: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} onVisibleColumnKeysChange={keys => changeColumnLayout({ visible: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} rowKey="id" loading={resultLoading} columns={columns} dataSource={result?.items ?? []} pagination={false} locale={{ emptyText: resultLoading ? t('加载中') : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={page > 1 && (result?.total ?? 0) > 0 ? t('本页暂无问题') : t('暂无问题')} /> }} scroll={{ x: 'max-content' }} /> : null}
+      </details>} ledgerId={ledgerId} organizationId={organizationId} viewId={selectedViewId || 'default'} toolbarContent={!resultError && result ? <><Typography.Text>{t('总数')}: {result.total}</Typography.Text><Pagination current={page} pageSize={pageSize} total={result.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPageSize(nextPageSize); setPage(Math.min(10001, nextPageSize === pageSize ? nextPage : 1)); }} /></> : null} requiredColumnKeys={processQuality ? ['reportNumber', 'processStage', 'processDeadlines'] : ['reportNumber']} columnOrder={columnOrder} visibleColumnKeys={visibleColumns} onColumnOrderChange={keys => changeColumnLayout({ order: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} onVisibleColumnKeysChange={keys => changeColumnLayout({ visible: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} rowKey="id" loading={resultLoading} columns={columns} showHeader={!resultError} dataSource={resultError ? [] : result?.items ?? []} pagination={false} locale={{ emptyText: resultError ? null : resultLoading ? t('加载中') : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={page > 1 && (result?.total ?? 0) > 0 ? t('本页暂无问题') : t('暂无问题')} /> }} scroll={{ x: 'max-content' }} />
     </section>
   </main>;
 }

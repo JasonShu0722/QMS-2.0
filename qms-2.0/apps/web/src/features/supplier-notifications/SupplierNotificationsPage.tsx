@@ -8,6 +8,7 @@ import { SupplierEightDTaskInbox } from '../tasks/SupplierEightDTaskInbox';
 import { useLedgerPageSize } from '../../ui/ledger';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 import './supplier-notifications.css';
+import { ListToolbar } from '../../ui/list/ListToolbar';
 
 
 function InboxError({ cause }: { cause: unknown }) {
@@ -67,13 +68,15 @@ function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> })
   return <section className="supplier-notifications">
     <div className="supplier-notifications__header">
       <div><Typography.Title level={2}>{t('我的待办')}</Typography.Title><Typography.Paragraph type="secondary">{t('我的通知')}</Typography.Paragraph></div>
-      <Button aria-label={t('刷新')} onClick={refresh} disabled={loading}>{t('刷新')}</Button>
     </div>
     <InboxError cause={mutationError} />
     <InboxError cause={error} />
-    {loading ? <Spin aria-label={t('正在加载通知')} /> : data && <>
-      <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(data.total, 10000 + pageSize)}
-        showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!writing.current) requestLeave(() => { setOffset(size === pageSize ? (page - 1) * size : 0); setPageSize(size); }); }} showTotal={() => `${t('总数')}：${data.total}`} />
+    <ListToolbar>
+      <div><Button aria-label={t('刷新')} onClick={refresh} disabled={loading}>{t('刷新')}</Button></div>
+      {!loading && data && <Pagination current={offset / pageSize + 1} pageSize={pageSize} total={Math.min(data.total, 10000 + pageSize)}
+        showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!writing.current) requestLeave(() => { setOffset(size === pageSize ? (page - 1) * size : 0); setPageSize(size); }); }} showTotal={() => `${t('总数')}：${data.total}`} />}
+    </ListToolbar>
+    {loading ? <Spin aria-label={t('正在加载通知')} /> : data &&
       <List dataSource={data.items} locale={{ emptyText: <Empty description={t('暂无通知')} /> }} renderItem={(notice) =>
         <List.Item key={notice.id}>
           <Card className="supplier-notifications__card qms-display-card" title={notice.subject ?? t(notice.kind === 'TASK_REMINDER' ? '时限提醒' : '任务分配')}
@@ -87,6 +90,6 @@ function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> })
             </Space>
           </Card>
         </List.Item>} />
-    </>}
+    }
   </section>;
 }

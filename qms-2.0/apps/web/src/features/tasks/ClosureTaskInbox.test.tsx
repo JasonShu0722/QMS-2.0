@@ -434,7 +434,7 @@ it('paginates notifications independently and confines wide tables to their own 
   const region = screen.getByRole('region', { name: '关闭职责通知' }); fireEvent.click(within(region).getByTitle('2'));
   await waitFor(() => expect(requests.some(item => item.path === '/api/v1/notifications/closure?pageSize=20&offset=20')).toBe(true));
   expect(requests.filter(item => item.path.startsWith('/api/v1/tasks/closure?'))).toHaveLength(1);
-  expect(region.querySelector('.ant-table-content')).toHaveStyle({ overflowX: 'auto' });
+  expect(region.querySelector('.ant-table-body')).toHaveStyle({ overflowX: 'auto' });
 });
 
 it('aborts old route reads and ignores late errors after a query-scope transition', async () => {

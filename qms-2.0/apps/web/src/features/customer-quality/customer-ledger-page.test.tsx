@@ -151,7 +151,7 @@ it('loads three formal views and paginates at the server without the legacy stri
 it('preserves declared ledger column widths instead of letting long issue numbers squeeze other headers', async () => {
   show();
   const number = await screen.findByLabelText('CQ-N4-1');
-  expect(screen.getByRole('table')).toHaveStyle({ tableLayout: 'fixed' });
+  expect(number.closest('table')).toHaveStyle({ tableLayout: 'fixed' });
   expect(number).toHaveClass('customer-ledger-number');
 });
 it('loads controlled deep-link detail in the target organization and exposes the analysis slot', async () => {

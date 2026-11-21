@@ -142,11 +142,8 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
     { label: '200–1000 ms', value: data.summary.le1000 }, { label: '1000–5000 ms', value: data.summary.le5000 }, { label: '> 5000 ms', value: data.summary.gt5000 },
   ] : [];
   const pagination = data && <div className="qms-api-pagination"><span>{text(`共 ${count(data.total)} 个聚合桶 · 第 ${data.page} 页`, `${count(data.total)} aggregate buckets · Page ${data.page}`)}</span><div><Select aria-label={text('每页条数', 'Page size')} value={pageSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} disabled={loading} onChange={size => { changePage(1); setPageSize(size); setRevision(value => value + 1); }} /><Button disabled={loading || data.page <= 1} onClick={() => changePage(data.page - 1)}>{text('上一页', 'Previous page')}</Button><Button disabled={loading || data.page >= 10000 || data.page * data.limit >= data.total} onClick={() => changePage(data.page + 1)}>{text('下一页', 'Next page')}</Button></div></div>;
-  return <div className="qms-api-monitoring" aria-busy={loading}>
-    <header className="qms-api-heading">
-      {!denied && <Button icon={<RefreshCw size={16} aria-hidden="true" />} onClick={restart} aria-label={error === 'network' ? text('重试读取', 'Retry reading') : text('刷新 API 观测', 'Refresh API observations')}>{error === 'network' ? text('重试读取', 'Retry reading') : text('刷新', 'Refresh')}</Button>}</header>
-    {denied ? <div className="qms-console-state"><Alert role="alert" showIcon type="error" title={text('API 观测访问已失效或无权限，请重新核验。', 'API observation access expired or denied. Verify authorization again.')} /><Button onClick={refresh}>{text('重新核验权限', 'Verify authorization again')}</Button></div> : <>
-      <div className="qms-api-scope"><strong>{context.targetOrganization.name} ({context.targetOrganization.code})</strong><span>{filters.scope === 'PLATFORM' ? text('平台观测（含未归属请求）', 'Platform observations including unscoped requests') : text('当前目标组织', 'Current target organization')}</span></div>
+  const actionBar = <>
+      <div className="qms-api-heading"><Button icon={<RefreshCw size={16} aria-hidden="true" />} onClick={restart} aria-label={error === 'network' ? text('重试读取', 'Retry reading') : text('刷新 API 观测', 'Refresh API observations')}>{error === 'network' ? text('重试读取', 'Retry reading') : text('刷新', 'Refresh')}</Button></div>
       <form className="qms-api-filters" aria-label={text('API 观测筛选', 'API observation filters')} onSubmit={event => { event.preventDefault(); apply(); }}>
         {context.hasPlatformAdministrator && <label><span>{text('观测范围', 'Observation scope')}</span><Select aria-label={text('观测范围', 'Observation scope')} value={filters.scope} options={[
           { value: 'ORGANIZATION', label: text('当前目标组织', 'Current target organization') }, { value: 'PLATFORM', label: text('平台观测（含未归属请求）', 'Platform observations including unscoped requests') },
@@ -164,8 +161,10 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
         <Button htmlType="submit" type="primary">{text('应用筛选', 'Apply filters')}</Button>
       </form>
       {validation && <Alert role="alert" type="warning" showIcon title={text('请输入静态路由模板或 UNKNOWN，不可包含查询参数或原请求 URL。', 'Enter a static route template or UNKNOWN, never query parameters or a raw request URL.')} />}
-      {error === 'network' && <Alert role="alert" type="error" showIcon title={text('API 观测读取失败，请重试。', 'API observations could not be read. Retry.')} />}
-      {loading && <div role="status" aria-label={text('读取 API 观测中', 'Reading API observations')}><Skeleton active paragraph={{ rows: 4 }} /></div>}
+  </>;
+  return <div className="qms-api-monitoring" aria-busy={loading}>
+    {denied ? <div className="qms-console-state"><Alert role="alert" showIcon type="error" title={text('API 观测访问已失效或无权限，请重新核验。', 'API observation access expired or denied. Verify authorization again.')} /><Button onClick={refresh}>{text('重新核验权限', 'Verify authorization again')}</Button></div> : <>
+      <div className="qms-api-scope"><strong>{context.targetOrganization.name} ({context.targetOrganization.code})</strong><span>{filters.scope === 'PLATFORM' ? text('平台观测（含未归属请求）', 'Platform observations including unscoped requests') : text('当前目标组织', 'Current target organization')}</span></div>
       {data && <>
         <div className="qms-api-times"><Clock3 size={15} aria-hidden="true" /><span>{text('服务器查询时间：', 'Server query time: ')}{clock(data.asOf)}</span><span>{text('实际统计窗口：', 'Actual observed window: ')}{clock(data.from)} — {clock(data.to)}</span></div>
         <Alert type={data.collector.status === 'CURRENT' ? 'info' : 'warning'} showIcon title={receipts[data.collector.status]} />
@@ -175,10 +174,13 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
           <div><dt>{text('平均耗时', 'Mean latency')}</dt><dd>{data.summary.requests ? duration(data.summary.durationTotal / data.summary.requests) : '—'}</dd></div><div><dt>{text('最大耗时', 'Maximum latency')}</dt><dd>{data.summary.requests ? duration(data.summary.durationMax) : '—'}</dd></div>
         </dl></section>
         <section className="qms-api-latency" aria-label={text('耗时分布', 'Latency distribution')}><h3>{text('耗时分布', 'Latency distribution')}</h3><div>{latency.map(bucket => <dl key={bucket.label}><dt>{bucket.label}</dt><dd>{count(bucket.value)}</dd><div className="qms-api-meter" aria-hidden="true"><span style={{ width: `${data.summary.requests ? Math.min(100, bucket.value / data.summary.requests * 100) : 0}%` }} /></div></dl>)}</div></section>
-        <section aria-label={text('分钟聚合明细', 'Minute aggregate details')} className="qms-api-details"><h3>{text('分钟聚合明细', 'Minute aggregate details')}</h3>
-          {!data.items.length ? <>{pagination}<div className="qms-api-empty"><strong>{text('当前查询范围没有观测记录', 'No observations in this query window')}</strong></div></> : <LedgerTable<Bucket> ledgerId="console-api-monitoring" organizationId={context.targetOrganization.id} viewId={filters.scope} toolbarContent={pagination} requiredColumnKeys={['route']} size="small" columns={columns} dataSource={data.items} pagination={false} rowKey={row => JSON.stringify([row.minute, row.scopeKey, row.method, row.route, row.statusClass])} scroll={{ x: data.scope === 'PLATFORM' ? 1170 : 950 }} />}
-        </section>
       </>}
+      <section aria-label={text('分钟聚合明细', 'Minute aggregate details')} className="qms-api-details"><h3>{text('分钟聚合明细', 'Minute aggregate details')}</h3>
+        <LedgerTable<Bucket> ledgerId="console-api-monitoring" organizationId={context.targetOrganization.id} viewId={filters.scope} actionBar={actionBar} toolbarContent={pagination} requiredColumnKeys={['route']} size="small" columns={columns} dataSource={data?.items} pagination={false} rowKey={row => JSON.stringify([row.minute, row.scopeKey, row.method, row.route, row.statusClass])} scroll={{ x: data?.scope === 'PLATFORM' ? 1170 : 950 }} bodyFallback={data?.items.length ? undefined : loading
+          ? <div role="status" aria-label={text('读取 API 观测中', 'Reading API observations')}><Skeleton active paragraph={{ rows: 4 }} /></div>
+          : error === 'network' ? <Alert role="alert" type="error" showIcon title={text('API 观测读取失败，请重试。', 'API observations could not be read. Retry.')} />
+          : <div className="qms-api-empty"><strong>{text('当前查询范围没有观测记录', 'No observations in this query window')}</strong></div>} />
+      </section>
     </>}
   </div>;
 }

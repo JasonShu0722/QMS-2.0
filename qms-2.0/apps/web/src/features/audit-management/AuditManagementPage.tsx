@@ -7,6 +7,7 @@ import { AuditExcelImport } from './AuditExcelImport';
 import { AuditMobileExecution } from './AuditMobileExecution';
 import { AuditNcClosurePanel } from './AuditNcClosurePanel';
 import './audit-management.css';
+import { ListToolbar } from '../../ui/list/ListToolbar';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useLedgerPageSize } from '../../ui/ledger';
 
@@ -310,17 +311,19 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
     <section className="audit-management-card audit-import-card" aria-label="审核导入行">
       <div className="audit-import-heading">
         <div><Typography.Title level={3}>外部审核导入</Typography.Title></div>
-        <Button onClick={refreshImports} loading={importLoading}>刷新导入</Button>
       </div>
-      <Space wrap className="audit-import-filters">
-        <Select aria-label="导入来源" allowClear placeholder="全部来源" value={importSource} onChange={(value) => requestLeave(() => { discardIssue(); setImportSource(value); setImportPage(1); })} options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))} />
-        <Select aria-label="导入状态" allowClear placeholder="全部状态" value={importStatus} onChange={(value) => requestLeave(() => { discardIssue(); setImportStatus(value); setImportPage(1); })} options={Object.entries(importStatusLabels).map(([value, label]) => ({ value, label }))} />
-      </Space>
       {permissionError && !importError ? <Alert type="warning" showIcon title="无法验证发单权限" action={<Button onClick={refreshImports}>重试</Button>} /> : null}
       {permissions?.organizationId && permissions.permissions.includes('audit-management:write') ? <AuditExcelImport key={permissions.organizationId} organizationId={permissions.organizationId} onImported={() => setImportRevision((value) => value + 1)} onDenied={(cause) => clearImportAccess(cause)} /> : null}
       {issueSucceeded ? <Alert type="success" showIcon title={issued ? `问题 ${issued.problem.reportNumber} 已发起` : '审核导入行已发单'} action={issued ? <Link to={`/app/problem-workspace/${issued.problem.id}?organizationId=${encodeURIComponent(issued.source.organizationId)}`}>查看问题 {issued.problem.reportNumber}</Link> : undefined} /> : null}
-      {!importLoading && !importError && imports && <Pagination current={imports.page} pageSize={importPageSize} total={imports.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => requestLeave(() => { setImportPage(size === importPageSize ? page : 1); setImportPageSize(size); })} />}
       {importError ? <Alert type={permissionDenied(importError) ? 'warning' : 'error'} showIcon title={permissionDenied(importError) ? issueDenied ? '暂无发单权限' : '暂无导入行访问或复核权限' : '导入行加载或复核失败'} description={safeAccountError(importError)} action={!permissionDenied(importError) ? <Button onClick={refreshImports}>重试</Button> : undefined} /> : null}
+      <ListToolbar>
+        <Space wrap className="audit-import-filters">
+          <Select aria-label="导入来源" allowClear placeholder="全部来源" value={importSource} onChange={(value) => requestLeave(() => { discardIssue(); setImportSource(value); setImportPage(1); })} options={Object.entries(sourceLabels).map(([value, label]) => ({ value, label }))} />
+          <Select aria-label="导入状态" allowClear placeholder="全部状态" value={importStatus} onChange={(value) => requestLeave(() => { discardIssue(); setImportStatus(value); setImportPage(1); })} options={Object.entries(importStatusLabels).map(([value, label]) => ({ value, label }))} />
+          <Button onClick={refreshImports} loading={importLoading}>刷新导入</Button>
+        </Space>
+        {!importLoading && !importError && imports && <Pagination current={imports.page} pageSize={importPageSize} total={imports.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => requestLeave(() => { setImportPage(size === importPageSize ? page : 1); setImportPageSize(size); })} />}
+      </ListToolbar>
       {importLoading ? <div className="audit-management-loading"><Spin /></div> : !importError ? <List dataSource={imports?.items ?? []} locale={{ emptyText: <Empty description="暂无导入行" /> }} renderItem={(row) => <List.Item key={row.id} actions={canReview(row) ? [<Button key="accept" size="small" type="primary" loading={importBusyId === row.id} onClick={() => void reviewImport(row, 'ACCEPTED')}>接受</Button>, <Button key="reject" size="small" danger loading={importBusyId === row.id} onClick={() => void reviewImport(row, 'REJECTED')}>拒绝</Button>] : canIssue(row) ? [<Button key="issue" size="small" type="primary" onClick={() => openIssue(row)}>发起正式问题</Button>] : undefined}>
         <List.Item.Meta title={<Space wrap><Typography.Text strong>{row.external_key}</Typography.Text><Tag>{sourceLabels[row.source_system]}</Tag><Tag color={importStatusColor(row.status)}>{importStatusLabels[row.status]}</Tag></Space>} description={<Space orientation="vertical" size={0}><Typography.Text type="secondary">版本 v{row.version} · {new Date(row.created_at).toLocaleString('zh-CN')}</Typography.Text>{optionalText(row.review_note) ? <Typography.Text type="secondary">复核备注：{optionalText(row.review_note)}</Typography.Text> : null}{optionalText(row.problem_index_id) ? <Link to={`/app/problem-workspace/${optionalText(row.problem_index_id)}?organizationId=${encodeURIComponent(row.organization_id)}`}>已关联问题：{optionalText(row.problem_index_id)}</Link> : null}</Space>} />
       </List.Item>} /> : null}

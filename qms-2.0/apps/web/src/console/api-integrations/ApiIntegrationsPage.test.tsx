@@ -54,6 +54,7 @@ it('requires an explicit scoped integration capability even for a platform marke
 
 it('provides real receiver and receipt tabs and only a reserved outbound tab', async () => {
   view(); expect(await screen.findByText('MES质量推送')).toBeVisible();
+  expect(screen.getByRole('button', { name: '刷新接口' }).closest('.qms-ledger__action-bar')).toContainElement(screen.getByRole('button', { name: '新增接收接口' }));
   const query = new URL(read.mock.calls[0]![0], 'http://localhost').searchParams;
   expect(query.get('organizationId')).toBe(targetId); expect(query.get('limit')).toBe('20');
   fireEvent.click(screen.getByRole('tab', { name: '发出接口' }));

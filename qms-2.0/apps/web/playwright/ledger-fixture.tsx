@@ -8,6 +8,7 @@ import { ThemeProvider } from '../src/theme/ThemeProvider';
 import { LedgerScopeProvider, LedgerTable, useLedgerPageSize } from '../src/ui/ledger';
 import { useWorkTabsStore } from '../src/work-tabs/workTabsStore';
 import '../src/styles/global.css';
+import { ListToolbar } from '../src/ui/list/ListToolbar';
 
 const rows = Array.from({ length: 12 }, (_, index) => ({
   id: String(index + 1), number: `SAMPLE-${String(index + 1).padStart(3, '0')}`,
@@ -72,9 +73,32 @@ function ToolbarFixture() {
       ]} />
   </section>;
 }
+const stickyRows = Array.from({ length: 100 }, (_, index) => ({
+  id: index + 1, title: `模拟问题 ${index + 1}`, status: '处理中', notes: '模拟核对记录',
+}));
+function StickyFixture() {
+  return <section aria-label="共享台账吸顶验证">
+    <LedgerTable ledgerId="browser-sticky" rowKey="id" requiredColumnKeys={['number']} dataSource={stickyRows}
+      actionBar={<label>查询说明 <input aria-label="查询说明" /></label>}
+      scroll={{ x: 1660 }} pagination={{ pageSize: 50, showSizeChanger: false, showQuickJumper: false }}
+      columns={[
+        { title: '编号', key: 'number', dataIndex: 'id', width: 120, fixed: 'left', sorter: (left, right) => left.id - right.id, render: id => <button type="button">查看 {id}</button> },
+        { title: '问题说明', key: 'title', dataIndex: 'title', width: 500 },
+        { title: '状态', key: 'status', dataIndex: 'status', width: 300 },
+        { title: '备注', key: 'notes', dataIndex: 'notes', width: 740 },
+      ]} />
+  </section>;
+}
+function CardListFixture() {
+  return <section aria-label="卡片清单吸顶验证">
+    <ListToolbar><button type="button">刷新卡片</button><Pagination total={120} /></ListToolbar>
+    <ul>{stickyRows.slice(0, 20).map(row => <li key={row.id} style={{ minHeight: 100 }}><button type="button">查看版本 {row.id}</button></li>)}</ul>
+  </section>;
+}
 function Fixture() {
   const [organization, setOrganization] = useState('fixture-target-a');
   const [consoleHost, setConsoleHost] = useState(false);
+  const params = new URLSearchParams(window.location.search);
   const content = <main className={consoleHost ? 'qms-console-content' : 'qms-content'} style={{ padding: 8, color: 'var(--qms-text)', background: 'var(--qms-background)' }}>
     <Space wrap style={{ marginBottom: 8 }}><strong>正式组件验证 · 仅模拟数据</strong><span>{organization}</span>
       <Button onClick={() => setOrganization(current => current === 'fixture-target-a' ? 'fixture-target-b' : 'fixture-target-a')}>切换演示目标组织</Button>
@@ -83,7 +107,7 @@ function Fixture() {
       {consoleHost ? <ConsoleAppearanceControls /> : <AppearanceButton />}
     </Space>
     <p>宿主切换会重建模拟页，不验证业务草稿保持。</p>
-    <LedgerScopeProvider organizationId={organization} portal={consoleHost ? 'console' : 'business'}>{new URLSearchParams(window.location.search).has('toolbar') ? <ToolbarFixture /> : new URLSearchParams(window.location.search).has('boundaries') ? <BoundaryFixture /> : <FixtureTable />}</LedgerScopeProvider>
+    <LedgerScopeProvider organizationId={organization} portal={consoleHost ? 'console' : 'business'}>{params.has('cards') ? <CardListFixture /> : params.has('sticky') ? <StickyFixture /> : params.has('toolbar') ? <ToolbarFixture /> : params.has('boundaries') ? <BoundaryFixture /> : <FixtureTable />}</LedgerScopeProvider>
   </main>;
   return <LanguageProvider><ThemeProvider>{consoleHost ? <ConsoleTheme>{content}</ConsoleTheme> : content}</ThemeProvider></LanguageProvider>;
 }

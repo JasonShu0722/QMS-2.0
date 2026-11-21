@@ -99,8 +99,8 @@ function Inbox({ session, portal, organizationId, onDenied }: { session?: string
       {tasks.error ? error(tasks.error, '8D待办', tasks.retry) : null}
       {tasks.loading && <Spin aria-label={t('正在加载8D待办')} />}
       {tasks.data && <>
-        <div role="group" aria-label={t('供应商8D待办表格')} tabIndex={0} style={{ overflowX: 'auto', maxWidth: '100%' }}>
-        <LedgerTable<Task> ledgerId="supplier-eight-d-tasks" organizationId={organizationId ?? undefined} requiredColumnKeys={['reportNumber', 'actions']} size="small" style={{ minWidth: 900 }} rowKey="id" pagination={false} dataSource={tasks.data.items}
+        <div role="group" aria-label={t('供应商8D待办表格')} style={{ minWidth: 0, maxWidth: '100%' }}>
+        <LedgerTable<Task> ledgerId="supplier-eight-d-tasks" organizationId={organizationId ?? undefined} requiredColumnKeys={['reportNumber', 'actions']} size="small" scroll={{ x: 900 }} rowKey="id" pagination={false} dataSource={tasks.data.items}
           locale={{ emptyText: t('暂无供应商8D待办') }} columns={[
             { key: 'reportNumber', title: t('问题编号'), dataIndex: 'reportNumber' },
             { key: 'kind', title: t('任务类型'), render: (_, task) => t(kinds[task.kind] ?? task.kind) },

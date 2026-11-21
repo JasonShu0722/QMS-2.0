@@ -456,7 +456,8 @@ body { color: var(--qms-text); background: var(--qms-background); }
 .admin-heading h2, .account-center h2 { font-size: 26px; letter-spacing: -.3px; }
 .admin-page > .ant-tabs > .ant-tabs-nav { margin-bottom: var(--qms-section-gap); }
 .admin-toolbar { display: flex; flex-wrap: wrap; gap: var(--qms-section-gap); }
-.admin-page .ant-table-wrapper, .account-sessions .ant-list, .governance-panel .ant-table-wrapper { max-width: 100%; overflow-x: auto; }
+.admin-page .ant-table-wrapper, .governance-panel .ant-table-wrapper { max-width: 100%; }
+.admin-page .ant-table-wrapper:not(.qms-ledger > *), .account-sessions .ant-list, .governance-panel .ant-table-wrapper:not(.qms-ledger > *) { overflow-x: auto; }
 .account-center { padding: 0; min-width: 0; }
 .account-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--qms-section-gap); }
 .account-summary .ant-descriptions { overflow-x: auto; }

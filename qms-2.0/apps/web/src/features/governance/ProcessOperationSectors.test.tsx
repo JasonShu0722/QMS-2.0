@@ -58,6 +58,7 @@ it('searches all rows, retains checks across pages and submits only selected ver
 it('clears hidden selection on search and keeps read-only search available', async () => {
   const view = mount();
   const row = (await screen.findByText('终检', { selector: 'td' })).closest('tr')!;
+  expect(screen.getByRole('textbox', { name: '搜索工序' }).closest('.qms-ledger__action-bar')).toContainElement(screen.getByRole('button', { name: '批量配置板块' }));
   fireEvent.click(within(row).getByRole('checkbox'));
   expect(screen.getByRole('button', { name: '批量配置板块' })).toBeEnabled();
   fireEvent.change(screen.getByRole('textbox', { name: '搜索工序' }), { target: { value: '不存在' } });

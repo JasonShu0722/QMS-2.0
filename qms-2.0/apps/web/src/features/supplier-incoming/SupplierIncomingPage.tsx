@@ -66,16 +66,20 @@ export function SupplierIncomingPage() {
   useEffect(() => { void load(); }, [page, pageSize, status, queryMaterial, revision]);
 
   return <main className="supplier-incoming-page">
-    <header className="supplier-incoming-heading"><h1 className="sr-only">来料检验台账</h1><Space><Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button><Button type="primary" onClick={() => setCreateOpen(true)}>新建检验草稿</Button></Space></header>
+    <h1 className="sr-only">来料检验台账</h1>
     {error ? <Alert type={isDenied(error) ? 'warning' : 'error'} showIcon title={errorTitle(error, 'IQC 台账加载失败，请重试。')} description={error instanceof ApiError ? error.traceId : undefined} action={isDenied(error) ? undefined : <Button onClick={() => void load()}>重试</Button>} /> : null}
-    <section className="supplier-incoming-card"><Space className="supplier-incoming-toolbar" wrap><Input.Search aria-label="按物料编码筛选" placeholder="物料编码" allowClear value={materialCode} onChange={(event) => setMaterialCode(event.target.value)} onSearch={(value) => { setPage(1); setQueryMaterial(value); }} /><Select aria-label="按状态筛选" placeholder="全部状态" allowClear value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={Object.entries(statusLabels).map(([value, label]) => ({ value, label }))} /><Typography.Text type="secondary">共 {total} 条</Typography.Text></Space>
-      {loading ? <div className="supplier-incoming-loading"><Spin /></div> : error ? null : <LedgerTable<Inspection> ledgerId="supplier-incoming" requiredColumnKeys={['supplierName']} rowKey="id" dataSource={rows} scroll={{ x: 1040 }} locale={{ emptyText: <Empty description={queryMaterial || status ? '没有匹配的检验记录' : '暂无来料检验记录'} /> }} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} columns={[
+    <section className="supplier-incoming-card">
+      <LedgerTable<Inspection> ledgerId="supplier-incoming" requiredColumnKeys={['supplierName']} rowKey="id" loading={loading} dataSource={loading || error ? [] : rows} scroll={{ x: 1040 }} actionBar={<Space wrap>
+        <Input.Search aria-label="按物料编码筛选" placeholder="物料编码" allowClear value={materialCode} onChange={(event) => setMaterialCode(event.target.value)} onSearch={(value) => { setPage(1); setQueryMaterial(value); }} />
+        <Select aria-label="按状态筛选" placeholder="全部状态" allowClear value={status} onChange={(value) => { setStatus(value); setPage(1); }} options={Object.entries(statusLabels).map(([value, label]) => ({ value, label }))} />
+        <Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button><Button type="primary" onClick={() => setCreateOpen(true)}>新建检验草稿</Button>
+      </Space>} locale={{ emptyText: error ? '—' : <Empty description={queryMaterial || status ? '没有匹配的检验记录' : '暂无来料检验记录'} /> }} pagination={loading || error ? false : { current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} columns={[
         { key: 'supplierName', title: '供应商', dataIndex: 'supplierName', render: (value: string, row) => <Button type="link" onClick={() => setSelectedId(row.id)}>{value || row.supplierBusinessCode}</Button> },
         { key: 'materialCode', title: '物料编码', dataIndex: 'materialCode' }, { key: 'incomingBatch', title: '来料批次', dataIndex: 'incomingBatch' },
         { title: '收货 / 抽检', key: 'quantity', render: (_: unknown, row) => `${row.receivedQuantity} / ${row.sampledQuantity}` },
         { key: 'conclusion', title: '结论', dataIndex: 'conclusion', render: (value: Inspection['conclusion']) => value === 'PENDING' ? '未完成' : value }, { key: 'status', title: '状态', dataIndex: 'status', render: statusTag },
         { key: 'updatedAt', title: '更新时间', dataIndex: 'updatedAt', render: (value: string) => new Date(value).toLocaleString('zh-CN') },
-      ]} />}
+      ]} />
     </section>
     {createOpen ? <CreateInspectionModal close={() => setCreateOpen(false)} saved={() => { setCreateOpen(false); setPage(1); setRevision((value) => value + 1); }} /> : null}
     {selectedId ? <InspectionDrawer id={selectedId} close={() => setSelectedId(undefined)} refreshed={() => setRevision((value) => value + 1)} /> : null}

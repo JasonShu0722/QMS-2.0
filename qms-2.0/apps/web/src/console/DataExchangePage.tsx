@@ -164,10 +164,9 @@ function ExchangeScope({ context, session, refresh, invalidate }: { context: Con
   const denied = error === 'denied' || !canRead || !matchesSession;
   const objectTypes = [...new Set((data?.sources ?? []).filter(source => !draft.sourceKey || source.key === draft.sourceKey).flatMap(source => source.objectTypes))];
   const pagination = data && <div className="qms-exchange-pagination"><span>{text(`共 ${count(data.total)} 个尝试 · 第 ${data.page} 页`, `${count(data.total)} attempts · Page ${data.page}`)}</span><div><Select aria-label={text('每页条数', 'Page size')} value={pageSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} disabled={loading} onChange={size => { changePage(1); setPageSize(size); setRevision(value => value + 1); }} /><Button disabled={loading || data.page <= 1} onClick={() => changePage(data.page - 1)}>{text('上一页', 'Previous page')}</Button><Button disabled={loading || data.page >= 10000 || data.page * data.limit >= data.total} onClick={() => changePage(data.page + 1)}>{text('下一页', 'Next page')}</Button></div></div>;
-  return <div className="qms-exchange-page">
-    <header className="qms-exchange-heading"><Button icon={<RefreshCw size={15} />} onClick={denied ? refresh : restart} aria-label={text('刷新交换观测', 'Refresh exchange observations')}>{text('刷新', 'Refresh')}</Button></header>
-    <div className="qms-exchange-scope"><strong>{context.targetOrganization.name} ({context.targetOrganization.code})</strong><span>{filters.scope === 'PLATFORM' ? text('平台范围 · 只读观测', 'Platform scope · Read-only observations') : text('目标组织范围 · 只读观测', 'Target organization · Read-only observations')}</span><span>{text('仅保留近 30 天元数据', 'Metadata retained for 30 days')}</span></div>
-    {denied ? <Alert role="alert" type="error" showIcon title={text('交换观测访问已失效或无权限', 'Exchange observation access expired or denied')} /> : <>
+  const refreshButton = <Button icon={<RefreshCw size={15} />} onClick={denied ? refresh : restart} aria-label={text('刷新交换观测', 'Refresh exchange observations')}>{text('刷新', 'Refresh')}</Button>;
+  const actionBar = <>
+      <div className="qms-exchange-heading">{refreshButton}</div>
       <form className="qms-exchange-filters" onSubmit={event => { event.preventDefault(); apply(); }} aria-label={text('交换观测筛选', 'Exchange observation filters')}>
         {context.hasPlatformAdministrator && <label><span>{text('交换范围', 'Exchange scope')}</span><Select aria-label={text('交换范围', 'Exchange scope')} value={filters.scope} options={[{ value: 'ORGANIZATION', label: text('目标组织', 'Target organization') }, { value: 'PLATFORM', label: text('平台交换观测', 'Platform observations') }]} onChange={(scope: Filters['scope']) => { restart(); setDraft({ ...defaults, scope }); setFilters({ ...defaults, scope }); }} /></label>}
         <label><span>{text('查询时段', 'Time window')}</span><Select aria-label={text('查询时段', 'Time window')} value={draft.period} options={[{ value: '24', label: text('近 24 小时', 'Last 24 hours') }, { value: '168', label: text('近 7 天', 'Last 7 days') }, { value: '720', label: text('近 30 天', 'Last 30 days') }]} onChange={(period: Filters['period']) => setDraft(value => ({ ...value, period }))} /></label>
@@ -181,8 +180,11 @@ function ExchangeScope({ context, session, refresh, invalidate }: { context: Con
         <Button type="primary" htmlType="submit">{text('应用筛选', 'Apply filters')}</Button>
       </form>
       {validation && <Alert type="warning" showIcon title={text('请选择成对的阶段与结果，并使用不含 URL 或查询参数的批次标识。', 'Choose stage and outcome together; use a batch identifier without a URL or query string.')} />}
-      {error === 'network' && <Alert role="alert" type="error" showIcon title={text('交换观测读取失败，请重试。', 'Exchange observations could not be read. Retry.')} action={<Button onClick={restart}>{text('重试读取', 'Retry read')}</Button>} />}
-      {loading && <div role="status" aria-label={text('读取交换观测中', 'Reading exchange observations')}><Skeleton active paragraph={{ rows: 4 }} /></div>}
+  </>;
+  return <div className="qms-exchange-page">
+    {denied && <header className="qms-exchange-heading">{refreshButton}</header>}
+    <div className="qms-exchange-scope"><strong>{context.targetOrganization.name} ({context.targetOrganization.code})</strong><span>{filters.scope === 'PLATFORM' ? text('平台范围 · 只读观测', 'Platform scope · Read-only observations') : text('目标组织范围 · 只读观测', 'Target organization · Read-only observations')}</span><span>{text('仅保留近 30 天元数据', 'Metadata retained for 30 days')}</span></div>
+    {denied ? <Alert role="alert" type="error" showIcon title={text('交换观测访问已失效或无权限', 'Exchange observation access expired or denied')} /> : <>
       {data && <>
         <div className="qms-exchange-times"><Clock3 size={15} aria-hidden="true" /><span>{text('服务器查询时间：', 'Server query time: ')}{clock(data.asOf)}</span><span>{text('实际查询窗口：', 'Actual query window: ')}{clock(data.from)} — {clock(data.to)}</span></div>
         <Alert type="info" showIcon title={data.connectionStatus === 'NOT_CONNECTED' ? text('尚未接入数据交换来源', 'No data exchange source connected') : text('来源已注册', 'Sources registered')} />
@@ -190,10 +192,13 @@ function ExchangeScope({ context, session, refresh, invalidate }: { context: Con
         <section className="qms-exchange-metrics" aria-label={text('交换摘要', 'Exchange summary')}><dl>
           <div><dt>{text('批次尝试', 'Batch attempts')}</dt><dd>{count(data.summary.batchAttempts)}</dd></div><div><dt>{text('记录尝试', 'Record attempts')}</dt><dd>{count(data.summary.recordAttempts)}</dd></div><div><dt>{text('传输成功批次', 'Transfer-succeeded batches')}</dt><dd>{count(data.summary.transferSucceededBatches)}</dd></div><div><dt>{text('处理失败批次', 'Processing-failed batches')}</dt><dd>{count(data.summary.processingFailedBatches)}</dd></div><div><dt>{text('对账成功批次', 'Reconciled batches')}</dt><dd>{count(data.summary.reconciliationSucceededBatches)}</dd></div>
         </dl></section>
-        <section className="qms-exchange-records" aria-label={text('交换尝试记录', 'Exchange attempt records')}><h3>{text('交换尝试记录', 'Exchange attempts')}</h3>
-          {!data.items.length ? <>{pagination}<div className="qms-exchange-empty"><strong>{text('当前范围没有交换观测记录', 'No exchange observations in this scope')}</strong></div></> : <LedgerTable<Attempt> ledgerId="console-data-exchanges" organizationId={context.targetOrganization.id} viewId={filters.scope} toolbarContent={pagination} requiredColumnKeys={['record', 'details']} size="small" columns={columns} dataSource={data.items} rowKey="id" pagination={false} scroll={{ x: 1200 }} />}
-        </section>
       </>}
+      <section className="qms-exchange-records" aria-label={text('交换尝试记录', 'Exchange attempt records')}><h3>{text('交换尝试记录', 'Exchange attempts')}</h3>
+        <LedgerTable<Attempt> ledgerId="console-data-exchanges" organizationId={context.targetOrganization.id} viewId={filters.scope} actionBar={actionBar} toolbarContent={pagination} requiredColumnKeys={['record', 'details']} size="small" columns={columns} dataSource={data?.items} rowKey="id" pagination={false} scroll={{ x: 1200 }} bodyFallback={data?.items.length ? undefined : loading
+          ? <div role="status" aria-label={text('读取交换观测中', 'Reading exchange observations')}><Skeleton active paragraph={{ rows: 4 }} /></div>
+          : error === 'network' ? <Alert role="alert" type="error" showIcon title={text('交换观测读取失败，请重试。', 'Exchange observations could not be read. Retry.')} action={<Button onClick={restart}>{text('重试读取', 'Retry read')}</Button>} />
+          : <div className="qms-exchange-empty"><strong>{text('当前范围没有交换观测记录', 'No exchange observations in this scope')}</strong></div>} />
+      </section>
       <Modal title={text('交换尝试详情', 'Exchange attempt details')} open={!!selected} onCancel={closeDetail} footer={<Button onClick={closeDetail}>{text('关闭', 'Close')}</Button>} destroyOnHidden width={720}>
         {selected && (!detail && !detailError ? <div role="status" aria-label={text('读取交换详情中', 'Reading exchange details')}><Skeleton active paragraph={{ rows: 3 }} /></div> : detailError ? <Alert type="error" showIcon title={text('交换详情不可用或已过期，请重新查询。', 'Exchange details are unavailable or expired. Query again.')} /> : detail && <div className="qms-exchange-detail">
           <dl><div><dt>{text('来源', 'Source')}</dt><dd>{sourceLabel(detail.sourceKey)}</dd></div><div><dt>{text('关联标识', 'Correlation')}</dt><dd>{detail.correlationId}</dd></div><div><dt>{text('批次 / 记录', 'Batch / record')}</dt><dd>{detail.batchId ?? '—'}{detail.recordId ? ` / ${detail.recordId}` : ''}</dd></div><div><dt>{text('尝试', 'Attempt')}</dt><dd>{detail.attemptNumber}</dd></div><div><dt>{text('开始时间', 'Started')}</dt><dd>{clock(detail.startedAt)}</dd></div><div><dt>{text('完成时间', 'Completed')}</dt><dd>{detail.finishedAt ? clock(detail.finishedAt) : text('未全部报告终态', 'Not all stages have terminal results')}</dd></div></dl>

@@ -126,11 +126,11 @@ function EndpointList({ scope }: { scope: IntegrationScope }) {
     </Space> },
   ];
   return <div className="qms-integration-section">
-    <Space wrap><Button icon={<RefreshCw size={15} />} disabled={deleteBusy} onClick={reload} loading={loading}>{text('刷新接口', 'Refresh interfaces')}</Button>{canManage && <Button type="primary" disabled={deleteBusy} onClick={() => setEditing({})}>{text('新增接收接口', 'New receiving interface')}</Button>}</Space>
     {error ? <Alert role="alert" showIcon type="error" title={text(integrationError(error), 'Unable to read interfaces. Retry.')} description={error instanceof ApiError ? error.traceId : undefined} /> : null}
     {deleteError && !deleting?.unknown ? <Alert role="alert" showIcon type="error" title={text(integrationError(deleteError), 'Unable to delete this interface. Retry after refreshing.')} description={deleteError instanceof ApiError ? deleteError.traceId : undefined} /> : null}
     {deleting?.unknown && <Alert role="alert" showIcon type="error" title={text('删除结果未确认，请使用原请求重试；期间请勿进行其他维护操作或离开页面。', 'Deletion result is unknown. Retry the original request; do not perform other maintenance or leave this page.')} description={deleteError instanceof ApiError ? deleteError.traceId : undefined} />}
     <LedgerTable<Endpoint> ledgerId="console-integration-endpoints" organizationId={scope.organizationId} requiredColumnKeys={['identity', 'actions']} rowKey="id" loading={loading}
+      actionBar={<Space wrap><Button icon={<RefreshCw size={15} />} disabled={deleteBusy} onClick={reload} loading={loading}>{text('刷新接口', 'Refresh interfaces')}</Button>{canManage && <Button type="primary" disabled={deleteBusy} onClick={() => setEditing({})}>{text('新增接收接口', 'New receiving interface')}</Button>}</Space>}
       dataSource={data?.items ?? []} columns={columns} scroll={{ x: 1090 }} pagination={{ current: page, pageSize, total: data?.total ?? 0, disabled: deleteBusy, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100],
         onChange: (next, size) => { if (!deleteBusy) { setPage(size === pageSize ? next : 1); setPageSize(size); } } }} />
     {editing && <EndpointEditor scope={scope} endpoint={editing.endpoint} close={() => setEditing(undefined)} saved={() => { setEditing(undefined); reload(); }} />}

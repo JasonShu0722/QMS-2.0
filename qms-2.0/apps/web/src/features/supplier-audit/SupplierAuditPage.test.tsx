@@ -24,13 +24,21 @@ beforeEach(() => vi.stubEnv('NODE_ENV', 'development'));
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); });
 
 it('keeps plan and record page sizes independent', async () => {
-  server(['supplier-audit:plans:read', 'supplier-audit:records:read']);
+  server(['supplier-audit:plans:read', 'supplier-audit:records:read', 'supplier-audit:plans:write', 'supplier-audit:records:write']);
   render(<SupplierAuditPage />);
   await screen.findByText(record.summary);
   const plans = screen.getByRole('region', { name: '供应商审核计划' });
   const records = screen.getByRole('region', { name: '供应商审核记录台账' });
+  expect(plans.querySelector('.qms-ledger__action-bar')).toContainElement(screen.getByRole('button', { name: '新建审核计划' }));
+  expect(records.querySelector('.qms-ledger__action-bar')).toContainElement(screen.getByRole('button', { name: '新建审核记录' }));
   expect(within(plans).getByRole('button', { name: '列设置' })).toBeEnabled();
   expect(within(records).getByRole('button', { name: '列设置' })).toBeEnabled();
+  const refresh = within(records).getByRole('button', { name: /^刷\s*新$/ });
+  refresh.focus();
+  fireEvent.click(refresh);
+  await within(records).findByText(record.summary);
+  expect(within(records).getByRole('button', { name: /^刷\s*新$/ })).toBe(refresh);
+  expect(refresh).toHaveFocus();
   await userEvent.click(within(plans).getByRole('combobox'));
   await userEvent.click(await screen.findByRole('option', { name: /50/ }));
   await waitFor(() => expect(request).toHaveBeenCalledWith('/api/v1/supplier-audit/plans?page=1&pageSize=50'));

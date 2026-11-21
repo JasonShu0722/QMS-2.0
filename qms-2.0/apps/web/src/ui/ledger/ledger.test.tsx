@@ -258,8 +258,8 @@ describe('LedgerTable', () => {
       expect(sharesGrid(spinContainer)).toBe(true);
       expect(sharesGrid(spin)).toBe(true);
       expect(sharesGrid(spin.parentElement!)).toBe(true);
-      expect(rules.some(rule => tools.matches(rule.selectorText) && rule.style.getPropertyValue('grid-column') === '2' && rule.style.getPropertyValue('grid-row') === '1')).toBe(true);
-      expect(rules.some(rule => pagination.matches(rule.selectorText) && rule.style.getPropertyValue('grid-column') === '1' && rule.style.getPropertyValue('grid-row') === '1')).toBe(true);
+      expect(rules.some(rule => tools.matches(rule.selectorText) && rule.style.getPropertyValue('grid-column') === '2' && rule.style.getPropertyValue('grid-row') === 'var(--qms-ledger-first-controls-row)')).toBe(true);
+      expect(rules.some(rule => pagination.matches(rule.selectorText) && rule.style.getPropertyValue('grid-column') === '1' && rule.style.getPropertyValue('grid-row') === 'var(--qms-ledger-first-controls-row)')).toBe(true);
       for (const control of [tools, pagination]) {
         expect(rules.some(rule => control.matches(rule.selectorText) && rule.style.getPropertyValue('min-height') === '48px')).toBe(true);
         expect(rules.some(rule => control.matches(rule.selectorText) && rule.style.getPropertyValue('background') === 'var(--qms-surface)')).toBe(true);
@@ -520,7 +520,7 @@ describe('LedgerTable', () => {
   it('settings hide permitted columns, keep required actions and preserve business selection', () => {
     const onChange = vi.fn();
     const { container } = render(<LedgerTable ledgerId="basic" columns={columns} dataSource={data} requiredColumnKeys={['action']} pagination={false} rowSelection={{ selectedRowKeys: ['one'], onChange }} />);
-    const table = within(container.querySelector('table')!);
+    const table = within(container.querySelector('.ant-table-container') as HTMLElement);
     settings();
     const popup = within(document.querySelector<HTMLElement>('.qms-ledger__settings')!);
     expect(popup.queryByRole('spinbutton', { name: '列宽 选择' })).not.toBeInTheDocument();
@@ -552,8 +552,8 @@ describe('LedgerTable', () => {
   it('fills selection tables with proportional business columns and recomputes only visible widths', () => {
     const equalColumns = [{ ...columns[0], width: 180 }, { ...columns[1], width: 180 }];
     const props = { ledgerId: 'selection-fill', columns: equalColumns, dataSource: data, pagination: false as const, rowSelection: {}, resizableSelection: true };
-    const { rerender } = render(<LedgerTable {...props} />);
-    const table = screen.getByRole('table');
+    const { container, rerender } = render(<LedgerTable {...props} />);
+    const table = container.querySelector('.ant-table-body > table')!;
     expect(table).toHaveStyle({ width: 'max(100%, 404px)', tableLayout: 'fixed' });
     expect(table.querySelectorAll('col')).toHaveLength(3);
     expect(table.querySelector('col')).toHaveStyle({ width: '44px' });
@@ -566,7 +566,7 @@ describe('LedgerTable', () => {
     expect(table).toHaveStyle({ width: 'max(100%, 224px)' });
     rerender(<LedgerTable {...props} rowSelection={undefined} />);
     expect(table.querySelectorAll('col')[0]).toHaveStyle({ width: '180px' });
-    expect(table).not.toHaveStyle({ tableLayout: 'fixed' });
+    expect(table.querySelector('col.ant-table-selection-col')).toBeNull();
   });
   it('supports numeric width, pinning, moving, single and all resets without touching page size', () => {
     const { container } = render(<LedgerTable ledgerId="controls" columns={columns} dataSource={data} pagination={false} />);
@@ -639,7 +639,7 @@ describe('LedgerTable', () => {
   });
   it('sizes a compact table from its visible columns and native selection', () => {
     const { container } = render(<LedgerTable ledgerId="compact-width" compactLayout columns={[{ ...columns[0], width: 100 }, { ...columns[1], width: 160 }]} rowSelection={{ columnWidth: 40 }} dataSource={data} />);
-    const table = container.querySelector('table')!;
+    const table = container.querySelector('.ant-table-body > table')!;
     expect(table).toHaveStyle({ width: '300px', tableLayout: 'fixed' });
     fireEvent.keyDown(within(screen.getByRole('columnheader', { name: String(columns[0].title) })).getByRole('separator'), { key: 'ArrowLeft' });
     expect(table).toHaveStyle({ width: '290px' });
@@ -835,7 +835,7 @@ describe('LedgerTable', () => {
     expect(screen.getByRole('columnheader', { name: '无标识' })).toBeInTheDocument();
     expect(screen.queryByRole('separator', { name: '调整列宽 无标识' })).not.toBeInTheDocument();
     rerender(<LedgerTable ledgerId="empty" columns={[]} dataSource={[]} pagination={false} />);
-    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.getByRole('table')).toHaveClass('ant-table-container');
     expect(screen.getByRole('button', { name: '列设置' })).toBeDisabled();
   });
 });

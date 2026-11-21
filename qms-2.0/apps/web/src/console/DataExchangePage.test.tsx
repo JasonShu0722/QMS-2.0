@@ -73,11 +73,14 @@ it('uses the chosen page length for real attempt reads and resets the old page',
   await screen.findByText('batch-001');
   expect(new URL(read.mock.calls[0][0], 'http://localhost').searchParams.get('limit')).toBe('20');
   const next = screen.getByRole('button', { name: '下一页' });
+  const filters = screen.getByRole('form', { name: '交换观测筛选' });
+  expect(document.querySelector('.qms-ledger__action-bar')).toContainElement(filters);
   const toolbar = document.querySelector('.qms-ledger__tools');
   expect(toolbar).toContainElement(next);
   expect(toolbar).toContainElement(screen.getByRole('button', { name: '列设置' }));
   expect(next.compareDocumentPosition(document.querySelector('.qms-ledger .ant-table-wrapper')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '下一页' }));
+  expect(screen.getByRole('form', { name: '交换观测筛选' })).toBe(filters);
   await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=2'));
   await choose('每页条数', '50');
   await waitFor(() => expect(read.mock.calls.at(-1)![0]).toContain('page=1&limit=50'));

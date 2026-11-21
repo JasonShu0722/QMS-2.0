@@ -44,7 +44,7 @@
 .workflow-node-list li > .ant-tag { margin-left: var(--qms-section-gap); }
 .workflow-edge { padding: var(--qms-card-padding); margin: var(--qms-section-gap) 0; border-left: 3px solid var(--qms-accent-border); background: var(--qms-surface-tint); }
 .workflow-list__filters { padding: var(--qms-card-padding); background: var(--qms-surface); border: 1px solid var(--qms-border); border-radius: 10px; }
-.workflow-list__table { overflow-x: auto; min-width: 0; border: 1px solid var(--qms-border); border-radius: 10px; background: var(--qms-surface); }
+.workflow-list__table { min-width: 0; border: 1px solid var(--qms-border); border-radius: 10px; background: var(--qms-surface); }
 .workflow-list table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: 14px; }
 .workflow-list th, .workflow-list td { border-bottom: 1px solid var(--qms-border); padding: var(--qms-table-cell-padding-block) var(--qms-card-padding); text-align: left; }
 .workflow-list th { background: var(--qms-surface-tint); color: var(--qms-muted); font-weight: 600; white-space: nowrap; }

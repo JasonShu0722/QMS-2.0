@@ -304,7 +304,7 @@ test('registers the formal ledger and follows real CQE, FAE and SQE appointments
         appendFileSync(testInfo.outputPath('n4-geometry-progress.ndjson'), `${JSON.stringify({ width, step: 'resize' })}\n`);
         await qe.page.setViewportSize({ width, height: 900 });
         const ledgerPage = qe.page.locator('.customer-quality-page');
-        const table = ledgerPage.locator('.customer-quality-card .ant-table-content').first();
+        const table = ledgerPage.locator('.customer-quality-card .ant-table-body').first();
         await expect(table).toBeVisible();
         for (const name of ['人工登记客诉', /^刷\s*新$/]) {
           stage = `geometry ${width}: ${String(name)}`;

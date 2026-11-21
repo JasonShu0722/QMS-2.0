@@ -39,6 +39,7 @@ afterEach(() => { vi.unstubAllEnvs(); localStorage.clear(); });
 it('defaults new credentials to permanent validity with an editable useful name', async () => {
   view(); const element = screen.getByRole('dialog', { name: 'MES质量推送凭据' });
   await waitFor(() => expect(element).toBeVisible()); const panel = within(element);
+  expect(element.querySelector('.qms-ledger')).not.toHaveClass('qms-ledger--sticky');
   expect(panel.getByLabelText('凭据名称')).toHaveValue('制造系统对接凭据');
   expect(panel.getByRole('radio', { name: '永久有效' })).toBeChecked();
   mocks.mutate.mockResolvedValue({ ...credential, expiresAt: null });

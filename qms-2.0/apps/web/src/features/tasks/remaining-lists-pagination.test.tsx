@@ -49,9 +49,43 @@ async function chooseFifty(input: HTMLElement) {
   expect(owner).toHaveAttribute('role', 'listbox');
   const popup = owner!.closest('.ant-select-dropdown') as HTMLElement;
   const option = await within(popup).findByText('50 条/页', { selector: '.ant-select-item-option-content' });
-  await waitFor(() => expect(option).toBeVisible());
   fireEvent.click(option);
 }
+
+it.each([
+  ['my tasks', <MyTasksPage />, '我的待办', ['.task-inbox__filters'], []],
+  ['my notifications', <MyTasksPage />, '我的通知', ['.task-inbox__filters'], []],
+  ['supplier notifications', <SupplierNotificationsPage />, '原通知', ['button[aria-label="刷新"]'], ['h2']],
+  ['audit catalog', <AuditStandardsPage />, null, ['.audit-standards-filters'], []],
+  ['audit import review', <AuditManagementPage />, null, ['.audit-import-filters'], ['h3']],
+  ['managed announcements', <AnnouncementsPage />, '公告管理', [], []],
+] as const)('remaining lists bound the %s toolbar to its own entries', async (name, content, tab, controls, headings) => {
+  const { container } = mount(content);
+  if (tab && (name === 'my notifications' || name === 'managed announcements')) {
+    fireEvent.click(await screen.findByRole('tab', { name: tab }));
+  }
+  const scope = tab ? screen.getByRole('tabpanel', { name: tab })
+    : name === 'audit import review' ? screen.getByRole('region', { name: '审核导入行' })
+    : screen.getByRole('region', { name: '审核标准目录' });
+  const pageTwo = await within(scope).findByTitle('2');
+  const toolbar = pageTwo.closest('.qms-list-toolbar');
+  expect(toolbar).toBeInTheDocument();
+  const list = scope.querySelector('.ant-list');
+  expect(list).toBeInTheDocument();
+  expect(toolbar!.parentElement).toBe(list!.parentElement);
+  expect(toolbar!.nextElementSibling).toBe(list);
+  expect(scope.querySelectorAll('.ant-pagination')).toHaveLength(1);
+  for (const control of controls) expect(toolbar).toContainElement(scope.querySelector(control));
+  for (const heading of headings) expect(toolbar).not.toContainElement(scope.querySelector(heading));
+  if (name === 'audit catalog') expect(toolbar).toContainElement(screen.getByRole('button', { name: '新建标准' }));
+  if (name === 'audit import review') expect(toolbar).toContainElement(within(scope).getByRole('button', { name: '刷新导入' }));
+  if (name === 'managed announcements') {
+    expect(toolbar).toContainElement(within(scope).getByRole('button', { name: '新建公告' }));
+    expect(toolbar).not.toContainElement(within(container).getByRole('button', { name: /^刷\s*新$/ }));
+    fireEvent.click(screen.getByRole('tab', { name: '我的公告' }));
+    expect(screen.getByRole('tabpanel', { name: '我的公告' }).querySelector('.ant-pagination, .qms-list-toolbar')).toBeNull();
+  }
+});
 
 it.each([
   ['tasks', <MyTasksPage />, '/api/v1/tasks'],

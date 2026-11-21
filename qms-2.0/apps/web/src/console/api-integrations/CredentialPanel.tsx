@@ -71,7 +71,7 @@ export function CredentialPanel({ scope, endpoint, close, changed }: { scope: In
         <Button htmlType="submit" type="primary" loading={busy}>{text('创建凭据', 'Create credential')}</Button>
       </Form>}
       <Button onClick={() => setRevision(value => value + 1)} disabled={busy} loading={loading}>{text('刷新凭据', 'Refresh credentials')}</Button>
-      <LedgerTable<Credential> ledgerId="console-integration-credentials" organizationId={scope.organizationId} rowKey="id" size="small" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 620 }}
+      <LedgerTable<Credential> ledgerId="console-integration-credentials" sticky={false} organizationId={scope.organizationId} rowKey="id" size="small" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 620 }}
         pagination={{ current: page, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: busy, onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }}
         columns={[
           { key: 'name', title: text('名称', 'Name'), width: 170, render: (_, item) => <>{item.name}<small>{item.id}</small></> },

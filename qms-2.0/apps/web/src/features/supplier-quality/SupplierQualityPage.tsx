@@ -35,22 +35,21 @@ function ProblemLedger({ portal }: { portal: boolean }) {
   if (stage && !portal) query.set('stage', stage);
   const result = useSupplierData<ProblemPage>(`${supplierApi(portal)}/problems?${query}`);
   return <>
-    <div className="supplier-toolbar"><Input.Search aria-label="搜索问题" placeholder="搜索问题标题或物料号" maxLength={100} allowClear onSearch={(value) => { setSearch(value); setPage(1); }} />
-      {result.data?.canCreateDraft ? <Button type="primary" onClick={() => navigate(`${supplierPath(portal)}/new`)}>创建问题草稿</Button> : null}</div>
-    <Space wrap className="supplier-filters">
+    <LoadError error={result.error} retry={result.reload} />
+    <LedgerTable<SupplierProblem> ledgerId="supplier-quality" requiredColumnKeys={['title']} rowKey="id" loading={result.loading} dataSource={result.data?.items ?? []} scroll={{ x: 850 }} actionBar={<Space wrap className="supplier-filters">
+      <Input.Search aria-label="搜索问题" placeholder="搜索问题标题或物料号" maxLength={100} allowClear onSearch={(value) => { setSearch(value); setPage(1); }} />
       <Select aria-label="筛选严重度" placeholder="全部严重度" allowClear value={severity} onChange={(value) => { setSeverity(value); setPage(1); }} options={Object.entries(severityLabels).map(([value, label]) => ({ value, label }))} />
       <Select aria-label="筛选回复形式" placeholder="全部回复形式" allowClear value={responseForm} onChange={(value) => { setResponseForm(value); setPage(1); }} options={[{ value: 'BRIEF', label: '简报' }, { value: 'EIGHT_D', label: '8D' }]} />
       {!portal ? <Select aria-label="筛选发单状态" placeholder="全部发单状态" allowClear value={stage} onChange={(value) => { setStage(value); setPage(1); }} options={[{ value: 'DRAFT', label: '草稿' }, { value: 'ISSUED', label: '已发单' }]} /> : null}
-    </Space>
-    <LoadError error={result.error} retry={result.reload} />
-    {!result.error ? <LedgerTable<SupplierProblem> ledgerId="supplier-quality" requiredColumnKeys={['title']} rowKey="id" loading={result.loading} dataSource={result.data?.items ?? []} scroll={{ x: 850 }} pagination={{ current: page, pageSize, total: result.data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} locale={{ emptyText: <Empty description={portal ? '尚未收到问题单' : '暂无问题草稿'} /> }} columns={[
+      {result.data?.canCreateDraft ? <Button type="primary" onClick={() => navigate(`${supplierPath(portal)}/new`)}>创建问题草稿</Button> : null}
+    </Space>} pagination={result.error ? false : { current: page, pageSize, total: result.data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} locale={{ emptyText: result.error ? '—' : <Empty description={portal ? '尚未收到问题单' : '暂无问题草稿'} /> }} columns={[
       { title: '问题 / 编号', key: 'title', render: (_, record) => <><Link to={`${supplierPath(portal)}/problems/${record.id}`}>{record.title}</Link><div className="supplier-secondary">{record.reportNumber ?? '未发单'}</div></> },
       { key: 'supplierName', title: '供应商', dataIndex: 'supplierName' }, { key: 'materialCode', title: '物料号', dataIndex: 'materialCode' },
       { title: '严重度', key: 'severity', render: (_, record) => <Tag color={record.severity === 'CRITICAL' || record.severity === 'HIGH' ? 'red' : 'default'}>{severityLabels[record.severity]}</Tag> },
       { title: '回复形式', key: 'form', render: (_, record) => record.responseForm === 'BRIEF' ? '简报' : '8D' },
       { title: '进度', key: 'stage', render: (_, record) => record.problemStatus ? statusLabels[record.problemStatus] : '草稿' },
       { title: '截止时间', key: 'due', render: (_, record) => record.dueAt ? new Date(record.dueAt).toLocaleString() : '未设定' },
-    ]} /> : null}
+    ]} />
   </>;
 }
 

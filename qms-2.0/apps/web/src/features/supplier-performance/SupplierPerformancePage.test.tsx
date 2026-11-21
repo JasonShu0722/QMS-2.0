@@ -69,7 +69,7 @@ it('reviews a submitted supplier appeal from the internal page', async () => {
     throw new Error(String(path));
   });
   render(<SupplierPerformancePage />);
-  expect(await screen.findByText('检验批次有误')).toBeVisible();
+  expect((await screen.findByText('检验批次有误')).closest('.qms-ledger')).toHaveClass('qms-ledger--sticky');
   fireEvent.click(screen.getByRole('button', { name: '复核申诉' }));
   fireEvent.change(screen.getByRole('textbox', { name: '复核说明' }), { target: { value: '核实检验记录，确认需要更正' } });
   fireEvent.click(screen.getByRole('button', { name: '采纳申诉' }));

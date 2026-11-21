@@ -176,18 +176,18 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
     setBulkSector(undefined); setDirty(false); setSelectedIds([]); setRevision(value => value + 1);
   }
   const feedback = <><GovernanceFeedback error={error} />{unknown ? <Alert type="warning" title={t('操作结果未知，输入已保留，请重试原请求。')} /> : null}</>;
-  return <Card title={t('工序主数据')}>
-    <Space wrap>
+  const actions = <Space wrap>
       <Input aria-label={t('搜索工序')} placeholder={t('搜索工序编码、名称或板块')} allowClear maxLength={200} disabled={locked} value={search} onChange={event => { setSearch(event.target.value); setSelectedIds([]); setPage(1); }} />
       {manage && <><Button type="primary" disabled={locked} onClick={() => { form.resetFields(); form.setFieldsValue({ active: true }); setError(undefined); setEditor({}); }}>{t('新增工序')}</Button>
       <Button disabled={locked} onClick={() => { setError(undefined); setBatchOpen(true); }}>{t('批量新增')}</Button>
       <Button disabled={locked || loading || bulkRefreshRequired || !selectedItems.length || selectedItems.length > bulkSectorLimit} onClick={() => { setError(undefined); setBulkSector(''); }}>{t('批量配置板块')}</Button></>}
       <Button disabled={locked || loading} onClick={refresh}>{t('刷新')}</Button>
       {manage && selectedItems.length > 0 && <><span aria-live="polite">{t('已选 {count} 条').replace('{count}', String(selectedItems.length))}</span><Button disabled={locked} onClick={() => setSelectedIds([])}>{t('取消选择')}</Button></>}
-    </Space>
+    </Space>;
+  return <Card title={t('工序主数据')}>
     {selectedItems.length > bulkSectorLimit && <Alert type="warning" title={t('每次最多配置 1000 条工序，请缩小选择范围。')} />}
     {!editor && !removing && !batchOpen && bulkSector === undefined ? feedback : null}
-    <LedgerTable<Sector> ledgerId="process-operation-sectors" organizationId={organization.id} requiredColumnKeys={['operationName', 'actions']} rowKey="id" loading={loading} dataSource={filtered} scroll={{ x: 620 }} rowSelection={manage ? { selectedRowKeys: selectedIds, preserveSelectedRowKeys: true, onChange: keys => setSelectedIds(keys.map(String)), getCheckboxProps: () => ({ disabled: locked || loading || bulkRefreshRequired }) } : undefined} pagination={{ current: Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize))), pageSize, disabled: locked, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} columns={[
+    <LedgerTable<Sector> ledgerId="process-operation-sectors" organizationId={organization.id} requiredColumnKeys={['operationName', 'actions']} rowKey="id" actionBar={actions} loading={loading} dataSource={filtered} scroll={{ x: 620 }} rowSelection={manage ? { selectedRowKeys: selectedIds, preserveSelectedRowKeys: true, onChange: keys => setSelectedIds(keys.map(String)), getCheckboxProps: () => ({ disabled: locked || loading || bulkRefreshRequired }) } : undefined} pagination={{ current: Math.min(page, Math.max(1, Math.ceil(filtered.length / pageSize))), pageSize, disabled: locked, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { setPage(size === pageSize ? next : 1); setPageSize(size); } }} columns={[
       { key: 'operationCode', title: t('工序编码'), dataIndex: 'operationCode', ellipsis: true }, { key: 'operationName', title: t('工序名称'), dataIndex: 'operationName', ellipsis: true }, { key: 'sectorName', title: t('板块名称'), dataIndex: 'sectorName', ellipsis: true },
       { key: 'active', title: t('状态'), dataIndex: 'active', render: value => t(value ? '启用' : '停用') }, { key: 'version', title: t('版本'), dataIndex: 'version' },
       { key: 'actions', title: t('操作'), render: (_, record) => manage ? <Space wrap><Button disabled={locked} onClick={() => { form.setFieldsValue(record); setError(undefined); setEditor({ record }); }}>{t('编辑')}</Button><Button danger disabled={locked} onClick={() => { setError(undefined); setRemoving(record); }}>{t('删除')}</Button></Space> : t('只读') },
