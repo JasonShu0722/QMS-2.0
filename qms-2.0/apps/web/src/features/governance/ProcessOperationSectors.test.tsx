@@ -58,16 +58,21 @@ it('searches all rows, retains checks across pages and submits only selected ver
 it('clears hidden selection on search and keeps read-only search available', async () => {
   const view = mount();
   const row = (await screen.findByText('终检', { selector: 'td' })).closest('tr')!;
-  expect(screen.getByRole('textbox', { name: '搜索工序' }).closest('.qms-ledger__action-bar')).toContainElement(screen.getByRole('button', { name: '批量配置板块' }));
+  const search = screen.getByLabelText('搜索工序');
+  const batch = screen.getByText('批量配置板块', { selector: 'button span' }).closest('button');
+  expect(search.closest('.qms-ledger__action-bar')).toContainElement(batch);
   fireEvent.click(within(row).getByRole('checkbox'));
-  expect(screen.getByRole('button', { name: '批量配置板块' })).toBeEnabled();
-  fireEvent.change(screen.getByRole('textbox', { name: '搜索工序' }), { target: { value: '不存在' } });
-  expect(screen.getByRole('button', { name: '批量配置板块' })).toBeDisabled();
+  expect(batch).toBeEnabled();
+  fireEvent.change(search, { target: { value: '不存在' } });
+  expect(batch).toBeDisabled();
   view.unmount();
   mount(['process-quality:configuration:read']);
-  expect(screen.getByRole('textbox', { name: '搜索工序' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '批量配置板块' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  const readOnlySearch = screen.getByLabelText('搜索工序');
+  const readOnlyLedger = within(readOnlySearch.closest('.qms-ledger') as HTMLElement);
+  expect(readOnlySearch).toBeEnabled();
+  await readOnlyLedger.findByText('终检', { selector: 'td' });
+  expect(readOnlyLedger.queryByText('批量配置板块', { selector: 'button span' })).not.toBeInTheDocument();
+  expect(readOnlyLedger.queryByRole('checkbox')).not.toBeInTheDocument();
 });
 
 it('reloads newer versions and requires reselection after a batch conflict', async () => {
