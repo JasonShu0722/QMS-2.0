@@ -56,8 +56,8 @@ export function SupplierSourceCollaborationInbox({ data, error, loading, organiz
       action={<Button onClick={retry}>{t('重试来源协作')}</Button>} /> : null}
     {loading && <Spin aria-label={t('正在加载来源协作')} />}
     {data && <>
-      <div role="group" aria-label={t('SQE来源协作表格')} tabIndex={0} style={{ overflowX: 'auto', maxWidth: '100%' }}>
-        <LedgerTable<Task> ledgerId="supplier-source-collaboration" organizationId={organizationId ?? undefined} requiredColumnKeys={['title', 'actions']} size="small" style={{ minWidth: 900 }} rowKey="id" pagination={false} dataSource={data.items}
+      <div role="group" aria-label={t('SQE来源协作表格')} style={{ minWidth: 0, maxWidth: '100%' }}>
+        <LedgerTable<Task> ledgerId="supplier-source-collaboration" organizationId={organizationId ?? undefined} requiredColumnKeys={['title', 'actions']} size="small" scroll={{ x: 900 }} rowKey="id" pagination={false} dataSource={data.items}
           locale={{ emptyText: t('暂无SQE来源协作跟进') }} columns={[
             { key: 'title', title: t('协作事项'), dataIndex: 'title' },
             { key: 'sourceKind', title: t('来源类型'), render: (_, task) => t(sources[task.sourceKind] ?? task.sourceKind) },

@@ -17,8 +17,9 @@ it('preserves the internal appeal review note when closing is declined', async (
     ? { items: [{ id: 'appeal-1', cardId: 'card-1', reason: '批次需复核', status: 'SUBMITTED', version: 2 }], total: 1 } as never
     : { items: [], total: 0 } as never);
   render(<MemoryRouter><UnsavedChangesProvider><SupplierPerformancePage /></UnsavedChangesProvider></MemoryRouter>);
-  fireEvent.click(await screen.findByRole('button', { name: '复核申诉' }));
-  const modal = screen.getByRole('dialog', { name: '绩效申诉复核' });
+  const ledger = within(screen.getByLabelText('供应商绩效申诉', { selector: 'section' }));
+  fireEvent.click(await ledger.findByRole('button', { name: '复核申诉' }));
+  const modal = screen.getByLabelText('绩效申诉复核', { selector: '[role="dialog"]' });
   fireEvent.change(within(modal).getByRole('textbox', { name: '复核说明' }), { target: { value: '正在核对原始检验记录' } });
   fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
   const confirmation = screen.getByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' }).closest('[role="dialog"]') as HTMLElement;
@@ -69,9 +70,11 @@ it('reviews a submitted supplier appeal from the internal page', async () => {
     throw new Error(String(path));
   });
   render(<SupplierPerformancePage />);
-  expect(await screen.findByText('检验批次有误')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: '复核申诉' }));
-  fireEvent.change(screen.getByRole('textbox', { name: '复核说明' }), { target: { value: '核实检验记录，确认需要更正' } });
-  fireEvent.click(screen.getByRole('button', { name: '采纳申诉' }));
+  const ledger = within(screen.getByLabelText('供应商绩效申诉', { selector: 'section' }));
+  expect((await ledger.findByText('检验批次有误')).closest('.qms-ledger')).toHaveClass('qms-ledger--sticky');
+  fireEvent.click(ledger.getByRole('button', { name: '复核申诉' }));
+  const modal = within(screen.getByLabelText('绩效申诉复核', { selector: '[role="dialog"]' }));
+  fireEvent.change(modal.getByRole('textbox', { name: '复核说明' }), { target: { value: '核实检验记录，确认需要更正' } });
+  fireEvent.click(modal.getByRole('button', { name: '采纳申诉' }));
   await waitFor(() => expect(vi.mocked(apiRequest)).toHaveBeenCalledWith('/api/v1/supplier-performance/appeals/appeal-1/review', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ expectedVersion: 2, decision: 'ACCEPTED', note: '核实检验记录，确认需要更正' }) })));
 });

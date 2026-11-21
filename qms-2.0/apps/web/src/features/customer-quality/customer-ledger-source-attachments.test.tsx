@@ -363,19 +363,28 @@ it.each([
 });
 
 it.each([401, 403])('clears the whole owning ledger page on source list %s', async status => {
+  let denyAttachments!: () => void;
+  const pendingAttachments = new Promise<Response>(resolve => {
+    denyAttachments = () => resolve(json({ code: 'FILE_RESOURCE_DENIED', traceId: 'source-denied' }, status));
+  });
   fetchMock.mockImplementation(async input => {
     const url = String(input);
     if (url === '/api/v1/auth/session') return json(session);
     if (url.includes('/my-permissions')) return json({ organizationId: org, permissions });
     if (url.includes('/candidates')) return json({ items: people });
     if (url.includes('/customers')) return json([]);
-    if (url.includes('/attachments')) return json({ code: 'FILE_RESOURCE_DENIED', traceId: 'source-denied' }, status);
+    if (url === path) return pendingAttachments;
     if (url.includes(`/${id}`)) return json(record);
     if (url.includes('/ledger')) return json({ items: [record], total: 1, page: 1, pageSize: 20 });
     throw new Error(`Unexpected request: ${url}`);
   });
-  render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MemoryRouter initialEntries={[`/app/customer-quality?complaintId=${id}&organizationId=${org}`]}><UnsavedChangesProvider><CustomerQualityPage renderAnalysis={() => null} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider></ConfigProvider>);
-  await waitFor(() => expect(fetchMock.mock.calls.map(([url]) => url)).toContain(path));
+  await act(async () => {
+    render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MemoryRouter initialEntries={[`/app/customer-quality?complaintId=${id}&organizationId=${org}`]}><UnsavedChangesProvider><CustomerQualityPage renderAnalysis={() => null} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider></ConfigProvider>);
+  });
+  expect(fetchMock.mock.calls.map(([url]) => url)).toContain(path);
+  expect(screen.getByLabelText(record.complaintNumber, { selector: 'button' })).toBeInTheDocument();
+  expect(screen.getByLabelText('客诉详情', { selector: 'section' })).toBeInTheDocument();
+  await act(async () => denyAttachments());
   await screen.findByText('source-denied');
   expect(screen.queryByRole('region', { name: '客诉详情' })).not.toBeInTheDocument();
   expect(screen.queryByLabelText(record.complaintNumber)).not.toBeInTheDocument();

@@ -53,6 +53,23 @@ it('reads receipt metadata in the verified organization without requiring config
   expect(read.mock.calls.some(([path]) => path.includes('/endpoints'))).toBe(false);
 });
 
+it('opens the receiving filters from the ledger action bar and keeps the draft mounted during refresh', async () => {
+  view(); await screen.findByText('message-001');
+  const toolbar = screen.getByRole('toolbar', { name: '接收记录操作' });
+  const actionBar = toolbar.closest('.qms-ledger__action-bar');
+  expect(actionBar).toContainElement(toolbar);
+  openFilters();
+  const filters = screen.getByRole('form', { name: '接收记录筛选' });
+  expect(actionBar).toContainElement(filters);
+  expect(filters).toHaveFocus();
+  const source = within(filters).getByRole('textbox', { name: '来源系统编码' });
+  fireEvent.change(source, { target: { value: 'MES-draft' } });
+  fireEvent.click(within(toolbar).getByRole('button', { name: '刷新记录' }));
+  expect(screen.getByRole('form', { name: '接收记录筛选' })).toBe(filters);
+  expect(source).toHaveValue('MES-draft');
+  await screen.findByText('message-001');
+});
+
 it('compact receiving controls combine capacity and actions and keep all six page sizes beside columns above the table', async () => {
   scope.permissions = ['integration:receipts:read', 'integration:manage'];
   read.mockImplementation(async path => path.includes('/status')
@@ -67,7 +84,8 @@ it('compact receiving controls combine capacity and actions and keep all six pag
   expect(screen.queryByText(/最近清理(成功|失败)/)).not.toBeInTheDocument();
   const pagination = screen.getByRole('navigation', { name: '接收记录分页' });
   expect(pagination.parentElement).toContainElement(screen.getByRole('button', { name: '列设置' }));
-  expect(pagination.compareDocumentPosition(screen.getByRole('table')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const table = screen.getByRole('columnheader', { name: '消息编号' }).closest('table')!;
+  expect(pagination.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(screen.getAllByRole('navigation', { name: '接收记录分页' })).toHaveLength(1);
   const sizes = within(pagination).getByRole('combobox', { name: '每页条数' });
   expect(sizes).toHaveValue('20');
@@ -488,7 +506,7 @@ it('keeps receipt selection compact and allows widening it without changing the 
   scope.permissions = ['integration:receipts:read', 'integration:manage'];
   view(); await screen.findByText('message-001');
   const selectPage = screen.getByRole('checkbox', { name: '选择当前页' });
-  const column = screen.getByRole('table').querySelector<HTMLElement>('col.ant-table-selection-col');
+  const column = selectPage.closest('table')!.querySelector<HTMLElement>('col.ant-table-selection-col');
   expect(column).toHaveStyle({ width: '44px' });
   fireEvent.click(selectPage);
   fireEvent.click(screen.getByRole('button', { name: '列设置' }));
@@ -505,8 +523,8 @@ it('keeps receipt selection compact and allows widening it without changing the 
 it('distributes spare space among business columns without adding an empty trailing column', async () => {
   scope.permissions = ['integration:receipts:read', 'integration:manage'];
   view(); await screen.findByText('message-001');
-  const table = screen.getByRole('table');
-  expect(table).toHaveStyle({ minWidth: '100%' });
+  const table = screen.getByRole('columnheader', { name: '消息编号' }).closest('table')!;
+  expect(screen.getByText('message-001').closest('table')).toHaveStyle({ minWidth: '100%' });
   expect(table.querySelectorAll('thead th')).toHaveLength(6);
   expect(table.querySelector('thead tr')?.lastElementChild).toHaveTextContent('详情');
   expect(table.querySelector('.qms-integration-table-fill')).toBeNull();

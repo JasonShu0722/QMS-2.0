@@ -63,8 +63,11 @@ it('renders three real source projections and uses the returned links verbatim, 
   expect(requests.every(({ init }) => !init?.method || init.method === 'GET')).toBe(true);
   expect(within(section).getAllByRole('button').map(button => button.textContent).filter(Boolean)).toEqual(['刷新来源协作', '列设置']);
   expect(within(section).getAllByRole('button', { name: /^移动列 / })).toHaveLength(6);
-  expect(within(section).getByRole('group', { name: 'SQE来源协作表格' })).toHaveAttribute('tabindex', '0');
-  expect(within(section).getByRole('group', { name: 'SQE来源协作表格' })).toHaveStyle({ overflowX: 'auto', maxWidth: '100%' });
+  const group = within(section).getByRole('group', { name: 'SQE来源协作表格' });
+  expect(group).not.toHaveAttribute('tabindex');
+  expect(group).not.toHaveStyle({ overflowX: 'auto' });
+  expect(group).toHaveStyle({ maxWidth: '100%' });
+  expect(group.querySelector('.ant-table-body')).toHaveStyle({ overflowX: 'auto' });
 });
 
 it('does not mount or request source collaboration in the supplier portal', async () => {

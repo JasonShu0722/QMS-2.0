@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Empty, Input, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Empty, Input, Modal, Space, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { apiRequest, csrfToken, safeAccountError } from '../../api/client';
@@ -78,26 +78,24 @@ export function SupplierPerformancePortalPage() {
   }
 
   return <section className="supplier-performance-page">
-    <header className="supplier-performance-heading"><div><Typography.Text type="secondary">供应商门户 · 绩效</Typography.Text><Typography.Title level={1}>本企业绩效</Typography.Title><Typography.Paragraph type="secondary">查看已发布的月度绩效卡；对评分有异议时可保存并提交申诉。</Typography.Paragraph></div><Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button></header>
+    <header className="supplier-performance-heading"><div><Typography.Text type="secondary">供应商门户 · 绩效</Typography.Text><Typography.Title level={1}>本企业绩效</Typography.Title><Typography.Paragraph type="secondary">查看已发布的月度绩效卡；对评分有异议时可保存并提交申诉。</Typography.Paragraph></div></header>
     {error && <Alert type="error" showIcon title={error} action={<Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} />}
     {mutationError && <Alert type="error" showIcon title={mutationError} />}
     {notice && <Alert type="success" showIcon title={notice} />}
-    {loading ? <Spin /> : !error && <>
       <section className="supplier-performance-card" aria-label="已发布绩效卡"><Typography.Title level={2}>已发布绩效卡</Typography.Title>
-        <LedgerTable<Card> ledgerId="supplier-performance" requiredColumnKeys={['month', 'actions']} rowKey="id" dataSource={cards?.items.filter((card) => card.status === 'PUBLISHED') ?? []} scroll={{ x: 700 }} locale={{ emptyText: <Empty description="暂无已发布绩效卡" /> }} pagination={{ current: page, pageSize, total: cards?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!busy) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} columns={[
+        <LedgerTable<Card> ledgerId="supplier-performance" requiredColumnKeys={['month', 'actions']} rowKey="id" loading={loading} dataSource={loading || error ? [] : cards?.items.filter((card) => card.status === 'PUBLISHED') ?? []} scroll={{ x: 700 }} actionBar={<Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>} locale={{ emptyText: error ? '—' : <Empty description="暂无已发布绩效卡" /> }} pagination={loading || error ? false : { current: page, pageSize, total: cards?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!busy) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} columns={[
           { key: 'month', title: '月份', dataIndex: 'month' }, { key: 'incoming', title: 'IQC 检验 / 合格', render: (_, card) => `${card.inspectionCount} / ${card.passCount}` },
           { key: 'incomingScore', title: '来料分', dataIndex: 'incomingScore' }, { key: 'cooperationScore', title: '配合度', dataIndex: 'cooperationScore' }, { key: 'totalScore', title: '总分', dataIndex: 'totalScore' },
           { key: 'actions', title: '操作', render: (_, card) => <Button onClick={() => { setSelectedCard(card); setReason(''); setMutationError(undefined); }}>提出申诉</Button> },
         ]} expandable={{ expandedRowRender: (card) => <div className="supplier-performance-source"><p>配合度说明：{card.cooperationNote}</p><p>来源检验：{card.sourceInspections.map((source) => `${source.id}（第 ${source.version} 版，${source.conclusion}）`).join('、') || '无'}</p></div> }} />
       </section>
-      <section className="supplier-performance-card" aria-label="绩效申诉记录"><Typography.Title level={2}>申诉记录</Typography.Title>
-        <Table<Appeal> rowKey="id" dataSource={appeals?.items ?? []} locale={{ emptyText: <Empty description="暂无申诉记录" /> }} pagination={false} columns={[
-          { title: '原因', dataIndex: 'reason' }, { title: '状态', render: (_, appeal) => <Tag>{({ DRAFT: '草稿', SUBMITTED: '待复核', ACCEPTED: '已采纳', REJECTED: '未采纳' } as Record<string, string>)[appeal.status] ?? appeal.status}</Tag> },
-          { title: '处理说明', dataIndex: 'decisionNote' },
-          { title: '操作', render: (_, appeal) => appeal.status === 'DRAFT' ? <Button type="primary" disabled={busy} onClick={() => void submitAppeal(appeal)}>提交申诉</Button> : null },
+      {!loading && !error && <section className="supplier-performance-card" aria-label="绩效申诉记录"><Typography.Title level={2}>申诉记录</Typography.Title>
+        <LedgerTable<Appeal> ledgerId="supplier-performance-appeals" requiredColumnKeys={['reason', 'actions']} rowKey="id" dataSource={appeals?.items ?? []} locale={{ emptyText: <Empty description="暂无申诉记录" /> }} pagination={false} columns={[
+          { title: '原因', key: 'reason', dataIndex: 'reason' }, { title: '状态', key: 'status', render: (_, appeal) => <Tag>{({ DRAFT: '草稿', SUBMITTED: '待复核', ACCEPTED: '已采纳', REJECTED: '未采纳' } as Record<string, string>)[appeal.status] ?? appeal.status}</Tag> },
+          { title: '处理说明', key: 'decisionNote', dataIndex: 'decisionNote' },
+          { title: '操作', key: 'actions', render: (_, appeal) => appeal.status === 'DRAFT' ? <Button type="primary" disabled={busy} onClick={() => void submitAppeal(appeal)}>提交申诉</Button> : null },
         ]} />
-      </section>
-    </>}
+      </section>}
     <Modal title={`申诉 ${selectedCard?.month ?? ''} 绩效卡`} open={Boolean(selectedCard)} onCancel={closeAppeal} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} footer={null} destroyOnHidden>
       {mutationError && <Alert type="error" showIcon title={mutationError} />}
       <Space orientation="vertical" className="supplier-performance-appeal-form"><label htmlFor="supplier-performance-appeal-reason">申诉说明</label><Input.TextArea id="supplier-performance-appeal-reason" aria-label="申诉说明" rows={5} maxLength={4000} value={reason} onChange={(event) => setReason(event.target.value)} disabled={busy} /><Button type="primary" onClick={() => void createAppeal()} disabled={!reason.trim()} loading={busy}>保存申诉草稿</Button></Space>

@@ -5,6 +5,7 @@ import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/cli
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useLedgerPageSize } from '../../ui/ledger';
 import './audit-standards.css';
+import { ListToolbar } from '../../ui/list/ListToolbar';
 
 type StandardPage = components['schemas']['AuditStandardPageDto'];
 type StandardItem = components['schemas']['AuditStandardItemDto'];
@@ -109,19 +110,19 @@ export function AuditStandardsPage() {
   }
 
   return <main className="audit-standards-page">
-    <header className="audit-standards-heading">
-      <h1 className="sr-only">审核标准库</h1>
-      <Button type="primary" onClick={() => setEditor('new')}>新建标准</Button>
-    </header>
+    <h1 className="sr-only">审核标准库</h1>
     <section className="audit-standards-card" aria-label="审核标准目录" role="region">
-      <Space wrap className="audit-standards-filters">
-        <Input aria-label="标准名称" placeholder="按名称查找" value={search} onChange={(event) => setSearch(event.target.value)} onPressEnter={applyFilters} />
-        <Select aria-label="审核类型" placeholder="所有审核类型" allowClear value={auditType} onChange={setAuditType} options={auditTypes} className="audit-standards-type" />
-        <Button onClick={applyFilters}>查询</Button>
-        <Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>
-      </Space>
       {Boolean(loadError) && <Alert showIcon type={denied(loadError) ? 'warning' : 'error'} title={denied(loadError) ? '暂无审核标准访问权限' : '审核标准加载失败，请重试'} description={safeAccountError(loadError)} />}
-      {!loading && !loadError && catalog && <Pagination current={catalog.page} pageSize={pageSize} total={catalog.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); })} />}
+      <ListToolbar>
+        <Space wrap className="audit-standards-filters">
+          <Input aria-label="标准名称" placeholder="按名称查找" value={search} onChange={(event) => setSearch(event.target.value)} onPressEnter={applyFilters} />
+          <Select aria-label="审核类型" placeholder="所有审核类型" allowClear value={auditType} onChange={setAuditType} options={auditTypes} className="audit-standards-type" />
+          <Button onClick={applyFilters}>查询</Button>
+          <Button onClick={() => setRevision((value) => value + 1)} loading={loading}>刷新</Button>
+          <Button type="primary" onClick={() => setEditor('new')}>新建标准</Button>
+        </Space>
+        {!loading && !loadError && catalog && <Pagination current={catalog.page} pageSize={pageSize} total={catalog.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); })} />}
+      </ListToolbar>
       {loading ? <div className="audit-standards-loading"><Spin /></div> : !loadError && <List dataSource={catalog?.items ?? []} locale={{ emptyText: <Empty description="暂无审核标准" /> }} renderItem={(standard: StandardItem) => <List.Item key={standard.id} actions={[<Button key="detail" onClick={() => requestLeave(() => { setEditor(undefined); setDirty(false); void showDetail(standard.id); })}>查看版本</Button>]}><List.Item.Meta title={<Space wrap><span>{standard.name}</span><Tag>{auditTypes.find((item) => item.value === standard.auditType)?.label}</Tag><Tag color={standard.status === 'PUBLISHED' ? 'green' : 'orange'}>{standard.status === 'PUBLISHED' ? '已生效' : '草稿'}</Tag></Space>} description={`最新生效版本 v${standard.latestVersion} · 编辑版本 ${standard.version}`} /></List.Item>} />}
     </section>
     {Boolean(actionError) && !detail && !editor && <Alert showIcon type="error" title={safeAccountError(actionError)} />}

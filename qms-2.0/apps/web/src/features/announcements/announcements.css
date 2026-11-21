@@ -7,7 +7,6 @@
 .announcements-item { width: 100%; border-color: var(--qms-border); background: var(--qms-surface); }
 .announcements-content { white-space: pre-wrap; overflow-wrap: anywhere; }
 .announcements-loading { min-height: 180px; display: grid; place-items: center; }
-.announcements-pagination { margin-top: var(--qms-section-gap); }
 .announcements-form-options { align-items: flex-start; }
 @media (max-width: 760px) {
   .announcements-page { padding: 0;  min-width: 0; }

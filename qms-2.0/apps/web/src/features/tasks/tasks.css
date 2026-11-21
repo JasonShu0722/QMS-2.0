@@ -10,6 +10,7 @@
 .task-inbox .ant-list-item-meta-title { font-size: 16px; }
 .task-inbox .ant-list-item-meta-description, .task-inbox .ant-card-head-title { overflow-wrap: anywhere; }
 .task-inbox .ant-pagination { padding-top: var(--qms-section-gap); font-variant-numeric: tabular-nums; }
+.task-inbox .qms-list-toolbar > :is(.task-inbox__filters, .ant-pagination) { padding-block: 0; }
 @media (max-width: 760px) {
   .task-inbox > .ant-tabs { padding: var(--qms-card-padding); }
   .task-inbox .ant-list-item { align-items: flex-start; flex-direction: column; gap: var(--qms-section-gap); }

@@ -144,12 +144,14 @@ it('aborts on session replacement and never fills a new principal with late rows
   expect(screen.queryByText('SQ-34')).not.toBeInTheDocument();
 });
 
-it('aborts on unmount, keeps horizontal scrolling keyboard reachable and local', async () => {
+it('aborts on unmount and leaves horizontal scrolling to the shared table body', async () => {
   const requests = api(); const view = mount();
   await screen.findByText('SQ-34');
   const section = screen.getByRole('region', { name: '供应商8D正式待办' });
-  expect(within(section).getByRole('group', { name: '供应商8D待办表格' })).toHaveAttribute('tabindex', '0');
-  expect(within(section).getByRole('group', { name: '供应商8D待办表格' })).toHaveStyle({ overflowX: 'auto' });
+  const group = within(section).getByRole('group', { name: '供应商8D待办表格' });
+  expect(group).not.toHaveAttribute('tabindex');
+  expect(group).not.toHaveStyle({ overflowX: 'auto' });
+  expect(group.querySelector('.ant-table-body')).toHaveStyle({ overflowX: 'auto' });
   expect(within(section).getByRole('link', { name: '审核关闭' })).not.toHaveAttribute('tabindex', '-1');
   view.unmount(); await waitFor(() => expect(requests.every(({ init }) => init?.signal?.aborted)).toBe(true));
 });

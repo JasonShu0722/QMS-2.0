@@ -414,7 +414,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "e95c895e49302169c5fdaf284f85ed0cad894853867bd0e5aed8f12cb468bb94"
+            "sha256": "287f4f3d4beffcec666dcec5b9e70baa1ba36ddc6b0f4b6f2c5a1168e63f1860"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -606,7 +606,7 @@
           },
           {
             "path": "apps/web/src/features/workflows/WorkflowListPage.tsx",
-            "sha256": "5b2503d00877ba362d4c906d978427eecf85471fb5b4c349ac172ad9baaedcfe"
+            "sha256": "bd5874443e037c53e49de535e3c925d3c873d2d21db2a1a0c8310758e2676801"
           },
           {
             "path": "apps/web/src/features/workflows/WorkflowClosurePreview.tsx",
@@ -618,7 +618,7 @@
           },
           {
             "path": "apps/web/src/features/tasks/MyTasksPage.tsx",
-            "sha256": "5dd3f244f594c8f3a304d90af706e4069d696f79ee4cbdc245061ff4dfa60e27"
+            "sha256": "b684d13135c40913d5d1843ca71612f36483db1e37aacec5a18c82a3c93b4304"
           },
           {
             "path": "apps/web/src/features/tasks/ClosureTaskInbox.tsx",
@@ -634,11 +634,11 @@
           },
           {
             "path": "apps/web/src/features/supplier-audit/SupplierAuditPage.test.tsx",
-            "sha256": "28e2162af92a142c2abe2d6f46cbade70e3b9008f296580b3eddf167983ba92c"
+            "sha256": "5ba2044d4bc795dc0e56df36202a775fa0c49a5dd38aa7145c56f1bdc0bc7a86"
           },
           {
             "path": "apps/web/src/features/supplier-pcn/SupplierPcnPage.test.tsx",
-            "sha256": "2cc4a888a9cd9cfa02363b4e1ea50f8e4d0763b9e0486a79ab0a5a045d89592b"
+            "sha256": "b4a51aecc4d6033678614b0c5cef1a2c33f7c3acd53b9a774685e6330d883d44"
           },
           {
             "path": "apps/web/src/features/supplier-quality/SupplierUsersPanel.test.tsx",
@@ -646,7 +646,7 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/CustomerQualityPage.tsx",
-            "sha256": "3a9d7d78da7c7875d891cbe8266cc534db474de6ea1cadf93decc3184357d465"
+            "sha256": "c57f29b95a5dd6e61c2aa4c10e0b8cec0d51cc42076ef6dcbdfa52bcda3fc61a"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-analysis-panel.tsx",
@@ -698,7 +698,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/index.tsx",
-            "sha256": "98673133f7ecaca5c8d1a24a918968f7a490e23ce950909faac8dcc58714d96d"
+            "sha256": "7591671f7ec8247f32c613a0e15e17dad6ba86aad85d5141ea101feefd95386d"
           },
           {
             "path": "apps/web/src/ui/ledger/model.ts",
@@ -710,11 +710,11 @@
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.css",
-            "sha256": "3af077c336668798f412a202379176802da365ddccc014208c3794ce9ad21008"
+            "sha256": "1676ba8964cc1d5aba7211446341640bfcfcf7530b80675c71764b343410b003"
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.test.tsx",
-            "sha256": "156cd2aea3755800f39a018ebde1e77385e592d7436fd0ea2665977f60448348"
+            "sha256": "7d4c1a8273c84944941c2ee08967687808132409726e7200fe67884c070e7e95"
           },
           {
             "path": "apps/web/src/ui/ledger/model.test.ts",
@@ -722,7 +722,7 @@
           },
           {
             "path": "apps/web/src/features/tasks/remaining-lists-pagination.test.tsx",
-            "sha256": "e6148d0ffe1353d14563ddf98beb17ce53cc06ad82e6f4fb8c8b1b55a187754b"
+            "sha256": "ad5d15df9f7f3dc9eaba3286db8fb567fa9f2c68020abb7b37b4842db325d494"
           },
           {
             "path": "apps/web/src/features/tasks/remaining-lists-quality.test.tsx",
@@ -734,11 +734,11 @@
           },
           {
             "path": "apps/web/src/styles/global.css",
-            "sha256": "772800008b5fad8c433ea4290b2c619ff8a6f5f2649379866f0d39b32ef85641"
+            "sha256": "9e61cd18f307c64f7770b7408b2b25492d4efc8a65d3263c5762daf1d0374daa"
           },
           {
             "path": "apps/web/src/styles/governance-layout.test.ts",
-            "sha256": "6d9c2775f541e32b0cf83bde2fe8daf056997a93e43c8cfa34045f11ba4a97f3"
+            "sha256": "48972de8258799149b435904843e8754d5bbd4365fb8a029712d936381a113ec"
           },
           {
             "path": "apps/web/src/layouts/InternalLayout.tsx",
@@ -770,7 +770,7 @@
           },
           {
             "path": "apps/web/src/console/console.css",
-            "sha256": "1145bc063b937c68ad10328e54d56428efbdb672181905802fc6cb7c679e6e52"
+            "sha256": "b707ba0f682e4864c3dfdd3777a78e7c74a249b846b957bc6fe4b7d76976627f"
           },
           {
             "path": "apps/web/playwright/sidebar-regression-fixture.tsx",
@@ -1052,7 +1052,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "9058fc3ab6cce0409c2de21237ce2c8ce910846788a5cc3cac433834ef6483c6"
+            "sha256": "b1db93b73180df70084414214fc9f506e525c91c32da6326b387186312b329b8"
           },
           {
             "path": "governance/operability-alerts.json",

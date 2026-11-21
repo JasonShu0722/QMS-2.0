@@ -1,0 +1,25 @@
+.qms-list-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--qms-section-gap);
+  padding-block: var(--qms-section-gap);
+  background: var(--qms-surface);
+}
+
+.qms-list-toolbar > .ant-pagination {
+  flex-wrap: wrap;
+  row-gap: 8px;
+  max-width: 100%;
+}
+
+.qms-list-toolbar > .ant-pagination .ant-pagination-options {
+  margin-inline-start: 0;
+}
+
+@media (min-width: 600px) and (min-height: 480px), (min-height: 680px) {
+  .qms-list-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+}

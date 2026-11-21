@@ -78,11 +78,10 @@ function SupplierAccountsScope({ organization, principal, onDenied }: Props & { 
   return <section aria-label={t('供应商账号（全平台）')}>
     <Typography.Title level={4} className="sr-only">{t('供应商账号（全平台）')}</Typography.Title>
     {!!error && <Alert type="error" showIcon title={t(safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}
-    <Space wrap>
+    <LedgerTable<Account> ledgerId="admin-supplier-accounts" organizationId={organization.id} requiredColumnKeys={['username', 'actions']} rowKey="id" size="small" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 760 }} actionBar={<Space wrap>
       <Input.Search aria-label={t('搜索供应商账号或企业')} placeholder={t('搜索供应商账号或企业')} maxLength={100} disabled={invalidated} onSearch={value => guarded(() => { setSearch(value.trim()); setOffset(0); reload(); })} />
       <Button loading={loading} disabled={invalidated} onClick={() => guarded(reload)}>{t('刷新供应商账号')}</Button>
-    </Space>
-    <LedgerTable<Account> ledgerId="admin-supplier-accounts" organizationId={organization.id} requiredColumnKeys={['username', 'actions']} rowKey="id" size="small" loading={loading} dataSource={data?.items ?? []} scroll={{ x: 760 }}
+    </Space>}
       locale={{ emptyText: data ? t('暂无供应商账号') : ' ' }}
       pagination={{ current: offset / pageSize + 1, pageSize, total: data?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: invalidated || loading, onChange: (page, size) => guarded(() => { setOffset(size === pageSize ? (page - 1) * size : 0); setPageSize(size); reload(); }) }}
       columns={[

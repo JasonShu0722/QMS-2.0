@@ -180,7 +180,8 @@ it('keeps one 8D action and moves filters into the compact toolbar', async () =>
   expect(within(toolbar).queryByRole('button', { name: '复制为供应商草稿' })).not.toBeInTheDocument();
   expect(within(toolbar).getByRole('button', { name: '筛选条件' })).toBeInTheDocument();
   expect(within(toolbar).getByRole('button', { name: '登记不良' })).toBeInTheDocument();
-  expect(within(toolbar.parentElement!.querySelector<HTMLElement>('.qms-ledger__tools')!).getByRole('button', { name: '列设置' })).toBeInTheDocument();
+  expect(toolbar.closest('.qms-ledger__action-bar')).toBeInTheDocument();
+  expect(within(toolbar.closest<HTMLElement>('.qms-ledger')!.querySelector<HTMLElement>('.qms-ledger__tools')!).getByRole('button', { name: '列设置' })).toBeInTheDocument();
   expect(screen.queryByLabelText('台账批量操作')).not.toBeInTheDocument();
   expect(latestQuery().get('occurredFrom')).toBe(monthFrom);
   expect(latestQuery().get('occurredTo')).toBe(monthTo);

@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Select, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, Button, Empty, Form, Input, InputNumber, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
@@ -139,28 +139,29 @@ export function SupplierPerformancePage() {
   }
 
   return <main className="supplier-performance-page">
-    <header className="supplier-performance-heading"><h1 className="sr-only">月度绩效卡</h1><Button onClick={() => setRevision((current) => current + 1)} loading={loading}>刷新</Button></header>
+    <h1 className="sr-only">月度绩效卡</h1>
     {notice ? <Alert type="success" showIcon title={notice} /> : null}
     {publishError ? <Alert type="error" showIcon title={publishError} /> : null}
     <section className="supplier-performance-card" aria-label="月度绩效卡台账">
       <Typography.Title level={2}>绩效卡台账</Typography.Title>
-      {error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => setRevision((current) => current + 1)}>重试</Button>} /> : null}
-      {loading ? <div className="supplier-performance-loading"><Spin /></div> : !error ? <LedgerTable<Card> ledgerId="supplier-performance" requiredColumnKeys={['supplierName', 'month', 'actions']} rowKey="id" dataSource={cards} scroll={{ x: 850 }} locale={{ emptyText: <Empty description="暂无月度绩效卡" /> }} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!saving && !publishingId && !reviewBusy) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} columns={[
+      <LedgerTable<Card> ledgerId="supplier-performance" requiredColumnKeys={['supplierName', 'month', 'actions']} rowKey="id" dataSource={cards} scroll={{ x: 850 }} actionBar={<Button onClick={() => setRevision((current) => current + 1)} loading={loading}>刷新</Button>}
+        bodyFallback={loading ? <div className="supplier-performance-loading"><Spin /></div> : error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => setRevision((current) => current + 1)}>重试</Button>} /> : undefined}
+        locale={{ emptyText: <Empty description="暂无月度绩效卡" /> }} pagination={{ current: page, pageSize, total, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!saving && !publishingId && !reviewBusy) requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }); } }} columns={[
         { key: 'supplierName', title: '供应商', dataIndex: 'supplierName' }, { key: 'month', title: '月份', dataIndex: 'month' },
         { title: 'IQC 检验 / 合格', key: 'incoming', render: (_, card) => `${card.inspectionCount} / ${card.passCount}` },
         { key: 'incomingScore', title: '来料分', dataIndex: 'incomingScore' }, { key: 'cooperationScore', title: '配合度', dataIndex: 'cooperationScore' },
         { key: 'totalScore', title: '总分', dataIndex: 'totalScore' },
         { title: '状态', key: 'status', render: (_, card) => card.status === 'PUBLISHED' ? '已发布' : '草稿' },
         { title: '操作', key: 'actions', render: (_, card) => card.status === 'DRAFT' ? <Button type="primary" loading={publishingId === card.id} disabled={!!publishingId} onClick={() => void publish(card)}>发布绩效卡</Button> : null },
-      ]} expandable={{ expandedRowRender: (card) => <div className="supplier-performance-source"><p>计分：来料 {card.incomingScore} × {card.incomingWeight}% + 配合度 {card.cooperationScore} × {card.cooperationWeight}% = {card.totalScore}</p><p>配合度说明：{card.cooperationNote}</p><p>来源检验：{card.sourceInspections.map((source) => `${source.id}（第 ${source.version} 版，${source.conclusion}）`).join('、')}</p></div> }} /> : null}
+      ]} expandable={{ expandedRowRender: (card) => <div className="supplier-performance-source"><p>计分：来料 {card.incomingScore} × {card.incomingWeight}% + 配合度 {card.cooperationScore} × {card.cooperationWeight}% = {card.totalScore}</p><p>配合度说明：{card.cooperationNote}</p><p>来源检验：{card.sourceInspections.map((source) => `${source.id}（第 ${source.version} 版，${source.conclusion}）`).join('、')}</p></div> }} />
     </section>
     <section className="supplier-performance-card" aria-label="供应商绩效申诉"><Typography.Title level={2}>供应商绩效申诉</Typography.Title>
       {appealsError ? <Alert type="warning" showIcon title={appealsError} action={<Button onClick={() => setRevision((value) => value + 1)}>重试</Button>} /> : null}
-      {!appealsError && <Table<Appeal> rowKey="id" dataSource={appeals} locale={{ emptyText: <Empty description="暂无绩效申诉" /> }} pagination={false} columns={[
-        { title: '申诉原因', dataIndex: 'reason' },
-        { title: '状态', render: (_, appeal) => <Tag>{({ DRAFT: '草稿', SUBMITTED: '待复核', ACCEPTED: '已采纳', REJECTED: '未采纳' } as Record<string, string>)[appeal.status] ?? appeal.status}</Tag> },
-        { title: '复核说明', dataIndex: 'decisionNote' },
-        { title: '操作', render: (_, appeal) => appeal.status === 'SUBMITTED' ? <Button onClick={() => { setReviewAppeal(appeal); setReviewNote(''); setReviewError(undefined); }}>复核申诉</Button> : null },
+      {!appealsError && <LedgerTable<Appeal> ledgerId="supplier-performance-internal-appeals" requiredColumnKeys={['reason', 'actions']} rowKey="id" dataSource={appeals} scroll={{ x: 700 }} locale={{ emptyText: <Empty description="暂无绩效申诉" /> }} pagination={false} columns={[
+        { key: 'reason', title: '申诉原因', dataIndex: 'reason' },
+        { key: 'status', title: '状态', render: (_, appeal) => <Tag>{({ DRAFT: '草稿', SUBMITTED: '待复核', ACCEPTED: '已采纳', REJECTED: '未采纳' } as Record<string, string>)[appeal.status] ?? appeal.status}</Tag> },
+        { key: 'decisionNote', title: '复核说明', dataIndex: 'decisionNote' },
+        { key: 'actions', title: '操作', render: (_, appeal) => appeal.status === 'SUBMITTED' ? <Button onClick={() => { setReviewAppeal(appeal); setReviewNote(''); setReviewError(undefined); }}>复核申诉</Button> : null },
       ]} />}
     </section>
     <section className="supplier-performance-card" aria-label="新建月度绩效卡">

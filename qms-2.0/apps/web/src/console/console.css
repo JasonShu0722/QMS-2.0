@@ -28,7 +28,8 @@
 .qms-console-breadcrumb a, .qms-console-breadcrumb > span { color: var(--qms-muted); }
 .qms-console-theme .qms-console-mobile-toggle { display: none; }
 .qms-console-content { min-width: 0; padding: 16px 28px 28px; }
-.qms-console-content > .sr-only:first-child + .admin-toolbar { margin-top: 0; }
+.qms-console-content > .sr-only:first-child + .admin-toolbar,
+.qms-console-content > .sr-only:first-child + .qms-ledger > .qms-ledger__action-bar > .admin-toolbar { margin-top: 0; }
 .qms-console-content > .sr-only:first-child + .governance-panel { padding-top: 0; }
 .qms-console-reading-notes > summary { min-height: 36px; padding-block: 8px; cursor: pointer; color: var(--qms-muted); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .qms-console-reading-notes { min-width: 0; }

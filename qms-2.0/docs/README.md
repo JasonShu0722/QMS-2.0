@@ -83,6 +83,7 @@
 | [数据保护](DATA-PROTECTION.md) | TLS、密钥、对象保护、备份和恢复 |
 | [邮件恢复](EMAIL-RECOVERY.md) | 邮箱确认、找回和投递 Worker |
 | [前端设计](FRONTEND-DESIGN.md) | 生产 Web 参考、迁移和验收 |
+| [主清单冻结实施计划](../../docs/superpowers/plans/2026-11-21-qms-ledger-sticky-scroll.md) | 台账与清单单滚动、冻结、横展和证据 |
 | [导航、登录工具栏与需求反馈设计](../../docs/superpowers/specs/2026-10-09-qms-navigation-and-feedback-design.md) | REQ-0006～0010 的设计与交付映射；已发布并经负责人手动最终验收、关闭回填 |
 | [OpenAPI](OPENAPI.md) | API 契约生成与同步 |
 | [阶段二](PHASE-2.md) | 平台实施和验收记录 |

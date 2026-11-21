@@ -230,6 +230,12 @@ export function UserAdministration({ organization, organizations, targetUserId, 
   const mutationRecovery = mutationUnknown && <><Alert type="warning" showIcon title={t('原请求结果尚未确认，请重试原请求或明确放弃。')} /><Space wrap><Button loading={busy} disabled={busy} onClick={() => { const command = pendingMutation.current; if (command) void perform(command.action, command.message, true); }}>{t('重试确认结果')}</Button><Button disabled={busy} onClick={() => setAbandonMutation(true)}>{t('放弃修改')}</Button></Space></>;
   const organizationOptions = organizations.filter((entry) => allows(entry, editing === 'new' ? 'users:create' : 'users:transfer')).map((entry) => ({ value: entry.id, label: entry.name }));
   if (lifecycleDenied) return <Alert type="error" showIcon title={t('管理权限或会话已失效，已清除用户内容')} description={<>{error && t(error)}{errorDescription}</>} />;
+  const actionBar = <div className="admin-toolbar"><Space wrap>
+    {canRead && <><Input.Search aria-label={t('搜索用户')} placeholder={t('用户名或邮箱')} allowClear onSearch={setSearch} />
+      <Select aria-label={t('用户状态')} placeholder={t('全部状态')} allowClear value={status} onChange={setStatus} options={[{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }]} /></>}
+    {canCreate && <Button type="primary" disabled={busy || commandPending || mutationUnknown} onClick={() => edit('new')}>{t('创建用户')}</Button>}
+    {canCreate && organization.type === 'INTERNAL' && <Button disabled={busy || commandPending || mutationUnknown} onClick={() => setBatch(true)}>{t('批量创建账号')}</Button>}
+  </Space></div>;
   return <>
     {targetUserId !== undefined && (!canRead ? <Alert type="error" title={t('无权查看目标账号')} showIcon /> : target?.organizationId === organization.id && target.userId === targetUserId && target.error ? <Alert type="error" title={t(target.error)} showIcon /> : target?.organizationId === organization.id && target.userId === targetUserId && target.user ? <section aria-label={t('目标账号')}>
       <Typography.Title level={4}>{t('目标账号')}</Typography.Title>
@@ -238,13 +244,8 @@ export function UserAdministration({ organization, organizations, targetUserId, 
     </section> : <Typography.Text role="status">{t('正在加载目标账号')}</Typography.Text>)}
     {error && !editing && !assignment && !reset && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
     {success && <Alert type="success" title={t(success)} showIcon />}
-    <div className="admin-toolbar"><Space wrap>
-      {canRead && <><Input.Search aria-label={t('搜索用户')} placeholder={t('用户名或邮箱')} allowClear onSearch={setSearch} />
-        <Select aria-label={t('用户状态')} placeholder={t('全部状态')} allowClear value={status} onChange={setStatus} options={[{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }]} /></>}
-      {canCreate && <Button type="primary" disabled={busy || commandPending || mutationUnknown} onClick={() => edit('new')}>{t('创建用户')}</Button>}
-      {canCreate && organization.type === 'INTERNAL' && <Button disabled={busy || commandPending || mutationUnknown} onClick={() => setBatch(true)}>{t('批量创建账号')}</Button>}
-    </Space></div>
-    {canRead && <LedgerTable<AdminUser> ledgerId="admin-users" organizationId={organization.id} requiredColumnKeys={['username', 'actions']} rowKey="id" loading={loading} dataSource={users} scroll={{ x: 850 }} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: busy || batchBusy, onChange: (nextPage, size) => requestLeave(() => { setPage(size === pageSize ? nextPage : 1); setPageSize(size); }) }} columns={[
+    {!canRead && actionBar}
+    {canRead && <LedgerTable<AdminUser> actionBar={actionBar} ledgerId="admin-users" organizationId={organization.id} requiredColumnKeys={['username', 'actions']} rowKey="id" loading={loading} dataSource={users} scroll={{ x: 850 }} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: busy || batchBusy, onChange: (nextPage, size) => requestLeave(() => { setPage(size === pageSize ? nextPage : 1); setPageSize(size); }) }} columns={[
       { key: 'username', title: t('用户名'), dataIndex: 'username' }, { key: 'fullName', title: t('姓名'), render: (_, user) => user.fullName || t('未填写') }, { key: 'phone', title: t('电话'), render: (_, user) => user.phone || t('未填写') }, { key: 'email', title: t('邮箱'), dataIndex: 'email' },
       { key: 'accountType', title: t('账号类型'), render: (_, user) => user.accountType === 'INTERNAL' ? t('内部') : t('供应商') },
       { key: 'organization', title: t('主组织'), render: (_, user) => user.organization.name },

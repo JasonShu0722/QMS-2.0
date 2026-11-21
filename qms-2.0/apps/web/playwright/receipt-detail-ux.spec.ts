@@ -248,11 +248,12 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
 
     const selectPage = section.getByRole('checkbox', { name: '选择当前页', exact: true });
     await page.setViewportSize({ width: 1920, height: 900 });
-    const tableContent = section.locator('.ant-table-content');
+    const tableContent = section.locator('.ant-table-body');
     const table = tableContent.locator('table');
+    const headers = section.locator('.ant-table-header thead th');
     expect((await table.boundingBox())!.width).toBeGreaterThanOrEqual((await tableContent.boundingBox())!.width - 2);
-    await expect(table.locator('thead th')).toHaveCount(6);
-    await expect(table.locator('thead th').last()).toHaveText('详情');
+    await expect(headers).toHaveCount(6);
+    await expect(headers.last()).toHaveText('详情');
     const selectionHeader = selectPage.locator('xpath=ancestor::th');
     expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(44, 0);
     await section.getByRole('separator', { name: '调整列宽 选择', exact: true }).press('ArrowRight');
@@ -266,17 +267,17 @@ test('real receipt detail UX, candidate pagination, scoped deletion and retained
       await section.getByRole('separator', { name: `调整列宽 ${name}`, exact: true }).press('ArrowLeft');
       await expect.poll(async () => (await header.boundingBox())!.width).toBeCloseTo(widthBefore, 0);
     }
-    const lastHeader = (await table.locator('thead th').last().boundingBox())!;
+    const lastHeader = (await headers.last().boundingBox())!;
     expect(lastHeader.x + lastHeader.width).toBeCloseTo((await table.boundingBox())!.x + (await table.boundingBox())!.width, 0);
     if (process.env.QMS_RECEIPT_VISUAL_SCREENSHOT) await page.screenshot({ path: process.env.QMS_RECEIPT_VISUAL_SCREENSHOT });
     await section.getByRole('button', { name: '列设置', exact: true }).click();
     const resultVisibility = page.getByRole('checkbox', { name: '显示 接收结果', exact: true });
     await resultVisibility.uncheck();
-    await expect(table.locator('thead th')).toHaveCount(5);
+    await expect(headers).toHaveCount(5);
     expect((await table.boundingBox())!.width).toBeGreaterThanOrEqual((await tableContent.boundingBox())!.width - 2);
     expect((await selectionHeader.boundingBox())!.width).toBeCloseTo(44, 0);
     await resultVisibility.check();
-    await expect(table.locator('thead th')).toHaveCount(6);
+    await expect(headers).toHaveCount(6);
     await section.getByRole('button', { name: '列设置', exact: true }).click();
 
     await page.setViewportSize({ width: 390, height: 700 });
@@ -429,7 +430,7 @@ test('real receipt filters contain long endpoints and clear applied and invalid 
         const fieldRect = field.getBoundingClientRect(), selectRect = select.getBoundingClientRect(), itemRect = item.getBoundingClientRect(), sourceRect = source.getBoundingClientRect();
         const overflowing = [...document.querySelectorAll<HTMLElement>('body *')].filter(element => {
           const rect = element.getBoundingClientRect();
-          return rect.width > 0 && rect.right > innerWidth + 1 && !element.closest('.ant-table-content');
+          return rect.width > 0 && rect.right > innerWidth + 1 && !element.closest('.ant-table-body, .ant-table-header');
         }).slice(0, 12).map(element => ({ tag: element.tagName, className: String(element.className), right: element.getBoundingClientRect().right, width: element.clientWidth, scrollWidth: element.scrollWidth, ancestors: [element.parentElement, element.parentElement?.parentElement].filter(Boolean).map(parent => ({ className: String(parent!.className), display: getComputedStyle(parent!).display, overflowX: getComputedStyle(parent!).overflowX, visibility: getComputedStyle(parent!).visibility })) }));
         return { fieldRight: fieldRect.right, fieldBottom: fieldRect.bottom, selectRight: selectRect.right, itemRight: itemRect.right, sourceLeft: sourceRect.left, sourceTop: sourceRect.top, itemWidth: item.clientWidth, itemScrollWidth: item.scrollWidth, overflow: getComputedStyle(item).textOverflow, filterWidth: field.closest('fieldset')!.clientWidth, filterScrollWidth: field.closest('fieldset')!.scrollWidth, documentWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth, overflowing };
       });

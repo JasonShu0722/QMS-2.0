@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Input, InputNumber, Modal, Popover, Select, Space, Tag, type TableProps } from 'antd';
 import { Copy } from 'lucide-react';
 import type { components } from '@qms/contracts';
@@ -42,6 +42,18 @@ export function ReceiptList({ scope, onViewIngestion }: { scope: IntegrationScop
   const [error, setError] = useState<unknown>();
   const [validation, setValidation] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const filtersId = useId();
+  const filterForm = useRef<HTMLFormElement>(null);
+  const filterTrigger = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const form = filterForm.current;
+    form?.focus();
+    const frame = requestAnimationFrame(() => {
+      if (form && document.activeElement === form && form.getBoundingClientRect().top < 0) form.scrollIntoView({ block: 'start' });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [filtersOpen]);
   const [endpointSearch, setEndpointSearch] = useState('');
   const [endpointOptions, setEndpointOptions] = useState<ReceiptEndpointPage['items']>([]);
   const [endpointLoading, setEndpointLoading] = useState(false);
@@ -193,19 +205,19 @@ export function ReceiptList({ scope, onViewIngestion }: { scope: IntegrationScop
     { key: 'time', title: text('时间', 'Time'), width: 185, render: (_, item) => clock('receivedAt' in item ? item.receivedAt : item.observedAt) },
     { key: 'actions', title: text('详情', 'Details'), width: (canDelete ? 170 : 90) + (onViewIngestion && mode === 'receipts' ? 90 : 0), render: (_, item) => <Space size={4}><Button size="small" disabled={busy || loading || !current()} aria-label={text(`查看消息${item.messageId ?? item.id}`, `View message ${item.messageId ?? item.id}`)} onClick={() => { if (!busy && current()) setSelected(item); }}>{text('查看', 'View')}</Button>{onViewIngestion && 'receivedAt' in item && <Button size="small" disabled={busy || loading || !current()} aria-label={text(`查看消息${item.messageId}入库结果`, `View ingestion for ${item.messageId}`)} onClick={() => { if (!busy && current()) onViewIngestion(item.id); }}>{text('入库结果', 'Ingestion')}</Button>}{canDelete && <Button size="small" danger disabled={selectionDisabled} aria-label={text(`删除消息${item.messageId ?? item.id}`, `Delete message ${item.messageId ?? item.id}`)} onClick={() => confirmDelete([item.id])}>{text('删除', 'Delete')}</Button>}</Space> },
   ];
-  return <div className={`qms-integration-section qms-integration-records${canDelete && selectedIds.length > 0 ? ' qms-integration-records--selected' : ''}`}>
+  const filterValidation = validation && <Alert role="alert" type="warning" title={text('请检查标识格式；来源系统编码最多64位，消息编号为8～128位', 'Check ID formats. Source system codes allow up to 64 characters; message IDs require 8–128 characters.')} />;
+  const actionBar = <>
     <div role="toolbar" aria-label={text('接收记录操作', 'Receiving record actions')} className="qms-integration-record-actions"><Select disabled={busy} aria-label={text('记录视图', 'Record view')} value={mode} options={[{ value: 'receipts', label: text('已收数据', 'Received data') }, { value: 'attempts', label: text('请求结果', 'Request results') }]} onChange={value => { if (busy) return; setSelectedIds([]); setMode(value); setPage(1); setTotal(0); setJumpPage(''); setFilters(defaults); setDraft(defaults); setEndpointSearch(''); setEndpointOptions([]); setEndpointLoadedPage(0); }} />
       <Button disabled={busy} loading={loading} onClick={() => setRevision(value => value + 1)}>{text('刷新记录', 'Refresh records')}</Button>
-      <Button disabled={busy} aria-expanded={filtersOpen} aria-controls="qms-integration-record-filters" onClick={() => setFiltersOpen(value => !value)}>{text('筛选条件', 'Filters')}</Button>
+      <Button ref={filterTrigger} disabled={busy} aria-expanded={filtersOpen} aria-controls={filtersOpen ? filtersId : undefined} onClick={() => setFiltersOpen(value => !value)}>{text('筛选条件', 'Filters')}</Button>
       <Button disabled={busy || !current()} onClick={clearFilters}>{text('清空筛选', 'Clear filters')}</Button>
       {operation && <button type="button" className={`qms-integration-capacity-button${operation.usedBodyBytes >= operation.capacityBytes * .8 ? ' qms-integration-capacity-warning' : ''}`} disabled={!canManageCapacity || busy} onClick={() => { setCapacityGiB(Math.max(1, Math.min(10, Math.round(operation.capacityBytes / 1073741824)))); setCapacityError(undefined); setCapacityUnknown(false); setCapacityOpen(true); }} aria-label={text('设置组织正文容量', 'Set organization payload capacity')}>{text('组织正文容量', 'Organization payload capacity')} {(operation.usedBodyBytes / 1048576).toFixed(1)} / {(operation.capacityBytes / 1048576).toFixed(0)} MiB</button>}
     </div>
-    {operationFailed && <Alert type="warning" showIcon title={text('运行事实暂不可读取', 'Operation facts are unavailable')} />}
-    {mode === 'attempts' && <Alert type="info" showIcon title={text(data && 'collectionStatus' in data && data.collectionStatus === 'UNAVAILABLE' ? '请求明细采集不可用，部分请求可能没有记录' : '请求明细仅保留近7天，采集完整性未知', data && 'collectionStatus' in data && data.collectionStatus === 'UNAVAILABLE' ? 'Request collection is unavailable; some requests may be missing' : 'Request details are retained for seven days; collection completeness unknown')} />}
-    {canDelete && selectedIds.length > 0 && <div role="toolbar" aria-label={text('已选接收记录', 'Selected receiving records')} className="qms-integration-selection-bar"><span>{text(`已选择 ${selectedIds.length} 条`, `${selectedIds.length} selected`)}</span><Button disabled={busy} onClick={() => { if (!busy) setSelectedIds([]); }}>{text('取消选择', 'Clear selection')}</Button><Button danger disabled={busy} loading={deleting} onClick={() => confirmDelete(selectedIds)}>{text('删除所选', 'Delete selected')}</Button></div>}
-    {deleteUnknown && <Alert role="status" type="error" showIcon title={text('删除结果未确认，请使用原请求重试；期间请勿离开页面。', 'Deletion result is unknown. Retry the original request; do not leave this page.')} description={deleteError instanceof ApiError ? deleteError.traceId : undefined} />}
-    {deleteNotice ? <Alert role="alert" type="error" showIcon title={text(deleteNotice instanceof ApiError && deleteNotice.code === 'CLIENT_REAUTHENTICATION_COMPLETED' ? '身份验证已完成，请重新提交删除操作' : '删除未完成，请检查后重试', deleteNotice instanceof ApiError && deleteNotice.code === 'CLIENT_REAUTHENTICATION_COMPLETED' ? 'Reauthentication completed. Submit the deletion again.' : 'Deletion was not completed. Check and retry.')} description={deleteNotice instanceof ApiError ? deleteNotice.traceId : undefined} /> : null}
-    {filtersOpen && <fieldset disabled={busy} className="qms-integration-filter-fieldset"><form id="qms-integration-record-filters" className="qms-integration-filters" aria-label={text('接收记录筛选', 'Record filters')} onSubmit={event => { event.preventDefault(); apply(); }}>
+    {filtersOpen && <fieldset disabled={busy} className="qms-integration-filter-fieldset"><form ref={filterForm} id={filtersId} tabIndex={-1} className="qms-integration-filters" aria-label={text('接收记录筛选', 'Record filters')} onSubmit={event => { event.preventDefault(); apply(); }} onKeyDown={event => {
+      if (event.key !== 'Escape' || event.defaultPrevented || busy || (event.target as HTMLElement).getAttribute('aria-expanded') === 'true') return;
+      setFiltersOpen(false);
+      filterTrigger.current?.focus();
+    }}>
       {endpointError ? <Alert role="alert" type="error" title={text('接口候选加载失败，请重试', 'Unable to load interfaces. Retry.')} action={<Button type="link" disabled={endpointLoading} onClick={() => setEndpointRetry(value => value + 1)}>{text('重试', 'Retry')}</Button>} /> : null}
       <label><span>{text('接口名称或编码', 'Interface name or code')}</span><Select disabled={busy} showSearch filterOption={false} allowClear aria-label={text('接口名称或编码', 'Interface name or code')} value={draft.endpointId || undefined} searchValue={endpointSearch} onSearch={value => { setEndpointSearch(value); setEndpointPage(1); setEndpointLoadedPage(0); }} onChange={value => setDraft(currentDraft => ({ ...currentDraft, endpointId: value ?? '' }))} loading={endpointLoading} options={endpointOptions.map(item => ({ value: item.id, label: `${item.name} (${item.code}) · ${item.id}` }))} dropdownRender={menu => <>{menu}{!endpointError && endpointLoadedPage * 20 < endpointTotal && <Button type="link" disabled={busy || endpointLoading} onMouseDown={event => event.preventDefault()} onClick={() => setEndpointPage(value => value + 1)}>{text('加载更多接口', 'Load more interfaces')}</Button>}</>} placeholder={text('输入名称或编码搜索', 'Search by interface name or code')} /></label>
       <label><span>{text('来源系统编码', 'Source system code')}</span><Input aria-label={text('来源系统编码', 'Source system code')} value={draft.sourceCode} onChange={event => setDraft(value => ({ ...value, sourceCode: event.target.value }))} maxLength={64} /></label>
@@ -215,8 +227,15 @@ export function ReceiptList({ scope, onViewIngestion }: { scope: IntegrationScop
         <label><span>{text('请求结果', 'Request outcome')}</span><Select disabled={busy} aria-label={text('请求结果', 'Request outcome')} value={draft.outcome} options={[{ value: '', label: text('全部结果', 'All outcomes') }, ...Object.entries(outcomes).map(([value, labels]) => ({ value, label: text(...labels) }))]} onChange={outcome => setDraft(value => ({ ...value, outcome }))} /></label></>}
       <label><span>{text('查询时段', 'Time window')}</span><Select disabled={busy} aria-label={text('查询时段', 'Time window')} value={draft.period} options={(mode === 'attempts' ? [1, 7] : [1, 7, 30, 90]).map(value => ({ value, label: text(`近${value}天`, `Last ${value} days`) }))} onChange={period => setDraft(value => ({ ...value, period }))} /></label>
       <Button htmlType="submit" type="primary">{text('应用筛选', 'Apply filters')}</Button>
-    </form></fieldset>}
-    {validation && <Alert role="alert" type="warning" title={text('请检查标识格式；来源系统编码最多64位，消息编号为8～128位', 'Check ID formats. Source system codes allow up to 64 characters; message IDs require 8–128 characters.')} />}
+    </form>{filterValidation}</fieldset>}
+  </>;
+  return <div className={`qms-integration-section qms-integration-records${canDelete && selectedIds.length > 0 ? ' qms-integration-records--selected' : ''}`}>
+    {operationFailed && <Alert type="warning" showIcon title={text('运行事实暂不可读取', 'Operation facts are unavailable')} />}
+    {mode === 'attempts' && <Alert type="info" showIcon title={text(data && 'collectionStatus' in data && data.collectionStatus === 'UNAVAILABLE' ? '请求明细采集不可用，部分请求可能没有记录' : '请求明细仅保留近7天，采集完整性未知', data && 'collectionStatus' in data && data.collectionStatus === 'UNAVAILABLE' ? 'Request collection is unavailable; some requests may be missing' : 'Request details are retained for seven days; collection completeness unknown')} />}
+    {canDelete && selectedIds.length > 0 && <div role="toolbar" aria-label={text('已选接收记录', 'Selected receiving records')} className="qms-integration-selection-bar"><span>{text(`已选择 ${selectedIds.length} 条`, `${selectedIds.length} selected`)}</span><Button disabled={busy} onClick={() => { if (!busy) setSelectedIds([]); }}>{text('取消选择', 'Clear selection')}</Button><Button danger disabled={busy} loading={deleting} onClick={() => confirmDelete(selectedIds)}>{text('删除所选', 'Delete selected')}</Button></div>}
+    {deleteUnknown && <Alert role="status" type="error" showIcon title={text('删除结果未确认，请使用原请求重试；期间请勿离开页面。', 'Deletion result is unknown. Retry the original request; do not leave this page.')} description={deleteError instanceof ApiError ? deleteError.traceId : undefined} />}
+    {deleteNotice ? <Alert role="alert" type="error" showIcon title={text(deleteNotice instanceof ApiError && deleteNotice.code === 'CLIENT_REAUTHENTICATION_COMPLETED' ? '身份验证已完成，请重新提交删除操作' : '删除未完成，请检查后重试', deleteNotice instanceof ApiError && deleteNotice.code === 'CLIENT_REAUTHENTICATION_COMPLETED' ? 'Reauthentication completed. Submit the deletion again.' : 'Deletion was not completed. Check and retry.')} description={deleteNotice instanceof ApiError ? deleteNotice.traceId : undefined} /> : null}
+    {!filtersOpen && filterValidation}
     {error ? <Alert role="alert" showIcon type="error" title={text(integrationError(error), 'Unable to read records. Retry.')} description={error instanceof ApiError ? error.traceId : undefined} /> : null}
     <Modal open={capacityOpen} title={text('设置组织正文容量', 'Set organization payload capacity')} onCancel={() => { if (!capacityBusy) setCapacityOpen(false); }} maskClosable={!capacityBusy} keyboard={!capacityBusy} closable={!capacityBusy} onOk={() => void saveCapacity()} okText={text(capacityUnknown ? '重试保存' : '保存', capacityUnknown ? 'Retry save' : 'Save')} cancelText={text('取消', 'Cancel')} cancelButtonProps={{ disabled: capacityBusy }} okButtonProps={{ loading: capacitySaving, disabled: !Number.isInteger(capacityGiB) || capacityGiB! < 1 || capacityGiB! > 10 }}>
       <Space orientation="vertical" style={{ width: '100%' }}>
@@ -225,7 +244,7 @@ export function ReceiptList({ scope, onViewIngestion }: { scope: IntegrationScop
         {capacityError ? <Alert role="alert" type="error" showIcon title={text(integrationError(capacityError), 'Unable to update organization capacity. Retry.')} description={capacityError instanceof ApiError ? capacityError.traceId : undefined} /> : null}
       </Space>
     </Modal>
-    <LedgerTable<Row> ledgerId={`console-integration-${mode}`} organizationId={scope.organizationId} rowKey="id" dataSource={data?.items ?? []} columns={columns} requiredColumnKeys={['messageId', 'actions']} rowSelection={rowSelection} resizableSelection className={canDelete ? 'qms-integration-receipt-table--selection' : undefined} loading={loading} scroll={{ x: canDelete ? 'max-content' : 860 }}
+    <LedgerTable<Row> actionBar={actionBar} ledgerId={`console-integration-${mode}`} organizationId={scope.organizationId} rowKey="id" dataSource={data?.items ?? []} columns={columns} requiredColumnKeys={['messageId', 'actions']} rowSelection={rowSelection} resizableSelection className={canDelete ? 'qms-integration-receipt-table--selection' : undefined} loading={loading} scroll={{ x: canDelete ? 'max-content' : 860 }}
       pagination={false} toolbarContent={<nav aria-label={text('接收记录分页', 'Receiving record pagination')} className="qms-integration-pagination">
         <span>{text(`共 ${total} 条`, `${total} records`)}</span>
         <label><span>{text('每页', 'Per page')}</span><select aria-label={text('每页条数', 'Records per page')} disabled={busy || loading} value={pageSize} onChange={event => changePage(1, Number(event.target.value))}>{[10, 20, 50, 100, 500, 1000].map(size => <option key={size} value={size}>{size}</option>)}</select></label>

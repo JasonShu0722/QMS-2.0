@@ -124,13 +124,25 @@ function List({ session, expectedOrganizationId }: { session?: string; expectedO
   const createFrozen = denied || busy || !!uncertain || stale;
   const pagination = page && <Space className="workflow-list__pagination"><span>{t('总数')} {page.total}</span><Select aria-label={locale === 'en-US' ? 'Page size' : '每页条数'} value={pageSize} options={[10, 20, 50, 100].map(value => ({ value, label: String(value) }))} disabled={createFrozen || loading} onChange={size => requestLeave(() => { if (!current()) return; setOffset(0); setPageSize(size); })} /><Button disabled={createFrozen || loading || offset === 0} onClick={() => setOffset((value) => Math.max(0, value - pageSize))}>{t('上一页')}</Button>
     <Button disabled={createFrozen || loading || offset + pageSize >= page.total || offset + pageSize > 10000} onClick={() => setOffset((value) => value + pageSize)}>{t('下一页')}</Button></Space>;
-  return <section className="workflow-list">
-    <header className="workflow-heading"><Typography.Title level={2}>{t('受控流程列表')}</Typography.Title>
+  const actionBar = <>
+    <div className="workflow-heading">
       <Space wrap><Button disabled={createFrozen || templateBusy || !!error} onClick={() => requestLeave(() => { setCreating(false); setCode(''); setName(''); setTemplateOpen(true); })}>{locale === 'en-US' ? 'Initialize closure review template' : '初始化关闭审核模板'}</Button>
       <Button type="primary" disabled={createFrozen || templateBusy || templateOpen || !!error} onClick={() => {
         if (creating) requestLeave(() => { setCreating(false); setCode(''); setName(''); });
         else setCreating(true);
-      }}>{t('新建流程')}</Button></Space></header>
+      }}>{t('新建流程')}</Button></Space></div>
+    <Space wrap className="workflow-list__filters"><label>{t('搜索流程')}<input aria-label={t('搜索流程')} value={search} maxLength={100} disabled={createFrozen} onChange={(event) => { setSearch(event.target.value); setOffset(0); }} /></label>
+      <label>{t('状态')}<select aria-label={t('状态')} value={status} disabled={createFrozen} onChange={(event) => { setStatus(event.target.value); setOffset(0); }}>
+        <option value="">{t('全部状态')}</option>{['DRAFT', 'PUBLISHED', 'RETIRED'].map((value) => <option key={value} value={value}>{t(workflowLabel(value))}</option>)}
+      </select></label></Space>
+    {creating && <Card title={t('新建流程')}><form onSubmit={(event) => { event.preventDefault(); void act(); }}>
+      <label>{t('流程代码')}<input aria-label={t('流程代码')} required maxLength={100} value={code} disabled={createFrozen} onChange={(event) => setCode(event.target.value)} /></label>
+      <label>{t('流程名称')}<input aria-label={t('流程名称')} required maxLength={200} value={name} disabled={createFrozen} onChange={(event) => setName(event.target.value)} /></label>
+      <Button htmlType="submit" disabled={createFrozen || !code.trim() || !name.trim()}>{t('创建草稿')}</Button>
+    </form></Card>}
+  </>;
+  return <section className="workflow-list">
+    <header className="workflow-heading"><Typography.Title level={2}>{t('受控流程列表')}</Typography.Title></header>
     {templateOpen && <WorkflowClosureTemplateDialog onClose={() => setTemplateOpen(false)} onBusyChange={setTemplateBusy} onCreated={result => {
       if (!current()) return;
       if (expectedOrganizationId && result.organizationId !== expectedOrganizationId) { const cause = new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403); setActionError(cause); report(cause); return; }
@@ -140,23 +152,13 @@ function List({ session, expectedOrganizationId }: { session?: string; expectedO
       action={error && !stale ? <Button disabled={createFrozen} aria-label={t('重试')} onClick={() => setRevision((value) => value + 1)}>{t('重试')}</Button> : undefined} />}
     {uncertain && <Alert type="warning" title={t('创建请求结果未确认，输入已冻结，只能重试原请求。')} action={<Button disabled={busy || denied} onClick={() => void act(undefined, uncertain)}>{t('重试原创建请求')}</Button>} />}
     {stale && <Button disabled={loading || busy || denied} onClick={() => setRevision(value => value + 1)}>{t('刷新流程列表核对')}</Button>}
-    <Space wrap className="workflow-list__filters"><label>{t('搜索流程')}<input aria-label={t('搜索流程')} value={search} maxLength={100} disabled={createFrozen} onChange={(event) => { setSearch(event.target.value); setOffset(0); }} /></label>
-      <label>{t('状态')}<select aria-label={t('状态')} value={status} disabled={createFrozen} onChange={(event) => { setStatus(event.target.value); setOffset(0); }}>
-        <option value="">{t('全部状态')}</option>{['DRAFT', 'PUBLISHED', 'RETIRED'].map((value) => <option key={value} value={value}>{t(workflowLabel(value))}</option>)}
-      </select></label></Space>
-    {creating && <Card title={t('新建流程')}><form onSubmit={(event) => { event.preventDefault(); void act(); }}>
-      <label>{t('流程代码')}<input aria-label={t('流程代码')} required maxLength={100} value={code} disabled={createFrozen} onChange={(event) => setCode(event.target.value)} /></label>
-      <label>{t('流程名称')}<input aria-label={t('流程名称')} required maxLength={200} value={name} disabled={createFrozen} onChange={(event) => setName(event.target.value)} /></label>
-
-      <Button htmlType="submit" disabled={createFrozen || !code.trim() || !name.trim()}>{t('创建草稿')}</Button>
-    </form></Card>}
-    {loading ? <>{pagination}<Spin aria-label={t('加载中')} /></> : page && !page.items.length ? <>{pagination}<Empty description={t('暂无流程')} /></> : page && <LedgerTable ledgerId="workflows" organizationId={expectedOrganizationId} toolbarContent={pagination} requiredColumnKeys={['code', 'actions']} className="workflow-list__table" rowKey="id" dataSource={page.items} pagination={false} scroll={{ x: 760 }} columns={[
+    <LedgerTable ledgerId="workflows" organizationId={expectedOrganizationId} actionBar={actionBar} toolbarContent={pagination} bodyFallback={loading ? <Spin aria-label={t('加载中')} /> : !page ? false : !page.items.length ? <Empty description={t('暂无流程')} /> : undefined} requiredColumnKeys={['code', 'actions']} className="workflow-list__table" rowKey="id" dataSource={page?.items} pagination={false} scroll={{ x: 760 }} columns={[
       { key: 'code', title: t('代码'), render: (_, item) => <code>{item.code}</code> },
       { key: 'name', title: t('名称'), dataIndex: 'name' },
       { key: 'status', title: t('状态'), render: (_, item) => <Tag>{t(workflowLabel(item.version.status))}</Tag> },
       { key: 'version', title: t('版本'), render: (_, item) => item.version.version },
       { key: 'actions', title: t('操作'), render: (_, item) => <Space><Link to={`/console/workflows/${item.id}/${item.version.id}`}>{t('打开流程')}</Link><Button disabled={createFrozen} aria-label={`${t('版本历史')} ${item.name}`} onClick={() => void act(item.id)}>{t('版本历史')}</Button></Space> },
-    ]} />}
+    ]} />
     {history && <Card title={`${history.name} · ${t('版本历史')}`}><ul>{history.versions.map((version) => <li key={version.id}>
       <Link to={`/console/workflows/${history.id}/${version.id}`}>{t('版本')} {version.version} · {t(workflowLabel(version.status))}</Link>{version.changeNote && <span> — {version.changeNote}</span>}
     </li>)}</ul></Card>}
