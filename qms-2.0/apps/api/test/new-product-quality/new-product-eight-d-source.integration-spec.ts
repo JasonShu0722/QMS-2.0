@@ -156,7 +156,7 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
   it('does not rewrite the selected fact when the live process record is edited', async () => {
     const f = await fixture();
     const selection = await select(f);
-    await ledger.update(f.actor, f.defect.id, { expectedVersion: f.defect.version, defectQuantity: 7, occurredAt: new Date() }, randomUUID(), randomUUID());
+    await ledger.update(f.actor, f.defect.id, { expectedVersion: f.defect.version, factoryCode: 'FACTORY_1', defectQuantity: 7, occurredAt: new Date() }, randomUUID(), randomUUID());
     expect(await quality.selectedDefects(f.actor, f.project.id)).toMatchObject([{ source_snapshot: selection.source_snapshot, source_version: selection.source_version }]);
     expect((await quality.projectDetail(f.actor, f.project.id)).selected_defects).toMatchObject([{ source_snapshot: selection.source_snapshot }]);
   });
@@ -210,7 +210,7 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
     expect(reference).toMatchObject({ sourceId: selected.id, sourceVersion: selected.source_version, createdBy: f.actor.id,
       sourceSnapshot: { ...selected.source_snapshot, selectionId: selected.id, projectId: f.project.id } });
     await mappings.updateProject(f.actor, f.actor.organizationId, f.projectRecord.id, { expectedVersion: f.projectRecord.version, stage: 'MASS_PRODUCTION' }, randomUUID(), randomUUID());
-    await ledger.update(f.actor, f.defect.id, { expectedVersion: f.defect.version, defectQuantity: 3, productCode: randomUUID() }, randomUUID(), randomUUID());
+    await ledger.update(f.actor, f.defect.id, { expectedVersion: f.defect.version, factoryCode: 'FACTORY_1', defectQuantity: 3, productCode: randomUUID() }, randomUUID(), randomUUID());
     expect(await sources.sourceReference(f.actor, selected.id)).toEqual(reference);
     expect(await prisma.$transaction(tx => sources.lockAndResolve(tx, reference, f.actor))).toMatchObject({
       organizationId: f.actor.organizationId, createdBy: f.actor.id, sourceVersion: reference.sourceVersion, sourceSnapshot: reference.sourceSnapshot,
@@ -259,7 +259,7 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
     const f = await fixture();
     const key = randomUUID();
     const selected = await select(f, reason, key);
-    await ledger.update(f.actor, f.defect.id, { expectedVersion: f.defect.version, defectQuantity: 4 }, randomUUID(), randomUUID());
+    await ledger.update(f.actor, f.defect.id, { expectedVersion: f.defect.version, factoryCode: 'FACTORY_1', defectQuantity: 4 }, randomUUID(), randomUUID());
     await mappings.updateProject(f.actor, f.actor.organizationId, f.projectRecord.id, { expectedVersion: f.projectRecord.version, stage: 'MASS_PRODUCTION' }, randomUUID(), randomUUID());
     expect(await select(f, reason, key)).toEqual(selected);
     expect(await quality.selectedDefects(f.actor, f.project.id)).toHaveLength(1);

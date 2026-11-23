@@ -86,11 +86,11 @@ function PlatformConfiguration({ organization }: { organization: AdminOrganizati
     <Button disabled={saving || loading} onClick={refresh}>{t('刷新')}</Button>
     <Card title={t('系统参数')}>
       <Spin spinning={loading}>
-        <Form name="platform-settings" form={settingsForm} layout="vertical" onValuesChange={() => setSettingsDirty(true)} onFinish={saveSettings} disabled={!manage || loading || saving || !settings}>
+        {settings ? <Form name="platform-settings" form={settingsForm} initialValues={settings} layout="vertical" onValuesChange={() => setSettingsDirty(true)} onFinish={saveSettings} disabled={!manage || loading || saving}>
           <Form.Item name="notificationLocale" label={t('通知语言')} rules={[{ required: true }]}><Select options={[{ value: 'zh-CN', label: '简体中文' }, { value: 'en-US', label: 'English' }]} /></Form.Item>
           <Form.Item name="exportRetentionMinutes" label={t('导出保留时间（分钟）')} rules={[{ required: true }, { type: 'number', min: 5, max: 10080 }]}><InputNumber min={5} max={10080} precision={0} /></Form.Item>
           {manage ? <Button htmlType="submit" type="primary" loading={saving}>{t('保存')}</Button> : null}
-        </Form>
+        </Form> : null}
       </Spin>
     </Card>
     <Card title={t('通知规则')} loading={loading}>

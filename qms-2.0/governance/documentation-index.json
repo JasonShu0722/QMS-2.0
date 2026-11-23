@@ -1012,7 +1012,7 @@
           },
           {
             "path": "test/ci-validation-scope.test.mjs",
-            "sha256": "26b033d30d8a1d2e8e0c5fb142082a2984ddffa020f64356c00d07483da120db"
+            "sha256": "27d65cbba88968170b7cfd71e65fc885af511e20d9324381c6b34753e47e9c08"
           }
         ]
       }

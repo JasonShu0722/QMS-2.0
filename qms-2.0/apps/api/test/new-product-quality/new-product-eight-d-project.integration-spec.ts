@@ -60,7 +60,7 @@ describe('new-product internal 8D project gates on PostgreSQL', () => {
     const record = await mappings.createProject(actor, f.org.id, { code: project.code, name: project.name, stage: 'NEW_PRODUCT' }, randomUUID(), randomUUID());
     await mappings.createMapping(actor, f.org.id, { componentCode: project.product_code, projectRecordId: record.id, productCategory: 'Gate fixture' }, randomUUID(), randomUUID());
     const select = async () => {
-      const defect = await app.get(ProcessDefectLedgerService).create(actor, { description: 'Selected process fact', productCode: project.product_code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+      const defect = await app.get(ProcessDefectLedgerService).create(actor, { description: 'Selected process fact', factoryCode: 'FACTORY_1', productCode: project.product_code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
       return quality.selectProcessDefect(actor, project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     };
     const first = await select(), second = await select();
@@ -135,18 +135,18 @@ describe('new-product internal 8D project gates on PostgreSQL', () => {
     const other = await quality.createProject(f.actor, { code: randomUUID(), name: 'Other gate project', productCode: randomUUID() }, randomUUID(), randomUUID());
     const record = await mappings.createProject(f.actor, f.org.id, { code: other.code, name: other.name, stage: 'NEW_PRODUCT' }, randomUUID(), randomUUID());
     await mappings.createMapping(f.actor, f.org.id, { componentCode: other.product_code, projectRecordId: record.id, productCategory: 'Gate fixture' }, randomUUID(), randomUUID());
-    const defect = await app.get(ProcessDefectLedgerService).create(f.actor, { description: 'Other project source', productCode: other.product_code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+    const defect = await app.get(ProcessDefectLedgerService).create(f.actor, { description: 'Other project source', factoryCode: 'FACTORY_2', productCode: other.product_code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     const selected = await quality.selectProcessDefect(f.actor, other.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     const current = await runtime.core.read(f.actor, problemId);
     await runtime.core.sources(f.actor, problemId, { expectedVersion: current.version, add: [{ defectId: selected.id, expectedVersion: selected.source_version }],
       removeDefectIds: [f.first.id, f.second.id], primaryDefectId: selected.id }, randomUUID(), randomUUID());
     expect(await quality.issueListForProject(f.actor, f.project.id)).toMatchObject({ internalEightDIssues: [], stats: { total: 0 } });
     expect(await quality.issueListForProject(f.actor, other.id)).toMatchObject({ internalEightDIssues: [{ problemId, selectionIds: [selected.id] }], stats: { total: 1 } });
-    const frozen = await app.get(ProcessDefectLedgerService).create(f.actor, { description: 'New-product registration before transition', productCode: other.product_code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+    const frozen = await app.get(ProcessDefectLedgerService).create(f.actor, { description: 'New-product registration before transition', factoryCode: 'FACTORY_2', productCode: other.product_code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     await mappings.updateProject(f.actor, f.org.id, record.id, { expectedVersion: record.version, stage: 'MASS_PRODUCTION' }, randomUUID(), randomUUID());
     expect(await quality.issueListForProject(f.actor, other.id)).toMatchObject({ internalEightDIssues: [{ problemId }] });
     await expect(quality.selectProcessDefect(f.actor, other.id, { defectId: frozen.id, expectedVersion: frozen.version }, randomUUID(), randomUUID())).resolves.toMatchObject({ defect_id: frozen.id });
-    const mass = await app.get(ProcessDefectLedgerService).create(f.actor, { description: 'Mass-production registration after transition', productCode: other.product_code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+    const mass = await app.get(ProcessDefectLedgerService).create(f.actor, { description: 'Mass-production registration after transition', factoryCode: 'FACTORY_2', productCode: other.product_code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     await expect(quality.selectProcessDefect(f.actor, other.id, { defectId: mass.id, expectedVersion: mass.version }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'NEW_PRODUCT_DEFECT_STAGE_INELIGIBLE' } });
     const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'new-product-quality:projects:read' } });
     await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: f.role.id, permissionId: permission.id } } });

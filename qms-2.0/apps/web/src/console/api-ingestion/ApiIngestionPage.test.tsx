@@ -207,10 +207,13 @@ it('opens receipt-linked processing jobs and clears the controlled receipt filte
   const selectedTab = pageTab('处理任务');
   expect(selectedTab).toHaveAttribute('aria-selected', 'true');
   const jobs = within(document.getElementById(selectedTab.getAttribute('aria-controls')!)!);
-  fireEvent.click(jobs.getByRole('button', { name: '清除接收记录筛选' })); await screen.findByText('供应商规则');
-  expect(jobs.queryByRole('button', { name: '清除接收记录筛选' })).not.toBeInTheDocument();
-  fireEvent.click(pageTab('处理任务'));
+  fireEvent.click(jobs.getByRole('button', { name: '清除接收记录筛选' }));
+  expect(pageTab('规则')).toHaveAttribute('aria-selected', 'true');
+  const reopenedTab = pageTab('处理任务');
+  fireEvent.click(reopenedTab);
   await waitFor(() => expect(read.mock.calls.some(call => call[0].includes('/ingestion/jobs?') && !new URL(call[0], 'http://localhost').searchParams.has('receiptId'))).toBe(true));
+  const reopenedJobs = within(document.getElementById(reopenedTab.getAttribute('aria-controls')!)!);
+  expect(reopenedJobs.queryByRole('button', { name: '清除接收记录筛选' })).not.toBeInTheDocument();
 });
 it.each(['not-a-receipt', `${receiptId}&receiptId=${receiptId}`])('refuses an invalid or ambiguous receipt filter %s', value => {
   view(`/console/api-ingestion?receiptId=${value}`); expect(screen.getByRole('alert')).toHaveTextContent('接收记录筛选无效'); expect(read).not.toHaveBeenCalled();
