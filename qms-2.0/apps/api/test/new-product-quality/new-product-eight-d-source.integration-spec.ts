@@ -137,7 +137,7 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
   it('preserves a known occurrence date without requiring a reason or claiming historical verification', async () => {
     const f = await fixture();
     const occurredAt = new Date('2026-10-25T01:23:45.000Z');
-    const defect = await ledger.create(f.actor, { description: 'Known occurrence', productCode: f.mapping.componentCode, traceCode: randomUUID(), occurredAt, defectQuantity: 2 }, randomUUID(), randomUUID());
+    const defect = await ledger.create(f.actor, { description: 'Known occurrence', productCode: f.mapping.componentCode, traceCode: randomUUID(), occurredAt, defectQuantity: 2, factoryCode: 'FACTORY_1' }, randomUUID(), randomUUID());
     const selected = await quality.selectProcessDefect(f.actor, f.project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     expect(selected).toMatchObject({ selection_reason: null, source_snapshot: { occurredAt: occurredAt.toISOString(), defectQuantity: 2,
       inclusion: { occurredAt: occurredAt.toISOString(), temporalEvidence: 'UNVERIFIED', warnings: ['HISTORICAL_MAPPING_UNAVAILABLE'] } } });
@@ -149,7 +149,7 @@ describe('new-product same-fact selection on disposable PostgreSQL', () => {
     await mappings.updateProject(f.actor, f.actor.organizationId, f.projectRecord.id, { expectedVersion: f.projectRecord.version, stage: 'MASS_PRODUCTION' }, randomUUID(), randomUUID());
     expect(await quality.selectedDefects(f.actor, f.project.id)).toMatchObject([{ id: selection.id, source_snapshot: selection.source_snapshot }]);
     expect((await quality.projectDetail(f.actor, f.project.id)).selected_defects).toMatchObject([{ id: selection.id, source_snapshot: selection.source_snapshot }]);
-    const defect = await ledger.create(f.actor, { description: 'After mass production', productCode: f.mapping.componentCode, traceCode: randomUUID(), occurredAt: new Date() }, randomUUID(), randomUUID());
+    const defect = await ledger.create(f.actor, { description: 'After mass production', factoryCode: 'FACTORY_1', productCode: f.mapping.componentCode, traceCode: randomUUID(), occurredAt: new Date() }, randomUUID(), randomUUID());
     await expect(select({ ...f, defect })).rejects.toMatchObject({ status: 409, response: { code: 'NEW_PRODUCT_DEFECT_STAGE_INELIGIBLE' } });
   });
 

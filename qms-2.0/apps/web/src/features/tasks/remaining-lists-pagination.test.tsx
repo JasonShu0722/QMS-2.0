@@ -70,7 +70,7 @@ it.each([
   const pageTwo = await within(scope).findByTitle('2');
   const toolbar = pageTwo.closest('.qms-list-toolbar');
   expect(toolbar).toBeInTheDocument();
-  const list = scope.querySelector('.ant-list');
+  const list = scope.querySelector('.qms-record-list');
   expect(list).toBeInTheDocument();
   expect(toolbar!.parentElement).toBe(list!.parentElement);
   expect(toolbar!.nextElementSibling).toBe(list);
@@ -104,7 +104,7 @@ it.each([
         ? screen.getByRole('region', { name: '审核导入行' })
         : view.container;
       const pager = scope.querySelector('.ant-pagination');
-      const list = scope.querySelector('.ant-table-wrapper, .ant-list');
+      const list = scope.querySelector('.ant-table-wrapper, .qms-record-list');
       expect(pager).toBeInTheDocument();
       expect(list).toBeInTheDocument();
       expect(pager!.compareDocumentPosition(list!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -145,7 +145,7 @@ it('remaining lists keep the personal notification pager above its cards and req
   await waitFor(() => expect(within(panel).getByTitle('2')).toBeVisible());
   const pager = panel.querySelector('.ant-pagination')!;
   expect(panel.querySelectorAll('.ant-pagination')).toHaveLength(1);
-  expect(pager.compareDocumentPosition(panel.querySelector('.ant-list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(pager.compareDocumentPosition(panel.querySelector('.qms-record-list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   fireEvent.click(within(pager as HTMLElement).getByTitle('2'));
   await waitFor(() => expect(requested('/api/v1/notifications', 20, 20)).toBe(true));
 });
@@ -225,7 +225,7 @@ it('remaining lists expose real management announcement page sizes', async () =>
   mount(<AnnouncementsPage />);
   fireEvent.click(await screen.findByRole('tab', { name: '公告管理' }));
   const panel = screen.getByRole('tabpanel', { name: '公告管理' });
-  expect(panel.querySelector('.ant-pagination')!.compareDocumentPosition(panel.querySelector('.ant-list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(panel.querySelector('.ant-pagination')!.compareDocumentPosition(panel.querySelector('.qms-record-list')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   await chooseFifty(screen.getByRole('combobox'));
   await waitFor(() => expect(requested('/api/v1/announcements/manage', 50)).toBe(true));
 });

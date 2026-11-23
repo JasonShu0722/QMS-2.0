@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Empty, List, Pagination, Space, Spin, Tabs, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Pagination, Space, Spin, Tabs, Tag, Typography } from 'antd';
+import { RecordList, RecordListActions, RecordListDetails } from '../../ui/list/RecordList';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -102,19 +103,20 @@ export function MyTasksPage() {
           {!tasks.loading && tasks.data && pagination(taskOffset, tasks.data.total, taskPageSize, setTaskOffset, setTaskPageSize)}
         </ListToolbar>
         {tasks.loading ? <Spin aria-label={t('正在加载待办')} /> : tasks.data &&
-          <List dataSource={tasks.data.items} locale={{ emptyText: <Empty description={t('暂无待办')} /> }} renderItem={(task) => <List.Item key={task.id} actions={[
-            ...(task.canClaim ? [<Button key="claim" aria-label={t(task.claimedByUserId ? '重新领取' : '领取')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/claim`, task.id, task.version, tasks.refresh)}>{t(task.claimedByUserId ? '重新领取' : '领取')}</Button>] : []),
-            ...(task.canRelease ? [<Button key="release" aria-label={t('释放')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/release`, task.id, task.version, tasks.refresh)}>{t('释放')}</Button>] : []),
-            ...(task.canRetry ? [<Button key="retry" aria-label={t('失败重试')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/retry`, task.id, task.version, tasks.refresh)}>{t('失败重试')}</Button>] : []),
-          ]}>
-            <List.Item.Meta title={<Link to={`/app/problem-workspace/${task.problemId}?instanceId=${encodeURIComponent(task.instanceId)}`}>{task.reportNumber}</Link>} description={<Space orientation="vertical" size={6}>
+          <RecordList items={tasks.data.items} itemKey={task => task.id} empty={<Empty description={t('暂无待办')} />} renderItem={(task) => <>
+            <RecordListDetails title={<Link to={`/app/problem-workspace/${task.problemId}?instanceId=${encodeURIComponent(task.instanceId)}`}>{task.reportNumber}</Link>} description={<Space orientation="vertical" size={6}>
               <span>{task.name}</span>
               <Space wrap className="task-inbox__filters"><Tag color={task.status === 'OVERDUE' ? 'red' : task.status === 'FAILED' ? 'volcano' : 'blue'}>{t(task.status === 'OVERDUE' ? '已逾期' : task.status === 'FAILED' ? '失败' : task.status === 'IN_PROGRESS' ? '处理中' : '待处理')}</Tag>
                 <span>{t(task.claimedByUserId ? task.canAct ? '我已领取' : task.canClaim ? '可重新领取' : '已由其他人领取' : '未领取')}</span>
               </Space>
               {task.dueAt && <span>{t('截止时间')}：{date(task.dueAt)}</span>}
             </Space>} />
-          </List.Item>} />
+            <RecordListActions>{[
+              ...(task.canClaim ? [<Button key="claim" aria-label={t(task.claimedByUserId ? '重新领取' : '领取')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/claim`, task.id, task.version, tasks.refresh)}>{t(task.claimedByUserId ? '重新领取' : '领取')}</Button>] : []),
+              ...(task.canRelease ? [<Button key="release" aria-label={t('释放')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/release`, task.id, task.version, tasks.refresh)}>{t('释放')}</Button>] : []),
+              ...(task.canRetry ? [<Button key="retry" aria-label={t('失败重试')} loading={pendingId === task.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/tasks/${task.id}/retry`, task.id, task.version, tasks.refresh)}>{t('失败重试')}</Button>] : []),
+            ]}</RecordListActions>
+          </>} />
         }
       </div> },
       { key: 'notifications', label: t('我的通知'), children: <div>
@@ -126,7 +128,7 @@ export function MyTasksPage() {
           {!notifications.loading && notifications.data && pagination(noticeOffset, notifications.data.total, noticePageSize, setNoticeOffset, setNoticePageSize)}
         </ListToolbar>
         {notifications.loading ? <Spin aria-label={t('正在加载通知')} /> : notifications.data &&
-          <List dataSource={notifications.data.items} locale={{ emptyText: <Empty description={t('暂无通知')} /> }} renderItem={(notice) => <List.Item key={notice.id}>
+          <RecordList items={notifications.data.items} itemKey={notice => notice.id} empty={<Empty description={t('暂无通知')} />} renderItem={(notice) =>
             <Card className="qms-display-card" style={{ width: '100%' }} title={notice.subject ?? t(notice.kind === 'TASK_ESCALATED' ? '超时升级' : notice.kind === 'TASK_REMINDER' ? '时限提醒' : '任务分配')} extra={<Tag>{t(notice.readAt ? '已读' : '未读')}</Tag>}>
               <Typography.Paragraph style={{ whiteSpace: 'pre-wrap' }}>{notice.body}</Typography.Paragraph>
               <Space wrap className="task-inbox__filters"><span>{notice.nodeName}</span><time dateTime={notice.createdAt}>{date(notice.createdAt)}</time>
@@ -134,7 +136,7 @@ export function MyTasksPage() {
                 {!notice.readAt && <Button loading={pendingId === notice.id} disabled={!!pendingId} onClick={() => void mutate(`/api/v1/notifications/${notice.id}/read`, notice.id, notice.version, notifications.refresh)}>{t('标为已读')}</Button>}
               </Space>
             </Card>
-          </List.Item>} />
+          } />
         }
       </div> },
     ]} />

@@ -36,6 +36,21 @@
 .qms-ledger--sticky > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table > .ant-table-container > .ant-table-sticky-scroll { display: none; }
 .qms-ledger--sticky > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table > .ant-table-container > .ant-table-body:focus-visible { outline: 2px solid var(--qms-accent); outline-offset: -2px; }
 .qms-ledger--sticky:not([data-ledger-sticky-flow]) .ant-table-body :focus { scroll-margin-block-start: var(--qms-ledger-stack-height, 0px); }
+.qms-ledger[data-ledger-horizontal-overflow] { padding-block-end: var(--qms-ledger-dock-height, 20px); }
+.qms-ledger[data-ledger-horizontal-overflow] > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table > .ant-table-container > .ant-table-body { scrollbar-width: none; }
+.qms-ledger[data-ledger-horizontal-overflow] > .ant-table-wrapper > .ant-spin > .ant-spin-container > .ant-table > .ant-table-container > .ant-table-body::-webkit-scrollbar { display: none; }
+.qms-ledger[data-ledger-horizontal-overflow] .ant-table-body :focus { scroll-margin-block-end: var(--qms-ledger-dock-height, 20px); }
+.qms-ledger__horizontal-scroll:not([hidden]) { appearance: none; position: fixed; transform: translateY(-100%); box-sizing: border-box; z-index: 3; height: var(--qms-ledger-dock-height, 20px); margin: 0; padding: 0; border: 0; background: var(--qms-surface); cursor: ew-resize; touch-action: none; }
+.qms-ledger__horizontal-scroll:focus-visible { outline: 2px solid var(--qms-accent-action); outline-offset: -2px; }
+.qms-ledger__horizontal-scroll::-webkit-slider-runnable-track { height: 8px; border-radius: 4px; background: var(--qms-border); }
+.qms-ledger__horizontal-scroll::-webkit-slider-thumb { appearance: none; width: 44px; height: 14px; margin-top: -3px; border-radius: 7px; background: var(--qms-accent-action); }
+@supports selector(::-moz-range-thumb) {
+  .qms-ledger__horizontal-scroll::-moz-range-track { height: 8px; border-radius: 4px; background: var(--qms-border); }
+  .qms-ledger__horizontal-scroll::-moz-range-thumb { width: 44px; height: 14px; border: 0; border-radius: 7px; background: var(--qms-accent-action); }
+}
+@media (forced-colors: active) {
+  .qms-ledger__horizontal-scroll { --qms-accent-action: Highlight; --qms-border: GrayText; --qms-surface: Canvas; forced-color-adjust: none; }
+}
 .qms-ledger__heading { display: flex; align-items: center; gap: 3px; min-width: 0; }
 .qms-ledger__title { flex: 1; min-width: 0; }
 .qms-ledger__grip { display: inline-flex; align-items: center; padding: 2px 0; border: 0; background: transparent; color: var(--qms-muted); cursor: grab; touch-action: none; }

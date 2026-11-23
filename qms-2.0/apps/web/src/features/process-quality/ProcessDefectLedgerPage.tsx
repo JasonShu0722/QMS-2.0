@@ -1,13 +1,15 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Input, List, Popover, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
+import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Input, Popover, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
 import { Eye, Filter, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
+import { useLanguage } from '../../i18n/Language';
 import './process-quality.css';
 import { useCompletedSessionNavigation, useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
+import { RecordList } from '../../ui/list/RecordList';
 import { preferenceKey } from '../../ui/ledger/model';
 import { useLedgerScope, usePreference } from '../../ui/ledger/preferences';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
@@ -17,6 +19,7 @@ import { ProcessDefectDeletionDialog } from './ProcessDefectDeletionDialog';
 import { ProcessLedgerAction } from './ProcessLedgerAction';
 import { ProcessAiDescription } from './ProcessAiDescription';
 import { categoryLabels, categoryOptions, CompletionStatus, denied, MappingHint, ProcessError, verificationLabels } from './process-ledger';
+import { factoryChoices, factoryFieldLabel, factoryLabel } from './process-factory';
 
 type Defect = components['schemas']['ProcessDefectDto'];
 type DefectPage = components['schemas']['ProcessDefectPageDto'];
@@ -31,7 +34,7 @@ type FilterItem = { field: FilterField; operator: string; value?: string };
 type FilterState = { currentMonth: boolean; logic: FilterLogic; items: FilterItem[] };
 type FilterPreference = { search: string; filters: FilterState };
 const filterFields = [
-  ['occurredAt', '发生时间', 'Occurred at'], ['shift', '班次', 'Shift'], ['projectCode', '项目号', 'Project number'], ['projectStage', '项目状态', 'Project stage'], ['productSubcategory', '细分类型', 'Product subcategory'],
+  ['occurredAt', '发生时间', 'Occurred at'], ['factoryCode', ...factoryFieldLabel], ['shift', '班次', 'Shift'], ['projectCode', '项目号', 'Project number'], ['projectStage', '项目状态', 'Project stage'], ['productSubcategory', '细分类型', 'Product subcategory'],
   ['description', '不良描述', 'Defect description'], ['traceCode', '追溯码', 'Trace code'], ['lineName', '生产线名称', 'Line name'], ['operationName', '工序名称', 'Operation name'],
   ['operationSector', '板块', 'Sector'], ['defectQuantity', '不良数量', 'Defect quantity'], ['ledgerStatus', '台账状态', 'Ledger status'], ['responsibilityCategory', '责任类别', 'Responsibility category'],
   ['pendingCompletion', '完善情况', 'Completion pending'], ['pendingConfiguration', '配置情况', 'Configuration pending'],
@@ -45,6 +48,7 @@ const dateOperators = [['AFTER', '晚于', 'After'], ['BEFORE', '早于', 'Befor
 const numberOperators = [...equals, ['GT', '大于', 'Greater than'], ['GTE', '大于等于', 'At least'], ['LT', '小于', 'Less than'], ['LTE', '小于等于', 'At most'], ...empty];
 const enumOperators = [...equals, ...empty];
 const filterChoices: Partial<Record<FilterField, string[][]>> = {
+  factoryCode: factoryChoices,
   shift: [['DAY', '白班', 'Day'], ['NIGHT', '夜班', 'Night']],
   projectStage: [['NEW_PRODUCT', '新品', 'New product'], ['MASS_PRODUCTION', '量产', 'Mass production']],
   ledgerStatus: [['FOLLOWING', '跟进中', 'Following'], ['CLOSED', '已关闭', 'Closed']],
@@ -115,6 +119,8 @@ export function ProcessDefectLedgerPage() {
 }
 
 function ProcessLedgerContent({ organizationId, initialDefectId }: { organizationId?: string; initialDefectId?: string }) {
+  const english = useLanguage().locale === 'en-US';
+  const factoryTitle = factoryFieldLabel[english ? 1 : 0];
   const sessionOrganizationId = useWorkTabsStore(state => state.sessionScope?.split(':')[1]);
   const targetOrganizationId = organizationId ?? sessionOrganizationId;
   const [pageSize, setPageSize] = useLedgerPageSize('process-defects', targetOrganizationId);
@@ -322,7 +328,8 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     setFilterOpen(true);
   }
   function filterTitle(field: FilterField, label: string) {
-    return <span aria-label={label} className="process-quality-filter-title"><span>{label}</span><button type="button" aria-label={`按${label}筛选`} aria-haspopup="dialog" aria-expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === `按${label}筛选`} aria-pressed={appliedFilters.items.some(item => item.field === field) || field === 'occurredAt' && appliedFilters.currentMonth} disabled={locked || !!deletionTargets} onClick={event => { event.stopPropagation(); openFilters(event.currentTarget, field); }}><Filter size={13} aria-hidden="true" /></button></span>;
+    const triggerLabel = english && field === 'factoryCode' ? 'Filter by factory' : `按${label}筛选`;
+    return <span aria-label={label} className="process-quality-filter-title"><span>{label}</span><button type="button" aria-label={triggerLabel} aria-haspopup="dialog" aria-expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === triggerLabel} aria-pressed={appliedFilters.items.some(item => item.field === field) || field === 'occurredAt' && appliedFilters.currentMonth} disabled={locked || !!deletionTargets} onClick={event => { event.stopPropagation(); openFilters(event.currentTarget, field); }}><Filter size={13} aria-hidden="true" /></button></span>;
   }
   function updateFilterItem(index: number, next: FilterItem) {
     setDraftFilters(current => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? next : item) }));
@@ -342,9 +349,9 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     </div>
     <div className="process-quality-filter-rows">
       {draftFilters.items.map((item, index) => <div className="process-quality-filter-row" key={index}>
-        <select ref={filterRow === index ? filterControl : undefined} aria-label={`筛选字段 ${index + 1}`} value={item.field} onChange={event => updateFilterItem(index, filterItem(event.target.value))}>{filterFields.map(([field, label]) => <option key={field} value={field}>{label}</option>)}</select>
-        <select aria-label={`筛选运算符 ${index + 1}`} value={item.operator} onChange={event => updateFilterItem(index, { ...item, operator: event.target.value })}>{operatorsFor(item.field).map(([operator, label]) => <option key={operator} value={operator}>{label}</option>)}</select>
-        {emptyOperator(item.operator) ? <span /> : filterChoices[item.field] ? <select aria-label={`筛选值 ${index + 1}`} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })}><option value="">请选择</option>{filterChoices[item.field]!.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : <input aria-label={`筛选值 ${index + 1}`} type={item.field === 'occurredAt' ? 'date' : item.field === 'defectQuantity' ? 'number' : 'text'} maxLength={200} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })} />}
+        <select ref={filterRow === index ? filterControl : undefined} aria-label={`筛选字段 ${index + 1}`} value={item.field} onChange={event => updateFilterItem(index, filterItem(event.target.value))}>{filterFields.map(([field, label]) => <option key={field} value={field}>{field === 'factoryCode' ? factoryTitle : label}</option>)}</select>
+        <select aria-label={`筛选运算符 ${index + 1}`} value={item.operator} onChange={event => updateFilterItem(index, { ...item, operator: event.target.value })}>{operatorsFor(item.field).map(([operator, zh, en]) => <option key={operator} value={operator}>{english && item.field === 'factoryCode' ? en : zh}</option>)}</select>
+        {emptyOperator(item.operator) ? <span /> : filterChoices[item.field] ? <select aria-label={`筛选值 ${index + 1}`} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })}><option value="">{english && item.field === 'factoryCode' ? 'Select' : '请选择'}</option>{filterChoices[item.field]!.map(([value, zh, en]) => <option key={value} value={value}>{english && item.field === 'factoryCode' ? en : zh}</option>)}</select> : <input aria-label={`筛选值 ${index + 1}`} type={item.field === 'occurredAt' ? 'date' : item.field === 'defectQuantity' ? 'number' : 'text'} maxLength={200} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })} />}
         <Button type="text" aria-label={`删除筛选条件 ${index + 1}`} icon={<X size={13} />} onClick={() => { setFilterRow(undefined); setDraftFilters(current => ({ ...current, items: current.items.filter((_, entryIndex) => entryIndex !== index) })); }} />
       </div>)}
     </div>
@@ -361,6 +368,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const columns: TableColumnsType<Defect> = ([
     { title: <span aria-label="选择"><Checkbox aria-label="选择当前页制程不良" checked={!!selectablePage.length && selectedOnPage.length === selectablePage.length} indeterminate={!!selectedOnPage.length && selectedOnPage.length < selectablePage.length} disabled={locked || loading || !selectablePage.length || !selectedOnPage.length && selectedCount >= 100} onChange={event => togglePage(selectedCount >= 100 && selectedOnPage.length > 0 ? false : event.target.checked)} /></span>, onHeaderCell: () => ({ 'aria-label': '选择' }), key: 'select', width: 40, align: 'center', render: (_, record) => <Checkbox aria-label={`选择制程不良 ${record.description}`} disabled={locked || loading || (!selected[record.id] && selectedCount >= 100) || !!record.archivedAt} checked={Boolean(selected[record.id])} onChange={event => toggle(record, event.target.checked)} /> },
     { title: filterTitle('occurredAt', '发生时间'), key: 'occurredAt', dataIndex: 'occurredAt', width: 132, minWidth: 132, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (value: string | null) => value ? new Date(value).toLocaleString('zh-CN') : '—' },
+    { title: filterTitle('factoryCode', factoryTitle), key: 'factoryCode', dataIndex: 'factoryCode', width: 100, className: 'process-quality-compact-column', align: 'center', render: (_, record) => factoryLabel(record.factoryCode, english) },
     { title: filterTitle('shift', '班次'), key: 'shift', dataIndex: 'shift', width: 88, className: 'process-quality-compact-column', align: 'center', render: value => value === 'DAY' ? '白班' : value === 'NIGHT' ? '夜班' : '未知' },
     { title: filterTitle('projectCode', '项目号'), key: 'project', width: 108, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
     { title: '产品类型', key: 'productCategory', width: 84, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (_, record) => record.productCategory ?? '未确认' },
@@ -407,7 +415,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       {deletionTargets && !deletionOpen ? <Alert type="warning" title="删除结果尚待确认" action={<Button onClick={() => setDeletionOpen(true)}>恢复删除操作</Button>} /> : null}
       {staleSelected.length ? <Alert type="warning" title="所选来源版本已更新。" action={<Button disabled={locked} onClick={() => requestLeave(() => setSelected(current => ({ ...current, ...Object.fromEntries(staleSelected.map(item => [item.id, item])) })))}>更新所选版本</Button>} /> : null}
       <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
-      <LedgerTable<Defect> actionBar={toolbar} bodyFallback={listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : undefined} compactHeaders compactLayout ledgerId="process-defects" organizationId={targetOrganizationId} viewId={viewId} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'shift', 'project', 'productCategory', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} insertNewColumnBefore={['productCategory', 'productSubcategory']} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search || appliedFilters.currentMonth || appliedFilters.items.length ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { if (filterOpen && !saveAppliedFilters(completeDraft, undefined, false, false)) return; setPage(size === pageSize && !changesSelection ? next : 1); setPageSize(size); }); } }} />
+      <LedgerTable<Defect> pinnedHorizontalScroll actionBar={toolbar} bodyFallback={listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : undefined} compactHeaders compactLayout ledgerId="process-defects" organizationId={targetOrganizationId} viewId={viewId} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'factoryCode', 'shift', 'project', 'productCategory', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} insertNewColumnsBefore={[["factoryCode", "shift", true], ['productCategory', 'productSubcategory']]} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search || appliedFilters.currentMonth || appliedFilters.items.length ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => { if (!locked) requestLeave(() => { if (filterOpen && !saveAppliedFilters(completeDraft, undefined, false, false)) return; setPage(size === pageSize && !changesSelection ? next : 1); setPageSize(size); }); } }} />
     </section>
     <Drawer title="不良品详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden
       classNames={{ header: 'process-quality-drawer-header' }}
@@ -423,6 +431,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
           { key: 'description', label: '不良描述', children: <span className="process-quality-description">{detail.description || '待完善'}</span> },
           { key: 'quantity', label: '数量', children: detail.defectQuantity },
           { key: 'occurredAt', label: '发生时间', children: detail.occurredAt ? new Date(detail.occurredAt).toLocaleString('zh-CN') : '未知' },
+          { key: 'factoryCode', label: factoryTitle, children: factoryLabel(detail.factoryCode, english) },
           { key: 'shift', label: '班次', children: detail.shift === 'DAY' ? '白班' : detail.shift === 'NIGHT' ? '夜班' : '未知' },
           { key: 'project', label: '项目号', children: detail.componentProject?.project?.code ?? '未确认' },
           { key: 'stage', label: '项目状态', children: detail.projectStage === 'NEW_PRODUCT' ? '新品' : detail.projectStage === 'MASS_PRODUCTION' ? '量产' : '未确认' },
@@ -444,7 +453,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
         ]} />
         <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} onSaved={saved} onDenied={revoke} />
         <Typography.Title level={4}>已关联问题</Typography.Title>
-        <List dataSource={linked} locale={{ emptyText: <Empty description="尚未关联正式问题" /> }} renderItem={(problem) => <List.Item><Link to={`/app/problem-workspace/${problem.id}`}>{problem.reportNumber}</Link></List.Item>} />
+        <RecordList items={linked} itemKey={problem => problem.id} renderItem={problem => <Link to={`/app/problem-workspace/${problem.id}`}>{problem.reportNumber}</Link>} empty={<Empty description="尚未关联正式问题" />} />
         <Typography.Title level={4}>可用证据</Typography.Title>
         <AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: detail.id }} fileIds={(detail.evidence ?? []).map(evidence => evidence.id)} readOnly={!canWrite} />
         <Typography.Title level={4}>物料与复核事实</Typography.Title>

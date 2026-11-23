@@ -1,8 +1,9 @@
 import { ApiProperty, ApiPropertyOptional, PickType } from '@nestjs/swagger';
 import { AiDescriptionInputSnapshotDto } from '../../common/contracts/ai-description.dto.js';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { Allow, ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
 import { PROCESS_FILTER_FIELDS, PROCESS_FILTER_MAX_ITEMS, PROCESS_FILTER_MAX_LENGTH, PROCESS_FILTER_OPERATORS, PROCESS_MATERIAL_VERIFICATIONS, PROCESS_RESPONSIBILITY_CATEGORIES, type ProcessMaterialVerification, type ProcessResponsibilityCategory } from './process-defect-ledger.service.js';
+import { PROCESS_FACTORY_CODES, type ProcessFactoryCode } from './process-defect-registration.policy.js';
 
 import { ComponentProjectMappingDto, ComponentProjectRecordDto } from '../platform-configuration/component-project.dto.js';
 
@@ -99,6 +100,7 @@ export class ProcessDefectMaterialInputDto {
 }
 
 export class CreateProcessDefectDto extends ProcessScopeDto {
+  @ApiProperty({ type: String, enum: PROCESS_FACTORY_CODES }) @Allow() factoryCode!: ProcessFactoryCode;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 64 }) @IsOptional() @IsString() @MaxLength(64) defectTypeCode?: string | null;
   @ApiProperty({ maxLength: 10000 }) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(10000) description!: string;
   @ApiPropertyOptional({ type: Number, default: 1, minimum: 1, maximum: 2147483647 }) @IsInt() @Min(1) @Max(2147483647) defectQuantity = 1;
@@ -123,6 +125,7 @@ export class CreateProcessDefectDto extends ProcessScopeDto {
 
 export class UpdateProcessDefectDto extends ProcessScopeDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
+  @ApiPropertyOptional({ type: String, enum: PROCESS_FACTORY_CODES }) @Allow() factoryCode?: ProcessFactoryCode;
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 64 }) @IsOptional() @IsString() @MaxLength(64) defectTypeCode?: string | null;
   @ApiPropertyOptional({ maxLength: 10000 }) @ValidateIf((_, value) => value !== undefined) @IsString() @MaxLength(10000) description?: string;
   @ApiPropertyOptional({ type: Number, nullable: true, minimum: 1, maximum: 2147483647 }) @IsOptional() @IsInt() @Min(1) @Max(2147483647) defectQuantity?: number | null;
@@ -345,6 +348,7 @@ export class ProcessDefectDto {
   @ApiPropertyOptional({ type: String, nullable: true }) lineCode?: string | null;
   @ApiProperty({ type: String, nullable: true }) lineName!: string | null;
   @ApiProperty({ type: String, nullable: true }) operationName!: string | null;
+  @ApiProperty({ type: String, enum: PROCESS_FACTORY_CODES, nullable: true }) factoryCode!: ProcessFactoryCode | null;
   @ApiProperty({ type: String, enum: ['DAY', 'NIGHT'], nullable: true }) shift!: 'DAY' | 'NIGHT' | null;
   @ApiProperty({ type: String, nullable: true }) operationSector!: string | null;
   @ApiProperty({ type: String, nullable: true }) productCategory!: string | null;

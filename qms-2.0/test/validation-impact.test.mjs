@@ -9,7 +9,6 @@ import { branchChangedPaths, recommendForPaths, validateImpactPolicy } from '../
 const root = resolve(import.meta.dirname, '..');
 const policy = JSON.parse(await readFile(resolve(root, 'governance/validation-impact.json'), 'utf8'));
 const index = JSON.parse(await readFile(resolve(root, 'governance/documentation-index.json'), 'utf8'));
-const maintenance = JSON.parse(await readFile(resolve(root, 'governance/maintenance-items.json'), 'utf8'));
 
 test('规则清单引用真实文档、现有命令且无重复 ID', async () => {
   const manifest = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8'));
@@ -26,10 +25,13 @@ test('文档来源变化反向推荐受影响权威文档', () => {
   assert.deepEqual(result.unknownPaths, []);
 });
 
-test('改动来源文件时带出关联开放维护事项', () => {
-  const result = recommendForPaths(['qms-2.0/apps/web/src/features/account/AccountCenterPage.tsx'], policy, index, maintenance);
-  assert.deepEqual(result.maintenance.map((item) => item.id), ['MAINT-001']);
-  assert.deepEqual(result.maintenance[0].matchedPaths, ['apps/web/src/features/account/AccountCenterPage.tsx']);
+test('改动来源文件时带出关联开放维护事项但排除已关闭事项', () => {
+  const sourcePath = 'apps/web/src/features/account/AccountCenterPage.tsx';
+  const item = { owner: '测试维护者', reviewDue: '2026-12-23', nextAction: '复核来源', sources: [{ path: sourcePath }] };
+  const maintenance = { items: [{ ...item, id: 'MAINT-901', status: 'open' }, { ...item, id: 'MAINT-902', status: 'closed' }] };
+  const result = recommendForPaths([`qms-2.0/${sourcePath}`], policy, index, maintenance);
+  assert.deepEqual(result.maintenance.map((entry) => entry.id), ['MAINT-901']);
+  assert.deepEqual(result.maintenance[0].matchedPaths, [sourcePath]);
   const unrelated = recommendForPaths(['qms-2.0/apps/web/src/features/account/OtherPage.tsx'], policy, index, maintenance);
   assert.deepEqual(unrelated.maintenance, []);
 });

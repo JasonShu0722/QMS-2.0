@@ -17,6 +17,33 @@ describe('IMS process defects in the real PostgreSQL ledger', () => {
     expect(await fixture.prisma.processDefect.count({ where: { organizationId: fixture.actor.organizationId } })).toBe(2);
   });
 
+  it('writes explicit null, replaces factory issues and preserves them on unmapped updates', async () => {
+    const input = fixture.fields({ description: '来源事实', factoryCode: 'FACTORY_1', issues: ['lineName:TYPE'] });
+    const first = await fixture.ingest(input);
+    const invalid = await fixture.ingest({ ...input, factoryCode: null, issues: ['factory:INVALID'] });
+    expect(invalid).toMatchObject({ version: first.version + 1, values: { factoryCode: null } });
+    const empty = await fixture.ingest({ ...input, factoryCode: null, issues: ['factory:EMPTY'] });
+    expect(empty).toMatchObject({ version: invalid.version + 1, values: { factoryCode: null } });
+    expect(empty.values.issues).toContain('factory:EMPTY');
+    expect(empty.values.issues).not.toContain('factory:INVALID');
+    const replay = await fixture.ingest({ ...input, factoryCode: null, issues: ['factory:EMPTY'] });
+    expect(replay.version).toBe(empty.version);
+    const unmapped = await fixture.ingest(fixture.fields({ description: '旧规则更新' }));
+    expect(unmapped.values.issues).toContain('factory:EMPTY');
+    const restored = await fixture.ingest(fixture.fields({ factoryCode: 'FACTORY_2' }));
+    expect(restored).toMatchObject({ version: unmapped.version + 1, values: { factoryCode: 'FACTORY_2' } });
+    const row = await fixture.ledger.detail(fixture.actor, first.id);
+    expect(row).toMatchObject({ factoryCode: 'FACTORY_2', pendingCompletion: true });
+    expect(row.registrationIssues.filter(issue => issue.includes(':'))).toEqual(['lineName:TYPE']);
+    const updates = await fixture.prisma.auditEvent.findMany({ where: { resourceId: first.id, action: 'PROCESS_DEFECT_INGESTION_UPDATED' } });
+    expect(updates.map(event => event.metadata)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ resourceVersion: invalid.version, changedFields: 'factoryCode' }),
+      expect.objectContaining({ resourceVersion: empty.version, changedFields: 'factoryCode' }),
+      expect.objectContaining({ resourceVersion: restored.version, changedFields: 'factoryCode' }),
+    ]));
+    expect(updates.map(event => event.metadata).find(metadata => (metadata as { resourceVersion?: number }).resourceVersion === unmapped.version)).not.toHaveProperty('changedFields');
+  });
+
   it('reuses a receipt row and a numbered identity but does not merge different unnumbered messages', async () => {
     const input = fixture.fields({ description: '初次' });
     const first = await fixture.ingest(input), replay = await fixture.ingest(input);
@@ -77,12 +104,14 @@ describe('IMS process defects in the real PostgreSQL ledger', () => {
 
   it('protects original manual facts and their original sourceKind when a numbered IMS row later matches', async () => {
     const manual = await fixture.manual({ externalSourceSystem: 'IMS', externalRecordKey: 'MANUAL-IMS-KEY', sourceObservedAt: new Date('2026-11-16T00:00:00Z') });
-    const input = fixture.fields({ externalRecordKey: 'MANUAL-IMS-KEY', description: 'IMS不同描述' });
+    const input = fixture.fields({ externalRecordKey: 'MANUAL-IMS-KEY', description: 'IMS不同描述', factoryCode: null, issues: ['factory:INVALID'] });
     const inspected = await fixture.prisma.$transaction(tx => fixture.adapter.inspect(tx, fixture.actor, input));
-    expect(inspected?.protectedFields).toContain('description');
+    expect(inspected?.protectedFields).toEqual(expect.arrayContaining(['description', 'factoryCode']));
     await expect(fixture.ingest(input)).rejects.toMatchObject({ status: 409 });
+    expect(await fixture.ledger.detail(fixture.actor, manual.id)).toMatchObject({ factoryCode: 'FACTORY_1' });
     await fixture.ingest(input, true);
-    expect(await fixture.ledger.detail(fixture.actor, manual.id)).toMatchObject({ sourceKind: 'MANUAL', description: 'IMS不同描述', createdById: fixture.actor.id });
+    expect(await fixture.ledger.detail(fixture.actor, manual.id)).toMatchObject({ sourceKind: 'MANUAL', description: 'IMS不同描述', createdById: fixture.actor.id,
+      factoryCode: null, pendingCompletion: true, registrationIssues: ['factory:INVALID'] });
   });
 
   it('clears prior source issues for valid supplied facts even when their final value is unchanged', async () => {

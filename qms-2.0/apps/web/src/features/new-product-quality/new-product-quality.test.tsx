@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken, getSession } from '../../api/client';
 import { NewProductQualityPage } from './NewProductQualityPage';
 import { Link, MemoryRouter } from 'react-router-dom';
@@ -21,6 +21,8 @@ beforeEach(() => {
   vi.mocked(getSession).mockReset();
   vi.mocked(getSession).mockResolvedValue({ accountType: 'INTERNAL', landingPath: '/app/workbench', userId: 'reviewer', organizationId: 'org-1' });
 });
+
+afterEach(() => vi.restoreAllMocks());
 
 it('opens the formal same-source entry without replacing stages or historical issue handling', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/my-permissions') ? { permissions: ['new-product-quality:projects:read', 'new-product-quality:projects:write', 'process-quality:defects:read'] } : path.includes('/defect-selections') ? [] : path.includes('/defects?') ? { items: [], total: 0 } : project);
@@ -199,6 +201,7 @@ it('ignores a late summary response after switching to another batch', async () 
 });
 
 it('creates an early flow plan from the project page', async () => {
+  const errors = vi.spyOn(console, 'error');
   vi.mocked(csrfToken).mockResolvedValue('csrf-token');
   const earlyFlow = { id: 'flow-1', organizationId: 'org-1', projectId: project.id, monitoringWindowDays: 30, plan: '每日首件确认', status: 'DRAFT' as const, approvalNote: null, version: 1, submittedById: null, submittedAt: null, approvedById: null, approvedAt: null, createdAt: '2026-09-25T00:00:00.000Z', updatedAt: '2026-09-25T00:00:00.000Z' };
   vi.mocked(apiRequest).mockResolvedValueOnce(project).mockResolvedValueOnce(earlyFlow).mockResolvedValueOnce({ ...project, early_flow: earlyFlow });
@@ -209,4 +212,5 @@ it('creates an early flow plan from the project page', async () => {
   fireEvent.change(screen.getByLabelText('退出条件'), { target: { value: '连续三批合格' } });
   fireEvent.click(screen.getByRole('button', { name: '保存方案' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/new-product-quality/projects/${project.id}/early-flow`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ monitoringWindowDays: 30, monitoringFrequency: '每日', plan: '每日首件确认', exitCriteria: '连续三批合格' }) })));
+  expect(errors.mock.calls.flat().map(String).filter(message => /\[antd: Space\].*`direction`/.test(message))).toEqual([]);
 });

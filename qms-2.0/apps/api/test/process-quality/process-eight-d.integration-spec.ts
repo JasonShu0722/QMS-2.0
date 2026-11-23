@@ -136,7 +136,7 @@ describe('process 8D real domain transactions', () => {
       definitionId: definition.id, draftVersionId: definition.version.id, expectedRevision: definition.revision });
     await service.bind(issuer.actor, { expectedVersion: 0, workflowDefinitionId: definition.id, workflowVersionId: version.id }, randomUUID(), randomUUID());
     if (activate) await service.activate(issuer.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
-    const source = () => ledger.create(issuer.actor, { description: '真实原台账来源，未知分类保留空', productCode: 'EIGHT-D-PRODUCT', traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+    const source = () => ledger.create(issuer.actor, { description: '真实原台账来源，未知分类保留空', factoryCode: 'FACTORY_1', productCode: 'EIGHT-D-PRODUCT', traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     const input = (sources: { id: string; version: number }[]) => ({ sources: sources.map(s => ({ defectId: s.id, expectedVersion: s.version })), severity: 'LOW' as const,
       ownerUserId: owner.user.id, responsibleSectionDepartmentId: section.id, analysisDueAt: new Date('2026-11-01T00:00:00Z'), closureDueAt: new Date('2026-12-01T00:00:00Z') });
     const issue = async () => { const defect = await source(); const issued = await service.issue(issuer.actor, input([defect]), randomUUID(), randomUUID()); return String(issued.problem.id); };

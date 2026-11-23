@@ -79,13 +79,14 @@ test('authenticated process defect ledger keeps controls and aligned columns on 
   const context = await browser.newContext({ baseURL: gateway, locale: 'zh-CN', timezoneId: 'Asia/Shanghai' });
   try {
     const ledgerPage = await context.newPage();
+    const device = await context.newCDPSession(ledgerPage);
     const session = await login(ledgerPage, username, actorPassword);
     expect(session.id).toBe(actor.id);
     const month = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit' }).format(new Date());
     const start = new Date(`${month}-01T00:00:00+08:00`).getTime();
     for (let ordinal = 1; ordinal <= total; ordinal++) {
       await positionWrite(ledgerPage.request, defects, 'POST', {
-        description: description(ordinal), productCode: `${tag}-PRODUCT`, traceCode: `${tag}-TRACE-${ordinal}`,
+        description: description(ordinal), productCode: `${tag}-PRODUCT`, traceCode: `${tag}-TRACE-${ordinal}`, factoryCode: 'FACTORY_1',
         occurredAt: new Date(start + (total - ordinal)).toISOString(), lineName: `${tag}-LINE`, operationName: `${tag}-OPERATION`,
       } satisfies Schema['CreateProcessDefectDto'], 201);
     }
@@ -95,6 +96,7 @@ test('authenticated process defect ledger keeps controls and aligned columns on 
 
     for (const width of [1440, 390]) {
       const height = 740;
+      await device.send('Emulation.setTouchEmulationEnabled', { enabled: width === 390 });
       await ledgerPage.setViewportSize({ width, height });
       await ledgerPage.goto(route);
       const ledger = ledgerPage.locator('.process-quality-compact-ledger');
@@ -108,6 +110,7 @@ test('authenticated process defect ledger keeps controls and aligned columns on 
       const next = pager.locator('.ant-pagination-next button');
       const header = ledger.getByRole('columnheader', { name: '发生时间', exact: true });
       const shift = ledger.getByRole('columnheader', { name: '班次', exact: true });
+      const scrollbar = ledger.getByRole('slider', { name: '横向滚动台账' });
       const row = (ordinal: number) => ledger.getByRole('row').filter({ has: ledgerPage.getByRole('button', { name: description(ordinal), exact: true }) });
       const rows = ledger.locator('tbody tr[data-row-key]');
 
@@ -118,6 +121,7 @@ test('authenticated process defect ledger keeps controls and aligned columns on 
       await expect(row(1)).toHaveCount(1);
       await expect(pager).toHaveCount(1);
       await expect(pager.getByText(`共 ${total} 条`, { exact: true })).toBeVisible();
+      expect(await ledgerPage.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(width === 390);
 
       for (const count of [10, 50, 100]) {
         await test.step(`${width}px / ${count} rows`, async () => {
@@ -133,16 +137,28 @@ test('authenticated process defect ledger keeps controls and aligned columns on 
           if (count > 10) expect(initial.remaining, 'A long page must scroll in the document').toBeGreaterThan(height);
           const samples = [];
           for (const [phase, offset] of [['top', 0], ['mid', initial.remaining / 2], ['end', initial.remaining]] as const) {
-            await ledgerPage.evaluate(y => window.scrollTo(0, y), offset);
-            await expect.poll(async () => Math.abs((await readLayout(ledger)).y - offset)).toBeLessThanOrEqual(2);
+            if (phase === 'end') {
+              await expect.poll(async () => {
+                await ledgerPage.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+                return (await readLayout(ledger)).remaining;
+              }).toBeLessThanOrEqual(2);
+            } else {
+              await ledgerPage.evaluate(y => window.scrollTo(0, y), offset);
+              await expect.poll(async () => Math.abs((await readLayout(ledger)).y - offset)).toBeLessThanOrEqual(2);
+            }
             const layout = await readLayout(ledger);
             const [queryBox, actionBox, pagerBox, settingsBox, headerBox] = await Promise.all([search, register, pager, settings, header].map(getBox));
             const clickable = await Promise.all([filter, settings, next].map(canClickWithoutScrolling));
+            const scrollbarBox = await getBox(scrollbar);
             const scope = `${width}px / ${count} rows / ${phase}`;
             samples.push({ phase, layout, queryBox, actionBox, pagerBox, settingsBox, headerBox, clickable });
             expect.soft(layout.vertical, `${scope}: no active nested vertical track`).toEqual([]);
             expect.soft(layout.pageOverflowX, `${scope}: no page-level horizontal overflow`).toBeLessThanOrEqual(1);
-            expect.soft(layout.horizontal, `${scope}: exactly one horizontal track`).toHaveLength(1);
+            expect.soft(layout.horizontal, `${scope}: exactly one horizontally scrollable table body`).toHaveLength(1);
+            await expect(scrollbar).toHaveCount(1);
+            expect(await ledger.locator('.ant-table-body').evaluate(body => getComputedStyle(body).scrollbarWidth)).toBe('none');
+            expect.soft(Math.abs(scrollbarBox.y + scrollbarBox.height - height), `${scope}: scrollbar remains at the viewport edge`).toBeLessThanOrEqual(2);
+            expect.soft(await canClickWithoutScrolling(scrollbar), `${scope}: scrollbar remains hit-testable`).toBe(true);
             expect.soft(Math.min(queryBox.y, actionBox.y, pagerBox.y, settingsBox.y, headerBox.y), `${scope}: sticky controls remain onscreen`).toBeGreaterThanOrEqual(-1);
             expect.soft(Math.max(queryBox.y + queryBox.height, actionBox.y + actionBox.height), `${scope}: query/actions precede pagination/settings`).toBeLessThanOrEqual(Math.min(pagerBox.y, settingsBox.y) + 2);
             expect.soft(Math.max(pagerBox.y + pagerBox.height, settingsBox.y + settingsBox.height), `${scope}: pagination/settings precede the header`).toBeLessThanOrEqual(headerBox.y + 2);
@@ -177,10 +193,23 @@ test('authenticated process defect ledger keeps controls and aligned columns on 
               }
               expect.soft(Math.abs((await readLayout(ledger)).y - layout.y), `${scope}: opening controls must not scroll back`).toBeLessThanOrEqual(2);
               const checkbox = row(count).getByRole('checkbox', { name: `选择制程不良 ${description(count)}` });
+              expect.soft(await canClickWithoutScrolling(checkbox), `${scope}: the last row can be selected above the scrollbar`).toBe(true);
               await checkbox.check();
               const batch = ledger.getByRole('toolbar', { name: '台账批量操作' });
+              const cancel = batch.getByRole('button', { name: '取消选择' });
               await expect(batch.getByRole('button', { name: '删除所选' })).toBeInViewport();
-              await batch.getByRole('button', { name: '取消选择' }).click();
+              expect.soft(await canClickWithoutScrolling(cancel), `${scope}: selected-row actions stay hit-testable`).toBe(true);
+              expect.soft(await canClickWithoutScrolling(scrollbar), `${scope}: selected-row actions leave the scrollbar hit-testable`).toBe(true);
+              const track = await getBox(scrollbar);
+              const center = { x: track.x + track.width / 2, y: track.y + track.height / 2 };
+              if (width === 390) {
+                await device.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [center] });
+                await device.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+              } else await ledgerPage.mouse.click(center.x, center.y);
+              await expect.poll(() => ledger.locator('.ant-table-body').evaluate(body => body.scrollLeft)).toBeGreaterThan(30);
+              await scrollbar.press('Home');
+              await expect.poll(() => ledger.locator('.ant-table-body').evaluate(body => body.scrollLeft)).toBe(0);
+              await cancel.click();
               await expect(checkbox).not.toBeChecked();
             }
           }

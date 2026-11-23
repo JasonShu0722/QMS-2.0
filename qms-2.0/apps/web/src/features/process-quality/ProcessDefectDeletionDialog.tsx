@@ -1,8 +1,9 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Form, Input, List, Modal, Space, Spin, Tag } from 'antd';
+import { Alert, Button, Form, Input, Modal, Space, Spin, Tag } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
+import { RecordList } from '../../ui/list/RecordList';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { denied, ProcessError, useProcessWrite, type Defect } from './process-ledger';
 
@@ -67,7 +68,7 @@ export function ProcessDefectDeletionDialog({ sources, organizationId, open, onC
     <p>已选择 {sources.length} 条台账。删除后将退出正常台账，来源身份、附件与历史保留。</p>
     <ProcessError cause={error} fallback="删除操作未完成，请重试。" />
     {writer.uncertain ? <Alert type="warning" showIcon title="删除结果未知，请使用原请求重试。" /> : null}
-    {loading ? <Spin aria-label="正在预览删除" /> : preview ? <List dataSource={preview.items} renderItem={item => <List.Item><div className="process-quality-description"><span>{item.description || '待完善记录'}</span>{item.blocked ? <Tag color="error">无法删除</Tag> : null}{item.blockers.map((blocker, index) => <div key={index}>{blockerLabels[blocker.code] ?? '存在有效业务关联'}{blocker.reportNumber ? `：${blocker.reportNumber}` : ''}</div>)}</div></List.Item>} /> : null}
+    {loading ? <Spin aria-label="正在预览删除" /> : preview ? <RecordList items={preview.items} itemKey={item => item.defectId} renderItem={item => <div className="process-quality-description"><span>{item.description || '待完善记录'}</span>{item.blocked ? <Tag color="error">无法删除</Tag> : null}{item.blockers.map((blocker, index) => <div key={index}>{blockerLabels[blocker.code] ?? '存在有效业务关联'}{blocker.reportNumber ? `：${blocker.reportNumber}` : ''}</div>)}</div>} /> : null}
     {!writer.uncertain ? <Button disabled={loading || writer.busy} onClick={() => setRevision(value => value + 1)}>重新预览</Button> : null}
     <Form layout="vertical"><Form.Item label="删除原因" htmlFor="process-defect-deletion-reason" required validateStatus={reason.trim().length > 300 ? 'error' : undefined} help={reason.trim().length > 300 ? '删除原因最多300字' : undefined}><Input.TextArea id="process-defect-deletion-reason" value={reason} disabled={writer.busy || writer.uncertain} showCount maxLength={300} autoSize={{ minRows: 2, maxRows: 5 }} onChange={event => setReason(event.target.value)} /></Form.Item></Form>
   </Modal>;

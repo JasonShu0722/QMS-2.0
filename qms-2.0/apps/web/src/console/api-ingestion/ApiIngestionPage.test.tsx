@@ -92,11 +92,20 @@ it('edits process source fields and ordered description composition without expo
   expect(dialog.getByLabelText('描述标签2')).toHaveValue('位置');
   expect(dialog.getByRole('switch', { name: 'AI整理' })).not.toBeChecked();
   fireEvent.change(dialog.getByLabelText('提示词变量2'), { target: { value: 'position' } });
+  const factory = dialog.getByLabelText('工厂来源字段');
+  expect(factory).toHaveValue('');
+  expect(dialog.getByText(/1 → 一工厂；2 → 二工厂/)).toBeInTheDocument();
+  fireEvent.change(factory, { target: { value: '   ' } });
+  fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
+  await dialog.findByText('请填写工厂来源字段');
+  expect(mocks.mutate).not.toHaveBeenCalled();
+  fireEvent.change(factory, { target: { value: ' source.plant ' } });
+  fireEvent.click(dialog.getByRole('checkbox', { name: '工厂' }));
   expect(dialog.queryByLabelText('班次')).not.toBeInTheDocument();
   fireEvent.click(dialog.getByRole('button', { name: '下移描述字段1' }));
   fireEvent.click(dialog.getByRole('button', { name: /^保\s*存$/ }));
   await waitFor(() => expect(mocks.mutate).toHaveBeenCalled());
-  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ target: 'PROCESS_DEFECT', mapping: { productCode: 'product', traceCode: 'barcode' }, descriptionComposition: { fields: [{ path: 'position', label: '位置', variable: 'position' }, { path: 'fault', label: '现象' }], separator: '\n' }, sourceTimezone: 'Asia/Shanghai' });
+  expect(mocks.mutate.mock.calls[0][2]).toMatchObject({ target: 'PROCESS_DEFECT', mapping: { productCode: 'product', traceCode: 'barcode', factoryCode: 'source.plant' }, updateFields: ['factoryCode', 'description'], descriptionComposition: { fields: [{ path: 'position', label: '位置', variable: 'position' }, { path: 'fault', label: '现象' }], separator: '\n' }, sourceTimezone: 'Asia/Shanghai' });
   expect(mocks.mutate.mock.calls[0][2].mapping).not.toHaveProperty('code');
   expect(mocks.mutate.mock.calls[0][2]).not.toHaveProperty('aiApplication');
 });
@@ -104,6 +113,7 @@ it('configures component names from the internal material master snapshot', asyn
   mocks.mutate.mockResolvedValue({});
   const componentRule = { ...rule, name: '组件规则', target: 'COMPONENT', mapping: { code: 'partCode' }, componentNameLookup: { source: 'MATERIAL', field: 'materialName' } } as Rule;
   const dialog = editorView(componentRule);
+  expect(dialog.queryByLabelText('工厂来源字段')).not.toBeInTheDocument();
   expect(dialog.getByRole('combobox', { name: '名称来源方式' })).toBeInTheDocument();
   await waitFor(() => expect(dialog.getByText('内部物料主数据', { selector: '.ant-select-content' })).toBeVisible());
   expect(dialog.getByText('物料名称', { selector: '.ant-select-content' })).toBeVisible();
@@ -124,6 +134,24 @@ it('previews incomplete process facts as an importable ledger result and shows s
   expect(preview.getByText('待补配')).toBeVisible();
   expect(preview.getByText('不良数量: 1')).toBeVisible();
   expect(preview.getByText(/<b>松脱<\/b>/)).toBeVisible();
+  expect(preview.getByRole('button', { name: '确认导入' })).toBeEnabled();
+});
+it.each([
+  ['FACTORY_1', [], '一工厂', undefined],
+  ['FACTORY_2', [], '二工厂', undefined],
+  [null, ['factory:EMPTY'], '/', '工厂来源值为空'],
+  [null, ['factory:INVALID'], '/', '工厂来源值无效'],
+] as const)('previews factory %s as an importable result (%j)', async (factoryCode, registrationIssues, factoryLabel, issue) => {
+  mocks.mutate.mockResolvedValueOnce({ previewId: 'preview-factory', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z', action: 'INSERTED', fields: { factoryCode }, differences: [], pendingCompletion: !!issue, registrationIssues });
+  componentView(<ImportPreview scope={verifiedScope()} rule={{ ...rule, target: 'PROCESS_DEFECT', mapping: { factoryCode: 'source.plant' } }} history={false} canReceipts close={vi.fn()} />);
+  const dialog = within(screen.getByRole('dialog'));
+  fireEvent.mouseDown(dialog.getByRole('combobox', { name: '接收记录' }));
+  fireEvent.click(await screen.findByText(/MSG001/, { selector: '.ant-select-item-option-content' }));
+  fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
+  const preview = within(await dialog.findByRole('region', { name: '入库预览' }));
+  expect(preview.getByText('工厂').closest('tr')?.querySelector('td')).toHaveTextContent(factoryLabel);
+  if (issue) await waitFor(() => expect(preview.getByText(issue)).toBeVisible());
+  expect(preview.queryByText('该行未通过校验')).not.toBeInTheDocument();
   expect(preview.getByRole('button', { name: '确认导入' })).toBeEnabled();
 });
 it('requires the scoped ingestion capability even for a platform administrator', () => {
@@ -564,6 +592,27 @@ it('opens child item differences from a historical parent job without treating i
   await act(async () => { fireEvent.click(viewDifferences); }); const detail = within((await screen.findByText('数组第1行', { selector: '.ant-modal-title' })).closest('[role="dialog"]')!);
   const updatedName = await detail.findByText('新名称');
   await waitFor(() => expect(updatedName).toBeVisible()); expect(detail.getByText('确认更新', { selector: 'button span' }).closest('button')).toBeEnabled(); expect(mocks.invalidate).not.toHaveBeenCalled();
+});
+it('renders factory changes and field issues in a process job item without reporting row failure', async () => {
+  const jobId = '66666666-6666-4666-8666-666666666666'; const itemId = '77777777-7777-4777-8777-777777777777';
+  const job = { id: jobId, endpointId, receiptId, ruleId, ruleVersion: 2, target: 'PROCESS_DEFECT', source: 'AUTO', status: 'COMPLETED', sequence: 1, total: 1, pending: 0, succeeded: 1, skipped: 0, failed: 0, awaitingConfirmation: 0, createdAt: '2026-11-14T02:00:00Z' };
+  const item = { id: itemId, jobId, receiptId, rowIndex: 0, status: 'UPDATED', targetId: 'defect-one', targetVersion: 2, version: 3, pendingCompletion: true };
+  read.mockImplementation(async path => {
+    if (path.includes(`/items/${itemId}?`)) return { ...item, fields: { factoryCode: null }, differences: [{ field: 'factoryCode', before: 'FACTORY_2', after: null }, { field: 'registrationIssues', before: 'factory:EMPTY', after: 'factory:INVALID' }], registrationIssues: ['factory:INVALID'] };
+    if (path.includes(`/jobs/${jobId}/items`)) return { items: [item], total: 1, page: 1, limit: 20 };
+    if (path.includes(`/jobs/${jobId}?`)) return job;
+    return { items: [job], total: 1, page: 1, limit: 20 };
+  });
+  jobsView(); fireEvent.click(await screen.findByLabelText('查看任务1'));
+  const dialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
+  fireEvent.click(await dialog.findByRole('button', { name: '查看差异' }));
+  const detail = within(await screen.findByRole('dialog', { name: '数组第1行' }));
+  const difference = (await detail.findByText('二工厂')).closest('tr')!;
+  await waitFor(() => expect(within(difference).getByText('/')).toBeVisible());
+  expect(detail.getByText('工厂来源值为空')).toBeVisible();
+  expect(detail.getAllByText('工厂来源值无效')).toHaveLength(2);
+  expect(detail.getByText('待完善')).toBeVisible();
+  expect(detail.queryByText('条目处理异常')).not.toBeInTheDocument();
 });
 it.each([
   { status: 'COMPLETED', expansionComplete: false }, { status: 'CANCELLED', expansionComplete: false },

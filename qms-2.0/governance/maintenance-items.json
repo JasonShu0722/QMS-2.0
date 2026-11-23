@@ -4,14 +4,24 @@
     {
       "id": "MAINT-001",
       "category": "deprecation",
-      "status": "open",
+      "status": "closed",
       "owner": "QMS Web 维护者",
       "fact": "历史记录：2026-09-23 Web 测试曾出现 Ant Design List 与 Space 属性弃用提示；2026-10-20 REQ-0022账号改为两区概览和独立设置，继续使用Card/Table和Space，账号31项及资料返修24项通过；本轮仍出现其他页面Drawer width、Spin tip提示及useForm连接警告，升级前须分别核对。2026-10-24 重新复核：AccountCenterPage 仍使用 Card/Descriptions/Space；仅运行 AccountCenter.u3.test.tsx，20/20 通过、退出码0，本次输出未出现 warning。静态读取仍发现审核标准页使用 List/Drawer width、新产品质量页使用 Space direction；已安装 Ant Design 的 List/Space 实现仍有对应弃用分支，不能据账号单文件无警告认定全站已消除。 2026-10-27 N4来源复核：新品项目页本批仅增加独立同源8D入口及真实项目上下文，既有List与Space direction用法仍保留；对应新品页面完整文件已回归，但未实施全站弃用迁移，维护项继续open，原复核期限不变。 2026-10-30 CP-1来源复核：AccountCenter新增受真实context约束的新窗口管理入口、nullable直属岗位展示及对应用例；Card/Descriptions/Space既有组合保留，本次未作全站弃用迁移，不关闭或延长原复核期限。 2026-10-31 REQ0033复核：账号仅标题去重及设置入口重排、供应商标题分支保留，审核标准和新品仅固定标题/泛化介绍精简；原Card/Descriptions/Space与List/Space旧用法仍存在，回归原Ant Design告警保留，未执行全站弃用迁移，维持open及原reviewDue。 2026-10-31 REQ0033-fix1人工验收失败返修：审核标准仅删除常态发布版本介绍并把不可编辑后果放到草稿发布操作旁；List与原组件用法不变，维持open和原reviewDue，不将文案整改当作弃用迁移完成。 2026-10-31 REQ-0034复核：审核标准动态检查项增加编号/内容显式字段标签，标准目录另有从固定首屏20改为现有契约真实分页的候选；原List、Space和Drawer及编辑器保存边界仍保留，新增分页回归待完成；本轮不做弃用迁移，不以样式/规范/局部测试结案，保持open与原reviewDue。",
-      "impact": "全站仍有组件弃用用法，未来升级 Ant Design 可能需要兼容性修改；账号单文件测试通过不证明其他页面无警告、真实浏览器已验收或生产存在/不存在故障。",
+      "impact": "2026-11-23 Issue #161：正式 Web 已迁移本项登记的 List、Space direction、Drawer width、Spin tip，以及定向复核发现的 Modal maskClosable、Select dropdownRender 和 InputNumber addonAfter；配置编辑器不再调用尚未挂载的表单，容量未知结果继续重试原请求。此结论限于已登记和本轮复现的用法，不代表所有未来升级兼容性。",
       "trigger": "升级 Ant Design 前、相关来源变化或警告升级为构建/测试失败时提前复核；无新触发时30天复核。",
       "nextAction": "升级前核对官方迁移说明并逐页验证 List、Space direction、Drawer width 及历史 Spin tip/useForm 提示。2026-10-24复核仅确认账号所选文件无警告，命令、退出码和未覆盖范围见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md；REQ-0034标签与分页候选不是弃用迁移，不据此关闭全局事项，仍按原期限接续复核。2026-11-14 REQ-0037仅向试产问题责任人选择传递实际组织，原List/Space direction保留；本轮不作弃用迁移，保持open及原reviewDue。",
-      "reviewedOn": "2026-11-13",
-      "reviewDue": "2026-11-23",
+      "reviewedOn": "2026-11-23",
+      "reviewDue": "2026-12-23",
+      "closedOn": "2026-11-23",
+      "closure": {
+        "evidence": ["docs/MAINTENANCE-REGISTER.md"],
+        "commands": [
+          "corepack pnpm --filter @qms/web test process-shipment-report.test.tsx AdminPage.identity.test.tsx -t 'opens a report and shows|shows both management loading' --maxWorkers=1 --pool=threads --testTimeout=25000",
+          "corepack pnpm --filter @qms/web test ReceiptList.test.tsx -t 'keeps the original capacity request|saves a ten GiB|compact receiving freezes|loads all 21 matching' --maxWorkers=1 --pool=threads --testTimeout=30000",
+          "corepack pnpm --filter @qms/web test ConfigurationAdministration.guard.test.tsx --maxWorkers=1 --pool=threads --reporter=verbose"
+        ],
+        "result": "PASS"
+      },
       "sources": [
         {
           "path": "apps/web/src/features/account/AccountCenterPage.tsx",
@@ -23,11 +33,11 @@
         },
         {
           "path": "apps/web/src/features/audit-standards/AuditStandardsPage.tsx",
-          "sha256": "90374612d395388dff8a51595ffba29ab488d7fe15275aa9af377636948d4d3d"
+          "sha256": "14d1db8e804577f0d15d0db72ffe7aea850f2bc3088c1ceff3f7bcec67399a77"
         },
         {
           "path": "apps/web/src/features/new-product-quality/NewProductQualityPage.tsx",
-          "sha256": "39390f095bd5207e51726e651e73ab1815873d31657efe7485943609e66c4725"
+          "sha256": "0aef46306d0c1a2f1100d775cbde0a922eacfb0eb7901b8c972c088b41ee7314"
         }
       ]
     },
@@ -37,11 +47,11 @@
       "status": "open",
       "owner": "QMS 平台维护者",
       "fact": "当前备份工具对 dump 与对象累计设置 256 MiB 上限，对序列化包设置 512 MiB 上限。2026-10-24 重新读取实现确认 dump 与全部对象版本原始字节分别受256 MiB限制，JSON/Base64序列化包受512 MiB限制，读取密文包上限另加33字节封装；5项静态容量守卫断言及现有5项对象引用/恢复映射测试通过，但没有执行接近上限的大包备份或真实恢复。",
-      "impact": "Base64和JSON开销使序列化包可能先于两个原始字节上限耗尽；超限仍会失败，阈值不是内存峰值保证，也不是大容量在线备份方案。生产数据量与容量余量未核实。",
+      "impact": "Base64 和 JSON 开销使序列化包可能先于两个原始字节上限耗尽；读取密文文件后才执行大小判断，阈值不是峰值内存保证。2026-11-23 核对三份来源指纹、五项静态容量守卫及五项对象引用与恢复映射测试均通过；未测生产用量、近上限备份或 10 GiB 恢复，事项仍开放。",
       "trigger": "试点容量规划、实际备份接近任一上限或数据保护来源变化时提前复核；无新触发时30天复核。",
       "nextAction": "在获准的一次性环境测量dump、对象全部版本及序列化包规模，评估有界扩展/分段方案并执行真实PostgreSQL/对象存储恢复；历史边界见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md。2026-11-17 REQ-0038复核：恢复后默认停用AI连接并推进版本，小样本真实PostgreSQL及版本化对象存储恢复8/8通过；容量上限未变，未执行近上限或10GiB恢复，不连接预览或生产，保持open与原reviewDue。",
-      "reviewedOn": "2026-11-16",
-      "reviewDue": "2026-11-23",
+      "reviewedOn": "2026-11-23",
+      "reviewDue": "2026-12-23",
       "sources": [
         {
           "path": "apps/api/scripts/data-protection.mjs",
@@ -63,11 +73,11 @@
       "status": "open",
       "owner": "QMS 平台与运维维护者",
       "fact": "历史登记：当前仓库提供一次性数据库聚合快照、版本化告警判定和隔离触发/恢复演练，尚未部署生产指标采集、告警阈值或通知渠道。2026-10-24 重新读取运维手册、演练说明、snapshot/alerts实现及版本化阈值，现有快照目标/聚合2项、告警判定及CLI6项测试通过；本轮没有数据库采样或故障注入，只确认本地判定基础存在，生产采集、定时采样和通知状态未知，不将历史未部署描述当作本轮生产核查。 2026-10-30 CP-1运维文档来源复核：成功部署后增加默认builder dangling cache回收，不是指标采集/告警渠道；管理首页仅真实事项汇总，CP-2观测未交付，无新的生产采样证据，保持open与原复核期限。 2026-10-30CP-1部署后default builder cache回收真实输出4.615GB，属于发布维护，不是生产持续指标/告警闭环；本地八容器只评估未清理，仍open及原due。 2026-10-30CP-2本地候选新增API/交换/运行事实观测和回执，但尚未发布，不等于生产持续告警阈值/通知处置闭环，仍open原due。 2026-10-30CP-2观测代码已获准部署89c2ddd，增加API/交换与owner执行事实不等于告警阈值/通知/处置恢复闭环，仍open原reviewDue；未据机器发布关闭维护项。 2026-11-01 REQ0034运维来源实际复核：5880894前置加密快照/同SHA健康/Worker强制成功出口及builder1.502GB属于该次发布核验，不是持续采样/告警阈值/通知/处置闭环的新证据；仍open并保原reviewDue2026-11-23，不因CI或机器发布关闭。 2026-11-09 REQ0036来源定向复核：新增本地API接收排查、采集缺口及恢复停用指引，没有部署生产告警阈值/通知/处置闭环；维护项保持open和原2026-11-23期限，不以收件或网关测试关闭。",
-      "impact": "本地规则能判定失败、积压与扫描滞留，不证明Worker存活、生产持续自动发现或通知送达；目标运行架构的观测与处置闭环仍缺少本轮证据。",
+      "impact": "本地规则能判定失败、积压与扫描滞留，不证明 Worker 存活、生产持续自动发现或通知送达。2026-11-23 核对七份来源指纹、两项快照测试和六项告警判定及 CLI 测试均通过；未连接生产、未验证实际指标出口、通知送达或故障恢复，事项仍开放。",
       "trigger": "供应商试点准备、目标运行架构确定或观测/阈值来源变化时提前复核并补真实故障注入；无新触发时30天复核。",
       "nextAction": "由平台与运维维护者在获准的目标架构确定指标出口、只读授权、采样频率、阈值责任人和通知渠道，再验证失败/积压触发、处置与恢复；本轮不建监控服务、不访问生产，保留open。具体本地证据和未知范围见 docs/N1-MAINTENANCE-REVIEW-2026-10-24.md。2026-11-14本地（UTC2026-11-13）REQ-0037新增入库队列恢复、输入保留和版本回退指引，不等于持续告警采集或通知闭环，维持open及原reviewDue。",
-      "reviewedOn": "2026-11-13",
-      "reviewDue": "2026-11-23",
+      "reviewedOn": "2026-11-23",
+      "reviewDue": "2026-12-23",
       "sources": [
         {
           "path": "docs/OPERATIONS-RUNBOOK.md",

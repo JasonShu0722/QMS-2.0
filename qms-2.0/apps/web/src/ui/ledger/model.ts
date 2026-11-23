@@ -29,18 +29,18 @@ export function boundedWidth(value: unknown, fallback = DEFAULT_WIDTH, minimum =
   return Math.max(minimum, Math.min(MAX_WIDTH, Math.round(width)));
 }
 const objectValue = (input: unknown): Record<string, unknown> => input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {};
-export function normalizePreferences(input: unknown, keys: string[], resizableSelection = false, insertNewColumnBefore?: readonly [column: string, anchor: string]): Preferences {
+export type ColumnInsertion = readonly [column: string, anchor: string, defaultVisible?: boolean];
+export function normalizePreferences(input: unknown, keys: string[], resizableSelection = false, insertNewColumnsBefore: readonly ColumnInsertion[] = []): Preferences {
   const allowed = [...new Set(keys.filter(validKey))].slice(0, 200);
   const value = objectValue(input);
   const list = (candidate: unknown) => Array.isArray(candidate) ? [...new Set(candidate.slice(0, 200).filter((key): key is string => typeof key === 'string' && allowed.includes(key)))] : [];
   const priorOrder = list(value.order);
   const priorVisible = list(value.visible);
-  if (insertNewColumnBefore) {
-    const [column, anchor] = insertNewColumnBefore;
+  for (const [column, anchor, defaultVisible] of insertNewColumnsBefore) {
     const anchorIndex = priorOrder.indexOf(anchor);
     if (anchorIndex >= 0 && allowed.includes(column) && !priorOrder.includes(column)) {
       priorOrder.splice(anchorIndex, 0, column);
-      if (priorVisible.includes(anchor) && !priorVisible.includes(column)) priorVisible.push(column);
+      if ((defaultVisible ?? priorVisible.includes(anchor)) && !priorVisible.includes(column)) priorVisible.push(column);
     }
   }
   const order = [...priorOrder, ...allowed.filter(key => !priorOrder.includes(key))];

@@ -82,7 +82,7 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
   }, [location, acceptedLocation]);
 
   if (error) return <Alert type="error" title={t(error)} description={traceId ? <code>{traceId}</code> : undefined} role="alert" showIcon />;
-  if (!organizations) return <Spin tip={t('加载系统管理权限')} />;
+  if (!organizations) return <Spin description={t('加载系统管理权限')} />;
   if (targeting && (!validTarget || !organization || !(auditTarget ? organization.permissions.includes('audit:read') : allows(organization, 'users:read')))) return <Alert type="error" title={t(auditTarget ? '审计定位失败：链接无效或无权查看目标组织审计。' : '账号定位失败：链接无效或无权查看目标组织账号。')} role="alert" showIcon />;
   if (!organization) return <Alert type="warning" title={t('无系统管理访问权限')} showIcon />;
   const users = allows(organization, 'users:read') || allows(organization, 'users:create');
@@ -117,7 +117,7 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
       <header className="admin-heading"><Typography.Title level={2}>{t('平台管理')}</Typography.Title>
       <label>{t('管理组织')}<Select aria-label={t('管理组织')} value={organization.id} onChange={(id) => { if (id !== organization.id) changeScope(() => { setSelectedId(id); setTargetConsumed(true); }); }} options={organizations.map((entry) => ({ value: entry.id, label: `${entry.name} · ${entry.code}` }))} /></label>
     </header>
-    {management.loading ? <Spin tip={t('核实管理身份')} /> : management.context ? <Alert showIcon type="info"
+    {management.loading ? <Spin description={t('核实管理身份')} /> : management.context ? <Alert showIcon type="info"
       title={t(management.context.hasPlatformAdministrator ? '平台管理员：全部内部组织' : '组织管理：当前授权范围')}
       description={<>
         <div>{t('当前管理目标')}：{organization.name} · {organization.code}</div>

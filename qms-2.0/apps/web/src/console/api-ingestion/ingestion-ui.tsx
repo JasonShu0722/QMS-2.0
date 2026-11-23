@@ -6,6 +6,7 @@ import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy } from '../../layouts/UnsavedChanges';
 import { isAborted, useScopedIntegrationRequests, type IntegrationScope } from '../api-integrations/integration-ui';
 import { Link } from 'react-router-dom';
+import { factoryFieldLabel, factoryIssue, factoryLabel } from '../../features/process-quality/process-factory';
 
 export type Rule = components['schemas']['IngestionRuleDto'];
 export type Endpoint = components['schemas']['IngestionEndpointDto'];
@@ -17,6 +18,7 @@ export function useIngestionText() {
   return (zh: string, en: string) => locale === 'en-US' ? en : zh;
 }
 export function label(value: string, english: boolean) {
+  if (value === 'factoryCode') return factoryFieldLabel[english ? 1 : 0];
   const labels: Record<string, [string, string]> = {
     SUPPLIER: ['供应商档案', 'Supplier profiles'], CUSTOMER: ['客户档案', 'Customer profiles'], MATERIAL: ['物料主数据', 'Material master'], COMPONENT: ['组件项目映射', 'Component mapping'], OPERATION: ['工序主数据', 'Operation master'], PROCESS_DEFECT: ['制程不良品台账', 'Process defect ledger'],
     INSERT_ONLY: ['仅新增，已有跳过', 'Insert only'], UPDATE: ['新增并更新指定字段', 'Insert and update selected fields'], CONFIRM: ['新增，变更人工确认', 'Insert and confirm changes'],
@@ -177,14 +179,21 @@ export function useIngestionPage<Data extends { items: unknown[]; total: number;
   return { data, error, loading };
 }
 
-export function IngestionFields({ fields, differences }: { fields?: Record<string, string>; differences?: components['schemas']['IngestionDifferenceDto'][] }) {
+export function IngestionFields({ fields, differences, registrationIssues }: Pick<components['schemas']['IngestionPreviewDto'], 'fields' | 'registrationIssues'> & { differences?: components['schemas']['IngestionDifferenceDto'][] }) {
   const text = useIngestionText(); const english = text('zh', 'en') === 'en';
+  const factoryIssues = registrationIssues?.flatMap(code => factoryIssue(code, english) ?? []) ?? [];
+  const valueLabel = (field: string, value: string | null) => {
+    if (field === 'factoryCode') return factoryLabel(value, english);
+    if (field === 'registrationIssues' && value) return value.split('\n').map(code => factoryIssue(code, english) ?? code).join('\n');
+    return value ?? '—';
+  };
   return <div className="qms-ingestion-section">
-    {fields && <Descriptions size="small" bordered column={1} items={Object.entries(fields).map(([field, value]) => ({ key: field, label: label(field, english), children: <span className="qms-ingestion-field-value">{value}</span> }))} />}
+    {fields && <Descriptions size="small" bordered column={1} items={Object.entries(fields).map(([field, value]) => ({ key: field, label: label(field, english), children: <span className="qms-ingestion-field-value">{valueLabel(field, value)}</span> }))} />}
+    {factoryIssues.length > 0 && <div className="qms-ingestion-counts">{factoryIssues.map(issue => <Tag key={issue} color="warning">{issue}</Tag>)}</div>}
     {!!differences?.length && <Table size="small" rowKey="field" pagination={false} dataSource={differences} scroll={{ x: 480 }} columns={[
       { key: 'field', title: text('字段', 'Field'), dataIndex: 'field', render: value => label(value, english) },
-      { key: 'before', title: text('原值', 'Before'), dataIndex: 'before', render: value => value ?? '—' },
-      { key: 'after', title: text('新值', 'After'), dataIndex: 'after', render: value => value ?? '—' },
+      { key: 'before', title: text('原值', 'Before'), dataIndex: 'before', render: (value, row) => <span className="qms-ingestion-field-value">{valueLabel(row.field, value)}</span> },
+      { key: 'after', title: text('新值', 'After'), dataIndex: 'after', render: (value, row) => <span className="qms-ingestion-field-value">{valueLabel(row.field, value)}</span> },
     ]} />}
   </div>;
 }

@@ -3,13 +3,14 @@ import { isUUID } from 'class-validator';
 import type { ProcessDefect } from '../../generated/prisma/client.js';
 import { aiDescriptionDisposition, validateAiDescription, type AiDescriptionField } from '../../common/ai-description.js';
 import { assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
-import type { IntegrationExpected, ProcessDefectIntegrationFields, ProcessDefectIntegrationRecord } from '../../common/integration-master-data.js';
+import { processDefectIssueField, type IntegrationExpected, type ProcessDefectIntegrationFields, type ProcessDefectIntegrationRecord } from '../../common/integration-master-data.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { ProcessDefectCompletionService } from './process-defect-completion.service.js';
 import { normalizeProcessDefectFacts } from './process-defect-ledger.service.js';
 import { processDefectRequiredIssues } from './process-defect-registration.policy.js';
 
-const sourceFields = ['occurredAt', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey', 'sourceObservedAt'] as const;
+const sourceFields = ['occurredAt', 'factoryCode', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey', 'sourceObservedAt'] as const;
+const isFactoryIssue = (issue: string) => processDefectIssueField(issue) === 'factoryCode';
 function fail(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
 
 @Injectable()
@@ -52,6 +53,10 @@ export class ProcessDefectIngestionAdapter {
   private record(row: ProcessDefect, fields: ProcessDefectIntegrationFields): ProcessDefectIntegrationRecord {
     const values: ProcessDefectIntegrationFields = { receiptId: fields.receiptId, rowIndex: fields.rowIndex, issues: row.registrationIssues };
     for (const field of sourceFields) {
+      if (field === 'factoryCode') {
+        values.factoryCode = row.factoryCode;
+        continue;
+      }
       const value = field === 'description' && !row.manualFields.includes('description') ? row.descriptionDirect ?? row.description : row[field];
       if (value !== null && value !== '') values[field] = value instanceof Date ? value.toISOString() : value;
     }
@@ -84,9 +89,13 @@ export class ProcessDefectIngestionAdapter {
     const supplied = Object.fromEntries(sourceFields.filter(field => fields[field] !== undefined && fields[field] !== '').map(field => [field, fields[field]]));
     const changedFields = Object.keys(supplied).filter(field => {
       const old = field === 'description' && current && !current.manualFields.includes('description') ? current.descriptionDirect ?? current.description : current?.[field as typeof sourceFields[number]];
-      return (old instanceof Date ? old.toISOString() : old) !== supplied[field];
+      return (old instanceof Date ? old.toISOString() : field === 'factoryCode' ? old ?? null : old) !== supplied[field];
     });
-    if (current && !confirmed && changedFields.some(field => this.protectedFields(current).includes(field))) fail('PROCESS_DEFECT_MANUAL_CONFIRMATION_REQUIRED', 409);
+    const factoryEvaluated = fields.factoryCode !== undefined;
+    const incomingFactoryIssues = [...new Set(fields.issues?.filter(isFactoryIssue))];
+    const priorFactoryIssues = current?.registrationIssues.filter(isFactoryIssue) ?? [];
+    const factoryIssuesChanged = factoryEvaluated && (incomingFactoryIssues.length !== priorFactoryIssues.length || priorFactoryIssues.some(issue => !incomingFactoryIssues.includes(issue)));
+    if (current && !confirmed && this.protectedFields(current).some(field => changedFields.includes(field) || field === 'factoryCode' && factoryIssuesChanged)) fail('PROCESS_DEFECT_MANUAL_CONFIRMATION_REQUIRED', 409);
     if (current?.externalRecordKey && supplied.externalRecordKey && current.externalRecordKey !== supplied.externalRecordKey) fail('PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT', 409);
     const input = { ...current, ...supplied, externalSourceSystem: current?.externalSourceSystem ?? 'IMS',
       ...(current && !changedFields.includes('description') ? { description: current.description } : {}),
@@ -95,30 +104,34 @@ export class ProcessDefectIngestionAdapter {
     const facts = normalizeProcessDefectFacts(input as Parameters<typeof normalizeProcessDefectFacts>[0], 'IMS');
     if (current) facts.defectQuantity = current.defectQuantity;
     const derived = !current || current.registrationVersion === 1 ? await this.completion.derive(tx, organizationId, facts, current ?? undefined, Object.keys(supplied)) : null;
-    if (derived) {
-      derived.registrationIssues = [...new Set([...derived.registrationIssues, ...(fields.issues ?? [])])];
-      derived.pendingCompletion = derived.registrationIssues.length > 0;
-    }
-    const issuesChanged = current !== null && derived !== null && JSON.stringify(current.registrationIssues) !== JSON.stringify(derived.registrationIssues);
+    const baseIssues = derived?.registrationIssues ?? current?.registrationIssues ?? [];
+    const registrationIssues = [...new Set([
+      ...baseIssues.filter(issue => !factoryEvaluated || !isFactoryIssue(issue)),
+      ...(derived ? fields.issues ?? [] : incomingFactoryIssues),
+    ])];
+    const issueUpdate = derived || factoryIssuesChanged ? { registrationIssues, pendingCompletion: registrationIssues.length > 0 } : null;
+    const issuesChanged = current !== null && issueUpdate !== null && (current.registrationIssues.length !== issueUpdate.registrationIssues.length
+      || current.registrationIssues.some(issue => !issueUpdate.registrationIssues.includes(issue)));
     if (current && !changedFields.length && !issuesChanged) return this.record(current, fields);
     let record: ProcessDefect;
     if (current) {
       const changed = await tx.processDefect.updateMany({ where: { id: current.id, version: current.version, archivedAt: null }, data: {
-        ...facts, ...derived, updatedById: actor.id, version: { increment: 1 },
+        ...facts, ...derived, ...issueUpdate, updatedById: actor.id, version: { increment: 1 },
         ...(changedFields.includes('description') ? { descriptionDirect: facts.description, descriptionSource: 'DIRECT', descriptionInputVersion: { increment: 1 }, descriptionAiStatus: 'DISABLED', descriptionAi: null } : {}),
         ...(confirmed ? { manualFields: current.manualFields.filter(field => !changedFields.includes(field)) } : {}),
       } });
       if (changed.count !== 1) fail('CONCURRENCY_CONFLICT', 409);
       record = await tx.processDefect.findUniqueOrThrow({ where: { id: current.id } });
     } else {
-      record = await tx.processDefect.create({ data: { ...facts, ...derived, organizationId, createdById: actor.id, updatedById: actor.id,
+      record = await tx.processDefect.create({ data: { ...facts, ...derived, ...issueUpdate, organizationId, createdById: actor.id, updatedById: actor.id,
         descriptionDirect: facts.description, descriptionSource: 'DIRECT',
         registrationVersion: 1, sourceKind: 'IMS', sourceReceiptId: fields.receiptId, sourceRowIndex: fields.rowIndex, ingestionStatus: 'PENDING_VERIFICATION' } });
     }
     await ProcessDefectCompletionService.history(tx, record, current, actor.id, current ? 'IMS_UPDATED' : 'IMS_CREATED');
     await this.audit.record({ organizationId, actorUserId: actor.id, action: current ? 'PROCESS_DEFECT_INGESTION_UPDATED' : 'PROCESS_DEFECT_INGESTION_CREATED',
       resourceType: 'ProcessDefect', resourceId: record.id, outcome: 'SUCCESS', traceId,
-      metadata: { resourceVersion: record.version, receiptId: fields.receiptId, rowIndex: fields.rowIndex, changedFields } }, tx);
+      metadata: { resourceVersion: record.version, receiptId: fields.receiptId, rowIndex: fields.rowIndex,
+        changedFields: changedFields.includes('factoryCode') || factoryIssuesChanged ? 'factoryCode' : undefined } }, tx);
     return this.record(record, fields);
   }
 

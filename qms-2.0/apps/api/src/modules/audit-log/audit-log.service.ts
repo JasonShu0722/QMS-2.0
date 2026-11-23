@@ -127,6 +127,8 @@ export class AuditLogService {
     const trialFields = event?.action === 'AI_APPLICATION_TESTED' && event.resourceType === 'AiApplication' && (event.outcome === 'SUCCESS' || event.outcome === 'FAILURE')
       ? Object.entries(aiApplicationTestMetadata(metadata)).filter(([, value]) => value !== null) : [];
     const workbenchStatusChange = event?.action === 'WORKBENCH_GRAPH_STATUS_UPDATED' && event.resourceType === 'WorkbenchGraphNode' && event.outcome === 'SUCCESS';
+    const processDefectWrite = event?.resourceType === 'ProcessDefect' && event.outcome === 'SUCCESS'
+      && ['PROCESS_DEFECT_CREATED', 'PROCESS_DEFECT_UPDATED', 'PROCESS_DEFECT_INGESTION_CREATED', 'PROCESS_DEFECT_INGESTION_UPDATED'].includes(event.action);
     return Object.fromEntries(
       Object.entries(metadata)
         .filter(([key, value]) => {
@@ -138,7 +140,7 @@ export class AuditLogService {
           && (!['structureCode', 'structurePreviousCode'].includes(key) || (typeof value === 'string' && value.length <= 64 && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)))
           && (!['structureName', 'structurePreviousName'].includes(key) || (typeof value === 'string' && value.length <= 200 && /\S/.test(value)))
           && (key !== 'structureGovernorRoleId' || (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)))
-          && (key !== 'changedFields' || (typeof value === 'string' && /^(fullName|phone|email)(,(fullName|phone|email))*$/.test(value)));
+          && (key !== 'changedFields' || (typeof value === 'string' && (/^(fullName|phone|email)(,(fullName|phone|email))*$/.test(value) || processDefectWrite && value === 'factoryCode')));
         })
         .map(([key, value]) => [key, value]).concat(trialFields),
     ) as Prisma.InputJsonObject;

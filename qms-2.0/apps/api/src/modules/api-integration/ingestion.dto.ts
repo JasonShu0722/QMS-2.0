@@ -51,10 +51,10 @@ export class SaveIngestionRuleDto extends IntegrationScopeDto {
   @ApiProperty() @IsBoolean() enabled!: boolean;
   @ApiProperty({ enum: ['ALL', 'ANY'] }) @IsIn(['ALL', 'ANY']) match!: 'ALL' | 'ANY';
   @ApiProperty({ type: [IngestionConditionDto], maxItems: 20 }) @IsArray() @ArrayMaxSize(20) @ValidateNested({ each: true }) @Type(() => IngestionConditionDto) conditions!: IngestionConditionDto[];
-  @ApiProperty({ type: 'object', additionalProperties: { type: 'string' }, description: '目标专用字段的受限点路径；制程仅允许来源事实，不允许派生字段、数量或接收定位。' }) @IsObject() mapping!: Record<string, string>;
+  @ApiProperty({ type: 'object', additionalProperties: { type: 'string' }, description: '目标专用字段的受限点路径；保存制程规则必填 factoryCode 来源路径，不允许派生字段、数量或接收定位。' }) @IsObject() mapping!: Record<string, string>;
   @ApiPropertyOptional({ type: ComponentNameLookupDto }) @IsOptional() @ValidateNested() @Type(() => ComponentNameLookupDto) componentNameLookup?: ComponentNameLookupDto;
   @ApiProperty({ enum: ['INSERT_ONLY', 'UPDATE', 'CONFIRM'] }) @IsIn(['INSERT_ONLY', 'UPDATE', 'CONFIRM']) mode!: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM';
-  @ApiProperty({ type: [String], maxItems: 9 }) @IsArray() @ArrayMaxSize(9) @IsString({ each: true }) updateFields!: string[];
+  @ApiProperty({ type: [String], maxItems: 10 }) @IsArray() @ArrayMaxSize(10) @IsString({ each: true }) updateFields!: string[];
   @ApiPropertyOptional({ maxLength: 200 }) @IsOptional() @IsString() @MaxLength(200) sourceUpdatedAtField?: string;
   @ApiPropertyOptional({ maxLength: 100, description: '制程无时区时间的来源时区，默认Asia/Shanghai。' }) @IsOptional() @IsString() @MaxLength(100) sourceTimezone?: string;
   @ApiPropertyOptional({ type: IngestionDescriptionCompositionDto }) @IsOptional() @ValidateNested() @Type(() => IngestionDescriptionCompositionDto) descriptionComposition?: IngestionDescriptionCompositionDto;
@@ -117,7 +117,7 @@ export class IngestionPreviewDto {
   @ApiPropertyOptional({ enum: ['INSERTED', 'UPDATED', 'UNCHANGED', 'FILTERED', 'EXISTING_SKIPPED', 'AWAITING_CONFIRMATION', 'VALIDATION_FAILED'] }) action?: string;
   @ApiPropertyOptional() errorCode?: string;
   @ApiPropertyOptional({ maxLength: 200, description: '受控来源路径或target字段标识，不含业务值。' }) errorField?: string;
-  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string' } }) fields?: Record<string, string>;
+  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string', nullable: true }, description: '受控目标字段；制程工厂未映射时省略，映射为空或非法时为 null。' }) fields?: Record<string, string | null>;
   @ApiPropertyOptional({ type: [IngestionDifferenceDto] }) differences?: IngestionDifferenceDto[];
   @ApiPropertyOptional({ format: 'uuid' }) targetId?: string;
   @ApiPropertyOptional() pendingCompletion?: boolean;
@@ -204,7 +204,7 @@ export class IngestionItemActionDto extends IntegrationScopeDto {
 }
 export class IngestionItemDetailDto extends IngestionItemDto {
   @ApiProperty({ type: [IngestionDifferenceDto] }) differences!: IngestionDifferenceDto[];
-  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string' } }) fields?: Record<string, string>;
+  @ApiPropertyOptional({ type: 'object', additionalProperties: { type: 'string', nullable: true }, description: '受控目标字段；制程工厂未映射时省略，映射为空或非法时为 null。' }) fields?: Record<string, string | null>;
   @ApiProperty() stale!: boolean;
   @ApiPropertyOptional({ type: [String] }) registrationIssues?: string[];
 }

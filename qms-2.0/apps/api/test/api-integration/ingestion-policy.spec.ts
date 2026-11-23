@@ -24,6 +24,23 @@ describe('API ingestion rule policy', () => {
     expect(() => normalizeIngestionRule({ ...rule, aiApplication: binding })).toThrow();
   });
   const processRule = { ...rule, target: 'PROCESS_DEFECT', conditions: [], mapping: { externalRecordKey: 'id', occurredAt: 'time', productCode: 'product', traceCode: 'trace' }, updateFields: ['description', 'productCode'], sourceTimezone: 'Asia/Shanghai', descriptionComposition: { fields: [{ path: 'test', label: '测试：' }, { path: 'zero' }, { path: 'flag', label: '结果：' }, { path: 'empty', label: '' }], separator: '\n' } };
+  it.each([
+    [1, 'FACTORY_1', []], ['1', 'FACTORY_1', []],
+    [2, 'FACTORY_2', []], ['2', 'FACTORY_2', []], [' 2 ', 'FACTORY_2', []],
+    [undefined, null, ['factory:EMPTY']], [null, null, ['factory:EMPTY']],
+    ['', null, ['factory:EMPTY']], ['  ', null, ['factory:EMPTY']],
+    [3, null, ['factory:INVALID']], ['01', null, ['factory:INVALID']],
+    [true, null, ['factory:INVALID']], [{ code: 1 }, null, ['factory:INVALID']],
+    [[1], null, ['factory:INVALID']],
+  ])('maps factory payload %p without rejecting the row', (value, factoryCode, issues) => {
+    const config = normalizeIngestionRule({ ...processRule, mapping: { factoryCode: 'source.factory' } });
+    const source = value === undefined ? {} : { factory: value };
+    expect(evaluateIngestionRow(config, { source })).toMatchObject({ matched: true, fields: { factoryCode, issues } });
+  });
+  it('omits factory facts and issues for historical rules without a mapping', () => {
+    const config = normalizeIngestionRule({ ...processRule, mapping: {} });
+    expect(evaluateIngestionRow(config, { factory: '01' })).toEqual({ matched: true, fields: { issues: [] }, sourceUpdatedAt: null });
+  });
   it('checks rule-owned variable mappings and excludes blank inputs without discarding zero or false', () => {
     const fields = [{ path: 'test', variable: 'fact' }, { path: 'zero', variable: 'quantity' }, { path: 'flag', variable: 'flag' }];
     const composition = { ...processRule, descriptionComposition: { fields, separator: '\n' } };

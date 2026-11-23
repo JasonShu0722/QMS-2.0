@@ -1,4 +1,10 @@
 export type ProcessShift = 'DAY' | 'NIGHT';
+export const PROCESS_FACTORY_CODES = ['FACTORY_1', 'FACTORY_2'] as const;
+export type ProcessFactoryCode = (typeof PROCESS_FACTORY_CODES)[number];
+
+export function isProcessFactoryCode(value: unknown): value is ProcessFactoryCode {
+  return PROCESS_FACTORY_CODES.some(code => code === value);
+}
 
 export function processDefectShift(occurredAt: Date | null): ProcessShift | null {
   if (!occurredAt) return null;

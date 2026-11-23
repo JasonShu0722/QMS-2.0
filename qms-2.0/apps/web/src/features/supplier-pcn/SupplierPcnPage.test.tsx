@@ -18,7 +18,17 @@ beforeEach(() => {
   vi.mocked(AttachmentPanel).mockReset().mockImplementation(() => <></>);
   vi.mocked(apiRequest).mockReset().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 } as never);
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+
+it('opens a read-only internal PCN without accessing an unmounted edit form', async () => {
+  const errors = vi.spyOn(console, 'error');
+  const row = { id: 'p1', title: '待审批变更', status: 'SUBMITTED', version: 2, events: [], workflow: null };
+  vi.mocked(apiRequest).mockImplementation(async (path) => String(path).endsWith('/p1') ? row as never : { items: [row], total: 1 } as never);
+  render(<SupplierPcnPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '待审批变更' }));
+  expect(await screen.findByText('启动已发布 PCN 流程')).toBeVisible();
+  expect(errors.mock.calls.flat().map(String).filter(message => /useForm.*not connected/.test(message))).toEqual([]);
+});
 
 it('passes the changed PCN page size to the server and resets page one', async () => {
   vi.mocked(apiRequest).mockResolvedValue({ items: [], total: 125 } as never);

@@ -486,7 +486,7 @@
           },
           {
             "path": "apps/web/src/features/admin/AdminPage.tsx",
-            "sha256": "74f01b12dcefae6fac6c2adaf23f4961af25c0523006ab51c310b777b39c50b8"
+            "sha256": "3f891652527d21000f1cf1e3fe23c8c65e87619b81e851c72a30f3c9a3d8e8a0"
           },
           {
             "path": "apps/web/src/features/admin/AdminPage.targeting.test.tsx",
@@ -618,7 +618,7 @@
           },
           {
             "path": "apps/web/src/features/tasks/MyTasksPage.tsx",
-            "sha256": "b684d13135c40913d5d1843ca71612f36483db1e37aacec5a18c82a3c93b4304"
+            "sha256": "ad532fb3c2dec5c99b82cf2dbd01e1ae8d08d3c7c62d83f994bb5082f628cf41"
           },
           {
             "path": "apps/web/src/features/tasks/ClosureTaskInbox.tsx",
@@ -638,7 +638,7 @@
           },
           {
             "path": "apps/web/src/features/supplier-pcn/SupplierPcnPage.test.tsx",
-            "sha256": "b4a51aecc4d6033678614b0c5cef1a2c33f7c3acd53b9a774685e6330d883d44"
+            "sha256": "a3a7c6a3b2ff139d60d5fd398d5a9e2cd4629263d3a346c867e0c6b035344891"
           },
           {
             "path": "apps/web/src/features/supplier-quality/SupplierUsersPanel.test.tsx",
@@ -698,11 +698,11 @@
           },
           {
             "path": "apps/web/src/ui/ledger/index.tsx",
-            "sha256": "7591671f7ec8247f32c613a0e15e17dad6ba86aad85d5141ea101feefd95386d"
+            "sha256": "3713fde33a2354da67ed381d369d039a1a7e9a637b16abcd84b4a423160a6edb"
           },
           {
             "path": "apps/web/src/ui/ledger/model.ts",
-            "sha256": "d0f1bc3548de56eb4d78b2ae7675f5bfd8c2a3c042b87bb18fadae89bba3bbb6"
+            "sha256": "a90fd96e412cdcbe8c9c504fef2b8eb9853edbf06cac827202e15ddce613869f"
           },
           {
             "path": "apps/web/src/ui/ledger/preferences.tsx",
@@ -710,7 +710,7 @@
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.css",
-            "sha256": "1676ba8964cc1d5aba7211446341640bfcfcf7530b80675c71764b343410b003"
+            "sha256": "db9321993915312fef46b0ded04114336ecb59d94260b26349b77283bf075cc9"
           },
           {
             "path": "apps/web/src/ui/ledger/ledger.test.tsx",
@@ -722,7 +722,7 @@
           },
           {
             "path": "apps/web/src/features/tasks/remaining-lists-pagination.test.tsx",
-            "sha256": "ad5d15df9f7f3dc9eaba3286db8fb567fa9f2c68020abb7b37b4842db325d494"
+            "sha256": "f8fd655efc6cb1b13fd02978c546c6f9c27a29f12726de82f5405e0222802fec"
           },
           {
             "path": "apps/web/src/features/tasks/remaining-lists-quality.test.tsx",
@@ -1052,7 +1052,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "b1db93b73180df70084414214fc9f506e525c91c32da6326b387186312b329b8"
+            "sha256": "c22d41e1b7e4391127dd0936e28582464d5db2b454b87eec9f88b398bb1e946e"
           },
           {
             "path": "governance/operability-alerts.json",

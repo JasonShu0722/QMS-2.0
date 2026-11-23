@@ -63,7 +63,7 @@ export function OutboxAdministration({ organization }: { organization: AdminOrga
       { key: 'receipt', title: t('回执'), render: (_value: unknown, entry: FailurePage['items'][number]) => <Button onClick={() => void showHistory(entry.id)}>{t('查看尝试')}</Button> },
       ...(organization.permissions.includes('outbox:retry') ? [{ key: 'actions', title: t('操作'), render: (_value: unknown, entry: FailurePage['items'][number]) => <Button disabled={retrying} onClick={() => setSelected(entry.id)}>{t('重试事件')}</Button> }] : []),
     ]} />
-    <Modal open={!!selected && !history} title={t('确认重试此事件？')} okText={t('重试')} cancelText={t('取消')} confirmLoading={retrying} cancelButtonProps={{ disabled: retrying }} closable={!retrying} maskClosable={!retrying} onCancel={() => setSelected(undefined)} onOk={() => void retry()}><GovernanceFeedback error={error} />{t('提交后由后台任务重新处理。')}</Modal>
+    <Modal open={!!selected && !history} title={t('确认重试此事件？')} okText={t('重试')} cancelText={t('取消')} confirmLoading={retrying} cancelButtonProps={{ disabled: retrying }} closable={!retrying} mask={{ closable: !retrying }} onCancel={() => setSelected(undefined)} onOk={() => void retry()}><GovernanceFeedback error={error} />{t('提交后由后台任务重新处理。')}</Modal>
     <Modal open={!!history} title={t('通知尝试回执')} footer={null} onCancel={closeHistory}>
       <Table rowKey="id" loading={historyLoading} pagination={false} dataSource={history ?? []} columns={[{ title: t('尝试'), dataIndex: 'attemptNumber' }, { title: t('结果'), dataIndex: 'outcome' }, { title: t('原因'), dataIndex: 'reasonCode' }, { title: t('时间'), dataIndex: 'occurredAt', render: (value: string) => new Date(value).toLocaleString(locale) }]} />
     </Modal>

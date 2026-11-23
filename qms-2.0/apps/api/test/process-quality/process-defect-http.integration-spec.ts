@@ -58,10 +58,15 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     ]));
     expect(document.components!.schemas!.ProcessDefectFiltersDto).toMatchObject({ properties: { logic: { enum: ['ALL', 'ANY'] }, items: { minItems: 1, maxItems: 10 } } });
     expect(document.components!.schemas!.ProcessDefectFilterDto).toMatchObject({ properties: {
-      field: { enum: expect.arrayContaining(['projectCode', 'projectStage', 'defectQuantity', 'pendingCompletion']) },
+      field: { enum: expect.arrayContaining(['projectCode', 'projectStage', 'defectQuantity', 'pendingCompletion', 'factoryCode']) },
       operator: { enum: expect.arrayContaining(['NE', 'NOT_CONTAINS', 'BEFORE', 'LTE', 'EMPTY']) },
       value: { oneOf: [{ type: 'string' }, { type: 'integer' }, { type: 'boolean' }] },
     } });
+    const schemas = document.components!.schemas!;
+    const factory = { type: 'string', enum: ['FACTORY_1', 'FACTORY_2'] };
+    expect(schemas.CreateProcessDefectDto).toMatchObject({ required: expect.arrayContaining(['factoryCode']), properties: { factoryCode: factory } });
+    expect(schemas.UpdateProcessDefectDto).toMatchObject({ required: expect.not.arrayContaining(['factoryCode']), properties: { factoryCode: factory } });
+    expect(schemas.ProcessDefectDto).toMatchObject({ required: expect.arrayContaining(['factoryCode']), properties: { factoryCode: { ...factory, nullable: true } } });
   });
 
   it('uses one scoped predicate for the persisted project stage, combined conditions, rows and total', async () => {
@@ -150,7 +155,7 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
 
   it('creates, queries, updates and archives a manual defect through protected routes', async () => {
     await send('post', 'defect-types', { code: 'BURR', name: '毛刺' }).expect(201);
-    const input = { defectTypeCode: 'BURR', description: '端面毛刺', defectQuantity: 3, occurredAt: '2026-09-24T02:00:00Z', productCode: 'HTTP-P', traceCode: 'HTTP-T', batchCode: 'HTTP-B', responsibilityCategory: 'PROCESS' };
+    const input = { defectTypeCode: 'BURR', description: '端面毛刺', defectQuantity: 3, occurredAt: '2026-09-24T02:00:00Z', productCode: 'HTTP-P', traceCode: 'HTTP-T', batchCode: 'HTTP-B', responsibilityCategory: 'PROCESS', factoryCode: 'FACTORY_1' };
     const created = await send('post', 'defects', input).expect(201);
     expect(created.body.version).toBe(1);
     const listed = await request(app.getHttpServer()).get('/api/v1/process-quality/defects?batchCode=HTTP-B').set('Cookie', cookie).expect(200);
@@ -159,6 +164,41 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     await send('put', `defects/${created.body.id}/archive`, { expectedVersion: 2, reason: '登记错误确认删除' }).expect(200);
     const hidden = await request(app.getHttpServer()).get('/api/v1/process-quality/defects?batchCode=HTTP-B').set('Cookie', cookie).expect(200);
     expect(hidden.body.items.some((item: { id: string }) => item.id === created.body.id)).toBe(false);
+  });
+
+  it('validates manual factory and applies all enum operators to both rows and total', async () => {
+    const batchCode = randomUUID();
+    const input = { description: '工厂筛选', occurredAt: '2026-09-24T02:00:00Z', productCode: 'HTTP-P', traceCode: batchCode, batchCode };
+    for (const factoryCode of [undefined, null, '', 'FACTORY_3']) {
+      const invalid = await send('post', 'defects', { ...input, factoryCode }).expect(400);
+      expect(invalid.body.fields).toMatchObject({ factoryCode: expect.any(Array) });
+    }
+    const first = (await send('post', 'defects', { ...input, factoryCode: 'FACTORY_1' }).expect(201)).body;
+    const second = (await send('post', 'defects', { ...input, factoryCode: 'FACTORY_2' }).expect(201)).body;
+    expect([first.factoryCode, second.factoryCode]).toEqual(['FACTORY_1', 'FACTORY_2']);
+    const invalidUpdate = await send('put', `defects/${first.id}`, { expectedVersion: 1, factoryCode: null }).expect(400);
+    expect(invalidUpdate.body.fields).toMatchObject({ factoryCode: expect.any(Array) });
+    const legacy = await prisma.processDefect.create({ data: { organizationId, batchCode, description: '历史记录', createdById: userId, updatedById: userId } });
+    const detail = await request(app.getHttpServer()).get(`/api/v1/process-quality/defects/${legacy.id}`).set('Cookie', cookie).expect(200);
+    expect(detail.body.factoryCode).toBeNull();
+    const filtersFor = (operator: string, value?: string) => JSON.stringify({ logic: 'ALL', items: [{ field: 'factoryCode', operator, value }] });
+    for (const { operator, value, ids } of [
+      { operator: 'EQ', value: 'FACTORY_1', ids: [first.id] },
+      { operator: 'NE', value: 'FACTORY_1', ids: [second.id] },
+      { operator: 'EMPTY', ids: [legacy.id] },
+      { operator: 'NOT_EMPTY', ids: [first.id, second.id] },
+    ]) {
+      const filters = filtersFor(operator, value);
+      const results = await list({ batchCode, filters }).expect(200);
+      expect(results.body.total).toBe(ids.length);
+      expect(results.body.items).toEqual(expect.arrayContaining(ids.map(id => expect.objectContaining({ id }))));
+      expect(results.body.items).toHaveLength(ids.length);
+      if (operator === 'EMPTY') expect(results.body.items[0].factoryCode).toBeNull();
+      const page = await list({ batchCode, filters, pageSize: 1 }).expect(200);
+      expect(page.body.total).toBe(ids.length);
+      expect(page.body.items).toHaveLength(1);
+    }
+    await list({ batchCode, filters: filtersFor('EQ', 'FACTORY_3') }).expect(400);
   });
 
   it('rejects a write without matching CSRF and a cross-organization read', async () => {
@@ -172,7 +212,7 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
       await list({}).expect(200);
       await send('post', 'defect-types', { code: 'RUNOUT', name: '跳动' }).expect(201);
       const created = await send('post', 'defects', { defectTypeCode: 'RUNOUT', description: '跳动异常', defectQuantity: 2,
-        occurredAt: '2026-09-24T02:00:00Z', productCode: 'ACTIVE-P', traceCode: 'ACTIVE-T' }).expect(201);
+        occurredAt: '2026-09-24T02:00:00Z', productCode: 'ACTIVE-P', traceCode: 'ACTIVE-T', factoryCode: 'FACTORY_2' }).expect(201);
       await send('put', `defects/${created.body.id}`, { expectedVersion: 1, description: '复测跳动' }).expect(200);
       await send('put', `defects/${created.body.id}/archive`, { expectedVersion: 2, reason: '确认删除' }).expect(200);
     } finally {

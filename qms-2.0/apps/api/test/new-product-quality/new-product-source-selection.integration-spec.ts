@@ -117,7 +117,7 @@ describe('new product process source snapshots on PostgreSQL', () => {
   it('denies another real organization even when the actor has both read permissions at home', async () => {
     const code = `NP-${randomUUID().slice(0, 8)}`;
     const project = await mappedProject(code, 'Organization scope');
-    const defect = await defects.create(actor, { description: 'Organization source', productCode: code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+    const defect = await defects.create(actor, { description: 'Organization source', factoryCode: 'FACTORY_1', productCode: code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     await service.selectProcessDefect(actor, project.id, { defectId: defect.id, expectedVersion: defect.version }, randomUUID(), randomUUID());
     const otherOrganizationId = randomUUID();
     const otherUserId = randomUUID();

@@ -63,9 +63,9 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
 
   async function engineSource(direct = '直接组合事实', updateFields = ['description','operationName','lineCode'], strategy: SaveIngestionRuleDto['mode'] = 'UPDATE', name = '真实入库AI接缝') {
     const original = await fixture.prisma.integrationReceipt.findUniqueOrThrow({ where: { id: fixture.fields().receiptId } });
-    const raw: Record<string, unknown> = { id: randomUUID(), time: '2026-11-16T00:30:00Z', product: 'QMS-AI-COMPLETE', trace: randomUUID(), operation: '目检', direct, fact: '毛刺' };
+    const raw: Record<string, unknown> = { id: randomUUID(), factory: 1, time: '2026-11-16T00:30:00Z', product: 'QMS-AI-COMPLETE', trace: randomUUID(), operation: '目检', direct, fact: '毛刺' };
     const configuration = await engine.saveRule(fixture.actor, { name, endpointId: original.endpointId, target: 'PROCESS_DEFECT', enabled: false,
-      match: 'ALL', conditions: [], mode: strategy, updateFields, mapping: { externalRecordKey: 'id', occurredAt: 'time', productCode: 'product', traceCode: 'trace', operationName: 'operation', lineCode: 'line', description: 'direct' },
+      match: 'ALL', conditions: [], mode: strategy, updateFields, mapping: { factoryCode: 'factory', externalRecordKey: 'id', occurredAt: 'time', productCode: 'product', traceCode: 'trace', operationName: 'operation', lineCode: 'line', description: 'direct' },
       aiDescription: { connectionId: connection.id, model: 'model-b', prompt: '整理{{fact}}。', inputFields: [{ path: 'fact', label: '现象', variable: 'fact' }], output: { mode: 'TEXT', field: 'description', target: 'description' } } }, randomUUID(), randomUUID());
     async function prepare(rule: IngestionRuleDto = configuration, body: Record<string, unknown> = raw) {
       const receipt = await fixture.receipt();

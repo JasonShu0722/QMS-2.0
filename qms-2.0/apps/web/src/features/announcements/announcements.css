@@ -3,7 +3,7 @@
 .announcements-heading h1 { margin: 0 0 var(--qms-section-gap); }
 .announcements-heading p { margin: 0; }
 .announcements-column { display: block; width: 100%; max-width: 1080px; }
-.announcements-column .ant-list-item { border: 0; padding: 0 0 var(--qms-section-gap); }
+.announcements-column .qms-record-list > .qms-record-list-item { border: 0; padding: 0 0 var(--qms-section-gap); }
 .announcements-item { width: 100%; border-color: var(--qms-border); background: var(--qms-surface); }
 .announcements-content { white-space: pre-wrap; overflow-wrap: anywhere; }
 .announcements-loading { min-height: 180px; display: grid; place-items: center; }

@@ -173,7 +173,7 @@ function ConcessionDrawer({ id, close, changed }: { id: string; close: () => voi
 
   const actions = record ? <Space wrap>{record.canSubmit ? <Button type="primary" disabled={busy} onClick={() => void run('submit')}>提交审批</Button> : null}{record.canApprove ? <><Button type="primary" disabled={busy} onClick={() => { setAction('approve'); setActionError(undefined); }}>批准</Button><Button danger disabled={busy} onClick={() => { setAction('reject'); setActionError(undefined); }}>驳回</Button></> : null}{record.canRelease ? <Button type="primary" disabled={busy} onClick={() => { setAction('release'); setActionError(undefined); }}>登记批次放行</Button> : null}{record.canWithdraw ? <Button disabled={busy} onClick={() => void run('withdraw')}>撤回申请</Button> : null}</Space> : null;
 
-  return <Drawer open title="特采申请详情" width={680} onClose={closeDrawer} closable={!busy} keyboard={!busy} mask={{ closable: !busy }}>
+  return <Drawer open title="特采申请详情" size={680} onClose={closeDrawer} closable={!busy} keyboard={!busy} mask={{ closable: !busy }}>
     {loading ? <div className="supplier-concession-loading"><Spin /></div> : error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => void load()}>重试</Button>} /> : record ? <div className="supplier-concession-detail">
       {actionError ? <Alert type="error" showIcon title={actionError} /> : null}
       <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small" items={[

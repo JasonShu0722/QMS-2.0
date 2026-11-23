@@ -13,7 +13,7 @@ export type ProcessProjectSnapshot = {
   mapping: Pick<ComponentProjectMappingDto, 'id' | 'version' | 'status' | 'componentCode' | 'componentName' | 'projectRecordId' | 'productCategory' | 'productSubcategory'>;
   project: Pick<ComponentProjectRecordDto, 'id' | 'version' | 'status' | 'code' | 'name' | 'stage'>;
 };
-type RegistrationFacts = { productCode: string | null; operationCode: string | null; operationName: string | null; occurredAt: Date | null; traceCode: string | null; description: string };
+type RegistrationFacts = { productCode: string | null; operationCode: string | null; operationName: string | null; occurredAt: Date | null; traceCode: string | null; description: string; factoryCode: string | null };
 type SectorCandidate = { id: string; operationCode: string | null; operationName: string; sectorName: string | null; active: boolean; version: number };
 export type ProcessCompletionVersion = { id: string; organizationId: string; previousVersion: number; version: number };
 
@@ -94,7 +94,7 @@ export class ProcessDefectCompletionService {
     }
     const priorIssues = previous?.registrationIssues.filter(issue => {
       if (!issue.includes(':')) return false;
-      const field = issue.split(':')[0]!;
+      const field = issue === 'factory:EMPTY' || issue === 'factory:INVALID' ? 'factoryCode' : issue.split(':')[0]!;
       return !correctedFields.includes(field) && (!(field in facts) || (facts as Record<string, unknown>)[field] === (previous as unknown as Record<string, unknown>)[field]);
     }) ?? [];
     const registrationIssues = [...new Set([...processDefectRequiredIssues(facts), ...priorIssues])];
@@ -110,7 +110,7 @@ export class ProcessDefectCompletionService {
   }
 
   static async history(tx: AdminTransaction, record: ProcessDefect, previous: ProcessDefect | null, actorUserId: string | null, action: string) {
-    const facts = (value: ProcessDefect) => JSON.stringify({ occurredAt: value.occurredAt, productCode: value.productCode, traceCode: value.traceCode,
+    const facts = (value: ProcessDefect) => JSON.stringify({ occurredAt: value.occurredAt, factoryCode: value.factoryCode, productCode: value.productCode, traceCode: value.traceCode,
       description: value.description, workOrderCode: value.workOrderCode, lineCode: value.lineCode, operationCode: value.operationCode,
       sourceObservedAt: value.sourceObservedAt, lineName: value.lineName, operationName: value.operationName, defectQuantity: value.defectQuantity,
       externalRecordKey: value.externalRecordKey, projectSnapshot: value.projectSnapshot, productCategory: value.productCategory, productSubcategory: value.productSubcategory,

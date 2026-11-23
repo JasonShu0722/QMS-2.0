@@ -3,6 +3,7 @@ import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Modal, Select,
 import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Minus, Plus } from 'lucide-react';
 import type { components } from '@qms/contracts';
+import { factoryLabel } from '../../features/process-quality/process-factory';
 import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useScopedIntegrationRequests, type IntegrationScope } from '../api-integrations/integration-ui';
 import { IngestionError, ingestionPath, label, useIngestionMutation, useIngestionText, type Endpoint, type Rule } from './ingestion-ui';
@@ -13,7 +14,7 @@ type ConditionValues = Omit<Condition, 'value'> & { valueType: 'string' | 'numbe
 type DescriptionField = { path: string; label?: string; variable?: string };
 type Values = Omit<Save, 'conditions' | 'aiDescription' | 'descriptionComposition'> & { conditions: ConditionValues[]; descriptionMode: 'single' | 'multiple'; aiEnabled: boolean; componentNameSource: 'EXTERNAL' | 'MATERIAL'; descriptionComposition?: { fields: DescriptionField[]; separator: string } };
 const operators: Condition['operator'][] = ['EQ', 'NE', 'IN', 'NOT_IN', 'EMPTY', 'NOT_EMPTY'];
-const processFields = ['occurredAt', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey'];
+const processFields = ['factoryCode', 'occurredAt', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey'];
 const operationFields = ['operationCode', 'operationName'];
 
 export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, saved }: { scope: IntegrationScope; rule?: Rule; endpoints: Endpoint[]; endpointsLoading: boolean; close: () => void; saved: () => void }) {
@@ -148,7 +149,9 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
       </>}</Form.List>
       <div className="qms-ingestion-grid qms-ingestion-actions">
         {target === 'PROCESS_DEFECT' ? <>
-          {processFields.filter(field => field !== 'description').map(field => <Form.Item key={field} name={['mapping', field]} label={text(`${label(field, false)}来源字段`, `${label(field, true)} source field`)}><Input maxLength={200} /></Form.Item>)}
+          {processFields.filter(field => field !== 'description').map(field => <Form.Item key={field} name={['mapping', field]} label={text(`${label(field, false)}来源字段`, `${label(field, true)} source field`)}
+            rules={field === 'factoryCode' ? [{ required: true, whitespace: true, message: text('请填写工厂来源字段', 'Enter the factory source field') }] : undefined}
+            extra={field === 'factoryCode' ? `1 → ${factoryLabel('FACTORY_1', english)}${text('；', '; ')}2 → ${factoryLabel('FACTORY_2', english)}` : undefined}><Input maxLength={200} /></Form.Item>)}
           <Form.Item name="sourceTimezone" label={text('来源时区', 'Source timezone')} rules={[{ validator: async (_, value: string) => { if (!value?.trim()) return; try { new Intl.DateTimeFormat('en', { timeZone: value.trim() }); } catch { throw new Error(text('请填写有效的IANA时区', 'Enter a valid IANA timezone')); } } }]}><Input maxLength={100} placeholder="Asia/Shanghai" /></Form.Item>
           <Form.Item name="descriptionMode" label={text('不良描述来源', 'Description source')}><Select options={[{ value: 'single', label: text('单字段', 'Single field') }, { value: 'multiple', label: text('多字段组合', 'Ordered fields') }]} /></Form.Item>
           {descriptionMode === 'single' && <Form.Item name={['mapping', 'description']} label={text('不良描述来源字段', 'Description source field')}><Input maxLength={200} /></Form.Item>}

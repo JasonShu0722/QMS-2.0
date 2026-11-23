@@ -2,7 +2,7 @@ import { Button, Checkbox, Popover, Table, type TableProps } from 'antd';
 import { ArrowDown, ArrowUp, GripVertical, RotateCcw, Settings2 } from 'lucide-react';
 import { createContext, isValidElement, useContext, useLayoutEffect, useRef, useState, type ComponentProps, type ElementType, type ReactNode } from 'react';
 import { useLanguage } from '../../i18n/Language';
-import { boundedWidth, columnKey, DEFAULT_WIDTH, MAX_WIDTH, MIN_SELECTION_WIDTH, MIN_WIDTH, moveColumn, normalizePreferences, preferenceKey, SELECTION_WIDTH_KEY, type Fixed, type Preferences } from './model';
+import { boundedWidth, columnKey, DEFAULT_WIDTH, MAX_WIDTH, MIN_SELECTION_WIDTH, MIN_WIDTH, moveColumn, normalizePreferences, preferenceKey, SELECTION_WIDTH_KEY, type ColumnInsertion, type Fixed, type Preferences } from './model';
 import { getLedgerSessionEpoch, useLedgerScope, useLedgerSessionEpoch, usePreference } from './preferences';
 import { useLedgerStickyLayout } from './stickyLayout';
 import './ledger.css';
@@ -12,12 +12,13 @@ export type LedgerTableProps<RecordType extends object> = TableProps<RecordType>
   resizableSelection?: boolean;
   compactHeaders?: boolean;
   compactLayout?: boolean;
+  pinnedHorizontalScroll?: boolean;
   actionBar?: ReactNode;
   bodyFallback?: ReactNode;
   toolbarContent?: ReactNode;
   columnOrder?: string[]; visibleColumnKeys?: string[];
   defaultVisibleColumnKeys?: string[];
-  insertNewColumnBefore?: readonly [column: string, anchor: string];
+  insertNewColumnsBefore?: readonly ColumnInsertion[];
   resetColumnsLabel?: string;
   onColumnOrderChange?: (keys: string[]) => void; onVisibleColumnKeysChange?: (keys: string[]) => void;
 };
@@ -37,7 +38,7 @@ function WidthInput({ value, minimum, label, onCommit }: { value: number; minimu
   }
   return <input aria-label={label} type="number" min={minimum} max={MAX_WIDTH} step={10} value={draft ?? value} onChange={event => setDraft(event.target.value)} onBlur={submit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); submit(); } else if (event.key === 'Escape') { event.preventDefault(); setDraft(undefined); } }} />;
 }
-export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, defaultVisibleColumnKeys, insertNewColumnBefore, resetColumnsLabel, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, sticky, className, components, expandable, rowSelection, resizableSelection = false, compactHeaders = false, compactLayout = false, actionBar, bodyFallback, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
+export function LedgerTable<RecordType extends object>({ ledgerId, organizationId, viewId, requiredColumnKeys = [], columnOrder, visibleColumnKeys, defaultVisibleColumnKeys, insertNewColumnsBefore, resetColumnsLabel, onColumnOrderChange, onVisibleColumnKeysChange, columns = [], scroll, sticky, className, components, expandable, rowSelection, resizableSelection = false, compactHeaders = false, compactLayout = false, pinnedHorizontalScroll = false, actionBar, bodyFallback, toolbarContent, ...tableProps }: LedgerTableProps<RecordType>) {
   const { locale } = useLanguage();
   const text = (chinese: string, english: string) => locale === 'en-US' ? english : chinese;
   const scope = useLedgerScope(organizationId);
@@ -51,7 +52,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   leaves.forEach(column => { const key = columnKey(column); if (key) counts.set(key, (counts.get(key) ?? 0) + 1); });
   const configurable = leaves.filter(column => { const key = columnKey(column); return key && counts.get(key) === 1 && !column.hidden; }).slice(0, 200);
   const keys = configurable.map(column => columnKey(column)!);
-  const normalize = (input: unknown) => normalizePreferences(input === undefined && defaultVisibleColumnKeys !== undefined ? { order: keys, visible: defaultVisibleColumnKeys } : input, keys, resizableSelection, insertNewColumnBefore);
+  const normalize = (input: unknown) => normalizePreferences(input === undefined && defaultVisibleColumnKeys !== undefined ? { order: keys, visible: defaultVisibleColumnKeys } : input, keys, resizableSelection, insertNewColumnsBefore);
   const [saved, save] = usePreference(storageKey, scope.sessionScope, normalize, stateKey);
   const defaultFixed = Object.fromEntries(configurable.map(column => [columnKey(column)!, column.fixed === true ? 'left' : column.fixed || false])) as Record<string, Fixed>;
   const order = columnOrder === undefined ? saved.order : normalizePreferences({ order: columnOrder }, keys).order;
@@ -72,7 +73,7 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
   const hasActionBar = actionBar != null && actionBar !== false;
   const hasTable = bodyFallback == null;
   const manageSticky = hasTable && sticky === undefined && scroll?.y == null && !tableProps.virtual && typeof components?.body !== 'function';
-  useLedgerStickyLayout(tableRoot, manageSticky, hasActionBar, tableProps.showHeader !== false);
+  useLedgerStickyLayout(tableRoot, manageSticky, hasActionBar, tableProps.showHeader !== false, pinnedHorizontalScroll);
   const [headerMinimum, setHeaderMinimum] = useState<Record<string, number>>({});
   const measuredColumns = JSON.stringify(keys.filter(key => visible.includes(key) || required.includes(key)));
   useLayoutEffect(() => {
@@ -269,5 +270,6 @@ export function LedgerTable<RecordType extends object>({ ledgerId, organizationI
     {hasTable ? <><div className="qms-ledger__tools">{toolbarContent}<Popover content={settings} trigger="click" placement="bottomRight"><Button size="small" icon={<Settings2 size={13} />} disabled={!keys.length && !selection}>{text('列设置', 'Columns')}</Button></Popover></div>
     <HeaderCellComponent value={{ Cell: (components?.header?.cell ?? 'th') as ElementType, selectionResize: selection ? resizeHandle(SELECTION_WIDTH_KEY, selectionName) : undefined }}><Table<RecordType> {...tableProps} sticky={manageSticky ? true : sticky} pagination={tableProps.pagination === false ? false : { placement: tableProps.pagination?.position ? undefined : ['topStart'], size: 'small', showTotal: total => text(`共 ${total} 条`, `${total} records`), showQuickJumper: true, ...tableProps.pagination }} tableLayout={compactLayout || fitSelection ? 'fixed' : tableProps.tableLayout} className={className} columns={decorate(columns)} rowSelection={selection ?? rowSelection} scroll={tableScroll} expandable={expansion} components={{ ...components, header: { ...components?.header, cell: LedgerHeaderCell } }} /></HeaderCellComponent>
     </> : <>{toolbarContent}{bodyFallback}</>}
+    {manageSticky && pinnedHorizontalScroll && <input type="range" className="qms-ledger__horizontal-scroll" aria-label={text('横向滚动台账', 'Scroll ledger horizontally')} hidden />}
   </div>;
 }

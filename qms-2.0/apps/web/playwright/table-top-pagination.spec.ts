@@ -435,7 +435,7 @@ test('real notifications use a single pager above the business list at desktop a
   const pager = panel.locator('.ant-pagination');
   await expect(pager).toHaveCount(1);
   await changeSize(page, pager, false, 10);
-  const titles = panel.locator('.ant-list-item .ant-card-head-title');
+  const titles = panel.getByRole('listitem').locator('.ant-card-head-title');
   await expect(titles).toHaveCount(10);
   const first = await titles.allTextContents();
   const firstPage = await positionRead<Schema['NotificationPageDto']>(page.request, '/api/v1/notifications?pageSize=10&offset=0');
@@ -447,7 +447,7 @@ test('real notifications use a single pager above the business list at desktop a
     await pager.scrollIntoViewIfNeeded();
     const measured = await panel.evaluate(element => {
       const pager = element.querySelector('.ant-pagination')!.getBoundingClientRect();
-      const list = element.querySelector('.ant-list')!.getBoundingClientRect();
+      const list = element.querySelector('.qms-record-list')!.getBoundingClientRect();
       const bounds = element.getBoundingClientRect();
       return { pagerBottom: pager.bottom, listTop: list.top, pagerLeft: pager.left - bounds.left, pagerRight: bounds.right - pager.right, viewportHeight: innerHeight, viewportWidth: innerWidth, pageWidth: document.documentElement.scrollWidth };
     });

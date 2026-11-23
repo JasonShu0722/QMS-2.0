@@ -8,8 +8,11 @@ import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { categoryOptions, denied, ProcessError, useProcessWrite, type Defect } from './process-ledger';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessTraceScanner } from './ProcessTraceScanner';
+import { useLanguage } from '../../i18n/Language';
+import { factoryChoices, factoryFieldLabel, factoryLabel } from './process-factory';
 
 type Update = components['schemas']['UpdateProcessDefectDto'];
+type Create = components['schemas']['CreateProcessDefectDto'];
 type Material = components['schemas']['ProcessDefectMaterialInputDto'];
 type SqePage = components['schemas']['ProcessMaterialSqePageDto'];
 type Supplier = components['schemas']['SupplierProfileDto'];
@@ -23,6 +26,8 @@ export function materialInputs(record?: Defect): Material[] {
 }
 export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSaved, onClose, onDenied }: { record?: Defect; suppliers: Supplier[]; canReadSuppliers: boolean; onSaved: (record: Defect) => void; onClose: () => void; onDenied: (cause?: unknown) => void }) {
   const [form] = Form.useForm<Update>();
+  const english = useLanguage().locale === 'en-US';
+  const factoryTitle = factoryFieldLabel[english ? 1 : 0];
   const formId = useId();
   const [saved, setSaved] = useState(record);
   const [dirty, setDirty] = useState(false);
@@ -94,13 +99,23 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
       if (saved?.sourceKind === 'IMS') {
         body = Object.fromEntries(Object.entries(body).filter(([field, value]) => field === 'materials' ? form.isFieldTouched('materials') : JSON.stringify(value ?? null) !== JSON.stringify(saved[field as keyof Defect] ?? null)));
         if (!saved.externalRecordKey && values.externalRecordKey?.trim()) body.externalRecordKey = values.externalRecordKey.trim();
+      } else if (values.factoryCode && values.factoryCode !== saved?.factoryCode) {
+        body.factoryCode = values.factoryCode;
       }
-      const result = await writer.write<Defect>(saved ? `/api/v1/process-quality/defects/${saved.id}` : '/api/v1/process-quality/defects', saved ? { ...body, expectedVersion: saved.version } satisfies Update : body, saved ? 'PUT' : 'POST');
-      if (current()) { setSaved(result); setDirty(false); onSaved(result); form.setFieldsValue({ materials: materialInputs(result) }); }
+      let result: Defect;
+      if (saved) {
+        const update: Update = { ...body, expectedVersion: saved.version };
+        result = await writer.write<Defect>(`/api/v1/process-quality/defects/${saved.id}`, update, 'PUT');
+      } else {
+        if (!values.factoryCode || !body.description || !body.occurredAt || !body.productCode || !body.traceCode || body.defectQuantity == null) return;
+        const create: Create = { ...body, factoryCode: values.factoryCode, description: body.description, occurredAt: body.occurredAt, productCode: body.productCode, traceCode: body.traceCode, defectQuantity: body.defectQuantity };
+        result = await writer.write<Defect>('/api/v1/process-quality/defects', create, 'POST');
+      }
+      if (current()) { setSaved(result); setDirty(false); onSaved(result); form.setFieldsValue({ materials: materialInputs(result), factoryCode: result.factoryCode ?? undefined }); }
     } catch (cause) { if (current()) setError(cause); }
     finally { submitting.current = false; }
   }
-  const initialValues: Partial<Update> = record ? { ...record, externalRecordKey: record.externalRecordKey ?? undefined, materials: materialInputs(record), occurredAt: record.occurredAt ? new Date(new Date(record.occurredAt).getTime() - new Date(record.occurredAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : null } : { materials: [{}], defectQuantity: 1 };
+  const initialValues: Partial<Update> = record ? { ...record, factoryCode: record.sourceKind === 'IMS' ? undefined : record.factoryCode ?? undefined, externalRecordKey: record.externalRecordKey ?? undefined, materials: materialInputs(record), occurredAt: record.occurredAt ? new Date(new Date(record.occurredAt).getTime() - new Date(record.occurredAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : null } : { materials: [{}], defectQuantity: 1 };
   return <Drawer open title={record ? '维护不良台账' : '登记不良'} size="min(920px, 100vw)"
     extra={<Button type="primary" htmlType="submit" form={formId} loading={writer.busy} disabled={invalidated || writer.busy}>{writer.uncertain ? '同请求重试保存' : '保存登记'}</Button>}
     onClose={() => { if (!writer.busy) requestLeave(onClose, true); }} closable={!writer.busy} keyboard={!writer.busy} mask={{ closable: !writer.busy }}>
@@ -110,6 +125,7 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
     <Form id={formId} form={form} layout="vertical" initialValues={initialValues} disabled={invalidated || writer.busy || writer.uncertain} onValuesChange={() => setDirty(true)} onFinish={() => void save(form.getFieldsValue(true))}>
       <div className="process-quality-form-grid">
         <Form.Item name="occurredAt" label="发生时间" rules={[{ required: !saved, message: '请填写发生时间' }]}><Input type="datetime-local" /></Form.Item>
+        {saved?.sourceKind !== 'IMS' && <Form.Item name="factoryCode" label={factoryTitle} rules={[{ required: true, message: english ? 'Select a factory' : '请选择工厂' }]}><Select options={factoryChoices.map(([value, zh, en]) => ({ value, label: english ? en : zh }))} /></Form.Item>}
         <Form.Item name="productCode" label="成品编码" rules={[{ required: !saved, whitespace: true, message: '请填写成品编码' }]}><Input maxLength={100} /></Form.Item>
         <Form.Item label="追溯码" required={!saved}><div className="process-trace-input"><Form.Item name="traceCode" noStyle rules={[{ required: !saved, whitespace: true, message: '请填写追溯码' }, { max: 200, message: '追溯码最多200个字符' }]}><Input aria-label="追溯码" maxLength={200} onKeyDown={event => { if (event.key === 'Enter') event.preventDefault(); }} /></Form.Item><Button disabled={invalidated || writer.busy || writer.uncertain} onClick={() => setScanning(true)}>手机扫码</Button></div></Form.Item>
         <Form.Item name="defectQuantity" label="不良数量" rules={[{ required: !saved, message: '请填写不良数量' }, { type: 'integer', min: 1, max: 2147483647, message: '请输入正整数' }]}><InputNumber min={1} max={2147483647} /></Form.Item>
@@ -118,6 +134,7 @@ export function ProcessDefectEditor({ record, suppliers, canReadSuppliers, onSav
       <div className="process-quality-form-grid"><Form.Item name="workOrderCode" label="工单号"><Input maxLength={100} /></Form.Item><Form.Item name="lineName" label="生产线名称"><Input maxLength={200} /></Form.Item><Form.Item name="operationName" label="工序名称"><Input maxLength={200} /></Form.Item></div>
       {saved?.sourceKind === 'IMS' ? <Form.Item name="externalRecordKey" label="来源明细编号"><Input maxLength={200} readOnly={!!saved.externalRecordKey} /></Form.Item> : null}
       {saved ? <Descriptions size="small" column={2} items={[
+        ...(saved.sourceKind === 'IMS' ? [{ key: 'factoryCode', label: factoryTitle, children: factoryLabel(saved.factoryCode, english) }] : []),
         { key: 'project', label: '项目号', children: saved.componentProject?.project?.code ?? '未确认' },
         { key: 'stage', label: '项目状态', children: saved.projectStage === 'NEW_PRODUCT' ? '新品' : saved.projectStage === 'MASS_PRODUCTION' ? '量产' : '未确认' },
         { key: 'subcategory', label: '细分类型', children: saved.productSubcategory ?? '—' },

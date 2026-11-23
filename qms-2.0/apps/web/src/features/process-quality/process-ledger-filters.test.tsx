@@ -20,7 +20,7 @@ const defect: components['schemas']['ProcessDefectDto'] = {
   ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null,
   evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL',
   materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: '一线', operationName: '贴片',
-  shift: 'DAY', operationSector: 'SMT', productCategory: 'PCBA', productSubcategory: '主板', projectStage: 'MASS_PRODUCTION', projectName: null,
+  factoryCode: 'FACTORY_1', shift: 'DAY', operationSector: 'SMT', productCategory: 'PCBA', productSubcategory: '主板', projectStage: 'MASS_PRODUCTION', projectName: null,
   pendingCompletion: false, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人',
 };
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:issues:issue'];
@@ -60,6 +60,63 @@ async function openPanel(label = '筛选条件') {
   const panel = await screen.findByLabelText('筛选面板');
   return { trigger, panel, queries: within(panel) };
 }
+
+it('shows the factory before shift and displays saved and missing values in the ledger and detail', async () => {
+  const missing = { ...defect, id: '33333333-3333-4333-8333-333333333333', description: '历史记录', factoryCode: null, issues: ['factory:INVALID'], pendingCompletion: true };
+  items = [defect, missing];
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation((path, init) => path.endsWith(`/defects/${missing.id}`) ? Promise.resolve(missing) : read(path, init));
+  const { container } = mount();
+  const headers = within(container.querySelector('thead')!);
+  const factory = headers.getByRole('columnheader', { name: '工厂' }) as HTMLTableCellElement;
+  expect(factory.previousElementSibling).toBe(headers.getByRole('columnheader', { name: '发生时间' }));
+  expect(factory.nextElementSibling).toBe(headers.getByRole('columnheader', { name: '班次' }));
+  const savedRow = (await screen.findByLabelText(`选择制程不良 ${defect.description}`)).closest('tr')!;
+  const oldRow = screen.getByLabelText(`选择制程不良 ${missing.description}`).closest('tr')!;
+  expect(savedRow.cells[factory.cellIndex]).toHaveTextContent('一工厂');
+  expect(oldRow.cells[factory.cellIndex]).toHaveTextContent(/^\/$/);
+  fireEvent.click(within(oldRow).getByLabelText('查看详情'));
+  const drawer = screen.getByText('不良品详情', { selector: '.ant-drawer-title' }).closest<HTMLElement>('[role="dialog"]')!;
+  expect((await within(drawer).findByText('工厂')).closest('tr')?.querySelector('td')).toHaveTextContent(/^\/$/);
+  expect(within(drawer).getByText(/工厂来源值无效/)).toBeVisible();
+});
+
+it('submits factory codes and value-free empty conditions from the shared filter panel', async () => {
+  mount();
+  const { queries } = await openPanel('按工厂筛选');
+  expect(queries.getByLabelText('筛选字段 1')).toHaveValue('factoryCode');
+  const select = queries.getByLabelText('筛选值 1');
+  expect(within(select).getByRole('option', { name: '一工厂' })).toHaveValue('FACTORY_1');
+  fireEvent.change(select, { target: { value: 'FACTORY_2' } });
+  fireEvent.click(queries.getByText('应用筛选'));
+  expect(JSON.parse(latestQuery().get('filters')!)).toEqual({ logic: 'ALL', items: [{ field: 'factoryCode', operator: 'EQ', value: 'FACTORY_2' }] });
+  const panel = (await openPanel()).queries;
+  fireEvent.change(panel.getByLabelText('筛选运算符 1'), { target: { value: 'EMPTY' } });
+  fireEvent.click(panel.getByText('应用筛选'));
+  expect(JSON.parse(latestQuery().get('filters')!)).toEqual({ logic: 'ALL', items: [{ field: 'factoryCode', operator: 'EMPTY' }] });
+});
+
+it('upgrades a saved order, keeps an explicitly hidden factory after reload, and restores defaults', async () => {
+  const order = ['select', 'project', 'shift', 'occurredAt', 'productSubcategory', 'description', 'actions'];
+  localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { order, visible: order.filter(key => key !== 'occurredAt'), widths: { description: 390 } } }));
+  const mounted = mount();
+  expect(screen.getByRole('columnheader', { name: '工厂' }).nextElementSibling).toBe(screen.getByRole('columnheader', { name: '班次' }));
+  expect(screen.getByRole('columnheader', { name: '产品类型' }).nextElementSibling).toBe(screen.getByRole('columnheader', { name: '细分类型' }));
+  expect(screen.queryByRole('columnheader', { name: '发生时间' })).not.toBeInTheDocument();
+  expect(within(screen.getByRole('columnheader', { name: '不良描述' })).getByRole('separator')).toHaveAttribute('aria-valuenow', '390');
+  fireEvent.click(screen.getByRole('button', { name: '列设置' }));
+  const restore = await screen.findByText('恢复录单默认列', { selector: 'button span' });
+  const settings = within(restore.closest<HTMLElement>('.qms-ledger__settings')!);
+  fireEvent.click(settings.getByLabelText('显示 工厂'));
+  mounted.unmount();
+  mount();
+  expect(screen.queryByRole('columnheader', { name: '工厂' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: '列设置' }));
+  fireEvent.click(await screen.findByText('恢复录单默认列', { selector: 'button span' }));
+  const factory = screen.getByRole('columnheader', { name: '工厂' });
+  expect(factory.previousElementSibling).toBe(screen.getByRole('columnheader', { name: '发生时间' }));
+  expect(factory.nextElementSibling).toBe(screen.getByRole('columnheader', { name: '班次' }));
+});
 
 it('displays the mapped product category even without a linked project and shows missing categories as unconfirmed', async () => {
   const unmapped = { ...defect, id: '33333333-3333-4333-8333-333333333333', description: '历史记录', productCategory: null, productSubcategory: null };
@@ -137,7 +194,7 @@ it.each([true, false])('inserts the category before the saved subcategory and fo
   localStorage.setItem(columnsKey, saved);
   const { container } = mount();
   const headers = within(container.querySelector('thead')!);
-  const expected = visible.flatMap(key => key === 'productSubcategory' ? ['productCategory', key] : [key]);
+  const expected = visible.flatMap(key => key === 'occurredAt' ? [key, 'factoryCode'] : key === 'productSubcategory' ? ['productCategory', key] : [key]);
   expect(headers.getAllByRole('columnheader').map(header => header.dataset.compactLedgerColumn).slice(0, expected.length)).toEqual(expected);
   expect(Boolean(headers.queryByLabelText('产品类型', { selector: 'th' }))).toBe(showSubcategory);
   expect(headers.queryByRole('columnheader', { name: '班次' })).not.toBeInTheDocument();
