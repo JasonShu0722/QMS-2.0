@@ -11,8 +11,9 @@ it('constrains the grid and wide table locally without hiding page overflow or c
   expect(css).not.toMatch(/body\s*\{[^}]*overflow/);
 });
 
-it('uses only the quantity label and its full-size filter target for the compact title measurement', () => {
+it('centers every filter title independently of its full-size filter target', () => {
   const css = readFileSync(`${process.cwd()}/src/features/process-quality/process-quality.css`, 'utf8');
-  expect(css).toMatch(/\.process-quality-filter-title--compact\s*\{\s*display:\s*inline-flex;\s*\}/);
-  expect(css).toMatch(/\.process-quality-filter-title > button\s*\{[^}]*width:\s*var\(--filter-size\);[^}]*height:\s*var\(--filter-size\)/);
+  expect(css).toMatch(/\.process-quality-ledger th\[data-compact-ledger-column\] > \.qms-ledger__heading\s*\{[^}]*text-align:\s*center/);
+  expect(css).toMatch(/\.process-quality-filter-title\s*\{[^}]*grid-template-columns:\s*var\(--filter-width\) max-content var\(--filter-width\)/);
+  expect(css).toMatch(/\.process-quality-filter-title > button\s*\{[^}]*width:\s*var\(--filter-width\);[^}]*height:\s*var\(--filter-height\)/);
 });

@@ -58,7 +58,7 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     ]));
     expect(document.components!.schemas!.ProcessDefectFiltersDto).toMatchObject({ properties: { logic: { enum: ['ALL', 'ANY'] }, items: { minItems: 1, maxItems: 10 } } });
     expect(document.components!.schemas!.ProcessDefectFilterDto).toMatchObject({ properties: {
-      field: { enum: expect.arrayContaining(['projectCode', 'projectStage', 'defectQuantity', 'pendingCompletion', 'factoryCode']) },
+      field: { enum: expect.arrayContaining(['projectCode', 'projectStage', 'defectQuantity', 'pendingCompletion', 'factoryCode', 'productCategory']) },
       operator: { enum: expect.arrayContaining(['NE', 'NOT_CONTAINS', 'BEFORE', 'LTE', 'EMPTY']) },
       value: { oneOf: [{ type: 'string' }, { type: 'integer' }, { type: 'boolean' }] },
     } });
@@ -131,6 +131,52 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     expect(month.body).toMatchObject({ total: 2, items: [{ id: recent }, { id: boundary }] });
     const legacy = await list({ page: 2, pageSize: 2, search: 'FilterScope', ledgerStatus: 'FOLLOWING' }).expect(200);
     expect(legacy.body).toMatchObject({ page: 2, pageSize: 2, total: 4, items: [{ id: boundary }, { id: blank }] });
+  });
+
+  it('filters persisted product categories with text operators, scoped combinations and server pagination', async () => {
+    const productCode = randomUUID();
+    const batchCode = randomUUID();
+    const savedCategory = 'Drive 100%_A';
+    const currentCategory = 'Current mapping';
+    await prisma.$executeRaw`INSERT INTO component_project_mappings
+      (organization_id, component_code, product_category, created_by_user_id, updated_by_user_id)
+      VALUES (${organizationId}::uuid, ${productCode}, ${currentCategory}, ${userId}::uuid, ${userId}::uuid)`;
+    const other = await prisma.organization.create({ data: { code: `OTHER-${randomUUID()}`, name: 'Other', type: 'INTERNAL' } });
+    const [recent, older, pending, different, nullCategory, blankCategory] = Array.from({ length: 6 }, () => randomUUID());
+    const base = { organizationId, createdById: userId, updatedById: userId, productCode, batchCode, description: 'Product category scope' };
+    await prisma.processDefect.createMany({ data: [
+      { ...base, id: recent, productCategory: savedCategory, occurredAt: new Date('2026-11-06T00:00:00Z') },
+      { ...base, id: older, productCategory: 'drive 100%_a', occurredAt: new Date('2026-11-05T00:00:00Z') },
+      { ...base, id: pending, productCategory: savedCategory, pendingCompletion: true, occurredAt: new Date('2026-11-04T00:00:00Z') },
+      { ...base, id: different, productCategory: 'Drive 100xxA', occurredAt: new Date('2026-11-03T00:00:00Z') },
+      { ...base, id: nullCategory, productCategory: null, productSubcategory: savedCategory, occurredAt: new Date('2026-11-02T00:00:00Z') },
+      { ...base, id: blankCategory, productCategory: '', occurredAt: new Date('2026-11-01T00:00:00Z') },
+      { ...base, organizationId: other.id, productCategory: savedCategory, pendingCompletion: true },
+      { ...base, archivedAt: new Date(), productCategory: savedCategory },
+    ] });
+    const category = (operator: string, value?: string) => ({ field: 'productCategory', operator, value });
+    const filters = (logic: 'ALL' | 'ANY', ...items: { field: string; operator: string; value?: string | boolean }[]) => JSON.stringify({ logic, items });
+    const matching = category('EQ', 'DRIVE 100%_A');
+    const combinations = filters('ALL', matching, { field: 'pendingCompletion', operator: 'EQ', value: false });
+    for (const [page, ids] of [[1, [recent]], [2, [older]], [3, []]] as const) {
+      const response = await list({ batchCode, filters: combinations, page, pageSize: 1 }).expect(200);
+      expect(response.body).toMatchObject({ page, pageSize: 1, total: 2 });
+      expect(response.body.items.map((row: { id: string }) => row.id)).toEqual(ids);
+    }
+    for (const [encoded, ids] of [
+      [filters('ALL', category('CONTAINS', '100%_a')), [recent, older, pending]],
+      [filters('ALL', category('NOT_CONTAINS', '100%_a')), [different]],
+      [filters('ALL', category('NE', 'DRIVE 100%_A')), [different]],
+      [filters('ALL', category('EMPTY')), [nullCategory, blankCategory]],
+      [filters('ALL', category('NOT_EMPTY')), [recent, older, pending, different]],
+      [filters('ALL', category('EQ', currentCategory)), []],
+      [filters('ANY', matching, { field: 'productSubcategory', operator: 'EQ', value: savedCategory }), [recent, older, pending, nullCategory]],
+    ] as const) {
+      const response = await list({ batchCode, filters: encoded }).expect(200);
+      expect(response.body.total).toBe(ids.length);
+      expect(response.body.items.map((row: { id: string }) => row.id)).toEqual(ids);
+    }
+    await list({ organizationId: other.id, batchCode, filters: filters('ALL', matching) }).expect(403);
   });
 
   it('rejects malformed filters, unknown properties and invalid field/operator/value combinations', async () => {

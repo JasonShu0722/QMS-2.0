@@ -14503,7 +14503,7 @@ export interface components {
         };
         ProcessDefectFilterDto: {
             /** @enum {string} */
-            field: "description" | "defectTypeCode" | "batchCode" | "workOrderCode" | "operationCode" | "lineCode" | "projectCode" | "productCode" | "materialCode" | "traceCode" | "lineName" | "operationName" | "operationSector" | "productSubcategory" | "occurredAt" | "defectQuantity" | "shift" | "projectStage" | "ledgerStatus" | "responsibilityCategory" | "pendingCompletion" | "pendingConfiguration" | "factoryCode";
+            field: "description" | "defectTypeCode" | "batchCode" | "workOrderCode" | "operationCode" | "lineCode" | "projectCode" | "productCode" | "materialCode" | "traceCode" | "lineName" | "operationName" | "operationSector" | "productCategory" | "productSubcategory" | "occurredAt" | "defectQuantity" | "shift" | "projectStage" | "ledgerStatus" | "responsibilityCategory" | "pendingCompletion" | "pendingConfiguration" | "factoryCode";
             /** @enum {string} */
             operator: "CONTAINS" | "NOT_CONTAINS" | "EQ" | "NE" | "EMPTY" | "NOT_EMPTY" | "BEFORE" | "AFTER" | "GT" | "GTE" | "LT" | "LTE";
             value?: string | number | boolean;
