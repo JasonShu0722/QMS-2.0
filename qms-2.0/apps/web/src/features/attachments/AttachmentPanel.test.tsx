@@ -99,12 +99,14 @@ it('refreshes after a delete version conflict and displays only a controlled err
   render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} /></LanguageProvider>);
   await userEvent.click(await screen.findByRole('button', { name: '删除附件' }));
   const confirmation = within(await screen.findByRole('tooltip'));
-  expect(confirmation.getByText(`删除附件 · ${file.originalName}`)).toBeVisible();
+  await waitFor(() => expect(confirmation.getByText(`删除附件 · ${file.originalName}`)).toBeVisible());
   expect(confirmation.getByText(/无法继续下载/)).toBeVisible();
   expect(confirmation.queryByRole('textbox')).not.toBeInTheDocument();
   await userEvent.click(confirmation.getByRole('button', { name: /^取\s*消$/ }));
   expect(deleted).toBe(false);
+  await waitFor(() => expect(confirmation.getByText(`删除附件 · ${file.originalName}`)).not.toBeVisible());
   await userEvent.click(screen.getByRole('button', { name: '删除附件' }));
+  await waitFor(() => expect(confirmation.getByText(`删除附件 · ${file.originalName}`)).toBeVisible());
   await userEvent.click(screen.getByRole('button', { name: '确认删除附件' }));
   expect(await screen.findByText('file-trace')).toBeInTheDocument();
   expect(await screen.findByText('已删除，保留历史记录')).toBeInTheDocument();

@@ -45,7 +45,7 @@ it('enables deletion only after a dependency read and leaves submission to expli
   await waitFor(() => expect(dialog.getByRole('button', { name: '确认删除' })).toBeEnabled());
   expect(fetcher).toHaveBeenCalledWith('/api/v1/organizations/child/lifecycle', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   expect(screen.getByRole('dialog')).toHaveAccessibleName(`删除 · ${organization.name} · ${organization.code}`);
-  expect(dialog.getByText('同时移除该组织的初始化角色和授权（如有），业务数据保留。')).toBeVisible();
+  await waitFor(() => expect(dialog.getByText('同时移除该组织的初始化角色和授权（如有），业务数据保留。')).toBeVisible());
   expect(dialog.queryByRole('link')).not.toBeInTheDocument();
   expect(dialog.queryByRole('button', { name: '重新检查依赖' })).not.toBeInTheDocument();
   await userEvent.click(dialog.getByRole('button', { name: /^取\s*消$/ }));
