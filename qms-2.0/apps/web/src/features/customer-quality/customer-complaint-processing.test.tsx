@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
@@ -41,6 +41,23 @@ it('submits a versioned progress event and refreshes the complaint', async () =>
   fireEvent.click(screen.getByRole('button', { name: '记录进展' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/complaints/complaint-1/progress', expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedVersion: 2, note: '已确认现场样件' }) })));
   await waitFor(() => expect(refresh).toHaveBeenCalledTimes(1));
+});
+
+it('confirms removal from the active complaint list before archiving the closed complaint', async () => {
+  const refresh = vi.fn().mockResolvedValue(undefined);
+  render(<CustomerComplaintProcessing complaint={{ ...complaint, status: 'CLOSED' }} canWrite refresh={refresh} />);
+  const archive = await screen.findByRole('button', { name: /^归\s*档$/ });
+  fireEvent.click(archive);
+  const confirmation = within(await screen.findByRole('tooltip'));
+  await waitFor(() => expect(confirmation.getByText('归档客诉 · CQ-1')).toBeVisible());
+  expect(confirmation.getByText('从当前台账移除，处理历史保留。')).toBeVisible();
+  expect(confirmation.queryByRole('textbox')).not.toBeInTheDocument();
+  fireEvent.click(confirmation.getByRole('button', { name: /^取\s*消$/ }));
+  expect(apiRequest).not.toHaveBeenCalledWith(expect.stringMatching(/\/archive$/), expect.anything());
+  fireEvent.click(archive);
+  fireEvent.click(confirmation.getByRole('button', { name: '确认归档' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/customer-quality/complaints/${complaint.id}/archive`, expect.objectContaining({ method: 'PUT', body: JSON.stringify({ expectedVersion: 2 }) })));
+  expect(refresh).toHaveBeenCalledOnce();
 });
 
 it('registers a complaint with the supplied severity policy snapshot', async () => {

@@ -63,6 +63,7 @@ it('offers one dangerous deletion confirmation only to integration managers and 
   view(); const button = await screen.findByLabelText('删除MES质量推送');
   expect(button).toHaveClass('ant-btn-dangerous'); fireEvent.click(button);
   const popup = await screen.findByRole('tooltip'); await waitFor(() => expect(popup).toBeVisible());
+  expect(popup).toHaveTextContent('确认删除接收接口「MES质量推送」？');
   expect(popup).toHaveTextContent('停止接收'); expect(popup).toHaveTextContent('撤销'); expect(popup).toHaveTextContent('保留历史');
   fireEvent.click(within(popup).getByRole('button', { name: '取消' })); expect(deletes()).toHaveLength(0);
   expect(screen.getByText('MES质量推送')).toBeVisible();

@@ -55,6 +55,7 @@ it('uses one live impact confirmation and the preview version/token, not the old
   expect(dialog.getByText('审批及签署历史')).toBeInTheDocument();
   for (const label of ['账号', '部门/科室', '岗位', '组织（含目标）', '任职', '管理职责', '分管范围']) expect(dialog.getByText(label)).toBeInTheDocument();
   expect(dialog.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(dialog.queryByRole('button', { name: '重新读取影响' })).not.toBeInTheDocument();
   expect(posts(fetchMock)).toHaveLength(0);
   await userEvent.click(dialog.getByRole('button', { name: '确认强制删除' }));
   await waitFor(() => expect(changed).toHaveBeenCalledOnce());

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken, getSession } from '../../api/client';
 import { NewProductQualityPage } from './NewProductQualityPage';
@@ -75,8 +75,11 @@ it('submits a mass production handover with the current project version', async 
   vi.mocked(apiRequest).mockResolvedValueOnce(project).mockResolvedValueOnce({}).mockResolvedValueOnce({ ...project, status: 'ARCHIVED', version: 3 });
   render(<NewProductQualityPage projectId={project.id} />);
   fireEvent.click(await screen.findByRole('button', { name: '量产移交' }));
-  fireEvent.change(screen.getByLabelText('遗留风险说明'), { target: { value: '未关闭问题已签署风险' } });
-  fireEvent.click(screen.getByRole('button', { name: '确认移交' }));
+  const confirmation = within(await screen.findByRole('dialog', { name: '量产移交 · NP-2026-001 电驱平台项目' }));
+  expect(confirmation.getByText('移交后项目归档，历史资料保留。')).toBeInTheDocument();
+  expect(confirmation.getByRole('button', { name: '确认移交' })).toBeDisabled();
+  fireEvent.change(confirmation.getByLabelText('遗留风险说明'), { target: { value: '未关闭问题已签署风险' } });
+  fireEvent.click(confirmation.getByRole('button', { name: '确认移交' }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/new-product-quality/projects/${project.id}/handover`, expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedVersion: 2, riskStatement: '未关闭问题已签署风险' }) })));
 });
 

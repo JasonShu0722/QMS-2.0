@@ -23,6 +23,19 @@ afterEach(() => vi.unstubAllEnvs());
 function mount(permissions: string[] = [...organization.permissions]) {
   return render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessOperationSectors organization={{ ...organization, permissions }} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
 }
+it('identifies the coded operation and confirms removal of the operation and its mapping', async () => {
+  vi.mocked(apiRequest).mockResolvedValue([{ ...sector, operationCode: 'OP-09' }]);
+  mutate.mockResolvedValue({ id: sector.id });
+  mount();
+  const row = within((await screen.findByText('OP-09')).closest('tr')!);
+  fireEvent.click(row.getByRole('button', { name: /^删\s*除$/ }));
+  const dialog = within(await screen.findByRole('dialog', { name: '删除工序 · OP-09 · 终检' }));
+  await waitFor(() => expect(dialog.getByText('同时移除板块关联「装配」。')).toBeVisible());
+  expect(mutate).not.toHaveBeenCalled();
+  fireEvent.click(dialog.getByRole('button', { name: '确认删除' }));
+  await waitFor(() => expect(mutate.mock.calls[0]?.slice(0, 2)).toEqual(['/api/v1/process-quality/operation-sectors/sector-1?organizationId=org&expectedVersion=2', 'DELETE']));
+});
+
 it('searches all rows, retains checks across pages and submits only selected versions', async () => {
   const pageSizeKey = preferenceKey({ sessionScope: 'INTERNAL:org:user', organizationId: 'org', portal: 'business' }, 'process-operation-sectors', 'pageSize')!;
   localStorage.setItem(pageSizeKey, JSON.stringify({ schema: 1, value: 10 }));

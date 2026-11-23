@@ -157,7 +157,7 @@ test('ledger shares selection for deletion and restores the approved registratio
   await page.getByRole('button', { name: '列设置', exact: true }).click();
   await page.getByRole('button', { name: '恢复录单默认列', exact: true }).click();
   await page.keyboard.press('Escape');
-  for (const title of ['班次', '项目号', '细分类型', '新品/量产', '生产线名称', '工序名称', '板块', '追溯码', '不良数量']) {
+  for (const title of ['班次', '项目号', '细分类型', '项目状态', '生产线名称', '工序名称', '板块', '追溯码', '不良数量']) {
     await expect(page.getByRole('columnheader', { name: title, exact: true })).toBeVisible();
   }
   const search = page.getByLabel('搜索制程不良', { exact: true });
@@ -168,8 +168,8 @@ test('ledger shares selection for deletion and restores the approved registratio
   await page.getByRole('checkbox', { name: '选择当前页制程不良', exact: true }).check();
   await page.getByRole('button', { name: '删除所选', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '删除制程不良台账', exact: true });
-  await expect(dialog).toContainText(`界面删除${suffix}`);
-  await dialog.getByLabel('删除原因', { exact: true }).fill('受控验收清理界面误录');
+  await expect(dialog).toContainText('1 条');
+  await expect(dialog.getByRole('textbox')).toHaveCount(0);
   const response = page.waitForResponse(value => new URL(value.url()).pathname === '/api/v1/process-quality/defects/deletion' && value.request().method() === 'POST');
   await dialog.getByRole('button', { name: '确认删除', exact: true }).click();
   expect((await response).status()).toBe(201);
@@ -178,7 +178,7 @@ test('ledger shares selection for deletion and restores the approved registratio
   expect((await positionRead<Schema['ProcessDefectPageDto']>(page.request, `/api/v1/process-quality/defects?page=1&pageSize=20&search=UI_TRACE_${suffix}`)).items.some(item => item.id === record.id)).toBe(false);
   for (const width of [1440, 390, 320]) {
     await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByLabel('台账筛选', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '筛选条件', exact: true })).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
     if (process.env.QMS_ACCEPTANCE_ARTIFACT_DIRECTORY) await page.screenshot({ path: `${process.env.QMS_ACCEPTANCE_ARTIFACT_DIRECTORY}/process-ledger-${width}.png` });
   }

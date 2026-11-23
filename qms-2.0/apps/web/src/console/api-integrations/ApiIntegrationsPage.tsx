@@ -120,7 +120,7 @@ function EndpointList({ scope }: { scope: IntegrationScope }) {
       {canCredentials && <Button size="small" disabled={deleteBusy} aria-label={text(`管理${item.name}凭据`, `Manage ${item.name} credentials`)} onClick={() => setCredentials(item)}>{text('凭据', 'Credentials')}</Button>}
       {canManage && (deleting?.endpoint.id === item.id && deleting.unknown
         ? <Button danger size="small" disabled={deletePending.current} aria-label={text(`重试删除${item.name}`, `Retry deleting ${item.name}`)} onClick={() => void remove(deleting.endpoint)}>{text('重试删除', 'Retry delete')}</Button>
-        : <Popconfirm title={text('删除后将停止接收、撤销全部凭据并保留历史，确认删除？', 'Deletion stops receiving, revokes all credentials, and preserves history. Continue?')} okText={text('确认删除', 'Confirm deletion')} cancelText={text('取消', 'Cancel')} cancelButtonProps={{ 'aria-label': text('取消', 'Cancel') }} okButtonProps={{ danger: true, loading: deleting?.endpoint.id === item.id }} onConfirm={() => remove(item)}>
+        : <Popconfirm title={text(`确认删除接收接口「${item.name}」？`, `Delete receiving interface “${item.name}”?`)} description={text('删除后将停止接收、撤销全部凭据并保留历史。', 'Deletion stops receiving, revokes all credentials, and preserves history.')} okText={text('确认删除', 'Confirm deletion')} cancelText={text('取消', 'Cancel')} cancelButtonProps={{ 'aria-label': text('取消', 'Cancel') }} okButtonProps={{ danger: true, loading: deleting?.endpoint.id === item.id }} onConfirm={() => remove(item)}>
           <Button danger size="small" disabled={deleteBusy || !!editing || !!credentials} aria-label={text(`删除${item.name}`, `Delete ${item.name}`)}>{text('删除', 'Delete')}</Button>
         </Popconfirm>)}
     </Space> },

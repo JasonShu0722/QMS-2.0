@@ -45,8 +45,20 @@ it('enables deletion only after a dependency read and leaves submission to expli
   await waitFor(() => expect(dialog.getByRole('button', { name: '确认删除' })).toBeEnabled());
   expect(fetcher).toHaveBeenCalledWith('/api/v1/organizations/child/lifecycle', expect.objectContaining({ signal: expect.any(AbortSignal) }));
   expect(screen.getByRole('dialog')).toHaveAccessibleName(`删除 · ${organization.name} · ${organization.code}`);
-  expect(dialog.getByRole('link', { name: '定位此组织审计' })).toHaveAttribute('href', expect.stringContaining('section=audit-log'));
+  expect(dialog.getByText('同时移除该组织的初始化角色和授权（如有），业务数据保留。')).toBeVisible();
+  expect(dialog.queryByRole('link')).not.toBeInTheDocument();
+  expect(dialog.queryByRole('button', { name: '重新检查依赖' })).not.toBeInTheDocument();
+  await userEvent.click(dialog.getByRole('button', { name: /^取\s*消$/ }));
   expect(fetcher.mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+});
+
+it('limits the ready department delete impact to retained business data', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => json({ deleteBlockers: [], disableBlockers: [] })));
+  render(<MemoryRouter><StructureLifecycleActions path="/api/v1/organizations/org-a/departments/dep-a" record={department} onChanged={vi.fn()} /></MemoryRouter>);
+  fireEvent.click(screen.getByRole('button', { name: /^删\s*除$/ }));
+  const dialog = within(await screen.findByRole('dialog'));
+  await waitFor(() => expect(dialog.getByText('业务数据保留。')).toBeVisible());
+  expect(dialog.queryByText(/初始化角色/)).not.toBeInTheDocument();
 });
 
 it('places management responsibilities inside the selected department workspace', async () => {

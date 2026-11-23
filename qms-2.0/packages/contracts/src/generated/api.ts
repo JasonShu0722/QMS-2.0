@@ -15009,7 +15009,7 @@ export interface components {
             /** Format: uuid */
             organizationId?: string;
             sources: components["schemas"]["ProcessDefectSelectionDto"][];
-            reason: string;
+            reason?: string;
         };
         ProcessDefectDeletionResultDto: {
             deletedIds: string[];
@@ -15086,7 +15086,7 @@ export interface components {
             /** Format: uuid */
             organizationId?: string;
             expectedVersion: number;
-            reason: string;
+            reason?: string;
         };
         ProcessIssueSourceDto: {
             /** Format: uuid */

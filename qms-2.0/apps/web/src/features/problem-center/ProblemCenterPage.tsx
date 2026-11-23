@@ -447,10 +447,10 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
           <Button type="primary" disabled={disabledWrites} loading={mutating} onClick={saveView}>{t('保存新视图')}</Button>
           <Button disabled={disabledWrites || !selectedView} loading={mutating} onClick={updateView}>{t('更新视图')}</Button>
           <Popconfirm
-            title="删除个人保存视图"
-            description={selectedView ? `将删除“${selectedView.name}”个人视图及其问题筛选、排序和显示列配置。` : undefined}
-            okText="删除"
-            cancelText="取消"
+            title={selectedView ? `${locale === 'en-US' ? 'Delete personal view' : '删除个人视图'} · ${selectedView.name}` : undefined}
+            description={locale === 'en-US' ? 'Only the view settings are removed. Problem records are retained.' : '仅移除视图配置，问题记录保留。'}
+            okText={t('删除')}
+            cancelText={t('取消')}
             okButtonProps={{ danger: true }}
             disabled={disabledWrites || !selectedView}
             onConfirm={removeView}

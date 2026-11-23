@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest, csrfToken, ApiError } from '../../api/client';
 import { AnnouncementsPage } from './AnnouncementsPage';
@@ -47,4 +48,25 @@ it('requests the next management page instead of silently stopping at the first 
   fireEvent.click(screen.getByTitle('2'));
   expect(await screen.findByText('第2页公告')).toBeVisible();
   expect(vi.mocked(apiRequest)).toHaveBeenCalledWith('/api/v1/announcements/manage?page=2&pageSize=20', expect.any(Object));
+});
+
+it('confirms removal of a published announcement from recipient lists and retains reading history', async () => {
+  const announcement = { id: 'published-1', title: '工艺变更公告', content: '正文', status: 'PUBLISHED', version: 3, recipientCount: 3, readCount: 2, mustRead: true };
+  vi.mocked(apiRequest).mockImplementation(async path => path.startsWith('/api/v1/announcements/manage?')
+    ? { items: [announcement], total: 1, page: 1, pageSize: 20 }
+    : { items: [], unreadMustReadCount: 0 });
+  render(<AnnouncementsPage />);
+  fireEvent.click(await screen.findByText('公告管理'));
+  const archive = await screen.findByRole('button', { name: /^归\s*档$/ });
+  archive.focus();
+  await userEvent.keyboard('{Enter}');
+  const dialog = await screen.findByRole('dialog', { name: '归档公告 · 工艺变更公告' });
+  await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement), { container: dialog });
+  expect(within(dialog).getByText('接收人将不再看到此公告，阅读记录保留。')).toBeVisible();
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(archive).toHaveFocus());
+  expect(apiRequest).not.toHaveBeenCalledWith(expect.stringMatching(/\/archive$/), expect.anything());
+  await userEvent.keyboard('{Enter}');
+  fireEvent.click(within(await screen.findByRole('dialog', { name: '归档公告 · 工艺变更公告' })).getByRole('button', { name: '确认归档' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/announcements/published-1/archive', expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedVersion: 3 }) })));
 });

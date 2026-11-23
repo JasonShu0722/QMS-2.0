@@ -44,7 +44,7 @@ export function ProcessOperationSectors({ organization }: { organization: AdminO
   return <SectorContent key={`${organization.id}:${organization.permissions.join(',')}`} organization={organization} />;
 }
 function SectorContent({ organization }: { organization: AdminOrganization }) {
-  const { t } = useLanguage(); const [form] = Form.useForm<Update>();
+  const { locale, t } = useLanguage(); const [form] = Form.useForm<Update>();
   const [items, setItems] = useState<Sector[]>([]); const [editor, setEditor] = useState<{ record?: Sector }>(); const [removing, setRemoving] = useState<Sector>();
   const [batchOpen, setBatchOpen] = useState(false); const [batchText, setBatchText] = useState('');
   const [search, setSearch] = useState(''); const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -223,8 +223,9 @@ function SectorContent({ organization }: { organization: AdminOrganization }) {
         <Space><Button disabled={locked} onClick={close}>{t('取消')}</Button>{unknown ? <Button type="primary" loading={busy} onClick={() => void execute()}>{t('重试原请求')}</Button> : <Button type="primary" htmlType="submit" loading={busy}>{t('保存')}</Button>}</Space>
       </Form>
     </Modal>
-    <Modal open={!!removing} title={t('删除板块规则')} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden footer={<Space><Button disabled={locked} onClick={close}>{t('取消')}</Button><Button danger type="primary" loading={busy} onClick={() => { if (unknown) void execute(); else if (removing) void execute({ path: `${sectorPath}/${removing.id}?organizationId=${encodeURIComponent(organization.id)}&expectedVersion=${removing.version}`, method: 'DELETE' }); }}>{t(unknown ? '重试原请求' : '确认删除')}</Button></Space>}>
-      {feedback}<p>{removing?.operationName} → {removing?.sectorName}</p>
+    <Modal open={!!removing} title={removing && [removing.operationCode ? (locale === 'en-US' ? 'Delete operation' : '删除工序') : (locale === 'en-US' ? 'Delete sector rule' : '删除板块规则'), removing.operationCode, removing.operationName].filter(Boolean).join(' · ')} onCancel={close} closable={!locked} keyboard={!locked} mask={{ closable: !locked }} destroyOnHidden footer={<Space><Button disabled={locked} onClick={close}>{t('取消')}</Button><Button danger type="primary" loading={busy} onClick={() => { if (unknown) void execute(); else if (removing) void execute({ path: `${sectorPath}/${removing.id}?organizationId=${encodeURIComponent(organization.id)}&expectedVersion=${removing.version}`, method: 'DELETE' }); }}>{t(unknown ? '重试原请求' : '确认删除')}</Button></Space>}>
+      {feedback}
+      {removing?.sectorName && <p>{locale === 'en-US' ? `Removes the association with sector “${removing.sectorName}”.` : `同时移除板块关联「${removing.sectorName}」。`}</p>}
     </Modal>
   </Card>;
 }

@@ -35,12 +35,14 @@ export function AnnouncementsPage() {
   const [managePageIndex, setManagePageIndex] = useState(1);
   const [activeTab, setActiveTab] = useState('mine');
   const [editor, setEditor] = useState<ManageItem | 'new'>();
+  const [archiveTarget, setArchiveTarget] = useState<ManageItem>();
   const [auditId, setAuditId] = useState<string>();
   const [receipts, setReceipts] = useState<Receipt[]>();
   const [auditError, setAuditError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
   const auditGeneration = useRef(0);
+  useNavigationBusy(busy && !!archiveTarget);
 
   useEffect(() => () => { auditGeneration.current += 1; }, []);
 
@@ -88,6 +90,14 @@ export function AnnouncementsPage() {
     });
   }
 
+  function confirmArchive() {
+    if (busy || !archiveTarget || !managed?.items.some(item => item.id === archiveTarget.id && item.version === archiveTarget.version && item.status === 'PUBLISHED')) return;
+    void act(async () => {
+      await mutate(`${basePath}/${archiveTarget.id}/archive`, 'POST', { expectedVersion: archiveTarget.version });
+      setArchiveTarget(undefined);
+    });
+  }
+
   async function showReceipts(id: string) {
     const generation = ++auditGeneration.current;
     setAuditId(id);
@@ -104,7 +114,7 @@ export function AnnouncementsPage() {
     setAuditId(undefined); setReceipts(undefined); setAuditError(undefined);
   }
 
-  const error = mutationError ?? loadError;
+  const error = (archiveTarget ? undefined : mutationError) ?? loadError;
   return <section className="announcements-page">
     <header className="announcements-heading">
       <h1 className="sr-only">公告中心</h1>
@@ -121,9 +131,21 @@ export function AnnouncementsPage() {
           {activeTab === 'manage' && <div><Button type="primary" onClick={() => setEditor('new')}>新建公告</Button></div>}
           <Pagination current={managed.page} pageSize={managePageSize} total={managed.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!busy) requestLeave(() => { setManagePageIndex(size === managePageSize ? page : 1); setManagePageSize(size); }); }} showTotal={(total) => '共 ' + total + ' 条'} />
         </ListToolbar>
-        <RecordList items={managed.items} itemKey={item => item.id} empty={<Empty description="暂无公告" />} renderItem={(item: ManageItem) => <Card className="announcements-item" title={<Space wrap><span>{item.title}</span><Tag>{statusLabel[item.status] ?? item.status}</Tag>{item.mustRead && <Tag color="red">必读</Tag>}</Space>} extra={<Space wrap><Typography.Text type="secondary">阅读 {item.readCount}/{item.recipientCount}</Typography.Text></Space>}><Typography.Paragraph className="announcements-content">{item.content}</Typography.Paragraph><Space wrap>{item.status === 'DRAFT' && <><Button onClick={() => setEditor(item)}>编辑</Button><Button type="primary" loading={busy} onClick={() => void act(() => mutate(basePath + '/' + item.id + '/publish', 'POST', { expectedVersion: item.version }))}>发布</Button></>}{item.status === 'PUBLISHED' && <Button loading={busy} onClick={() => void act(() => mutate(basePath + '/' + item.id + '/archive', 'POST', { expectedVersion: item.version }))}>归档</Button>}{item.status !== 'DRAFT' && <Button onClick={() => void showReceipts(item.id)}>阅读审计</Button>}</Space></Card>} />
+        <RecordList items={managed.items} itemKey={item => item.id} empty={<Empty description="暂无公告" />} renderItem={(item: ManageItem) => <Card className="announcements-item" title={<Space wrap><span>{item.title}</span><Tag>{statusLabel[item.status] ?? item.status}</Tag>{item.mustRead && <Tag color="red">必读</Tag>}</Space>} extra={<Space wrap><Typography.Text type="secondary">阅读 {item.readCount}/{item.recipientCount}</Typography.Text></Space>}>
+          <Typography.Paragraph className="announcements-content">{item.content}</Typography.Paragraph>
+          <Space wrap>
+            {item.status === 'DRAFT' && <><Button onClick={() => setEditor(item)}>编辑</Button><Button type="primary" loading={busy} onClick={() => void act(() => mutate(basePath + '/' + item.id + '/publish', 'POST', { expectedVersion: item.version }))}>发布</Button></>}
+            {item.status === 'PUBLISHED' && <Button disabled={busy} onClick={() => { setMutationError(undefined); setArchiveTarget(item); }}>归档</Button>}
+            {item.status !== 'DRAFT' && <Button onClick={() => void showReceipts(item.id)}>阅读审计</Button>}
+          </Space>
+        </Card>} />
       </div> }] : []),
     ]} />}
+    <Modal open={!!archiveTarget} title={archiveTarget && `归档公告 · ${archiveTarget.title}`} onOk={confirmArchive} onCancel={() => { if (!busy) setArchiveTarget(undefined); }}
+      okText="确认归档" cancelText="取消" confirmLoading={busy} cancelButtonProps={{ disabled: busy }} closable={!busy} keyboard={!busy} mask={{ closable: false }}>
+      <p>接收人将不再看到此公告，阅读记录保留。</p>
+      {Boolean(mutationError) && <Alert type={denied(mutationError) ? 'warning' : 'error'} showIcon title={safeAccountError(mutationError)} description={mutationError instanceof ApiError ? mutationError.traceId : undefined} />}
+    </Modal>
     {editor && <AnnouncementEditor key={editor === 'new' ? 'new' : editor.id} initial={editor === 'new' ? undefined : editor} users={users?.items ?? []} totalUsers={users?.total} busy={busy} error={mutationError} close={() => { setEditor(undefined); setMutationError(undefined); }} save={save} />}
     <Drawer title="阅读审计" open={!!auditId} onClose={closeReceipts} size={560}>{Boolean(auditError) && <Alert type={denied(auditError) ? 'warning' : 'error'} title={safeAccountError(auditError)} />}{!receipts && !auditError ? <Spin /> : <RecordList items={receipts ?? []} itemKey={receipt => receipt.userId} empty={<Empty description="暂无阅读记录" />} renderItem={(receipt) => <><RecordListDetails title={users?.items.find((user) => user.id === receipt.userId)?.username ?? receipt.userId} description={receipt.readAt ? '已读：' + formatDate(receipt.readAt) : '未读'} />{receipt.readTraceId && <Typography.Text type="secondary" copyable>{String(receipt.readTraceId)}</Typography.Text>}</>} />}</Drawer>
   </section>;

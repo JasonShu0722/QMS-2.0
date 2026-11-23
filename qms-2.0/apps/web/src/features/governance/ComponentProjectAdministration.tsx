@@ -468,7 +468,9 @@ function ComponentProjectScope({ organization, projectsOnly }: { organization: A
   const projectController = useRef<AbortController | undefined>(undefined);
   const read = organization.permissions.includes('component-project:read');
   const manage = read && organization.permissions.includes('component-project:manage');
-  const deletion = useMasterDataBulkDelete({ organizationId: organization.id, allowed: !projectsOnly && manage && !sessionEnded, disabled: loading || saving || projectLoading || bulkOpen || bulkBusy || Boolean(editor), path: configurationPath(organization.id, 'component-project-mappings/bulk-delete').split('?')[0], noun: '组件项目映射', selection, setSelection, label: id => { const row = mappings.find(item => item.id === id); return row ? `${row.componentCode} · ${row.componentName ?? ''}` : id; }, onDeleted: () => { if (current()) setRevision(next => next + 1); }, onDenied: cause => { setRecords(undefined); setSelection({}); setEditor(undefined); setSessionEnded(true); reportError(cause); } });
+  const deletion = useMasterDataBulkDelete({ organizationId: organization.id, allowed: !projectsOnly && manage && !sessionEnded, disabled: loading || saving || projectLoading || bulkOpen || bulkBusy || Boolean(editor), path: configurationPath(organization.id, 'component-project-mappings/bulk-delete').split('?')[0], noun: '组件项目映射', selection, setSelection,
+    impact: { zh: '共享项目保留。', en: 'Shared projects are retained.' },
+    label: id => { const row = mappings.find(item => item.id === id); return row ? `${row.componentCode} · ${row.componentName ?? ''}` : id; }, onDeleted: () => { if (current()) setRevision(next => next + 1); }, onDenied: cause => { setRecords(undefined); setSelection({}); setEditor(undefined); setSessionEnded(true); reportError(cause); } });
   const current = () => alive.current && !ending.current && session === useWorkTabsStore.getState().sessionScope;
   useUnsavedChanges(!!editor && (dirty || !!uncertain));
   const busy = saving || projectLoading || bulkBusy || deletion.busy;

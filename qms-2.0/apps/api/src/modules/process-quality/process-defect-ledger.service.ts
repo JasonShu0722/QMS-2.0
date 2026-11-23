@@ -25,6 +25,7 @@ type DeletionSelection = { defectId: string; expectedVersion: number };
 
 export const PROCESS_RESPONSIBILITY_CATEGORIES = ['MATERIAL', 'OPERATION', 'EQUIPMENT', 'PROCESS', 'DESIGN', 'FALSE_POSITIVE'] as const;
 export const PROCESS_MATERIAL_VERIFICATIONS = ['UNREVIEWED', 'CONFIRMED_DEFECT', 'NOT_MATERIAL', 'NEGOTIATED', 'RETURN_ANALYSIS'] as const;
+export const PROCESS_DEFECT_LEDGER_MAX_ROWS = 1000;
 export type ProcessMaterialVerification = (typeof PROCESS_MATERIAL_VERIFICATIONS)[number];
 export type ProcessLedgerStatus = 'FOLLOWING' | 'CLOSED';
 export type ProcessResponsibilityCategory = (typeof PROCESS_RESPONSIBILITY_CATEGORIES)[number];
@@ -104,6 +105,27 @@ export interface ProcessLedgerHistory {
   reason: string | null;
   recordedAt: Date;
   defectVersion: number;
+}
+
+type ProcessClassificationHistory = {
+  id: string;
+  previousCategory: ProcessResponsibilityCategory | null;
+  category: ProcessResponsibilityCategory | null;
+  actorUserId: string;
+  recordedAt: Date;
+  defectVersion: number;
+};
+
+function appendToGroup<Value>(groups: Map<string, Value[]>, key: string, value: Value) {
+  const items = groups.get(key);
+  if (items) items.push(value);
+  else groups.set(key, [value]);
+}
+
+function groupByDefect<Value extends { defectId: string }>(rows: Value[]) {
+  const groups = new Map<string, Omit<Value, 'defectId'>[]>();
+  for (const { defectId, ...row } of rows) appendToGroup(groups, defectId, row);
+  return groups;
 }
 
 export interface ProcessDefectQuery {
@@ -443,14 +465,14 @@ export class ProcessDefectLedgerService {
     }, async (tx) => { await this.find(tx, organizationId, id); });
   }
 
-  async archive(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string, reason = '旧归档入口删除') {
+  async archive(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string, reason?: string) {
     await this.deleteDefects(actor, { sources: [{ defectId: id, expectedVersion }], reason }, traceId, key);
     return this.detail(actor, id);
   }
 
   private deletionSources(input: { sources: DeletionSelection[]; organizationId?: string }, actor: AdminActor) {
     if (input.organizationId !== undefined && input.organizationId !== this.scope(actor)) reject('ORGANIZATION_SCOPE_DENIED', 403);
-    if (!Array.isArray(input.sources) || input.sources.length < 1 || input.sources.length > 100) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+    if (!Array.isArray(input.sources) || input.sources.length < 1 || input.sources.length > PROCESS_DEFECT_LEDGER_MAX_ROWS) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
     const sources = input.sources.map(source => {
       if (!source || typeof source !== 'object') reject('PROCESS_DEFECT_INPUT_INVALID', 400);
       return { defectId: uuid(source.defectId), expectedVersion: version(source.expectedVersion) };
@@ -464,26 +486,32 @@ export class ProcessDefectLedgerService {
     const ids = sources.map(source => source.defectId);
     await tx.$queryRaw(Prisma.sql`SELECT id FROM process_defects WHERE organization_id = ${organizationId}::uuid
       AND id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR UPDATE`);
-    const records = await tx.processDefect.findMany({ where: { organizationId, id: { in: ids } }, orderBy: { id: 'asc' } });
+    const records = await tx.processDefect.findMany({ where: { organizationId, id: { in: ids } }, orderBy: { id: 'asc' },
+      select: { id: true, version: true, archivedAt: true, description: true } });
     if (records.length !== sources.length) reject('PROCESS_DEFECT_NOT_FOUND', 404);
-    for (const [index, record] of records.entries()) {
-      const source = sources[index]!;
-      if (record.archivedAt || record.version !== source.expectedVersion) reject('CONCURRENCY_CONFLICT', 409);
+    const expectedVersions = new Map(sources.map(source => [source.defectId, source.expectedVersion]));
+    for (const record of records) {
+      if (record.archivedAt || record.version !== expectedVersions.get(record.id)) reject('CONCURRENCY_CONFLICT', 409);
     }
     const granted = await adminPermissions(tx, actor.id, organizationId);
     const visibility = granted.includes('process-quality:issues:read') ? this.readRegistry?.visibility(actor, organizationId) : undefined;
     const problems = await processDeletionProblemReferences(tx, organizationId, ids, visibility);
     const selections = await processDeletionSelectionReferences(tx, organizationId, ids, actor);
     const copies = await processDeletionCopyReferences(tx, organizationId, ids);
-    return records.map(record => {
-      const blockers: { code: string; reportNumber: string | null }[] = [];
-      for (const problem of problems) {
-        if (problem.domainSourceLinks.some(link => link.sourceId === record.id) || problem.domainCode === 'process-quality' && problem.sourceType === 'process-defect' && problem.sourceId === record.id) {
-          blockers.push({ code: 'FORMAL_PROBLEM', reportNumber: problem.reportNumber });
-        }
+    const blockersByDefect = new Map<string, { code: string; reportNumber: string | null }[]>();
+    const selectedIds = new Set(ids);
+    for (const problem of problems) {
+      const references = new Set(problem.domainSourceLinks.map(link => link.sourceId));
+      if (problem.domainCode === 'process-quality' && problem.sourceType === 'process-defect' && problem.sourceId && selectedIds.has(problem.sourceId)) {
+        references.add(problem.sourceId);
       }
-      for (const selected of selections.filter(selection => selection.defectId === record.id)) blockers.push({ code: 'NEW_PRODUCT_SELECTION', reportNumber: granted.includes('new-product-quality:projects:read') ? selected.projectCode : null });
-      if (copies.some(copy => copy.defectId === record.id)) blockers.push({ code: 'SUPPLIER_SOURCE_COPY', reportNumber: null });
+      for (const id of references) appendToGroup(blockersByDefect, id, { code: 'FORMAL_PROBLEM', reportNumber: problem.reportNumber });
+    }
+    const canReadProjects = granted.includes('new-product-quality:projects:read');
+    for (const selected of selections) appendToGroup(blockersByDefect, selected.defectId, { code: 'NEW_PRODUCT_SELECTION', reportNumber: canReadProjects ? selected.projectCode : null });
+    for (const copy of copies) appendToGroup(blockersByDefect, copy.defectId, { code: 'SUPPLIER_SOURCE_COPY', reportNumber: null });
+    return records.map(record => {
+      const blockers = blockersByDefect.get(record.id) ?? [];
       return { defectId: record.id, expectedVersion: record.version, description: record.description, blocked: blockers.length > 0, blockers };
     });
   }
@@ -498,21 +526,23 @@ export class ProcessDefectLedgerService {
     }, { isolationLevel: 'ReadCommitted' });
   }
 
-  async deleteDefects(actor: AdminActor, input: { sources: DeletionSelection[]; reason: string; organizationId?: string }, traceId: string, key?: string) {
-    const organizationId = this.scope(actor), sources = this.deletionSources(input, actor), reason = required(input.reason, 300);
+  async deleteDefects(actor: AdminActor, input: { sources: DeletionSelection[]; reason?: string; organizationId?: string }, traceId: string, key?: string) {
+    const organizationId = this.scope(actor), sources = this.deletionSources(input, actor);
+    const ids = sources.map(source => source.defectId);
+    const reason = input.reason === undefined ? undefined : required(input.reason, 300);
     return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECTS_DELETED', payload: { sources, reason },
       permission: ['process-quality:defects:read', 'process-quality:defects:delete'], authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
       const items = await this.deletionItems(tx, actor, sources);
       if (items.some(item => item.blocked)) reject('PROCESS_DEFECT_DELETE_BLOCKED', 409);
-      const changed = await tx.processDefect.updateMany({ where: { organizationId, id: { in: sources.map(source => source.defectId) }, archivedAt: null },
+      const changed = await tx.processDefect.updateMany({ where: { organizationId, id: { in: ids }, archivedAt: null },
         data: { archivedAt: new Date(), updatedById: actor.id, version: { increment: 1 }, descriptionAiStatus: 'STALE' } });
       if (changed.count !== sources.length) reject('CONCURRENCY_CONFLICT', 409);
-      for (const source of sources) {
-        await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECTS_DELETED', resourceType: 'ProcessDefect', resourceId: source.defectId,
-          outcome: 'SUCCESS', traceId, metadata: { deletionReason: reason, rowCount: sources.length, previousResourceVersion: source.expectedVersion, resourceVersion: source.expectedVersion + 1 } }, tx);
-      }
-      return { deletedIds: sources.map(source => source.defectId), count: sources.length };
-    }, async tx => { for (const source of sources) await this.find(tx, organizationId, source.defectId); });
+      await this.audit.recordMany(sources.map(source => ({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECTS_DELETED', resourceType: 'ProcessDefect', resourceId: source.defectId,
+        outcome: 'SUCCESS', traceId, metadata: { deletionReason: reason, rowCount: sources.length, previousResourceVersion: source.expectedVersion, resourceVersion: source.expectedVersion + 1 } })), tx);
+      return { deletedIds: ids, count: sources.length };
+    }, async tx => {
+      if (await tx.processDefect.count({ where: { organizationId, id: { in: ids } } }) !== ids.length) reject('PROCESS_DEFECT_NOT_FOUND', 404);
+    });
   }
 
   async close(actor: AdminActor, id: string, input: { expectedVersion: number; reason?: string | null }, traceId: string, key?: string) {
@@ -629,7 +659,7 @@ export class ProcessDefectLedgerService {
   async list(actor: AdminActor, query: ProcessDefectQuery) {
     const organizationId = this.scope(actor);
     const offset = (query.page - 1) * query.pageSize;
-    if (!Number.isSafeInteger(query.page) || query.page < 1 || !Number.isSafeInteger(query.pageSize) || query.pageSize < 1 || query.pageSize > 100 || !Number.isSafeInteger(offset)) reject('PROCESS_DEFECT_QUERY_INVALID', 400);
+    if (!Number.isSafeInteger(query.page) || query.page < 1 || !Number.isSafeInteger(query.pageSize) || query.pageSize < 1 || query.pageSize > PROCESS_DEFECT_LEDGER_MAX_ROWS || !Number.isSafeInteger(offset)) reject('PROCESS_DEFECT_QUERY_INVALID', 400);
     if ((query.occurredFrom !== undefined && !validProcessDate(query.occurredFrom)) || (query.occurredTo !== undefined && !validProcessDate(query.occurredTo))) reject('PROCESS_DEFECT_QUERY_INVALID', 400);
     const from = query.occurredFrom === undefined ? null : new Date(query.occurredFrom);
     const to = query.occurredTo === undefined ? null : new Date(query.occurredTo);
@@ -663,7 +693,7 @@ export class ProcessDefectLedgerService {
         tx.$queryRaw<{ total: bigint }[]>`SELECT count(*) AS total FROM process_defects d WHERE ${where}`,
       ]);
       const items = await tx.processDefect.findMany({ where: { organizationId, id: { in: pageIds.map(item => item.id) } }, orderBy: [{ occurredAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'desc' }] });
-      return { items: await Promise.all(items.map(item => this.view(tx, item))), total: Number(count!.total), page: query.page, pageSize: query.pageSize };
+      return { items: await this.views(tx, organizationId, items), total: Number(count!.total), page: query.page, pageSize: query.pageSize };
     }, { isolationLevel: 'RepeatableRead' });
   }
 
@@ -827,17 +857,22 @@ export class ProcessDefectLedgerService {
     return !!user && (await adminPermissions(tx, id, organizationId)).includes('process-quality:materials:review');
   }
 
-  private async materials(tx: AdminTransaction, organizationId: string, defectId: string, history?: ProcessMaterialVerificationHistory[]): Promise<ProcessDefectMaterial[]> {
-    const items = await tx.$queryRaw<ProcessDefectMaterial[]>(Prisma.sql`SELECT ${materialColumns} FROM process_defect_material_items
-      WHERE organization_id = ${organizationId}::uuid AND defect_id = ${defectId}::uuid AND removed_at IS NULL ORDER BY position, id`);
-    const entries = history ?? await this.materialVerificationHistory(tx, organizationId, defectId);
+  private async materials(tx: AdminTransaction, organizationId: string, defectId: string): Promise<ProcessDefectMaterial[]> {
+    const scope = Prisma.sql`organization_id = ${organizationId}::uuid AND defect_id = ${defectId}::uuid`;
+    const items = await this.materialRows(tx, scope);
+    const entries = groupByDefect(await this.materialVerificationHistory(tx, scope)).get(defectId) ?? [];
     return items.map(item => ({ ...item, verificationHistory: entries.filter(entry => entry.materialItemId === item.id) }));
   }
 
-  private materialVerificationHistory(tx: AdminTransaction, organizationId: string, defectId: string) {
-    return tx.$queryRaw<ProcessMaterialVerificationHistory[]>`SELECT id, material_item_id AS "materialItemId", verification,
+  private materialRows(tx: AdminTransaction, scope: Prisma.Sql) {
+    return tx.$queryRaw<Omit<ProcessDefectMaterial, 'verificationHistory'>[]>`SELECT ${materialColumns} FROM process_defect_material_items
+      WHERE ${scope} AND removed_at IS NULL ORDER BY position, id`;
+  }
+
+  private materialVerificationHistory(tx: AdminTransaction, scope: Prisma.Sql) {
+    return tx.$queryRaw<(ProcessMaterialVerificationHistory & { defectId: string })[]>`SELECT id, defect_id AS "defectId", material_item_id AS "materialItemId", verification,
       verification_notes AS "verificationNotes", actor_user_id AS "actorUserId", recorded_at AS "recordedAt", defect_version AS "defectVersion", material_snapshot AS "materialSnapshot"
-      FROM process_defect_material_verifications WHERE organization_id = ${organizationId}::uuid AND defect_id = ${defectId}::uuid ORDER BY defect_version, id`;
+      FROM process_defect_material_verifications WHERE ${scope} ORDER BY defect_version, id`;
   }
 
   private async saveMaterials(tx: AdminTransaction, actor: AdminActor, record: ProcessDefect, items: ReturnType<typeof normalizeProcessDefectMaterials>, previous: ProcessDefectMaterial[]) {
@@ -884,35 +919,70 @@ export class ProcessDefectLedgerService {
   }
 
   private async view(tx: AdminTransaction, record: ProcessDefect) {
-    const materialVerificationHistory = await this.materialVerificationHistory(tx, record.organizationId, record.id);
-    const materials = await this.materials(tx, record.organizationId, record.id, materialVerificationHistory);
-    const saved = processProjectSnapshot(record.projectSnapshot);
-    const componentProject = saved ? { outcome: 'matched' as const, componentCode: saved.componentCode,
-      mapping: { ...saved.mapping, productCategory: record.productCategory, productSubcategory: record.productSubcategory }, project: saved.project,
-      issues: [] } : null;
-    const duplicateCount = record.traceCode && record.operationCode ? await tx.processDefect.count({ where: { organizationId: record.organizationId,
-      id: { not: record.id }, traceCode: record.traceCode, operationCode: record.operationCode, archivedAt: null } }) : 0;
-    const issues = [
-      ...(!record.description.trim() ? ['DESCRIPTION_EMPTY'] : []), ...(record.defectTypeCode === null ? ['DEFECT_TYPE_UNKNOWN'] : []),
-      ...(record.defectQuantity === null ? ['DEFECT_QUANTITY_UNKNOWN'] : []), ...(record.occurredAt === null ? ['OCCURRED_AT_UNKNOWN'] : []),
-      ...(duplicateCount ? ['SAME_OPERATION_TRACE_DUPLICATE'] : []), ...(componentProject?.issues ?? []),
-      ...(record.projectCode && componentProject?.project && record.projectCode !== componentProject.project.code ? ['MANUAL_PROJECT_DIFFERS'] : []),
-      ...record.registrationIssues,
-      ...(record.registrationVersion === null ? ['HISTORICAL_ASSOCIATION_UNCONFIRMED'] : [
-        ...(!saved ? ['PROJECT_MAPPING_PENDING'] : []), ...(!record.productSubcategory ? ['PRODUCT_SUBCATEGORY_PENDING'] : []),
-        ...(!record.operationSector ? ['OPERATION_SECTOR_PENDING'] : []),
-        ...(record.sourceKind === 'IMS' && !record.externalRecordKey ? ['SOURCE_IDENTITY_INCOMPLETE'] : []),
-      ]),
-    ];
-    const ledgerHistory = await tx.$queryRaw<ProcessLedgerHistory[]>`SELECT id, from_status AS "fromStatus", to_status AS "toStatus", actor_user_id AS "actorUserId", reason,
-      recorded_at AS "recordedAt", defect_version AS "defectVersion" FROM process_defect_ledger_history WHERE organization_id = ${record.organizationId}::uuid AND defect_id = ${record.id}::uuid ORDER BY defect_version, id`;
-    const classificationHistory = await tx.$queryRaw<Array<{ id: string; previousCategory: ProcessResponsibilityCategory | null; category: ProcessResponsibilityCategory | null; actorUserId: string; recordedAt: Date; defectVersion: number }>>`SELECT id, previous_category AS "previousCategory", category,
-      actor_user_id AS "actorUserId", recorded_at AS "recordedAt", defect_version AS "defectVersion" FROM process_defect_classification_history WHERE organization_id = ${record.organizationId}::uuid AND defect_id = ${record.id}::uuid ORDER BY defect_version, id`;
-    const registrant = record.sourceKind === 'IMS' ? null : await tx.user.findUnique({ where: { id: record.createdById }, select: { fullName: true, username: true } });
-    return { ...record, projectStage: saved?.project.stage ?? null, projectName: saved?.project.name ?? null,
-      registeredByName: record.sourceKind === 'IMS' ? '自动' : registrant?.fullName ?? registrant?.username ?? null,
-      materialCode: materials[0]?.materialCode ?? null, supplierOrganizationId: materials[0]?.supplierOrganizationId ?? null,
-      materials, materialVerificationHistory, ledgerHistory, classificationHistory, componentProject, duplicateCount, issues };
+    const [item] = await this.views(tx, record.organizationId, [record]);
+    return item!;
+  }
+
+  private async views(tx: AdminTransaction, organizationId: string, records: ProcessDefect[]) {
+    if (records.length === 0) return [];
+    const ids = Prisma.join(records.map(record => Prisma.sql`${record.id}::uuid`));
+    const scope = Prisma.sql`organization_id = ${organizationId}::uuid AND defect_id IN (${ids})`;
+    const registrantIds = [...new Set(records.filter(record => record.sourceKind !== 'IMS').map(record => record.createdById))];
+    const [materialRows, verificationRows, ledgerRows, classificationRows, duplicateRows, registrants] = await Promise.all([
+      this.materialRows(tx, scope),
+      this.materialVerificationHistory(tx, scope),
+      tx.$queryRaw<(ProcessLedgerHistory & { defectId: string })[]>`SELECT id, defect_id AS "defectId", from_status AS "fromStatus", to_status AS "toStatus", actor_user_id AS "actorUserId", reason,
+        recorded_at AS "recordedAt", defect_version AS "defectVersion" FROM process_defect_ledger_history WHERE ${scope} ORDER BY defect_version, id`,
+      tx.$queryRaw<(ProcessClassificationHistory & { defectId: string })[]>`SELECT id, defect_id AS "defectId", previous_category AS "previousCategory", category,
+        actor_user_id AS "actorUserId", recorded_at AS "recordedAt", defect_version AS "defectVersion"
+        FROM process_defect_classification_history WHERE ${scope} ORDER BY defect_version, id`,
+      records.some(record => record.traceCode && record.operationCode) ? tx.$queryRaw<{ id: string; duplicateCount: bigint }[]>`WITH selected AS (
+          SELECT id, operation_code, trace_code FROM process_defects WHERE organization_id = ${organizationId}::uuid AND id IN (${ids})
+          AND operation_code <> '' AND trace_code <> ''
+        ), counts AS (
+          SELECT operation_code, trace_code, count(*) AS total FROM process_defects
+          JOIN (SELECT DISTINCT operation_code, trace_code FROM selected) AS selected_pairs USING (operation_code, trace_code)
+          WHERE organization_id = ${organizationId}::uuid AND archived_at IS NULL GROUP BY operation_code, trace_code
+        ) SELECT selected.id, counts.total AS "duplicateCount" FROM selected JOIN counts USING (operation_code, trace_code)` : [],
+      registrantIds.length ? tx.user.findMany({ where: { id: { in: registrantIds } }, select: { id: true, fullName: true, username: true } }) : [],
+    ]);
+    const verificationsByDefect = groupByDefect(verificationRows);
+    const verificationsByMaterial = new Map<string, ProcessMaterialVerificationHistory[]>();
+    for (const history of verificationsByDefect.values()) {
+      for (const entry of history) appendToGroup(verificationsByMaterial, entry.materialItemId, entry);
+    }
+    const materialsByDefect = new Map<string, ProcessDefectMaterial[]>();
+    for (const item of materialRows) appendToGroup(materialsByDefect, item.defectId, { ...item, verificationHistory: verificationsByMaterial.get(item.id) ?? [] });
+    const ledgerByDefect = groupByDefect(ledgerRows);
+    const classificationsByDefect = groupByDefect(classificationRows);
+    const countsByDefect = new Map(duplicateRows.map(row => [row.id, Number(row.duplicateCount)]));
+    const registrantsById = new Map(registrants.map(user => [user.id, user.fullName ?? user.username]));
+    return records.map(record => {
+      const materials = materialsByDefect.get(record.id) ?? [];
+      const saved = processProjectSnapshot(record.projectSnapshot);
+      const componentProject = saved ? { outcome: 'matched' as const, componentCode: saved.componentCode,
+        mapping: { ...saved.mapping, productCategory: record.productCategory, productSubcategory: record.productSubcategory }, project: saved.project,
+        issues: [] } : null;
+      const matchingCount = countsByDefect.get(record.id) ?? 0;
+      const duplicateCount = matchingCount && !record.archivedAt ? matchingCount - 1 : matchingCount;
+      const issues = [
+        ...(!record.description.trim() ? ['DESCRIPTION_EMPTY'] : []), ...(record.defectTypeCode === null ? ['DEFECT_TYPE_UNKNOWN'] : []),
+        ...(record.defectQuantity === null ? ['DEFECT_QUANTITY_UNKNOWN'] : []), ...(record.occurredAt === null ? ['OCCURRED_AT_UNKNOWN'] : []),
+        ...(duplicateCount ? ['SAME_OPERATION_TRACE_DUPLICATE'] : []), ...(componentProject?.issues ?? []),
+        ...(record.projectCode && componentProject?.project && record.projectCode !== componentProject.project.code ? ['MANUAL_PROJECT_DIFFERS'] : []),
+        ...record.registrationIssues,
+        ...(record.registrationVersion === null ? ['HISTORICAL_ASSOCIATION_UNCONFIRMED'] : [
+          ...(!saved ? ['PROJECT_MAPPING_PENDING'] : []), ...(!record.productSubcategory ? ['PRODUCT_SUBCATEGORY_PENDING'] : []),
+          ...(!record.operationSector ? ['OPERATION_SECTOR_PENDING'] : []),
+          ...(record.sourceKind === 'IMS' && !record.externalRecordKey ? ['SOURCE_IDENTITY_INCOMPLETE'] : []),
+        ]),
+      ];
+      return { ...record, projectStage: saved?.project.stage ?? null, projectName: saved?.project.name ?? null,
+        registeredByName: record.sourceKind === 'IMS' ? '自动' : registrantsById.get(record.createdById) ?? null,
+        materialCode: materials[0]?.materialCode ?? null, supplierOrganizationId: materials[0]?.supplierOrganizationId ?? null,
+        materials, materialVerificationHistory: verificationsByDefect.get(record.id) ?? [], ledgerHistory: ledgerByDefect.get(record.id) ?? [],
+        classificationHistory: classificationsByDefect.get(record.id) ?? [], componentProject, duplicateCount, issues };
+    });
   }
 
   private completionFor(tx: AdminTransaction, organizationId: string, facts: ReturnType<typeof normalizeProcessDefectFacts>, previous?: ProcessDefect, correctedFields: readonly string[] = []) {

@@ -59,6 +59,26 @@ it('keeps the embedded customer heading accessible without a duplicate visible t
   expect(heading.parentElement).toBe(screen.getByRole('region', { name: '客户主数据' }));
 });
 
+it('names the customer relation before deleting only the confirmed version', async () => {
+  vi.stubEnv('NODE_ENV', 'development');
+  const relation = { id: 'relation-1', version: 3, relation_type: 'PROJECT', related_code: 'P-9', related_name: '试产项目' };
+  vi.mocked(apiRequest).mockImplementation(path => Promise.resolve(path.includes('/relations') ? [relation] : path.includes('/customer-relations/') ? { id: relation.id, deleted: true } : [customer]));
+  render(<CustomerMasterSection organizationId="org-a" organizationPermissions={['customer-quality:complaints:read', 'customer-quality:complaints:write']} />);
+  await selectCustomer('C-1 · 客户一');
+  const row = within((await screen.findByText('P-9 · 试产项目')).closest('tr')!);
+  fireEvent.click(row.getByRole('button', { name: /^删\s*除$/ }));
+  const popup = await screen.findByRole('tooltip');
+  const confirmation = within(popup);
+  await waitFor(() => expect(confirmation.getByText('删除客户关系 · 客户一 → P-9 · 试产项目')).toBeVisible(), { container: popup });
+  expect(confirmation.queryByRole('textbox')).not.toBeInTheDocument();
+  fireEvent.click(confirmation.getByRole('button', { name: /^取\s*消$/ }));
+  await waitFor(() => expect(popup).not.toBeVisible(), { container: popup });
+  expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'DELETE')).toBe(false);
+  fireEvent.click(row.getByRole('button', { name: /^删\s*除$/ }));
+  fireEvent.click(await confirmation.findByRole('button', { name: /^删\s*除$/ }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/customer-quality/customer-relations/${relation.id}`, expect.objectContaining({ method: 'DELETE', body: JSON.stringify({ expectedVersion: 3, organizationId: 'org-a' }) })), { container: popup });
+});
+
 it('retains the visible customer section heading for callers without a containing page title', async () => {
   render(<CustomerMasterSection organizationPermissions={['customer-quality:complaints:read']} />);
   await waitFor(() => expect(screen.getByRole('button', { name: '导出当前客户清单' })).toBeEnabled());

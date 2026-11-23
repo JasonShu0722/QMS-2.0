@@ -146,7 +146,7 @@ function ForceDeleteScope({ path, kind, target, disabled, onBeforeOpen, onDelete
         <Descriptions title={t('受影响的当前关联')} size="small" column={1} items={(Object.keys(labels) as Array<keyof Preview['counts']>).map(key => ({ key, label: t(labels[key]), children: preview.counts[key] }))} />
         <p>{t('保留历史')}</p><ul>{preview.retainedHistory.map((entry, index) => <li key={index}>{entry}</li>)}</ul>
       </>}
-      {unknown ? <><Alert type="warning" showIcon title={t('删除结果尚未确认，将使用原请求重试，不会创建新的删除操作。')} /><Button disabled={busy || disabled} loading={busy} onClick={() => void confirm(true)}>{t('重试确认结果')}</Button></> : <Button disabled={busy || checking || disabled || reconcile} onClick={() => void inspect()}>{t('重新读取影响')}</Button>}
+      {unknown ? <><Alert type="warning" showIcon title={t('删除结果尚未确认，将使用原请求重试，不会创建新的删除操作。')} /><Button disabled={busy || disabled} loading={busy} onClick={() => void confirm(true)}>{t('重试确认结果')}</Button></> : (!preview || reconcile) && <Button disabled={busy || checking || disabled || reconcile} onClick={() => void inspect()}>{t('重新读取影响')}</Button>}
     </Modal>
   </>;
 }
