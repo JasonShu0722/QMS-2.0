@@ -506,7 +506,7 @@
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.test.tsx",
-            "sha256": "f3fbb46edc7a72493b9ba9c01bc6904f1587f6410762eb4938fa76c557acf8a3"
+            "sha256": "e959c4f443c1a3081de66ff3cd3d17a2d9b9457fc84978f930a5fe14a123e72d"
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.css",

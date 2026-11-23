@@ -11,6 +11,7 @@
 - 一次性 PostgreSQL 六套件 72 项、真实 Worker 八项、制程 Web 五套件 50 项、API 接收接口 Web 八项通过。生成契约与同步检查、Web 构建、治理、Compose 配置通过。最终发版证据依 GitHub 对实际 PR 和合并提交的检查及生产核验记录。
 - 早期 Web 扩展回归为 293/297。四个失败场景均在后续源码上定向复验通过，包括出货草稿离页保护、特采撤回确认、客户档案导出权限恢复、组织依赖检查后显式删除。保留原失败日志与各自复验结果。
 - [PR #164](https://github.com/JasonShu0722/QMS-2.0/pull/164) 首轮 Foundation 的三个 Web 分片有四条失败。`V0.0.69-fix1` 等待附件与组织确认内容可见，并让两条 8D 边界用例匹配台账原生按钮。四项定向复验通过，证据为 `ledger-delete-163/web-pr164-fix1-final.log`。其余首轮作业通过，仍以修复提交的完整 Foundation 为合并门禁。
+- 第二轮的治理检查因组织测试的来源指纹过期而失败。`V0.0.69-fix2` 已复核前端规范并更新指纹。本机 `corepack pnpm check:governance` 通过，证据为 `ledger-delete-163/governance-pr164-fix2.log`。
 
 ## 批准行为
 
