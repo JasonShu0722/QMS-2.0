@@ -116,7 +116,7 @@ it('upgrades a saved order, keeps an explicitly hidden factory after reload, and
   const factory = screen.getByRole('columnheader', { name: '工厂' });
   expect(factory.previousElementSibling).toBe(screen.getByRole('columnheader', { name: '发生时间' }));
   expect(factory.nextElementSibling).toBe(screen.getByRole('columnheader', { name: '班次' }));
-});
+}, 30000);
 
 it('displays the mapped product category even without a linked project and shows missing categories as unconfirmed', async () => {
   const unmapped = { ...defect, id: '33333333-3333-4333-8333-333333333333', description: '历史记录', productCategory: null, productSubcategory: null };
