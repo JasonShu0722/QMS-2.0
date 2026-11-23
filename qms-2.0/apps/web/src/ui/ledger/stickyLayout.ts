@@ -9,7 +9,7 @@ function findChild<T extends Element = Element>(parent: Element | null, selector
   return null;
 }
 
-export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>, enabled: boolean, hasActionBar: boolean, showHeader: boolean) {
+export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>, enabled: boolean, hasActionBar: boolean, showHeader: boolean, pinnedHorizontalScroll = false) {
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!enabled || !root) return;
@@ -60,8 +60,44 @@ export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>,
     const document = root.ownerDocument;
     const window = document.defaultView;
     const viewport = window?.visualViewport;
+    const horizontalScroll = pinnedHorizontalScroll ? findChild<HTMLInputElement>(root, '.qms-ledger__horizontal-scroll') : null;
+    let scrollPane: HTMLElement | null = null;
+    if (horizontalScroll) {
+      horizontalScroll.step = 'any';
+      for (let ancestor = root.parentElement; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {
+        if (['auto', 'scroll'].includes(getComputedStyle(ancestor).overflowY)) {
+          scrollPane = ancestor;
+          break;
+        }
+      }
+    }
     let pager: Element | null = null;
     const height = (element: Element | null | undefined) => element?.getBoundingClientRect().height ?? 0;
+
+    function positionHorizontalScroll() {
+      if (!horizontalScroll || horizontalScroll.hidden || !body) return;
+      const bodyBounds = body.getBoundingClientRect();
+      const paneBounds = scrollPane?.getBoundingClientRect();
+      const viewportLeft = viewport?.offsetLeft ?? 0;
+      const viewportRight = viewportLeft + (viewport?.width ?? document.documentElement.clientWidth);
+      const viewportBottom = (viewport?.offsetTop ?? 0) + (viewport?.height ?? document.documentElement.clientHeight);
+      const paneLeft = scrollPane && paneBounds ? paneBounds.left + scrollPane.clientLeft : viewportLeft;
+      const paneRight = scrollPane ? paneLeft + scrollPane.clientWidth : viewportRight;
+      const paneBottom = scrollPane && paneBounds ? paneBounds.top + scrollPane.clientTop + scrollPane.clientHeight : viewportBottom;
+      const left = Math.max(bodyBounds.left, viewportLeft, paneLeft);
+      const right = Math.min(bodyBounds.right, viewportRight, paneRight);
+      horizontalScroll.style.left = `${left}px`;
+      horizontalScroll.style.top = `${Math.min(paneBottom, viewportBottom)}px`;
+      horizontalScroll.style.width = `${Math.max(0, right - left)}px`;
+    }
+
+    function syncHorizontalScroll() {
+      if (horizontalScroll && body && horizontalScroll.valueAsNumber !== body.scrollLeft) horizontalScroll.valueAsNumber = body.scrollLeft;
+    }
+
+    function scrollTable() {
+      if (horizontalScroll && body) body.scrollLeft = horizontalScroll.valueAsNumber;
+    }
 
     function measure() {
       if (!root) return;
@@ -85,27 +121,45 @@ export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>,
       root.style.setProperty('--qms-ledger-header-top', `${headerTop}px`);
       root.style.setProperty('--qms-ledger-stack-height', `${stackHeight}px`);
       root.toggleAttribute('data-ledger-sticky-flow', stackHeight + minimumBodyHeight > (viewport?.height ?? document.documentElement.clientHeight));
-      if (body && body.scrollWidth > body.clientWidth) {
+      const horizontalOverflow = body ? body.scrollWidth - body.clientWidth : 0;
+      if (body && horizontalOverflow > 0) {
         if (body.getAttribute('tabindex') !== '0') body.tabIndex = 0;
       } else if (body?.hasAttribute('tabindex')) body.removeAttribute('tabindex');
+      if (horizontalScroll) {
+        const overflowing = horizontalOverflow > 0;
+        horizontalScroll.hidden = !overflowing;
+        root.toggleAttribute('data-ledger-horizontal-overflow', overflowing);
+        if (overflowing) {
+          if (horizontalScroll.max !== String(horizontalOverflow)) horizontalScroll.max = String(horizontalOverflow);
+          syncHorizontalScroll();
+          positionHorizontalScroll();
+        }
+      }
     }
 
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure);
-    for (const element of [root, actionBar, tools, header, body, body?.firstElementChild]) {
+    for (const element of [root, actionBar, tools, header, body, bodyTable, scrollPane]) {
       if (element) observer?.observe(element);
     }
     const paginationObserver = new MutationObserver(measure);
     if (spin) paginationObserver.observe(spin, { childList: true });
     function revealFocus(event: FocusEvent) {
       const target = event.target;
-      if (!(target instanceof HTMLElement) || !header || root?.hasAttribute('data-ledger-sticky-flow')) return;
-      const heading = header.getBoundingClientRect();
+      if (!(target instanceof HTMLElement) || typeof target.scrollIntoView !== 'function') return;
+      const heading = header && !root?.hasAttribute('data-ledger-sticky-flow') ? header.getBoundingClientRect() : null;
       const focused = target.getBoundingClientRect();
-      if (heading.top >= 0 && focused.top < heading.bottom && focused.bottom > 0 && typeof target.scrollIntoView === 'function') {
+      const dock = horizontalScroll && !horizontalScroll.hidden ? horizontalScroll.getBoundingClientRect() : null;
+      if ((heading && heading.top >= 0 && focused.top < heading.bottom && focused.bottom > 0) || (dock && focused.bottom > dock.top)) {
         target.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
       }
     }
     body?.addEventListener('focusin', revealFocus);
+    if (horizontalScroll) {
+      horizontalScroll.addEventListener('input', scrollTable);
+      body?.addEventListener('scroll', syncHorizontalScroll);
+      viewport?.addEventListener('scroll', positionHorizontalScroll);
+      if (scrollPane) window?.addEventListener('scroll', positionHorizontalScroll, true);
+    }
     const resizeTarget = viewport ?? window;
     resizeTarget?.addEventListener('resize', measure);
     measure();
@@ -113,6 +167,14 @@ export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>,
       observer?.disconnect();
       paginationObserver.disconnect();
       body?.removeEventListener('focusin', revealFocus);
+      if (horizontalScroll) {
+        horizontalScroll.hidden = true;
+        horizontalScroll.removeEventListener('input', scrollTable);
+        body?.removeEventListener('scroll', syncHorizontalScroll);
+        viewport?.removeEventListener('scroll', positionHorizontalScroll);
+        if (scrollPane) window?.removeEventListener('scroll', positionHorizontalScroll, true);
+        root.removeAttribute('data-ledger-horizontal-overflow');
+      }
       resizeTarget?.removeEventListener('resize', measure);
       body?.removeAttribute('tabindex');
       semanticsObserver.disconnect();

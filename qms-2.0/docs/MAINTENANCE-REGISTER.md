@@ -14,6 +14,12 @@
 
 2026-11-09 REQ-0036来源定向复核：运维手册增加API收件排查、辅助采集缺口、密钥及恢复先停用说明，属于本地候选能力，不是生产告警阈值、通知与处置闭环。MAINT-003保持open及原2026-11-23期限，仅更新实际来源和事实，不据本地测试关闭或延期。
 
+2026-11-23 [Issue #161](https://github.com/JasonShu0722/QMS-2.0/issues/161) 迁移了 `MAINT-001` 原登记的 `List`、`Space direction`、`Drawer width` 与 `Spin tip`，并改用 `Modal mask.closable`、`Select popupRender`。出货报告与管理加载两项定向验证通过；接收记录筛选、容量保存及删除保护三项定向验证通过。扩展运行仍发现 `InputNumber addonAfter`、`useForm` 连接提示和容量未知结果重试用例失败，台账保持开放且不延期；不把定向通过写成全站验证。实际证据见[实施计划](../../docs/superpowers/plans/2026-11-23-qms-process-defect-factory.md)。
+
+2026-11-23 到期复核（UTC）：`MAINT-002/003` 的十份来源摘要均与当前内容相符。`node --test apps/api/test/operations/data-protection-objects.test.mjs test/operations-snapshot.test.mjs test/operations-alerts.test.mjs` 通过 13/13；按 [N1 复核记录](N1-MAINTENANCE-REVIEW-2026-10-24.md) 复跑容量静态守卫通过 5/5。两项按现有 30 天周期登记下次复核，均仍开放；未执行生产采样、通知故障演练或近上限备份恢复。
+
+2026-11-23 结案续验：接收容量输入使用 `Space.Compact`，保留 GiB 单位；未知结果回归验证重试重发同一路径、方法及参数，并在成功后解除操作锁定。接收定向 4/4，覆盖原容量失败、容量保存、接收删除保护和接口候选分页。通知规则与岗位类别仅在编辑器开启时初始化，覆盖编辑保存版本及岗位类别新建；系统参数表单持续挂载，只在成功读写取得新版本后替换值，刷新失败保留草稿与离开保护。旧局部或失败证据保留，结案只覆盖本项实际登记和复现的用法；完整结果见[实施计划](../../docs/superpowers/plans/2026-11-23-qms-process-defect-factory.md)。
+
 从 `qms-2.0/` 执行：
 
 ```powershell

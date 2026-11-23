@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { apiRequest } from '../../api/client';
 import { AuditStandardsPage } from './AuditStandardsPage';
 import { Link, MemoryRouter } from 'react-router-dom';
@@ -11,8 +11,10 @@ vi.mock('../../api/client', async () => {
 });
 
 beforeEach(() => vi.mocked(apiRequest).mockReset());
+afterEach(() => vi.restoreAllMocks());
 
 it('labels repeated checklist fields with stable row identities after another row is removed', async () => {
+  const errors = vi.spyOn(console, 'error');
   vi.mocked(apiRequest).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
   render(<AuditStandardsPage />);
   fireEvent.click(screen.getByRole('button', { name: '新建标准' }));
@@ -26,6 +28,7 @@ it('labels repeated checklist fields with stable row identities after another ro
   expect(editor.queryByRole('textbox', { name: '检查项 1 编号' })).not.toBeInTheDocument();
   expect(editor.getByRole('textbox', { name: '检查项 2 内容' })).toHaveValue('保留第二项内容');
   expect(editor.getByRole('textbox', { name: '检查项 2 编号' })).toBeVisible();
+  expect(errors.mock.calls.flat().map(String).filter(message => /\[antd: (List\]|Drawer\].*`width`)/.test(message))).toEqual([]);
 });
 
 it('lists published standards and opens immutable version details', async () => {

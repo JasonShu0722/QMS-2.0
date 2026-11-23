@@ -245,7 +245,7 @@ test('workflow wiring preserves full business coverage, unconditional safety che
   assert.doesNotMatch(web, /continue-on-error:/);
   assert.match(checks, /name: CI scope and result gate tests\r?\n\s+if: needs.scope.outputs.scope == 'documentation'\r?\n\s+run: node --test test\/ci-validation-scope.test.mjs/);
   const integration = jobBlock(foundation, 'integration');
-  for (const retained of ['pnpm --recursive build', 'test:integration', 'test:worker-process:built', 'postgres:18', 'rustfs/rustfs:1.0.0', 'clamav/clamav@sha256:', 'prepare-ci-object-storage.mjs', 'SMTP_PORT=51026', 'docker compose -f deployment/docker-compose.foundation.yml config --quiet', 'Destroy ephemeral integration services']) assert.ok(integration.includes(retained), retained);
+  for (const retained of ['pnpm --recursive build', 'test:integration', 'test:worker-process:built', 'postgres:18', 'rustfs/rustfs:1.0.0', 'clamav/clamav@sha256:', 'prepare-ci-object-storage.mjs', 'docker compose -f deployment/docker-compose.foundation.yml config --quiet', 'Destroy ephemeral integration services']) assert.ok(integration.includes(retained), retained);
   assert.doesNotMatch(integration, /^    name:/m);
   assert.match(integration, /runs-on: ubuntu-latest/);
   assert.match(integration, /fail-fast: false/);
@@ -260,6 +260,17 @@ test('workflow wiring preserves full business coverage, unconditional safety che
   assert.match(aggregate, /if: always\(\)/);
   assert.match(aggregate, /ci-validation-scope\.mjs gate/);
   assert.match(aggregate, /toJSON\(needs\)/);
+});
+
+test('integration uses the host ports allocated to each Mailpit service', () => {
+  const integration = jobBlock(foundation, 'integration');
+  assert.match(integration, /mailpit:\r?\n +image: axllent\/mailpit:[^\r\n]+\r?\n +ports:\r?\n +- 1025\r?\n +- 8025\r?\n/);
+  assert.match(integration, /SMTP_PORT: \$\{\{ job\.services\.mailpit\.ports\[1025\] \}\}/);
+  assert.match(integration, /QMS_ACCEPTANCE_MAILPIT_URL: http:\/\/127\.0\.0\.1:\$\{\{ job\.services\.mailpit\.ports\[8025\] \}\}/);
+  for (const variable of ['SMTP_PORT', 'QMS_ACCEPTANCE_MAILPIT_URL']) {
+    assert.ok(integration.includes(`printf '${variable}=%s\\n' "$${variable}" >> "$GITHUB_ENV"`), variable);
+  }
+  assert.doesNotMatch(integration, /echo "(?:SMTP_PORT|QMS_ACCEPTANCE_MAILPIT_URL)=/);
 });
 
 test('Web shards retain the 30-minute job and 20-minute test budgets with always-uploaded per-shard diagnostics', () => {

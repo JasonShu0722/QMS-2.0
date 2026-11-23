@@ -1,0 +1,15 @@
+.qms-record-list { margin: 0; padding: 0; list-style: none; }
+.qms-record-list-empty { padding: var(--record-list-empty-padding); text-align: center; }
+.qms-record-list-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: var(--record-list-padding); }
+.qms-record-list-item:not(:last-child) { border-bottom: 1px solid var(--record-list-divider); }
+.qms-record-list-details { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.qms-record-list-title { margin: 0 0 4px; font-size: inherit; }
+.qms-record-list-title > a { color: inherit; }
+.qms-record-list-title > a:hover { color: var(--qms-accent); }
+.qms-record-list-description { color: var(--record-list-description); }
+.qms-record-list-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; flex-shrink: 0; gap: 8px; }
+@media (max-width: 576px) {
+  .qms-record-list-item { flex-wrap: wrap; }
+  .qms-record-list-details { flex-basis: 100%; }
+  .qms-record-list-actions { max-width: 100%; }
+}

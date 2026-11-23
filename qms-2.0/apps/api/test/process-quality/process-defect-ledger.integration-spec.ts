@@ -51,7 +51,7 @@ describe('process defect ledger on PostgreSQL', () => {
     defectTypeCode: 'OXIDATION', description: '端子表面氧化', defectQuantity: 12,
     occurredAt: new Date('2026-09-24T02:00:00Z'), batchCode: 'B-001', workOrderCode: 'WO-001',
     operationCode: 'ASSEMBLY', lineCode: 'L-01', materialCode: 'MAT-001',
-    productCode: 'PD-00001', traceCode: 'PD-TRACE',
+    productCode: 'PD-00001', traceCode: 'PD-TRACE', factoryCode: 'FACTORY_1' as const,
     responsibilityCategory: 'MATERIAL' as const,
   });
 
@@ -76,8 +76,32 @@ describe('process defect ledger on PostgreSQL', () => {
     const record = await create();
     const updated = await service.update(actor, record.id, { expectedVersion: 1, description: '复测氧化' }, randomUUID(), randomUUID());
     expect(updated.version).toBe(2);
+    expect(updated.factoryCode).toBe('FACTORY_1');
     await expect(service.update(actor, record.id, { expectedVersion: 1, description: '过期写入' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     expect((await service.detail(actor, record.id)).description).toBe('复测氧化');
+  });
+
+  it('requires a factory when saving historical manual records and keeps their prior null in history', async () => {
+    const legacy = await prisma.processDefect.create({ data: { organizationId, description: '历史不良', createdById: userId, updatedById: userId } });
+    const save = (factoryCode?: 'FACTORY_2') => service.update(actor, legacy.id, { expectedVersion: 1, description: '历史不良补充', factoryCode }, randomUUID(), randomUUID());
+    await expect(save()).rejects.toMatchObject({ status: 400, fields: { factoryCode: expect.any(Array) } });
+    await expect(service.detail(actor, legacy.id)).resolves.toMatchObject({ factoryCode: null, description: '历史不良', version: 1, pendingCompletion: false });
+    await expect(save('FACTORY_2')).resolves.toMatchObject({ factoryCode: 'FACTORY_2', description: '历史不良补充', version: 2 });
+    const history = await prisma.$queryRaw<Array<{ before: string | null; after: string | null }>>`SELECT before_facts ->> 'factoryCode' AS "before", after_facts ->> 'factoryCode' AS "after" FROM process_defect_registration_history WHERE defect_id = ${legacy.id}::uuid AND defect_version = 2`;
+    expect(history).toEqual([{ before: null, after: 'FACTORY_2' }]);
+  });
+
+  it.each([null, 'FACTORY_1'] as const)('prevents a routine IMS update from changing factory %p without blocking other edits', async factoryCode => {
+    const ims = await prisma.processDefect.create({ data: { organizationId, sourceKind: 'IMS', externalSourceSystem: 'IMS', sourceReceiptId: randomUUID(), sourceRowIndex: 0, factoryCode, description: 'IMS 来料', createdById: userId, updatedById: userId } });
+    await expect(service.update(actor, ims.id, { expectedVersion: 1, factoryCode: 'FACTORY_2' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 400 });
+    await expect(service.update(actor, ims.id, { expectedVersion: 1, description: '复测结果' }, randomUUID(), randomUUID())).resolves.toMatchObject({ factoryCode, description: '复测结果', version: 2 });
+  });
+
+  it('rejects invalid factory codes at the database boundary', async () => {
+    const record = await create();
+    await expect(prisma.$executeRaw`UPDATE process_defects SET factory_code = 'FACTORY_3' WHERE id = ${record.id}::uuid`)
+      .rejects.toMatchObject({ code: 'P2010', meta: { driverAdapterError: { message: expect.stringContaining('process_defects_factory_code_check') } } });
+    await expect(prisma.processDefect.findUnique({ where: { id: record.id } })).resolves.toMatchObject({ factoryCode: 'FACTORY_1' });
   });
 
   it('rejects an unassigned organization scope with 403', async () => {

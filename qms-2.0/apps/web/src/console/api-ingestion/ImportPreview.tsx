@@ -89,7 +89,7 @@ export function ImportPreview({ scope, rule, history, canReceipts, close, viewJo
       <div className="qms-ingestion-counts"><span>{text('接收份数', 'Receiving records')}: {preview.receiptCount}</span><span>{text('数据条数', 'Rows')}: {preview.rowCount ?? text('后台统计', 'Counting in background')}</span>{preview.action && <Tag>{label(preview.action, english)}</Tag>}</div>
       <span className="qms-ingestion-secondary">{text('预览有效期至', 'Preview expires at')} {new Date(preview.expiresAt).toLocaleString(english ? 'en-US' : 'zh-CN')}</span>
       {preview.errorCode && <Alert type="warning" showIcon title={text('该行未通过校验', 'This row did not pass validation')} description={<>{ingestionIssue(preview.errorCode, english)}{preview.errorField && <div className="qms-ingestion-secondary">{text('字段', 'Field')}: <code>{preview.errorField}</code></div>}</>} />}
-      <IngestionFields fields={preview.fields} differences={preview.differences} />
+      <IngestionFields fields={preview.fields} differences={preview.differences} registrationIssues={preview.registrationIssues} />
       {preview.materialNameSource === 'MATERIAL_MASTER' && <div className="qms-ingestion-counts" role="region" aria-label={text('名称来源', 'Name source')}>
         <Tag>{text('名称来源：内部物料主数据', 'Name source: Internal material master')}</Tag>
         <Tag color={preview.materialMatched ? 'success' : 'warning'}>{preview.materialMatched ? text('物料已匹配', 'Material matched') : preview.targetId ? text('物料未匹配，保留已有名称', 'Material not matched; existing name is preserved') : text('物料未匹配，名称将留空', 'Material not matched; name will be blank')}</Tag>

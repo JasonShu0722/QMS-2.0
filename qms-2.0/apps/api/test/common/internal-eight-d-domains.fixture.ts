@@ -82,7 +82,7 @@ export async function domainFixture(app: INestApplication, domain: DomainName) {
         defectDescription: 'Original unanalysed customer fact', customerName: `Customer ${randomUUID()}` } }, randomUUID(), randomUUID());
       return { sourceId: row.id, expectedVersion: row.version, factId: row.id };
     }
-    const row = await process.create(f.manager.actor, { description: 'Original unanalysed process fact', productCode, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+    const row = await process.create(f.manager.actor, { description: 'Original unanalysed process fact', productCode, traceCode: randomUUID(), factoryCode: 'FACTORY_1', occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     const selection = await quality.selectProcessDefect(f.professional.actor, project.id,
       { defectId: row.id, expectedVersion: row.version }, randomUUID(), randomUUID());
     return { sourceId: String(selection.id), expectedVersion: row.version, factId: row.id };

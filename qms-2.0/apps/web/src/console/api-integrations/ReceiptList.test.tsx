@@ -297,13 +297,22 @@ it('clears candidate errors and ignores stale candidates after clearing search',
 });
 
 it('saves a ten GiB organization payload capacity from the facts button', async () => {
+  const errors = vi.spyOn(console, 'error');
+  const warnings = vi.spyOn(console, 'warn');
   scope.permissions = ['integration:receipts:read', 'integration:manage'];
-  view(); await screen.findByText('message-001');
-  fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
-  const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
-  fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '10' } });
-  fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }));
-  await waitFor(() => expect(mutate).toHaveBeenCalledWith('/api/v1/admin/integrations/status', 'PATCH', { organizationId, capacityBytes: 10737418240 }, expect.any(AbortSignal)));
+  try {
+    view(); await screen.findByText('message-001');
+    fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
+    const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
+    expect(dialog.getByText('GiB', { exact: true })).toBeInTheDocument();
+    fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '10' } });
+    fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }));
+    await waitFor(() => expect(mutate).toHaveBeenCalledWith('/api/v1/admin/integrations/status', 'PATCH', { organizationId, capacityBytes: 10737418240 }, expect.any(AbortSignal)));
+    expect([...errors.mock.calls, ...warnings.mock.calls].flat().join('\n')).not.toMatch(/InputNumber.*addonAfter/);
+  } finally {
+    errors.mockRestore();
+    warnings.mockRestore();
+  }
 });
 
 it('does not submit an out of range organization capacity', async () => {
@@ -325,13 +334,23 @@ it.each([403, 409])('keeps capacity input and original retry on %s', async statu
 
 it('keeps the original capacity request for an unknown result and offers retry', async () => {
   scope.permissions = ['integration:receipts:read', 'integration:manage'];
-  mutate.mockRejectedValueOnce(new ApiError({ code: 'INTEGRATION_CONFIGURATION_UNAVAILABLE', message: 'failed', traceId: 'capacity-unknown' }, 503));
+  mutate.mockRejectedValueOnce(new ApiError({ code: 'INTEGRATION_CONFIGURATION_UNAVAILABLE', message: 'failed', traceId: 'capacity-unknown' }, 503))
+    .mockResolvedValueOnce({ usedBodyBytes: 20, capacityBytes: 5368709120, receiptCount: 1, receiptLimit: 100000, requestCollection: 'UNKNOWN' });
   view(); await screen.findByText('message-001'); fireEvent.click(screen.getByRole('button', { name: '设置组织正文容量' }));
-  const dialog = within(screen.getByRole('dialog', { name: '设置组织正文容量' }));
+  const modal = screen.getByRole('dialog', { name: '设置组织正文容量' });
+  await waitFor(() => expect(modal).toBeVisible(), { timeout: 5000 });
+  const dialog = within(modal);
   fireEvent.change(dialog.getByRole('spinbutton', { name: '组织容量GiB' }), { target: { value: '5' } }); fireEvent.click(dialog.getByRole('button', { name: /保\s*存/ }));
-  await waitFor(() => expect(dialog.getByRole('button', { name: /重试\s*保存/ })).toBeVisible()); expect(dialog.getByRole('spinbutton', { name: '组织容量GiB' })).toBeDisabled();
+  const retry = await dialog.findByRole('button', { name: /重试\s*保存/ });
+  expect(retry).toBeVisible();
+  expect(dialog.getByRole('spinbutton', { name: '组织容量GiB' })).toBeDisabled();
   expect(within(screen.getByRole('toolbar', { name: '接收记录操作' })).getByRole('button', { name: '清空筛选' })).toBeDisabled();
   expect(mutate).toHaveBeenCalledTimes(1);
+  fireEvent.click(retry);
+  await waitFor(() => expect(mutate).toHaveBeenCalledTimes(2));
+  expect(mutate.mock.calls[1].slice(0, 3)).toEqual(mutate.mock.calls[0].slice(0, 3));
+  await waitFor(() => expect(modal).not.toBeVisible());
+  expect(within(screen.getByRole('toolbar', { name: '接收记录操作' })).getByRole('button', { name: '清空筛选' })).toBeEnabled();
 });
 
 it('does not offer organization capacity editing without integration management', async () => {

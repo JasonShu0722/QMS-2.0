@@ -32,7 +32,7 @@ vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource 
 vi.mock('./ProcessShipmentReportPanel', () => ({ ProcessShipmentReportPanel: () => null }));
 
 const organizationId = '22222222-2222-4222-8222-222222222222';
-const defect: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '表面划伤', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-1', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人' };
+const defect: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '表面划伤', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-1', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, factoryCode: 'FACTORY_1', shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人' };
 const section = { id: '33333333-3333-4333-8333-333333333333', code: 'SEC', name: '制造科' };
 const owner = { id: '44444444-4444-4444-8444-444444444444', username: 'owner', fullName: '真实负责人', departmentName: '制造科' };
 const preview = [{ defectId: defect.id, relatedProblems: [{ problemId: 'old', reportNumber: 'PQ-OLD', title: '已有问题', status: 'CLOSED', primary: true }], hasHiddenRelations: true, relatedSetToken: 'opaque-exact-1' }];
@@ -44,7 +44,7 @@ it('shows the approved default columns and applies incomplete and unconfigured c
   await screen.findByLabelText(`选择制程不良 ${defect.description}`);
   const headers = within(container.querySelector('.qms-ledger thead') as HTMLElement);
   const names = headers.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'));
-  expect(names).toEqual(expect.arrayContaining(['发生时间', '班次', '项目号', '产品类型', '细分类型', '项目状态', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']));
+  expect(names).toEqual(expect.arrayContaining(['发生时间', '工厂', '班次', '项目号', '产品类型', '细分类型', '项目状态', '生产线名称', '工序名称', '板块', '追溯码', '不良描述', '不良数量']));
   expect(names).not.toContain('成品编码');
   fireEvent.click(screen.getByLabelText('筛选条件', { selector: 'button' }));
   const panel = within(await screen.findByLabelText('筛选面板', { selector: '[role="dialog"]' }));

@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Link, MemoryRouter } from 'react-router-dom';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
@@ -44,6 +44,7 @@ function fillIssueForm() {
 }
 
 beforeEach(() => { vi.mocked(apiRequest).mockReset(); vi.mocked(csrfToken).mockReset().mockResolvedValue('csrf-token'); });
+afterEach(() => vi.restoreAllMocks());
 
 it('protects an unfinished audit issue when navigating away', async () => {
   mockWithIssuePermissions(acceptedPage);
@@ -117,11 +118,13 @@ it('submits a version-checked review decision', async () => {
 });
 
 it('shows permission failures separately from import failures', async () => {
+  const errors = vi.spyOn(console, 'error');
   const error = new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }, 403);
   vi.mocked(apiRequest).mockRejectedValue(error);
   render(<AuditManagementPage />);
   expect(await screen.findByText('暂无导入行访问或复核权限')).toBeVisible();
   expect(screen.queryByRole('button', { name: '重试' })).toBeNull();
+  expect(errors.mock.calls.flat().map(String).filter(message => /useForm.*not connected/.test(message))).toEqual([]);
 });
 
 it('issues an accepted row with CSRF, a stable idempotency key and a problem link', async () => {

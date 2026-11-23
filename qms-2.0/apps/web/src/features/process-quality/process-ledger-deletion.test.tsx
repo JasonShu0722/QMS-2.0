@@ -22,7 +22,7 @@ vi.mock('antd', async () => {
 vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() }));
 vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: () => null }));
 const organizationId = '22222222-2222-4222-8222-222222222222';
-const record: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '删除测试来源', defectTypeCode: null, defectQuantity: 1, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-DELETE', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: true, registrationIssues: ['OCCURRED_AT_REQUIRED', 'PROJECT_MAPPING_PENDING'], registeredByName: '登记人' };
+const record: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '删除测试来源', defectTypeCode: null, defectQuantity: 1, occurredAt: null, factoryCode: null, responsibilityCategory: null, traceCode: 'TRACE-DELETE', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: true, registrationIssues: ['OCCURRED_AT_REQUIRED', 'PROJECT_MAPPING_PENDING'], registeredByName: '登记人' };
 const other = { ...record, id: '33333333-3333-4333-8333-333333333333', description: '第二页来源', version: 7 };
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:delete'];
 const preview = { count: 1, canDelete: true, items: [{ defectId: record.id, expectedVersion: record.version, description: record.description, blocked: false, blockers: [] }] };
@@ -56,7 +56,7 @@ it('orders the default recording columns and keeps optional facts recoverable wi
   const { container } = mount();
   await screen.findByLabelText(`选择制程不良 ${record.description}`);
   const headers = within(container.querySelector<HTMLElement>('.qms-ledger thead')!);
-  const titles = ['选择', '发生时间', '班次', '项目号', '产品类型', '细分类型', '项目状态', '不良描述', '追溯码', '生产线名称', '工序名称', '板块', '不良数量', '操作'];
+  const titles = ['选择', '发生时间', '工厂', '班次', '项目号', '产品类型', '细分类型', '项目状态', '不良描述', '追溯码', '生产线名称', '工序名称', '板块', '不良数量', '操作'];
   const defaultTitles = headers.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'));
   expect(defaultTitles).toEqual(titles);
   fireEvent.click(within(container.querySelector<HTMLElement>('.qms-ledger__tools')!).getByRole('button', { name: '列设置' }));
@@ -88,7 +88,8 @@ it('keeps row actions as accessible icons and previews the same source before de
   await waitFor(() => expect(within(detail).getByText(record.traceCode!)).toBeVisible());
   fireEvent.click(within(detail).getByLabelText('关闭', { selector: 'button' }));
   fireEvent.click(remove);
-  await deletionDialog();
+  const dialog = await deletionDialog();
+  expect(await within(dialog).findByRole('listitem')).toHaveTextContent(record.description);
   const call = vi.mocked(apiRequest).mock.calls.find(([path]) => path.endsWith('/deletion-preview'));
   expect(JSON.parse(String(call?.[1]?.body))).toEqual({ sources: [{ defectId: record.id, expectedVersion: record.version }] });
 });

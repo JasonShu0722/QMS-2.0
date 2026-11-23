@@ -92,13 +92,16 @@ test('administrator imports incomplete IMS rows and real Worker fills only missi
   await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: '制程不良品台账' }).click();
   await editor.getByLabel('成品编码来源字段', { exact: true }).fill('PRODUCT');
   await editor.getByLabel('不良描述来源字段', { exact: true }).fill('FAULT');
+  await editor.getByRole('button', { name: /^保\s*存$/ }).click();
+  await expect(editor.getByLabel('工厂来源字段', { exact: true })).toBeVisible();
+  await editor.getByLabel('工厂来源字段', { exact: true }).fill('source.plant');
   const ruleSaved = page.waitForResponse(response => new URL(response.url()).pathname === `${ingestion}/rules` && response.request().method() === 'POST');
   await editor.getByRole('button', { name: /^保\s*存$/ }).click();
   expect((await ruleSaved).status()).toBe(201);
   await expect(editor).toHaveCount(0);
   await positionWrite<Schema['IngestionRuleDto']>(page.request, `${ingestion}/rules`, 'POST', {
     name: `制程规则${suffix}`, endpointId: endpoint.id, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [],
-    mapping: { externalRecordKey: 'ID', occurredAt: 'TIME', productCode: 'PRODUCT', traceCode: 'TRACE', operationName: 'OPERATION', lineName: 'LINE' },
+    mapping: { externalRecordKey: 'ID', occurredAt: 'TIME', productCode: 'PRODUCT', traceCode: 'TRACE', operationName: 'OPERATION', lineName: 'LINE', factoryCode: 'source.plant' },
     descriptionComposition: { fields: [{ path: 'FAULT', label: '现象：' }, { path: 'NOTE', label: '说明：' }], separator: '\n' },
     mode: 'UPDATE', updateFields: ['description'], sourceTimezone: 'Asia/Shanghai',
   } satisfies Schema['SaveIngestionRuleDto'], 201);
@@ -113,17 +116,17 @@ test('administrator imports incomplete IMS rows and real Worker fills only missi
   const productCode = `CMP_${suffix}`;
   const month = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit' }).format(new Date());
   await send([
-    { ID: `FIRST_${suffix}`, TIME: `${month}-01T08:30:00+08:00`, PRODUCT: productCode, TRACE: `T_${suffix}`, OPERATION: `焊接${suffix}`, FAULT: suffix, NOTE: '完整行' },
-    { ID: `SECOND_${suffix}`, PRODUCT: productCode, OPERATION: `焊接${suffix}`, FAULT: suffix },
+    { ID: `FIRST_${suffix}`, TIME: `${month}-01T08:30:00+08:00`, PRODUCT: productCode, TRACE: `T_${suffix}`, OPERATION: `焊接${suffix}`, FAULT: suffix, NOTE: '完整行', source: { plant: 1 } },
+    { ID: `SECOND_${suffix}`, PRODUCT: productCode, OPERATION: `焊接${suffix}`, FAULT: suffix, source: { plant: 'unexpected' } },
   ]);
   await worker();
   const list = await positionRead<Schema['ProcessDefectPageDto']>(page.request, `/api/v1/process-quality/defects?page=1&pageSize=20&search=${suffix}`);
   expect(list.items).toHaveLength(2);
   const first = list.items.find(item => item.externalRecordKey === `FIRST_${suffix}`)!;
   const incomplete = list.items.find(item => item.externalRecordKey === `SECOND_${suffix}`)!;
-  expect(first).toMatchObject({ sourceKind: 'IMS', defectQuantity: 1, shift: 'DAY', pendingConfiguration: true });
+  expect(first).toMatchObject({ sourceKind: 'IMS', factoryCode: 'FACTORY_1', defectQuantity: 1, shift: 'DAY', pendingConfiguration: true });
   expect(first.description).toBe(`现象：${suffix}\n说明：完整行`);
-  expect(incomplete).toMatchObject({ pendingCompletion: true, occurredAt: null, traceCode: null });
+  expect(incomplete).toMatchObject({ pendingCompletion: true, occurredAt: null, traceCode: null, factoryCode: null });
   const partlyUpdated = await positionWrite<Schema['ProcessDefectDto']>(page.request, `/api/v1/process-quality/defects/${incomplete.id}`, 'PUT', { expectedVersion: incomplete.version, traceCode: `FIX_${suffix}` });
   expect(partlyUpdated.pendingCompletion).toBe(true);
   const project = await positionWrite<Schema['ComponentProjectRecordDto']>(page.request, '/api/v1/admin/configuration/component-project-records', 'POST', { code: `PROJECT_${suffix}`, name: '登记时新品项目', stage: 'NEW_PRODUCT' }, 201);
@@ -150,6 +153,26 @@ test('administrator imports incomplete IMS rows and real Worker fills only missi
   await expect(page.getByRole('checkbox', { name: `选择制程不良 现象：${suffix}`, exact: true })).toHaveCount(0);
   const selectionBar = page.getByRole('toolbar', { name: '台账批量操作' });
   const shiftHeader = page.getByRole('columnheader', { name: '班次', exact: true });
+  const factoryHeader = page.getByRole('columnheader', { name: '工厂', exact: true });
+  await expect(factoryHeader).toBeVisible();
+  expect((await factoryHeader.boundingBox())!.x).toBeLessThan((await shiftHeader.boundingBox())!.x);
+  await expect(page.getByRole('row').filter({ has: selected }).getByRole('cell', { name: '一工厂', exact: true })).toBeVisible();
+  const scrollbar = page.getByRole('slider', { name: '横向滚动台账' });
+  const tableBody = page.locator('.process-quality-ledger .ant-table-body').first();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 740 });
+    await expect(scrollbar).toBeInViewport();
+    await expect.poll(async () => {
+      const box = await scrollbar.boundingBox();
+      return box ? Math.abs(740 - box.y - box.height) : Infinity;
+    }).toBeLessThanOrEqual(12);
+    const start = await tableBody.evaluate(element => element.scrollLeft);
+    await scrollbar.press('End');
+    await expect.poll(() => tableBody.evaluate(element => element.scrollLeft)).toBeGreaterThan(start);
+    await scrollbar.press('Home');
+    await expect.poll(() => tableBody.evaluate(element => element.scrollLeft)).toBe(0);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
   const projectHeader = page.getByRole('columnheader', { name: '项目号', exact: true });
   await expect(shiftHeader.locator('.qms-ledger__grip')).toHaveCount(0);
   const shift = (await shiftHeader.boundingBox())!;
@@ -193,13 +216,19 @@ test('administrator imports incomplete IMS rows and real Worker fills only missi
   await filter.getByRole('button', { name: '添加筛选条件' }).click();
   await filter.getByLabel('筛选字段 3').selectOption('description');
   await filter.getByLabel('筛选值 3').fill('现象');
-  const edge = (await narrow.boundingBox())!;
+  const outsideResize = page.getByRole('columnheader', { name: '发生时间', exact: true }).getByRole('separator');
+  const previousWidth = await outsideResize.getAttribute('aria-valuenow');
+  const edge = (await outsideResize.boundingBox())!;
+  expect(await outsideResize.evaluate(handle => {
+    const bounds = handle.getBoundingClientRect();
+    return handle.contains(document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2));
+  }), 'the column resize handle must be outside the open filter').toBe(true);
   await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
   await page.mouse.down();
   await page.mouse.move(edge.x + edge.width / 2 + 25, edge.y + edge.height / 2, { steps: 4 });
   await page.mouse.up();
   await expect(filter).toHaveCount(0);
-  await expect(narrow).not.toHaveAttribute('aria-valuenow', minimum!);
+  await expect(outsideResize).not.toHaveAttribute('aria-valuenow', previousWidth!);
   await toolbar.getByRole('button', { name: '筛选条件' }).click();
   await expect(filter.getByLabel('筛选值 3')).toHaveValue('现象');
   await filter.getByRole('button', { name: '删除筛选条件 3' }).click();
@@ -280,11 +309,15 @@ test('manual registration retains the trace draft after closing the camera and s
   await scanner.getByRole('button', { name: '返回手动输入', exact: true }).click();
   await expect(scanner).toHaveCount(0);
   await expect(drawer.getByLabel('追溯码', { exact: true })).toHaveValue(`SCAN_${suffix}`);
+  await drawer.getByRole('button', { name: '保存登记', exact: true }).click();
+  await expect(drawer.getByText('请选择工厂', { exact: true })).toBeVisible();
+  await drawer.getByLabel('工厂', { exact: true }).click();
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: '二工厂' }).click();
   const saved = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/process-quality/defects' && response.request().method() === 'POST');
   await drawer.getByRole('button', { name: '保存登记', exact: true }).click();
   const response = await saved;
   expect(response.status()).toBe(201);
-  expect(await response.json()).toMatchObject({ sourceKind: 'MANUAL', defectQuantity: 1, shift: 'DAY' });
+  expect(await response.json()).toMatchObject({ sourceKind: 'MANUAL', factoryCode: 'FACTORY_2', defectQuantity: 1, shift: 'DAY' });
 });
 
 test('AI channels keep credentials private and real Worker applies structured descriptions with failure and manual fallback', async ({ page }) => {
@@ -342,7 +375,7 @@ test('AI channels keep credentials private and real Worker applies structured de
     endpoint = await positionWrite<Schema['IntegrationEndpointDto']>(page.request, `/api/v1/admin/integrations/endpoints/${endpoint.id}`, 'PATCH', { expectedVersion: endpoint.version, status: 'ENABLED' });
     const aiRuleInput: Schema['SaveIngestionRuleDto'] = {
       name: `AI描述规则${suffix}`, endpointId: endpoint.id, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [],
-      mapping: { externalRecordKey: 'ID', productCode: 'PRODUCT', traceCode: 'TRACE' },
+      mapping: { externalRecordKey: 'ID', productCode: 'PRODUCT', traceCode: 'TRACE', factoryCode: 'PLANT' },
       descriptionComposition: { fields: [{ path: 'FAULT', label: '现象：' }], separator: '\n' }, mode: 'INSERT_ONLY', updateFields: [],
       aiDescription: { connectionId: channel.id, model: 'fixture-summary', prompt: '整理{{fault}}，仅保留已给事实。',
         inputFields: [{ path: 'FAULT', label: '现象', variable: 'fault' }], output: { mode: 'JSON', field: 'defectSummary', target: 'description' } },
@@ -463,7 +496,7 @@ test('AI management separates configuration and publishes prompt applications ac
       code: `VAR_${suffix}`, name: `变量来源${suffix}`, sourceCode: 'IMS', sourceName: 'IMS一次性AI验收', returnReceipt: true,
     }, 201);
     const sourceRule = await positionWrite<Schema['IngestionRuleDto']>(page.request, `${ingestion}/rules`, 'POST', {
-      name: `API变量规则${suffix}`, target: 'PROCESS_DEFECT', endpointId: endpoint.id, enabled: false, match: 'ALL', conditions: [], mapping: {}, mode: 'INSERT_ONLY', updateFields: [],
+      name: `API变量规则${suffix}`, target: 'PROCESS_DEFECT', endpointId: endpoint.id, enabled: false, match: 'ALL', conditions: [], mapping: { factoryCode: 'PLANT' }, mode: 'INSERT_ONLY', updateFields: [],
       descriptionComposition: { fields: [{ path: 'FAULT', variable: 'fault', label: '现象样本' }], separator: '\n' },
     }, 201);
     expect(sourceRule.descriptionComposition?.fields).toEqual([{ path: 'FAULT', variable: 'fault', label: '现象样本' }]);

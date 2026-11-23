@@ -50,7 +50,7 @@ export async function processIngestionFixture() {
     });
   }
   const manual = (input: Partial<Parameters<typeof ledger.create>[1]> = {}) => ledger.create(actor,
-    { occurredAt: new Date('2026-11-16T00:30:00Z'), productCode: '00001', traceCode: randomUUID(), description: '不良事实', ...input }, randomUUID(), randomUUID());
+    { occurredAt: new Date('2026-11-16T00:30:00Z'), factoryCode: 'FACTORY_1', productCode: '00001', traceCode: randomUUID(), description: '不良事实', ...input }, randomUUID(), randomUUID());
   return { prisma, audit, mappings, completion, ledger, adapter, sectors, actor, role, receipt, fields, ingest, manual };
 }
 

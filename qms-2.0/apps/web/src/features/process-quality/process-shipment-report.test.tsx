@@ -34,12 +34,19 @@ it('loads report pages from the server and resets to page one when changing twen
 });
 
 it('opens a report and shows its traceable source sections', async () => {
-  render(<MemoryRouter><ProcessShipmentReportPanel /></MemoryRouter>);
-  fireEvent.click(await screen.findByLabelText('查看出货报告 SHIP-001', { selector: 'button' }));
-  expect(await screen.findByText('扫描文件')).toBeVisible();
-  expect(screen.getByText('客户关联')).toBeVisible();
-  expect(screen.getByText('正式问题')).toBeVisible();
-  expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/shipment-reports/${report.id}`);
+  const warning = vi.spyOn(console, 'error');
+  try {
+    render(<MemoryRouter><ProcessShipmentReportPanel /></MemoryRouter>);
+    fireEvent.click(await screen.findByLabelText('查看出货报告 SHIP-001', { selector: 'button' }));
+    expect(await screen.findByText('扫描文件')).toBeVisible();
+    expect(screen.getByText('客户关联')).toBeVisible();
+    expect(screen.getByText('正式问题')).toBeVisible();
+    expect(screen.getByText('尚未绑定扫描文件')).toBeVisible();
+    expect(screen.getByText('尚未关联客户')).toBeVisible();
+    expect(screen.getByText('尚未关联正式问题')).toBeVisible();
+    expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/shipment-reports/${report.id}`);
+    expect(warning.mock.calls.flat().join('\n')).not.toMatch(/\[antd: (List|Drawer)\].*deprecated/i);
+  } finally { warning.mockRestore(); }
 });
 
 it('protects an unfinished shipment report when navigating away', async () => {

@@ -1,5 +1,6 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Card, Drawer, Empty, Form, Input, List, Pagination, Select, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Drawer, Empty, Form, Input, Pagination, Select, Space, Spin, Tag, Typography } from 'antd';
+import { RecordList, RecordListActions, RecordListDetails } from '../../ui/list/RecordList';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -123,10 +124,10 @@ export function AuditStandardsPage() {
         </Space>
         {!loading && !loadError && catalog && <Pagination current={catalog.page} pageSize={pageSize} total={catalog.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); })} />}
       </ListToolbar>
-      {loading ? <div className="audit-standards-loading"><Spin /></div> : !loadError && <List dataSource={catalog?.items ?? []} locale={{ emptyText: <Empty description="暂无审核标准" /> }} renderItem={(standard: StandardItem) => <List.Item key={standard.id} actions={[<Button key="detail" onClick={() => requestLeave(() => { setEditor(undefined); setDirty(false); void showDetail(standard.id); })}>查看版本</Button>]}><List.Item.Meta title={<Space wrap><span>{standard.name}</span><Tag>{auditTypes.find((item) => item.value === standard.auditType)?.label}</Tag><Tag color={standard.status === 'PUBLISHED' ? 'green' : 'orange'}>{standard.status === 'PUBLISHED' ? '已生效' : '草稿'}</Tag></Space>} description={`最新生效版本 v${standard.latestVersion} · 编辑版本 ${standard.version}`} /></List.Item>} />}
+      {loading ? <div className="audit-standards-loading"><Spin /></div> : !loadError && <RecordList items={catalog?.items ?? []} itemKey={standard => standard.id} empty={<Empty description="暂无审核标准" />} renderItem={(standard: StandardItem) => <><RecordListDetails title={<Space wrap><span>{standard.name}</span><Tag>{auditTypes.find((item) => item.value === standard.auditType)?.label}</Tag><Tag color={standard.status === 'PUBLISHED' ? 'green' : 'orange'}>{standard.status === 'PUBLISHED' ? '已生效' : '草稿'}</Tag></Space>} description={`最新生效版本 v${standard.latestVersion} · 编辑版本 ${standard.version}`} /><RecordListActions>{[<Button key="detail" onClick={() => requestLeave(() => { setEditor(undefined); setDirty(false); void showDetail(standard.id); })}>查看版本</Button>]}</RecordListActions></>} />}
     </section>
     {Boolean(actionError) && !detail && !editor && <Alert showIcon type="error" title={safeAccountError(actionError)} />}
-    <Drawer title={detail?.name ?? '标准详情'} open={!!detail || detailLoading} onClose={() => { setDetail(undefined); setActionError(undefined); }} width={680}>
+    <Drawer title={detail?.name ?? '标准详情'} open={!!detail || detailLoading} onClose={() => { setDetail(undefined); setActionError(undefined); }} size={680}>
       {detailLoading && <Spin />}
       {Boolean(actionError) && <Alert type="error" showIcon title={safeAccountError(actionError)} />}
       {detail && !detailLoading && <Space orientation="vertical" size={6} className="audit-standards-column">
@@ -134,10 +135,10 @@ export function AuditStandardsPage() {
         <Space>{detail.status === 'DRAFT' ? <><Button onClick={() => setEditor('draft')}>编辑草稿</Button><Button type="primary" loading={busy} onClick={() => void publish()}>发布生效</Button><Typography.Text type="secondary">发布后本版检查项不可修改。</Typography.Text></> : <Button onClick={() => setEditor('revision')}>创建修订</Button>}</Space>
         {detail.status === 'DRAFT' && <Card size="small" title="待发布检查项"><ChecklistItems definition={detail.draftDefinition} /></Card>}
         <Typography.Title level={4}>已生效版本</Typography.Title>
-        <List dataSource={detail.versions} locale={{ emptyText: <Empty description="尚未发布版本" /> }} renderItem={(version) => <List.Item key={version.id}><Card className="audit-standards-version" size="small" title={`v${version.version}`} extra={<Typography.Text type="secondary">{new Date(version.publishedAt).toLocaleString('zh-CN')}</Typography.Text>}><ChecklistItems definition={version.definition} /><Typography.Text type="secondary" copyable>{version.id}</Typography.Text></Card></List.Item>} />
+        <RecordList items={detail.versions} itemKey={version => version.id} empty={<Empty description="尚未发布版本" />} renderItem={(version) => <Card className="audit-standards-version" size="small" title={`v${version.version}`} extra={<Typography.Text type="secondary">{new Date(version.publishedAt).toLocaleString('zh-CN')}</Typography.Text>}><ChecklistItems definition={version.definition} /><Typography.Text type="secondary" copyable>{version.id}</Typography.Text></Card>} />
       </Space>}
     </Drawer>
-    <Drawer aria-label={editor === 'new' ? '新建审核标准' : editor === 'revision' ? '创建标准修订' : '编辑标准草稿'} title={editor === 'new' ? '新建审核标准' : editor === 'revision' ? '创建标准修订' : '编辑标准草稿'} open={!!editor} onClose={() => requestLeave(() => { setEditor(undefined); setDirty(false); }, true)} width={620} destroyOnHidden>
+    <Drawer aria-label={editor === 'new' ? '新建审核标准' : editor === 'revision' ? '创建标准修订' : '编辑标准草稿'} title={editor === 'new' ? '新建审核标准' : editor === 'revision' ? '创建标准修订' : '编辑标准草稿'} open={!!editor} onClose={() => requestLeave(() => { setEditor(undefined); setDirty(false); }, true)} size={620} destroyOnHidden>
       {editor && <Form<EditorValues> key={`${editor}-${detail?.id ?? 'new'}`} layout="vertical" disabled={busy} onValuesChange={() => setDirty(true)} onFinish={(values) => void save(values)} initialValues={editor === 'new' ? { auditType: 'PROCESS', items: [{ key: '', text: '' }] } : { name: detail?.name, auditType: detail?.auditType, items: items(detail?.draftDefinition ?? { items: [] }) }}>
         {Boolean(actionError) && <Alert type="error" showIcon title={safeAccountError(actionError)} />}
         {editor === 'new' && <><Form.Item name="name" label="标准名称" rules={[{ required: true, whitespace: true }]}><Input maxLength={300} /></Form.Item><Form.Item name="auditType" label="审核类型" rules={[{ required: true }]}><Select options={auditTypes} /></Form.Item></>}
@@ -149,5 +150,5 @@ export function AuditStandardsPage() {
 }
 
 function ChecklistItems({ definition }: { definition: StandardDetail['draftDefinition'] }) {
-  return <List size="small" dataSource={items(definition)} renderItem={(item) => <List.Item key={item.key}><Typography.Text strong>{item.key}</Typography.Text><Typography.Text>{item.text}</Typography.Text></List.Item>} />;
+  return <RecordList compact items={items(definition)} itemKey={item => item.key} renderItem={(item) => <><Typography.Text strong>{item.key}</Typography.Text><Typography.Text>{item.text}</Typography.Text></>} />;
 }

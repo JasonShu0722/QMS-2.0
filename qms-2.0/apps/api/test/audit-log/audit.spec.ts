@@ -80,6 +80,15 @@ describe('audit log foundation', () => {
     }
   });
 
+  it('audits the factory field name only on successful process defect writes', () => {
+    const service = new AuditLogService({ auditEvent: { create: jest.fn() } });
+    const event = { action: 'PROCESS_DEFECT_INGESTION_UPDATED', resourceType: 'ProcessDefect', outcome: 'SUCCESS' };
+    expect(service.safeMetadata({ changedFields: 'factoryCode', rawFactory: 'unexpected' }, event)).toEqual({ changedFields: 'factoryCode' });
+    expect(service.safeMetadata({ changedFields: 'factoryCode,rawFactory' }, event)).toEqual({});
+    expect(service.safeMetadata({ changedFields: 'factoryCode' }, { ...event, outcome: 'DENIED' })).toEqual({});
+    expect(service.safeMetadata({ changedFields: 'factoryCode' }, { ...event, resourceType: 'Profile' })).toEqual({});
+  });
+
   it('allowlists only bounded trial metadata on completed application audit outcomes', () => {
     const service = new AuditLogService({} as never);
     const event = { action: 'AI_APPLICATION_TESTED', resourceType: 'AiApplication', outcome: 'SUCCESS' };

@@ -15,7 +15,17 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const page = (organizations = [organization]) => <MemoryRouter><AdminPage organizations={organizations} /></MemoryRouter>;
 const principal = 'INTERNAL:11111111-1111-4111-8111-111111111111:22222222-2222-4222-8222-222222222222';
 beforeEach(() => { localStorage.clear(); useWorkTabsStore.getState().reset(); useWorkTabsStore.getState().bindSession(principal); });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+
+it('shows both management loading messages without using a deprecated spinner prop', () => {
+  const errors = vi.spyOn(console, 'error');
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(() => undefined)));
+  const view = render(<MemoryRouter><AdminPage organizations={null} /></MemoryRouter>);
+  expect(screen.getByText('加载系统管理权限')).toBeVisible();
+  view.rerender(page());
+  expect(screen.getByText('核实管理身份')).toBeVisible();
+  expect(errors.mock.calls.flat().map(String).filter(message => /\[antd: Spin\].*`tip`/.test(message))).toEqual([]);
+});
 
 it('shows the actual platform identity and target scope without changing the actor home', async () => {
   const fetcher = vi.fn(async (path: string) => json(path.includes('/organizations/context?') ? context('org-a', true) : []));

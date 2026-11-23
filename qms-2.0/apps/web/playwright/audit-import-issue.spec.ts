@@ -97,7 +97,7 @@ test('real audit import review, issue, source link, read-only and revoked permis
 
   await page.goto('/app/audits');
   const section = page.getByRole('region', { name: '审核导入行' });
-  const row = section.locator('.ant-list-item').filter({ hasText: externalKey });
+  const row = section.getByRole('listitem').filter({ hasText: externalKey });
   await expect(row).toContainText('待复核');
   const permissionResponse = await page.request.get('/api/v1/system/my-permissions');
   expect(permissionResponse.status(), await permissionResponse.text()).toBe(200);
@@ -133,11 +133,11 @@ test('real audit import review, issue, source link, read-only and revoked permis
     const reader = await readerContext.newPage();
     await login(reader, readerName);
     await reader.goto('/app/audits');
-    await expect(reader.getByRole('region', { name: '审核导入行' }).locator('.ant-list-item').filter({ hasText: externalKey })).toContainText('已发单');
+    await expect(reader.getByRole('region', { name: '审核导入行' }).getByRole('listitem').filter({ hasText: externalKey })).toContainText('已发单');
     const second = await importRow(page.request, `F4-REVOKE-${suffix}`);
     await expect(reader.getByRole('region', { name: '审核导入行' }).getByRole('button', { name: '刷新导入' })).toBeVisible();
     await reader.getByRole('button', { name: '刷新导入' }).click();
-    const readerRow = reader.locator('.audit-import-card .ant-list-item').filter({ hasText: second.external_key });
+    const readerRow = reader.locator('.audit-import-card').getByRole('listitem').filter({ hasText: second.external_key });
     await expect(readerRow).toContainText('待复核');
     await expect(readerRow.getByRole('button', { name: /^接\s*受$/ })).toHaveCount(0);
     await expect(readerRow.getByRole('button', { name: /^拒\s*绝$/ })).toHaveCount(0);
@@ -147,7 +147,7 @@ test('real audit import review, issue, source link, read-only and revoked permis
   const accepted = await write(page.request, `/api/v1/audit-management/imports/${second.id}/review`, 'PUT', { expectedVersion: second.version, decision: 'ACCEPTED' });
   expect(accepted.status(), await accepted.text()).toBe(200);
   await section.getByRole('button', { name: '刷新导入' }).click();
-  const deniedRow = section.locator('.ant-list-item').filter({ hasText: second.external_key });
+  const deniedRow = section.getByRole('listitem').filter({ hasText: second.external_key });
   await deniedRow.getByRole('button', { name: '发起正式问题' }).click();
   await drawer.getByLabel('问题类型').fill('AUDIT_FINDING');
   await drawer.getByLabel('责任范围').fill('audit-management');
@@ -162,6 +162,6 @@ test('real audit import review, issue, source link, read-only and revoked permis
   expect((await denied).status()).toBe(403);
   await expect(drawer).toHaveCount(0);
   await expect(section.getByText('暂无发单权限')).toBeVisible();
-  await expect(section.locator('.ant-list-item')).toHaveCount(0);
+  await expect(section.getByRole('listitem')).toHaveCount(0);
   expect(await prisma.problemIndex.count({ where: { organizationId, sourceId: second.id } })).toBe(0);
 });

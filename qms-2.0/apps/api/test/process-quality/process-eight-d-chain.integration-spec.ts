@@ -65,7 +65,7 @@ describe('complete process 8D HTTP chain with actual versioned storage and ClamA
     if (!binding) throw new Error('The actual workflow binding was not persisted');
     await core.activate(f.professional.actor, { expectedVersion: binding.version, enabled: true }, randomUUID(), randomUUID());
     const source = (await send(issuerCookie, 'post', 'process-quality/defects', {
-      occurredAt: '2026-10-20T08:30:00+08:00', productCode: `HTTP-${randomUUID()}`, traceCode: `TRACE-${randomUUID()}`,
+      occurredAt: '2026-10-20T08:30:00+08:00', factoryCode: 'FACTORY_1', productCode: `HTTP-${randomUUID()}`, traceCode: `TRACE-${randomUUID()}`,
       description: '真实HTTP手工登记来源',
     }).expect(201)).body;
     expect(source).toMatchObject({ sourceKind: 'MANUAL', defectQuantity: 1 });
@@ -157,7 +157,7 @@ describe('complete process 8D HTTP chain with actual versioned storage and ClamA
     expect(binding).toMatchObject({ version: 1 });
     await core.activate(f.professional.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
     const source = (await send(issuerCookie, 'post', 'process-quality/defects', {
-      occurredAt: '2026-10-20T08:30:00+08:00', productCode: `HTTP-${randomUUID()}`, traceCode: `TRACE-${randomUUID()}`,
+      occurredAt: '2026-10-20T08:30:00+08:00', factoryCode: 'FACTORY_1', productCode: `HTTP-${randomUUID()}`, traceCode: `TRACE-${randomUUID()}`,
       description: 'Missing fields and exact reassignment seam',
     }).expect(201)).body;
     const issued = (await send(issuerCookie, 'post', 'process-quality/eight-d', { sources: [{ defectId: source.id, expectedVersion: source.version }],

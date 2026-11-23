@@ -16,6 +16,7 @@ export type IntegrationFields = {
 
 export type ProcessDefectIntegrationFields = {
   occurredAt?: string;
+  factoryCode?: string | null;
   productCode?: string;
   workOrderCode?: string;
   lineCode?: string;
@@ -30,6 +31,10 @@ export type ProcessDefectIntegrationFields = {
   rowIndex: number;
   issues?: string[];
 };
+export function processDefectIssueField(issue: string): string {
+  const field = issue.split(':')[0]!;
+  return field === 'factory' ? 'factoryCode' : field;
+}
 export type IntegrationRecord<Fields = IntegrationFields> = { id: string; version: number; values: Fields };
 export type ProcessDefectIntegrationRecord = IntegrationRecord<ProcessDefectIntegrationFields> & { protectedFields?: string[]; pendingCompletion?: boolean; pendingConfiguration?: boolean; deleted?: boolean };
 export type IntegrationExpected = Pick<IntegrationRecord, 'id' | 'version'> | null;

@@ -4,6 +4,7 @@ import type { IntegrationFields, IntegrationTarget, OperationIntegrationFields, 
 import type { AiDescriptionOutput } from '../../common/ai-description.js';
 import { normalizeAiOutput } from '../ai-configuration/ai-connection.policy.js';
 import type { AiApplicationBinding } from '../ai-configuration/ai-application.service.js';
+import { PROCESS_FACTORY_CODES } from '../process-quality/process-defect-registration.policy.js';
 export { aiDescriptionDisposition } from '../../common/ai-description.js';
 
 export type IngestionTarget = IntegrationTarget;
@@ -12,7 +13,7 @@ export type IngestionDescriptionComposition = { fields: { path: string; label?: 
 export type ComponentNameLookup = { source: 'MATERIAL'; field: 'materialName' };
 export type IngestionCondition = { path: string; operator: 'EQ' | 'NE' | 'IN' | 'NOT_IN' | 'EMPTY' | 'NOT_EMPTY'; value?: string | number | boolean | null | (string | number | boolean)[] };
 export type IngestionRule = { name: string; endpointId: string; target: IngestionTarget; enabled: boolean; match: 'ALL' | 'ANY'; conditions: IngestionCondition[]; mapping: Record<string, string>; componentNameLookup?: ComponentNameLookup; mode: 'INSERT_ONLY' | 'UPDATE' | 'CONFIRM'; updateFields: string[]; sourceUpdatedAtField?: string; sourceTimezone?: string; descriptionComposition?: IngestionDescriptionComposition; aiApplication?: AiApplicationBinding; aiDescription?: { connectionId: string; model: string; prompt: string; inputFields: { path: string; label?: string; variable: string }[]; output: AiDescriptionOutput; connectionVersion?: number } };
-export const processDefectSourceFields = ['occurredAt', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey'];
+export const processDefectSourceFields = ['occurredAt', 'factoryCode', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey'];
 export const ingestionTargets = ['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'OPERATION', 'PROCESS_DEFECT'] satisfies IngestionTarget[];
 
 export function ingestionError(code: string, status = 400, field?: string): never { throw new HttpException({ code, message: code, ...(field ? { field } : {}) }, status); }
@@ -117,9 +118,16 @@ function processTimestamp(value: string, timeZone: string): string | undefined {
 }
 
 function evaluateProcessDefect(rule: IngestionRule, row: unknown): { matched: true; fields: IngestionFields; sourceUpdatedAt: string | null } {
-  const fields: Record<string, string> = {}, issues: string[] = [];
+  const fields: Record<string, string | null> = {}, issues: string[] = [];
   for (const [field, path] of Object.entries(rule.mapping)) {
     let value = pathValue(row, path);
+    if (field === 'factoryCode') {
+      const code = typeof value === 'string' ? value.trim() : value;
+      const factoryCode = code === 1 || code === '1' ? PROCESS_FACTORY_CODES[0] : code === 2 || code === '2' ? PROCESS_FACTORY_CODES[1] : null;
+      fields.factoryCode = factoryCode;
+      if (factoryCode === null) issues.push(code == null || code === '' ? 'factory:EMPTY' : 'factory:INVALID');
+      continue;
+    }
     if (value === undefined || value === null || value === '') continue;
     if (field === 'description' && scalar(value)) value = String(value);
     if (typeof value !== 'string') { issues.push(`${field}:TYPE`); continue; }

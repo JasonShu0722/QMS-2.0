@@ -1,5 +1,5 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Form, Input, List, Select, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Form, Input, Select, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
@@ -7,6 +7,7 @@ import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
+import { RecordList } from '../../ui/list/RecordList';
 
 type Report = components['schemas']['ProcessShipmentReportDto'];
 type ReportPage = components['schemas']['ProcessShipmentReportPageDto'];
@@ -66,7 +67,7 @@ export function ProcessShipmentReportPanel() {
       { title: '状态', key: 'status', width: 100, dataIndex: 'status', render: (value: string) => <Tag>{value === 'ARCHIVED' ? '已归档' : '草稿'}</Tag> },
       { title: '操作', key: 'actions', width: 150, render: (_, item) => <Button type="link" aria-label={`查看出货报告 ${item.reportNumber}`} onClick={() => requestLeave(() => { setReport(undefined); setSelectedId(item.id); if (item.id === selectedId) refresh(); })}>查看与关联</Button> },
     ]} />
-    <Drawer title={report?.reportNumber ?? '出货报告详情'} open={!!selectedId} onClose={() => requestLeave(() => { setSelectedId(undefined); setReport(undefined); }, true)} width="min(760px, 100vw)" destroyOnHidden>
+    <Drawer title={report?.reportNumber ?? '出货报告详情'} open={!!selectedId} onClose={() => requestLeave(() => { setSelectedId(undefined); setReport(undefined); }, true)} size="min(760px, 100vw)" destroyOnHidden>
       {detailError ? <Alert type={denied(detailError) ? 'warning' : 'error'} showIcon title={denied(detailError) ? '暂无出货报告访问权限' : message(detailError, '详情加载失败')} action={!denied(detailError) ? <Button onClick={refreshFromUser}>重试</Button> : undefined} /> : null}
       {detailLoading && !report ? <Spin /> : report ? <ReportDetail key={report.id} report={report} canWrite={canWrite} canReadCustomers={canReadCustomers} changed={refresh} /> : null}
     </Drawer>
@@ -108,7 +109,7 @@ function CreateReportDrawer({ created }: { created: () => void }) {
     catch (cause) { setError(message(cause, '创建出货报告失败')); }
     finally { setBusy(false); }
   }
-  return <><Button type="primary" onClick={() => setOpen(true)}>新建出货报告</Button><Drawer title="新建出货报告" open={open} onClose={close} closable={!busy && !searching} keyboard={!busy && !searching} mask={{ closable: !busy && !searching }} width="min(560px, 100vw)" destroyOnHidden={false}>
+  return <><Button type="primary" onClick={() => setOpen(true)}>新建出货报告</Button><Drawer title="新建出货报告" open={open} onClose={close} closable={!busy && !searching} keyboard={!busy && !searching} mask={{ closable: !busy && !searching }} size="min(560px, 100vw)" destroyOnHidden={false}>
     <Form<CreateReport> form={form} layout="vertical" disabled={busy || searching} onValuesChange={() => setDirty(true)} onFinish={(values) => void create(values)}>
       <Form.Item name="reportNumber" label="报告编号"><Input maxLength={100} /></Form.Item>
       <Form.Item name="periodStart" label="统计开始" rules={[{ required: true }]}><Input type="datetime-local" /></Form.Item>
@@ -169,12 +170,12 @@ function ReportDetail({ report, canWrite, canReadCustomers, changed }: { report:
     <Typography.Title level={4}>扫描文件版本</Typography.Title>
     <AttachmentPanel resource={{ resourceType: 'process-shipment-report', resourceId: report.id }} fileIds={fileIds} readOnly={!editable || busy} onReady={(file) => setFileIds((current) => [...new Set([...current, file.id])])} onRemoved={(id) => setFileIds((current) => current.filter((fileId) => fileId !== id))} />
     {editable ? <Button disabled={!fileIds.length || fileIds.join('|') === boundIds.join('|')} loading={busy} onClick={() => void write('/evidence', 'PUT', { expectedVersion: report.version, fileIds })}>绑定扫描文件</Button> : null}
-    <List size="small" dataSource={report.evidence} locale={{ emptyText: '尚未绑定扫描文件' }} renderItem={(item) => <List.Item>文件 {item.fileId} · 第 {item.fileVersion} 版 · 扫描于 {new Date(item.scannedAt).toLocaleString('zh-CN')}</List.Item>} />
+    <RecordList compact items={report.evidence} itemKey={item => item.fileId} empty={<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未绑定扫描文件" />} renderItem={item => <>文件 {item.fileId} · 第 {item.fileVersion} 版 · 扫描于 {new Date(item.scannedAt).toLocaleString('zh-CN')}</>} />
     <Typography.Title level={4}>客户关联</Typography.Title>
-    <List size="small" dataSource={report.customers} locale={{ emptyText: '尚未关联客户' }} renderItem={(item) => <List.Item>{item.customerCode} · {item.customerName}（第 {item.customerVersion} 版）</List.Item>} />
+    <RecordList compact items={report.customers} itemKey={item => item.customerId} empty={<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未关联客户" />} renderItem={item => <>{item.customerCode} · {item.customerName}（第 {item.customerVersion} 版）</>} />
     {editable && canReadCustomers ? <Space wrap><Select disabled={busy} aria-label="选择出货客户" className="process-quality-report-select" placeholder="选择客户" value={customerId} options={customers.map((item) => ({ value: item.id, label: `${item.code} · ${item.name}` }))} onChange={setCustomerId} /><Button disabled={!customerId} loading={busy} onClick={() => void write('/customer', 'PUT', { expectedVersion: report.version, customerId })}>关联客户</Button></Space> : null}
     <Typography.Title level={4}>正式问题</Typography.Title>
-    <List size="small" dataSource={report.issues} locale={{ emptyText: '尚未关联正式问题' }} renderItem={(item) => <List.Item><Link to={`/app/problem-workspace/${item.id}`}>{item.reportNumber}</Link> · {item.status} · 第 {item.version} 版</List.Item>} />
+    <RecordList compact items={report.issues} itemKey={item => item.id} empty={<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未关联正式问题" />} renderItem={item => <span><Link to={`/app/problem-workspace/${item.id}`}>{item.reportNumber}</Link> · {item.status} · 第 {item.version} 版</span>} />
     {editable ? <Space wrap><Input disabled={busy} aria-label="正式问题 ID" placeholder="正式问题 ID" value={problemId} onChange={(event) => setProblemId(event.target.value)} /><Input disabled={busy} aria-label="正式问题版本" type="number" min={1} className="process-quality-report-version" value={problemVersion} onChange={(event) => setProblemVersion(Number(event.target.value))} /><Button disabled={!problemId || problemVersion < 1} loading={busy} onClick={() => void write('/issues', 'POST', { problemId, expectedVersion: report.version, expectedProblemVersion: problemVersion })}>关联正式问题</Button></Space> : null}
     {editable ? <Button danger loading={busy} aria-label="归档出货报告" onClick={() => void write('/archive', 'PUT', { expectedVersion: report.version })}>归档出货报告</Button> : null}
   </Space>;

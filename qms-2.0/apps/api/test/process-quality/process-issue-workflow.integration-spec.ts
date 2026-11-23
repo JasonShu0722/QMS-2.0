@@ -78,7 +78,7 @@ describe('process defect issue workflow on PostgreSQL', () => {
   afterAll(async () => { await prisma.$disconnect(); });
 
   async function defect(owner = actor) {
-    return ledger.create(owner, { defectTypeCode: 'OXIDATION', description: '端子氧化', defectQuantity: 3,
+    return ledger.create(owner, { defectTypeCode: 'OXIDATION', description: '端子氧化', defectQuantity: 3, factoryCode: 'FACTORY_1',
       occurredAt: new Date('2026-09-24T00:00:00Z'), productCode: 'ISSUE-PRODUCT', traceCode: randomUUID(), responsibilityCategory: 'MATERIAL' }, randomUUID(), randomUUID());
   }
 

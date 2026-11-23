@@ -893,6 +893,7 @@ model ProcessDefect {
   lineCode               String?   @map("line_code") @db.VarChar(100)
   operationName          String?   @map("operation_name") @db.VarChar(200)
   lineName               String?   @map("line_name") @db.VarChar(200)
+  factoryCode            String?   @map("factory_code") @db.VarChar(16)
   shift                  String?   @db.VarChar(8)
   registrationVersion    Int?      @map("registration_version")
   registrationIssues     String[]  @default([]) @map("registration_issues")

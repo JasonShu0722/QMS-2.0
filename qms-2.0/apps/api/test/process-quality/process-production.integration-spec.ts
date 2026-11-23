@@ -101,7 +101,7 @@ describe('process production facts on PostgreSQL', () => {
     const facts = input();
     const record = await production.create(actor, facts, randomUUID(), randomUUID());
     await defects.createDefectType(actor, { code: 'PROCESS-PP', name: '制程不良' }, randomUUID(), randomUUID());
-    const defect = await defects.create(actor, { defectTypeCode: 'PROCESS-PP', description: '装配毛刺', productCode: 'PP-PRODUCT', traceCode: randomUUID(), defectQuantity: 2, occurredAt: new Date('2026-09-24T08:00:00Z'), batchCode: facts.batchCode, workOrderCode: facts.workOrderCode, operationCode: facts.operationCode, responsibilityCategory: 'PROCESS' }, randomUUID(), randomUUID());
+    const defect = await defects.create(actor, { defectTypeCode: 'PROCESS-PP', description: '装配毛刺', factoryCode: 'FACTORY_1', productCode: 'PP-PRODUCT', traceCode: randomUUID(), defectQuantity: 2, occurredAt: new Date('2026-09-24T08:00:00Z'), batchCode: facts.batchCode, workOrderCode: facts.workOrderCode, operationCode: facts.operationCode, responsibilityCategory: 'PROCESS' }, randomUUID(), randomUUID());
     const detail = await production.detail(actor, record.id);
     expect(detail.defects.map((item: { id: string }) => item.id)).toContain(defect.id);
     expect(detail.defectQuantity).toBe(2);

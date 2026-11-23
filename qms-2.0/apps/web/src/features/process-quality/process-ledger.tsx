@@ -3,6 +3,8 @@ import { Alert, Tooltip } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, getSession, safeAccountError } from '../../api/client';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
+import { useLanguage } from '../../i18n/Language';
+import { factoryIssue } from './process-factory';
 
 export type Defect = components['schemas']['ProcessDefectDto'];
 export const categoryLabels: Record<NonNullable<Defect['responsibilityCategory']>, string> = {
@@ -90,13 +92,15 @@ const sourceFieldLabels: Record<string, string> = {
   occurredAt: '发生时间', productCode: '成品编码', workOrderCode: '工单号', lineCode: '生产线编码', lineName: '生产线名称',
   operationCode: '工序编码', operationName: '工序名称', traceCode: '追溯码', description: '不良描述', externalRecordKey: '来源明细编号', sourceObservedAt: '来源更新时间',
 };
-function visibleHintMessages(record: Defect, detail: boolean) {
+function visibleHintMessages(record: Defect, detail: boolean, english: boolean) {
   const hints = [...new Set([...(record.registrationIssues ?? []), ...(record.issues ?? []), ...(record.componentProject?.issues ?? [])])];
   if (record.duplicateCount) hints.push('SAME_OPERATION_TRACE_DUPLICATE');
   const byField = new Map<string, string>();
   let unknown = false;
   for (const hint of hints) {
     const [field, problem] = hint.split(':');
+    const factoryMessage = factoryIssue(hint, english);
+    if (factoryMessage) byField.set(field, factoryMessage);
     if (!Object.hasOwn(sourceFieldLabels, field) || byField.has(field)) continue;
     if (problem === 'TYPE') byField.set(field, `${sourceFieldLabels[field]}来源值类型无效，请核对。`);
     if (problem === 'INVALID') byField.set(field, `${sourceFieldLabels[field]}来源值格式或长度无效，请核对。`);
@@ -115,11 +119,11 @@ function visibleHintMessages(record: Defect, detail: boolean) {
   return byField.size ? [...byField.values()] : unknown ? ['来源字段待核对'] : [];
 }
 export function CompletionStatus({ record, detail = false }: { record: Defect; detail?: boolean }) {
-  const messages = visibleHintMessages(record, detail);
+  const messages = visibleHintMessages(record, detail, useLanguage().locale === 'en-US');
   return messages.length ? <div className="process-quality-completion">{messages.join(' ')}</div> : '—';
 }
 export function MappingHint({ record }: { record: Defect }) {
-  const messages = visibleHintMessages(record, false);
+  const messages = visibleHintMessages(record, false, useLanguage().locale === 'en-US');
   if (!messages.length) return null;
   return <Tooltip trigger={['hover', 'focus']} title={<ul>{messages.map(hint => <li key={hint}>{hint}</li>)}</ul>}>
     <button type="button" className="process-quality-warning" aria-label={`映射与来源提示 ${record.description}`}>!</button>

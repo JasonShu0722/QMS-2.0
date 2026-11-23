@@ -128,6 +128,8 @@ curl --request POST "https://<qms-host>/api/v1/integrations/inbound/test/message
 
 REQ-0038 / V0.0.55沿用本页接收与有序入库，新增目标`PROCESS_DEFECT`。字段、手工必填、数量1、缺项入账、关联快照及自动只补待补项遵循[第二阶段需求](../../docs/superpowers/specs/2026-11-16-qms-api-ingestion-phase-2-stage-2-requirements.md)。收件200/true只表示原始保存与入队，不表示制程或AI已经处理完成。
 
+制程入库规则在「工厂来源字段」填写 IMS 报文里的实际字段路径（支持点路径，不预设 IMS 字段名）。数字 `1` 或文本 `"1"` 对应一工厂，数字 `2` 或文本 `"2"` 对应二工厂。已配置字段但值缺失、为空或非法时，其他校验通过的记录仍入账；工厂存 `NULL`、台账显示 `/`，并标注工厂待完善。既有未配置规则和历史任务快照按原口径处理，不推断或回填历史工厂。正式启用前需用 IMS 实际报文核对路径和两厂来源明细编号是否会冲突；目前未完成该联调。实现与回退边界见[设计](../../docs/superpowers/specs/2026-11-22-qms-process-defect-factory-design.md)和[实施计划](../../docs/superpowers/plans/2026-11-23-qms-process-defect-factory.md)。
+
 AI为规则可选项，在独立“AI管理”的“模型渠道”维护具名渠道、允许模型列表及默认模型；支持OpenAI Chat Completions、OpenAI Responses、Anthropic Messages和Gemini GenerateContent四种协议，旧渠道默认Chat Completions。“提示词应用”按业务板块和场景维护变量、渠道/模型、提示词及文本或JSON字段输出，本批实际接入制程质量的不良描述整理。应用先保存草稿、再发布不可变版本；制程 API 入库规则选择应用版本，并在“不良描述来源=多字段组合”的行中把 API 来源字段绑定到应用变量，提示词只消费这些变量，不重复配置 IMS 来源路径。发布新版本不自动切换既有绑定。旧内嵌配置归入同组织中心，原配置快照及历史任务保持，后续业务继续受中心停用控制。只向模型发送选定字段；本阶段输出目标为现有“不良描述”，编码、数量、项目及人员继续由原领域规则管理。详细边界见[AI配置中心专项设计](../../docs/superpowers/specs/2026-11-17-qms-configuration-groups-design.md)和[AI补充方案](../../docs/superpowers/specs/2026-11-16-qms-process-defect-ai-description-supplement.md)。
 
 台账详情发起 AI 重试或重新生成时，系统从原提示词应用的最新已发布版本创建任务，按变量名复用已保存的值，新增变量无历史值时留空。任务等待或失败期间保留现有描述。人工修订过的描述由用户确认采用建议后更新。

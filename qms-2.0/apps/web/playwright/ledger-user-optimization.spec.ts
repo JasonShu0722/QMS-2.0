@@ -128,7 +128,7 @@ test('administrator reads dedicated permissions and deletes a disposable ledger 
   const ai = catalog.find(group => group.key === 'ai');
   expect(ai?.modules.flatMap(module => module.operations.map(operation => operation.code))).toEqual(expect.arrayContaining(['ai:connections:manage', 'ai:applications:publish']));
   const record = await positionWrite<Schema['ProcessDefectDto']>(page.request, '/api/v1/process-quality/defects', 'POST', {
-    occurredAt: '2026-11-17T08:30:00+08:00', productCode: `PRODUCT_${suffix}`, traceCode: `TRACE_${suffix}`, description: `待删验收${suffix}`,
+    occurredAt: '2026-11-17T08:30:00+08:00', productCode: `PRODUCT_${suffix}`, traceCode: `TRACE_${suffix}`, description: `待删验收${suffix}`, factoryCode: 'FACTORY_1',
   }, 201);
   const selection = { sources: [{ defectId: record.id, expectedVersion: record.version }] };
   const preview = await positionWrite<Schema['ProcessDefectDeletionPreviewDto']>(page.request, '/api/v1/process-quality/defects/deletion-preview', 'POST', selection, 201);
@@ -150,7 +150,7 @@ test('administrator reads dedicated permissions and deletes a disposable ledger 
 test('ledger shares selection for deletion and restores the approved registration columns', async ({ page }) => {
   await login(page);
   const record = await positionWrite<Schema['ProcessDefectDto']>(page.request, '/api/v1/process-quality/defects', 'POST', {
-    occurredAt: '2026-11-17T20:30:00+08:00', productCode: `UI_PRODUCT_${suffix}`, traceCode: `UI_TRACE_${suffix}`, description: `界面删除${suffix}`,
+    occurredAt: '2026-11-17T20:30:00+08:00', productCode: `UI_PRODUCT_${suffix}`, traceCode: `UI_TRACE_${suffix}`, description: `界面删除${suffix}`, factoryCode: 'FACTORY_2',
   }, 201);
   await page.goto('/app/process-quality');
   await expect(page.getByRole('button', { name: '登记不良', exact: true })).toBeVisible();

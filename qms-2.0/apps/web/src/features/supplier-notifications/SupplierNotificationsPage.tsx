@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Empty, List, Pagination, Space, Spin, Tabs, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Pagination, Space, Spin, Tabs, Tag, Typography } from 'antd';
+import { RecordList } from '../../ui/list/RecordList';
 import { Link } from 'react-router-dom';
 import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -77,8 +78,7 @@ function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> })
         showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(page, size) => { if (!writing.current) requestLeave(() => { setOffset(size === pageSize ? (page - 1) * size : 0); setPageSize(size); }); }} showTotal={() => `${t('总数')}：${data.total}`} />}
     </ListToolbar>
     {loading ? <Spin aria-label={t('正在加载通知')} /> : data &&
-      <List dataSource={data.items} locale={{ emptyText: <Empty description={t('暂无通知')} /> }} renderItem={(notice) =>
-        <List.Item key={notice.id}>
+      <RecordList items={data.items} itemKey={notice => notice.id} empty={<Empty description={t('暂无通知')} />} renderItem={(notice) =>
           <Card className="supplier-notifications__card qms-display-card" title={notice.subject ?? t(notice.kind === 'TASK_REMINDER' ? '时限提醒' : '任务分配')}
             extra={<Tag>{t(notice.readAt ? '已读' : '未读')}</Tag>}>
             <Typography.Paragraph className="supplier-notifications__body">{notice.body}</Typography.Paragraph>
@@ -89,7 +89,7 @@ function LegacyNotifications({ writing }: { writing: React.RefObject<boolean> })
                 onClick={() => void markRead(notice.id, notice.version)}>{t('标为已读')}</Button>}
             </Space>
           </Card>
-        </List.Item>} />
+        } />
     }
   </section>;
 }

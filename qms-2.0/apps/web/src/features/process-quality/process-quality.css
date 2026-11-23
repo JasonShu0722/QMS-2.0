@@ -35,8 +35,12 @@
 .process-quality-completion > span { color: var(--qms-muted); }
 .process-quality-page--selected { padding-block-end: calc(100px + env(safe-area-inset-bottom, 0px)); }
 .process-quality-selection-bar { position: fixed; z-index: 30; inset-inline-start: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 32px); padding: 8px 12px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); color: var(--qms-text); box-shadow: 0 3px 12px rgb(0 0 0 / 12%); }
+.process-quality-compact-ledger:has(.qms-ledger[data-ledger-horizontal-overflow]) .process-quality-selection-bar { bottom: calc(16px + var(--qms-ledger-dock-height, 20px) + env(safe-area-inset-bottom, 0px)); }
 .process-quality-selection-bar > span { white-space: nowrap; }
-@media (pointer: coarse) { .process-quality-selection-bar button { min-height: 44px; min-width: 44px; } }
+@media (pointer: coarse) {
+  .process-quality-compact-ledger { --qms-ledger-dock-height: 44px; }
+  .process-quality-selection-bar button { min-height: 44px; min-width: 44px; }
+}
 .process-quality-ledger.ant-table-wrapper .ant-table-container > :is(.ant-table-content, .ant-table-body) > table > .ant-table-tbody > tr:not(.ant-table-expanded-row) > td { height: 48px; max-height: 48px; white-space: nowrap; overflow: hidden; }
 .process-quality-ledger.ant-table-wrapper .ant-table-container > :is(.ant-table-content, .ant-table-body) > table > .ant-table-tbody > tr:not(.ant-table-expanded-row) > td > * { max-height: 40px; overflow: hidden; }
 .process-quality-ledger .ant-table-selection-column, .process-quality-ledger .ant-table-selection-col { width: 40px !important; min-width: 40px !important; max-width: 40px !important; }

@@ -18,23 +18,32 @@ const rule: NotificationRule = { kind: 'TASK_ASSIGNED', enabled: true, subjectTe
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 beforeEach(() => { localStorage.clear(); // rc-component uses one shared test-id in test mode; keep dialog and Select IDs distinct.
   vi.stubEnv('NODE_ENV', 'development'); });
-afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
 function mountConfiguration(saveFailureStatus?: number) {
   const writes: RequestInit[] = [];
   const reads: string[] = [];
-  const server = { rule, categories: [] as PositionCategory[] };
+  const server = { rule, categories: [] as PositionCategory[], settingsReadFails: false };
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
     if (init.method && init.method !== 'GET') writes.push(init);
     else reads.push(path);
     if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf-test' });
     if (init.method === 'PATCH' && saveFailureStatus) return json({ code: saveFailureStatus === 409 ? 'CONCURRENCY_CONFLICT' : 'HTTP_500', traceId: 'configuration-save-failed' }, saveFailureStatus);
-    if (path.includes('/settings?')) return json(settings);
+    if (path.includes('/settings?')) return server.settingsReadFails ? json({ code: 'HTTP_500', traceId: 'settings-read-failed' }, 500) : json(settings);
     if (path.includes('/notification-rules?')) return json([server.rule]);
-    if (path.includes('/position-categories?')) return json(server.categories);
+    if (path.includes('/position-categories?') && (!init.method || init.method === 'GET')) return json(server.categories);
     if (path.includes('/operation-sectors?')) return json([]);
     if (path.includes('/ai-connections?')) return json([]);
     if (path.includes('/notification-rules/') && init.method === 'PATCH') return json({ ...server.rule, ...JSON.parse(String(init.body)), version: server.rule.version + 1 });
+    if (path.includes('/position-categories') && init.method === 'POST') {
+      const category = { id: 'category-created', status: 'ACTIVE', version: 1, ...JSON.parse(String(init.body)) };
+      server.categories.push(category);
+      return json(category, 201);
+    }
+    if (path.includes('/position-categories/') && init.method === 'PATCH') {
+      const record = server.categories.find((category) => path.includes(`/position-categories/${category.id}`));
+      if (record) return json({ ...record, ...JSON.parse(String(init.body)), version: record.version + 1 });
+    }
     throw new Error(`unexpected ${path}`);
   }));
   render(<MemoryRouter><UnsavedChangesProvider><Routes>
@@ -47,8 +56,7 @@ function mountConfiguration(saveFailureStatus?: number) {
 async function confirmationButton(name: string | RegExp) {
   const title = await screen.findByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' });
   const dialog = title.closest('[role="dialog"]') as HTMLElement;
-  const button = within(dialog).getByRole('button', { name });
-  await waitFor(() => expect(button).toBeVisible());
+  const button = await within(dialog).findByRole('button', { name }, { timeout: 5000 });
   return button;
 }
 
@@ -60,6 +68,7 @@ async function entryAction(kind: 'rule' | 'category') {
 }
 
 it.each(['rule', 'category'] as const)('configuration %s refresh handler discards editor state only after confirmation and rereads server versions', async (kind) => {
+  const errors = vi.spyOn(console, 'error');
   const user = userEvent.setup();
   const { writes, reads, server } = mountConfiguration();
   const refresh = screen.getByRole('button', { name: /^刷\s*新$/ });
@@ -109,13 +118,32 @@ it.each(['rule', 'category'] as const)('configuration %s refresh handler discard
   const reopened = await screen.findByRole('dialog', { name: title });
   expect(within(reopened).getByLabelText(label)).toHaveValue(kind === 'rule' ? '服务端新标题' : '服务端新类别');
   expect(writes).toEqual([]);
-  if (kind === 'rule') {
-    fireEvent.change(within(reopened).getByLabelText(label), { target: { value: '明确保存新标题' } });
-    await user.click(within(reopened).getByRole('button', { name: /^保\s*存$/ }));
-    await waitFor(() => expect(writes).toHaveLength(1));
-    expect(JSON.parse(String(writes[0].body))).toMatchObject({ subjectTemplate: '明确保存新标题', expectedVersion: 7 });
-    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  }
+  await waitFor(() => expect(reopened).toBeVisible());
+  fireEvent.change(within(reopened).getByLabelText(label), { target: { value: '明确保存新名称' } });
+  await user.click(within(reopened).getByRole('button', { name: /^保\s*存$/ }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(writes[0].method).toBe('PATCH');
+  expect(JSON.parse(String(writes[0].body))).toMatchObject(kind === 'rule'
+    ? { subjectTemplate: '明确保存新名称', expectedVersion: 7 }
+    : { name: '明确保存新名称', status: 'ACTIVE', sortOrder: 0, expectedVersion: 5 });
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(errors.mock.calls.flat().join('\n')).not.toMatch(/useForm.*not connected/);
+}, 30000);
+
+it('submits a new position category with its initial order', async () => {
+  const user = userEvent.setup();
+  const { writes } = mountConfiguration();
+  const create = await screen.findByRole('button', { name: /^新\s*建$/ });
+  await user.click(create);
+  const dialog = await screen.findByRole('dialog', { name: '岗位类别' });
+  await waitFor(() => expect(dialog).toBeVisible());
+  fireEvent.change(within(dialog).getByLabelText('代码'), { target: { value: 'QUALITY' } });
+  fireEvent.change(within(dialog).getByLabelText('名称'), { target: { value: '制程质量' } });
+  await user.click(within(dialog).getByRole('button', { name: /^保\s*存$/ }));
+  expect(await screen.findByRole('cell', { name: '制程质量' })).toBeVisible();
+  expect(writes).toHaveLength(1);
+  expect(writes[0].method).toBe('POST');
+  expect(JSON.parse(String(writes[0].body))).toEqual({ code: 'QUALITY', name: '制程质量', sortOrder: 0 });
 }, 30000);
 
 it('configuration category draft cancel retains changes until discard without saving settings or rules', async () => {
@@ -165,6 +193,22 @@ it.each(['refresh', 'navigate'] as const)('configuration settings draft requires
     await waitFor(() => expect(reads.filter(path => path.includes('/settings?'))).toHaveLength(initialReads + 1));
     await waitFor(() => expect(screen.getByLabelText('导出保留时间（分钟）')).toHaveValue('60'));
   } else expect(await screen.findByRole('heading', { name: '目标页面' })).toBeVisible();
+  expect(writes).toEqual([]);
+}, 30000);
+
+it('keeps the system settings draft recoverable when a confirmed refresh fails', async () => {
+  const { server, writes } = mountConfiguration();
+  const retention = await screen.findByLabelText('导出保留时间（分钟）');
+  await waitFor(() => expect(retention).toHaveValue('60'));
+  fireEvent.change(retention, { target: { value: '120' } });
+  server.settingsReadFails = true;
+  fireEvent.click(screen.getByRole('button', { name: /^刷\s*新$/ }));
+  fireEvent.click(await confirmationButton(/^放弃修改(?:并关闭)?$/));
+  await screen.findByText('settings-read-failed');
+  expect(screen.getByLabelText('导出保留时间（分钟）')).toHaveValue('120');
+  const leave = new Event('beforeunload', { cancelable: true });
+  window.dispatchEvent(leave);
+  expect(leave.defaultPrevented).toBe(true);
   expect(writes).toEqual([]);
 }, 30000);
 

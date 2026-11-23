@@ -3,6 +3,7 @@ import { isISO8601 } from 'class-validator';
 import { randomUUID } from 'node:crypto';
 import { Prisma, type ProcessDefect } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
+import { ControlledValidationException } from '../../common/contracts/controlled-validation.exception.js';
 import { AdminMutationService, adminPermissions, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
 import { featurePredicate } from '../workflow/workflow-access-policy.js';
@@ -13,7 +14,7 @@ import type { DomainSourceRecord, DomainSourceReference } from '../problem-index
 import { ComponentProjectService } from '../platform-configuration/component-project.service.js';
 import { SupplierQualityService } from '../supplier-quality/supplier-quality.service.js';
 import type { SupplierCopyProjection, SupplierCopySource } from '../../common/eight-d/supplier-copy.types.js';
-import { processDefectRequiredIssues, processDefectShift } from './process-defect-registration.policy.js';
+import { isProcessFactoryCode, PROCESS_FACTORY_CODES, processDefectRequiredIssues, processDefectShift } from './process-defect-registration.policy.js';
 import { ProcessDefectCompletionService, processProjectSnapshot } from './process-defect-completion.service.js';
 import { processDeletionProblemReferences } from '../problem-index/process-deletion-references.read-model.js';
 import { processDeletionSelectionReferences } from '../new-product-quality/process-deletion-references.read-model.js';
@@ -37,6 +38,7 @@ export interface ProcessDefectSourceAdapter<ExternalRecord> {
 }
 
 export interface ProcessDefectInput {
+  factoryCode?: string | null;
   defectTypeCode?: string | null;
   description?: string;
   defectQuantity?: number | null;
@@ -131,7 +133,7 @@ export const PROCESS_FILTER_FIELDS = {
   description: 'text', defectTypeCode: 'text', batchCode: 'text', workOrderCode: 'text', operationCode: 'text', lineCode: 'text',
   projectCode: 'text', productCode: 'text', materialCode: 'text', traceCode: 'text', lineName: 'text', operationName: 'text',
   operationSector: 'text', productSubcategory: 'text', occurredAt: 'date', defectQuantity: 'number', shift: 'enum', projectStage: 'enum',
-  ledgerStatus: 'enum', responsibilityCategory: 'enum', pendingCompletion: 'boolean', pendingConfiguration: 'boolean',
+  ledgerStatus: 'enum', responsibilityCategory: 'enum', pendingCompletion: 'boolean', pendingConfiguration: 'boolean', factoryCode: 'enum',
 } as const;
 type ProcessFilterField = keyof typeof PROCESS_FILTER_FIELDS;
 type ProcessFilterType = (typeof PROCESS_FILTER_FIELDS)[ProcessFilterField];
@@ -147,11 +149,15 @@ export const PROCESS_FILTER_OPERATORS: Record<ProcessFilterType, readonly Proces
 };
 const PROCESS_FILTER_ENUMS: Partial<Record<ProcessFilterField, readonly string[]>> = {
   shift: ['DAY', 'NIGHT'], projectStage: ['NEW_PRODUCT', 'MASS_PRODUCTION'], ledgerStatus: ['FOLLOWING', 'CLOSED'],
-  responsibilityCategory: PROCESS_RESPONSIBILITY_CATEGORIES,
+  responsibilityCategory: PROCESS_RESPONSIBILITY_CATEGORIES, factoryCode: PROCESS_FACTORY_CODES,
 };
 
 function reject(code: string, status: number): never {
   throw new HttpException({ code, message: code }, status);
+}
+
+function rejectFactory(code: 'PROCESS_DEFECT_INPUT_INVALID' | 'PROCESS_DEFECT_DERIVED_FIELD_READ_ONLY'): never {
+  throw new ControlledValidationException(code, [{ path: 'factoryCode', message: '' }]);
 }
 
 function required(value: string, maximum: number): string {
@@ -270,6 +276,8 @@ function processFilterPredicate({ field, operator, value }: ProcessFilter): Pris
 
 export function normalizeProcessDefectFacts(input: ProcessDefectInput, mode: 'MANUAL' | 'UPDATE' | 'IMS' = 'UPDATE') {
   if (!input || typeof input !== 'object' || Array.isArray(input)) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+  const factoryCode = isProcessFactoryCode(input.factoryCode) ? input.factoryCode : null;
+  if (factoryCode === null && (mode === 'MANUAL' || (mode === 'UPDATE' && input.factoryCode != null))) rejectFactory('PROCESS_DEFECT_INPUT_INVALID');
   if (input.defectQuantity != null && (!Number.isSafeInteger(input.defectQuantity) || input.defectQuantity < 1 || input.defectQuantity > 2147483647)) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
   if (input.occurredAt != null && (!(input.occurredAt instanceof Date) || Number.isNaN(input.occurredAt.getTime()))) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
   if (input.responsibilityCategory != null && !PROCESS_RESPONSIBILITY_CATEGORIES.includes(input.responsibilityCategory)) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
@@ -278,6 +286,7 @@ export function normalizeProcessDefectFacts(input: ProcessDefectInput, mode: 'MA
   if ((mode === 'MANUAL' || mode !== 'IMS' && externalSourceSystem !== 'IMS') && [externalSourceSystem, externalRecordKey, sourceObservedAt].some(value => value != null) &&
     (!['MES', 'IMS'].includes(externalSourceSystem ?? '') || typeof externalRecordKey !== 'string' || !externalRecordKey.trim() || !(sourceObservedAt instanceof Date) || Number.isNaN(sourceObservedAt.getTime()))) reject('PROCESS_DEFECT_EXTERNAL_IDENTITY_INVALID', 400);
   const facts = {
+    factoryCode,
     defectTypeCode: optional(input.defectTypeCode, 64)?.toUpperCase() ?? null, description: input.description?.trim() ?? '',
     defectQuantity: mode === 'IMS' ? 1 : input.defectQuantity === undefined && mode === 'MANUAL' ? 1 : input.defectQuantity ?? null, occurredAt: input.occurredAt ?? null,
     batchCode: optional(input.batchCode, 100), workOrderCode: optional(input.workOrderCode, 100), operationCode: optional(input.operationCode, 100), lineCode: optional(input.lineCode, 100),
@@ -387,7 +396,7 @@ export class ProcessDefectLedgerService {
       if (facts.externalSourceSystem && facts.externalRecordKey) {
         await tx.processDefectIngestionAudit.create({ data: { organizationId, defectId: record.id, externalSourceSystem: facts.externalSourceSystem, externalRecordKey: facts.externalRecordKey, status: 'PENDING_VERIFICATION', observedAt: facts.sourceObservedAt, recordedById: actor.id } });
       }
-      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_CREATED', resourceType: 'ProcessDefect', resourceId: record.id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version } }, tx);
+      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_CREATED', resourceType: 'ProcessDefect', resourceId: record.id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version, changedFields: 'factoryCode' } }, tx);
       return this.view(tx, await this.find(tx, organizationId, record.id));
     });
   }
@@ -407,6 +416,8 @@ export class ProcessDefectLedgerService {
       await this.lock(tx, organizationId, id);
       const existing = await this.find(tx, organizationId, id);
       if (existing.archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
+      if (existing.sourceKind === 'IMS' && input.factoryCode !== undefined) rejectFactory('PROCESS_DEFECT_DERIVED_FIELD_READ_ONLY');
+      if (input.factoryCode === null || (existing.sourceKind === 'MANUAL' && !isProcessFactoryCode(input.factoryCode ?? existing.factoryCode))) rejectFactory('PROCESS_DEFECT_INPUT_INVALID');
       if (existing.registrationVersion === 1 && input.defectQuantity === null) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
       if (supplementIdentity !== undefined) {
         if (existing.sourceKind !== 'IMS' || existing.externalRecordKey) reject('PROCESS_DEFECT_EXTERNAL_IDENTITY_IMMUTABLE', 409);
@@ -424,10 +435,10 @@ export class ProcessDefectLedgerService {
       const changed = await tx.processDefect.updateMany({ where: { id, organizationId, version: input.expectedVersion, archivedAt: null }, data: { ...facts, ...derived, manualFields, ...(changes.description !== undefined ? { descriptionSource: 'MANUAL' } : {}), updatedById: actor.id, version: { increment: 1 } } });
       if (changed.count !== 1) reject('CONCURRENCY_CONFLICT', 409);
       const record = await this.find(tx, organizationId, id);
-      if (existing.registrationVersion === 1) await ProcessDefectCompletionService.history(tx, record, existing, actor.id, 'MANUAL_UPDATED');
+      if (existing.registrationVersion === 1 || record.factoryCode !== existing.factoryCode) await ProcessDefectCompletionService.history(tx, record, existing, actor.id, 'MANUAL_UPDATED');
       if (materials !== undefined) await this.saveMaterials(tx, actor, record, materials, previousMaterials);
       await this.classificationHistory(tx, actor, existing, record);
-      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_UPDATED', resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version, previousResponsibilityCategory: existing.responsibilityCategory, responsibilityCategory: record.responsibilityCategory } }, tx);
+      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_UPDATED', resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version, previousResponsibilityCategory: existing.responsibilityCategory, responsibilityCategory: record.responsibilityCategory, changedFields: existing.factoryCode === record.factoryCode ? undefined : 'factoryCode' } }, tx);
       return this.view(tx, await this.find(tx, organizationId, id));
     }, async (tx) => { await this.find(tx, organizationId, id); });
   }
@@ -774,7 +785,7 @@ export class ProcessDefectLedgerService {
   }
 
   private validateInputFields(input: Partial<ProcessDefectInput>) {
-    const allowed = ['organizationId', 'expectedVersion', 'defectTypeCode', 'description', 'defectQuantity', 'occurredAt', 'batchCode', 'workOrderCode', 'operationCode', 'lineCode', 'lineName', 'operationName', 'projectCode', 'productCode', 'materialCode', 'supplierOrganizationId', 'responsibilityCategory', 'traceCode', 'analysisProgress', 'materials', 'externalSourceSystem', 'externalRecordKey', 'sourceObservedAt'];
+    const allowed = ['organizationId', 'expectedVersion', 'factoryCode', 'defectTypeCode', 'description', 'defectQuantity', 'occurredAt', 'batchCode', 'workOrderCode', 'operationCode', 'lineCode', 'lineName', 'operationName', 'projectCode', 'productCode', 'materialCode', 'supplierOrganizationId', 'responsibilityCategory', 'traceCode', 'analysisProgress', 'materials', 'externalSourceSystem', 'externalRecordKey', 'sourceObservedAt'];
     if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(field => !allowed.includes(field))) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
     if (input.projectCode !== undefined) reject('PROCESS_DEFECT_DERIVED_FIELD_READ_ONLY', 400);
   }

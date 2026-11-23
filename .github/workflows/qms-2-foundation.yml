@@ -146,8 +146,8 @@ jobs:
       mailpit:
         image: axllent/mailpit:v1.27.8
         ports:
-          - 51026:1025
-          - 51027:8025
+          - 1025
+          - 8025
     defaults:
       run:
         working-directory: qms-2.0
@@ -167,6 +167,9 @@ jobs:
       - name: Build Web and API
         run: pnpm --recursive build
       - name: Create ephemeral integration services
+        env:
+          SMTP_PORT: ${{ job.services.mailpit.ports[1025] }}
+          QMS_ACCEPTANCE_MAILPIT_URL: http://127.0.0.1:${{ job.services.mailpit.ports[8025] }}
         run: |
           POSTGRES_PASSWORD=$(openssl rand -hex 24)
           export POSTGRES_PASSWORD
@@ -230,10 +233,10 @@ jobs:
           echo "QMS_SECURITY_CURRENT_KEY_ID=ci" >> "$GITHUB_ENV"
           echo "QMS_SECURITY_KEYRING=$KEYRING" >> "$GITHUB_ENV"
           echo "SMTP_HOST=127.0.0.1" >> "$GITHUB_ENV"
-          echo "SMTP_PORT=51026" >> "$GITHUB_ENV"
+          printf 'SMTP_PORT=%s\n' "$SMTP_PORT" >> "$GITHUB_ENV"
           echo "SMTP_SECURE=false" >> "$GITHUB_ENV"
           echo "SMTP_FROM=qms@example.test" >> "$GITHUB_ENV"
-          echo "QMS_ACCEPTANCE_MAILPIT_URL=http://127.0.0.1:51027" >> "$GITHUB_ENV"
+          printf 'QMS_ACCEPTANCE_MAILPIT_URL=%s\n' "$QMS_ACCEPTANCE_MAILPIT_URL" >> "$GITHUB_ENV"
       - name: Prepare real object storage and scan fixture
         run: |
           command -v zip

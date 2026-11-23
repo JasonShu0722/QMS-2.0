@@ -15,7 +15,7 @@ it.each(['close', 'switch', 'refresh'] as const)('preserves an audit-standard dr
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><AuditStandardsPage /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   const catalog = screen.getByRole('region', { name: '审核标准目录' });
   const title = await within(catalog).findByText('标准一');
-  fireEvent.click(within(title.closest('.ant-list-item')!).getByRole('button', { name: '查看版本' }));
+  fireEvent.click(within(title.closest('li')!).getByRole('button', { name: '查看版本' }));
   fireEvent.click(await screen.findByRole('button', { name: '编辑草稿' }));
   fireEvent.change(screen.getByPlaceholderText('检查内容'), { target: { value: '未保存检查项' } });
   if (action === 'refresh') {
@@ -23,7 +23,7 @@ it.each(['close', 'switch', 'refresh'] as const)('preserves an audit-standard dr
     await within(catalog).findByText('标准一');
   } else {
     if (action === 'close') fireEvent.click(within(screen.getByRole('dialog', { name: '编辑标准草稿' })).getByRole('button', { name: /close|关闭/i }));
-    else fireEvent.click(within(within(catalog).getByText('标准二').closest('.ant-list-item')!).getByRole('button', { name: '查看版本' }));
+    else fireEvent.click(within(within(catalog).getByText('标准二').closest('li')!).getByRole('button', { name: '查看版本' }));
     await waitFor(() => expect(screen.getByText('当前草稿尚未保存，继续将放弃修改。')).toBeVisible());
     fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
   }

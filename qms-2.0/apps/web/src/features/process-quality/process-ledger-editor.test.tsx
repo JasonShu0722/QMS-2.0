@@ -14,7 +14,7 @@ vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource 
 vi.mock('./ProcessTraceScanner', () => ({ ProcessTraceScanner: ({ onScan, onClose }: { onScan: (value: string) => void; onClose: () => void }) => <div role="dialog" aria-label="测试本地扫码"><button onClick={() => { onScan('SCANNED-0001'); onClose(); }}>回填测试码</button><button onClick={onClose}>取消扫码</button></div> }));
 const record: components['schemas']['ProcessDefectDto'] = {
   id: 'defect', organizationId: 'org', description: '原始线索', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE', analysisProgress: null, ledgerStatus: 'FOLLOWING', closedAt: null, closedById: null,
-  sourceKind: 'MANUAL', version: 2, materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0, issues: [], evidence: [], projectCode: 'MANUAL',
+  sourceKind: 'MANUAL', factoryCode: 'FACTORY_1', version: 2, materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0, issues: [], evidence: [], projectCode: 'MANUAL',
   lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人',
   materials: [{ id: 'material', organizationId: 'org', defectId: 'defect', position: 0, materialCode: 'MAT-1', materialName: '物料一', supplierProfileId: 'profile-a', supplierOrganizationId: 'supplier-a', materialBatch: 'BATCH-1', sqeUserId: 'sqe', notes: '原物料线索', verification: 'NOT_MATERIAL', verificationNotes: '历史结论', verifiedById: 'sqe', verifiedAt: null, verificationHistory: [] }],
 };
@@ -29,13 +29,18 @@ function editor(initial: typeof record | 'new' = record) {
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectEditor record={initial === 'new' ? undefined : initial} suppliers={suppliers} canReadSuppliers onSaved={onSaved} onClose={vi.fn()} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   return onSaved;
 }
-function fillRequiredFacts() {
+async function chooseFactory(label: string) {
+  fireEvent.mouseDown(screen.getByRole('combobox', { name: '工厂' }));
+  fireEvent.click(await screen.findByText(label, { selector: '.ant-select-item-option-content' }));
+}
+async function fillRequiredFacts(factory = true) {
   fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '测试不良' } });
   fireEvent.change(screen.getByLabelText('发生时间'), { target: { value: '2026-11-16T09:30' } });
   fireEvent.change(screen.getByLabelText('成品编码'), { target: { value: '000123' } });
   fireEvent.change(screen.getByLabelText('追溯码'), { target: { value: 'TRACE-1' } });
+  if (factory) await chooseFactory('一工厂');
 }
-it('requires four registration facts and defaults quantity to one without creating from an incomplete form', async () => {
+it('requires a factory even after entering the other registration facts and submits the selected factory code', async () => {
   const saved = editor('new');
   expect(screen.getByLabelText('不良数量')).toHaveValue('1');
   const header = screen.getByRole('dialog', { name: '登记不良' }).querySelector('.ant-drawer-header')!;
@@ -44,14 +49,29 @@ it('requires four registration facts and defaults quantity to one without creati
   await screen.findByText('请填写不良描述');
   expect(saved).not.toHaveBeenCalled();
   expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
-  fillRequiredFacts();
+  await fillRequiredFacts(false);
+  fireEvent.click(submit);
+  await screen.findByText('请选择工厂');
+  expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  await chooseFactory('二工厂');
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(saved).toHaveBeenCalled());
   expect(screen.queryByText(/已保存 · 版本/)).not.toBeInTheDocument();
   expect(screen.getByText('附件资源 process-defect:defect').closest('.ant-drawer-body')).not.toBeNull();
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'POST');
-  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '测试不良', productCode: '000123', traceCode: 'TRACE-1', defectQuantity: 1 });
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '测试不良', productCode: '000123', traceCode: 'TRACE-1', defectQuantity: 1, factoryCode: 'FACTORY_2' });
   expect(JSON.parse(String(call?.[1]?.body))).not.toHaveProperty('projectCode');
+});
+it('requires resolving an empty factory on a historical manual record', async () => {
+  const saved = editor({ ...record, factoryCode: null });
+  fireEvent.click(screen.getByText('保存登记'));
+  await screen.findByText('请选择工厂');
+  expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
+  await chooseFactory('一工厂');
+  fireEvent.click(screen.getByText('保存登记'));
+  await waitFor(() => expect(saved).toHaveBeenCalled());
+  const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
+  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ factoryCode: 'FACTORY_1', expectedVersion: 2 });
 });
 it('allows a missing IMS source identity to be supplemented and preserves its draft on a conflict', async () => {
   vi.mocked(apiRequest).mockImplementation(async (path, init) => {
@@ -76,15 +96,17 @@ it('keeps an existing source identity read-only and never resubmits it as a corr
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
   expect(JSON.parse(String(call?.[1]?.body))).not.toHaveProperty('externalRecordKey');
 });
-it('sends only changed IMS facts so a partial completion does not protect untouched source fields', async () => {
-  const saved = editor({ ...record, sourceKind: 'IMS', productCode: '000012' });
+it.each([['FACTORY_2', '二工厂'], [null, '/']] as const)('shows IMS factory %s as read-only and sends only changed facts', async (factoryCode, label) => {
+  const saved = editor({ ...record, sourceKind: 'IMS', productCode: '000012', factoryCode });
+  expect(screen.queryByRole('combobox', { name: '工厂' })).not.toBeInTheDocument();
+  expect(screen.getByText('工厂', { selector: '.ant-descriptions-item-label' }).nextElementSibling).toHaveTextContent(label);
   fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '人工补充' } });
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(saved).toHaveBeenCalled());
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
   const body = JSON.parse(String(call?.[1]?.body));
   expect(body).toMatchObject({ description: '人工补充', expectedVersion: 2 });
-  for (const field of ['productCode', 'traceCode', 'occurredAt', 'workOrderCode', 'operationName', 'lineName']) expect(body).not.toHaveProperty(field);
+  for (const field of ['factoryCode', 'productCode', 'traceCode', 'occurredAt', 'workOrderCode', 'operationName', 'lineName']) expect(body).not.toHaveProperty(field);
 });
 it('preserves an IMS material edit when saving only changed facts', async () => {
   const saved = editor({ ...record, sourceKind: 'IMS' });
@@ -97,7 +119,7 @@ it('preserves an IMS material edit when saving only changed facts', async () => 
 });
 it('fills the scanned trace code without saving and keeps other registration drafts after cancellation', async () => {
   const saved = editor('new');
-  fillRequiredFacts();
+  await fillRequiredFacts(false);
   fireEvent.click(screen.getByRole('button', { name: '手机扫码' }));
   fireEvent.click(screen.getByRole('button', { name: '回填测试码' }));
   expect(screen.getByLabelText('追溯码')).toHaveValue('SCANNED-0001');
@@ -110,15 +132,15 @@ it('fills the scanned trace code without saving and keeps other registration dra
   expect(screen.getByLabelText('不良描述')).toHaveValue('测试不良');
   expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
-it('keeps a scanner-gun Enter suffix from submitting the registration', () => {
+it('keeps a scanner-gun Enter suffix from submitting the registration', async () => {
   editor('new');
-  fillRequiredFacts();
+  await fillRequiredFacts(false);
   expect(fireEvent.keyDown(screen.getByLabelText('追溯码'), { key: 'Enter', code: 'Enter' })).toBe(false);
   expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
 it('starts a new registration with one optional material row and preserves appended partial facts while collapsed', async () => {
   const saved = editor('new');
-  fillRequiredFacts();
+  await fillRequiredFacts();
   expect(screen.queryByRole('heading', { name: '附件与扫描' })).not.toBeInTheDocument();
   expect(screen.queryByText(/附件资源 process-defect:/)).not.toBeInTheDocument();
   fireEvent.click(screen.getByText('多物料、供应商与SQE'));
@@ -153,7 +175,7 @@ it('preserves the selected SQE label while paging and retires it after session A
 });
 it('prunes blank added material rows without requiring material facts for a new registration', async () => {
   const saved = editor('new');
-  fillRequiredFacts();
+  await fillRequiredFacts();
   fireEvent.click(screen.getByText('多物料、供应商与SQE'));
   fireEvent.click(screen.getByText('添加物料'));
   fireEvent.change(screen.getByLabelText('物料编码 1'), { target: { value: '   ' } });

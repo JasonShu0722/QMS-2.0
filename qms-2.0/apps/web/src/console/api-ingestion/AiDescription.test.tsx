@@ -18,7 +18,7 @@ vi.mock('../../api/client', async original => ({ ...await original<typeof import
 const org = '11111111-1111-4111-8111-111111111111';
 const endpointId = '33333333-3333-4333-8333-333333333333';
 const receiptId = '55555555-5555-4555-8555-555555555555';
-const rule: Rule = { id: '44444444-4444-4444-8444-444444444444', organizationId: org, name: '制程规则', endpointId, target: 'PROCESS_DEFECT', enabled: false, match: 'ALL', conditions: [], mapping: { traceCode: 'barcode' }, mode: 'INSERT_ONLY', updateFields: [], version: 2, creatorId: 'actor', updatedAt: '2026-11-16T00:00:00Z', sourceTimezone: 'Asia/Shanghai', descriptionComposition: { fields: [{ path: 'fault', label: '现象' }, { path: 'position', label: '位置' }], separator: '\n' } };
+const rule: Rule = { id: '44444444-4444-4444-8444-444444444444', organizationId: org, name: '制程规则', endpointId, target: 'PROCESS_DEFECT', enabled: false, match: 'ALL', conditions: [], mapping: { factoryCode: 'factory', traceCode: 'barcode' }, mode: 'INSERT_ONLY', updateFields: [], version: 2, creatorId: 'actor', updatedAt: '2026-11-16T00:00:00Z', sourceTimezone: 'Asia/Shanghai', descriptionComposition: { fields: [{ path: 'fault', label: '现象' }, { path: 'position', label: '位置' }], separator: '\n' } };
 const application = { id: 'app-1', organizationId: org, name: '制程描述应用', domain: 'PROCESS_QUALITY', scene: 'PROCESS_DEFECT_DESCRIPTION', enabled: true, variables: [{ variable: 'fault', label: '现象' }, { variable: 'position', label: '位置' }], connectionId: 'ai-1', model: 'quality-a', prompt: '整理{{ fault }}', output: { mode: 'JSON', field: 'aggregate', target: 'description' }, fallback: 'DIRECT', version: 3, publishedVersion: 2 };
 const binding = { applicationId: 'app-1', publishedVersion: 1, inputFields: [{ path: 'fault', label: '现象', variable: 'fault' }] };
 function scope(): IntegrationScope { return { organizationId: org, session: `INTERNAL:${org}:actor`, epoch: getLedgerSessionEpoch(), permissions: ['ingestion:read', 'ingestion:manage', 'ingestion:run', 'ai:applications:read'], deny: mocks.deny }; }
@@ -96,7 +96,7 @@ it.each(['规则现场标签', ''])('AI description preserves a saved single-fie
   const customBinding = { ...binding, inputFields: [{ path: 'fault', label: storedLabel, variable: 'fault' }] };
   const aiDescription = { connectionId: 'ai-1', model: 'quality-a', prompt: '整理{{fault}}', inputFields: customBinding.inputFields, output: { mode: 'JSON' as const, field: 'aggregate', target: 'description' as const } };
   mocks.mutate.mockResolvedValue({});
-  mount(<RuleEditor scope={scope()} rule={{ ...rule, mapping: { description: 'fallback' }, descriptionComposition: undefined, aiDescription, aiApplication: customBinding, aiApplicationLatestVersion: 2 }} endpoints={[{ id: endpointId, name: '制程接收', code: 'PROCESS', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={vi.fn()} />);
+  mount(<RuleEditor scope={scope()} rule={{ ...rule, mapping: { factoryCode: 'factory', description: 'fallback' }, descriptionComposition: undefined, aiDescription, aiApplication: customBinding, aiApplicationLatestVersion: 2 }} endpoints={[{ id: endpointId, name: '制程接收', code: 'PROCESS', status: 'ENABLED' }]} endpointsLoading={false} close={vi.fn()} saved={vi.fn()} />);
   const dialog = within(screen.getByRole('dialog'));
   const descriptionMode = dialog.getByLabelText('不良描述来源');
   fireEvent.mouseDown(descriptionMode);

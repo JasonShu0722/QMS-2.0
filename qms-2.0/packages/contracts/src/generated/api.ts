@@ -11443,7 +11443,7 @@ export interface components {
             /** @enum {string} */
             match: "ALL" | "ANY";
             conditions: components["schemas"]["IngestionConditionDto"][];
-            /** @description 目标专用字段的受限点路径；制程仅允许来源事实，不允许派生字段、数量或接收定位。 */
+            /** @description 目标专用字段的受限点路径；保存制程规则必填 factoryCode 来源路径，不允许派生字段、数量或接收定位。 */
             mapping: {
                 [key: string]: string;
             };
@@ -11485,7 +11485,7 @@ export interface components {
             /** @enum {string} */
             match: "ALL" | "ANY";
             conditions: components["schemas"]["IngestionConditionDto"][];
-            /** @description 目标专用字段的受限点路径；制程仅允许来源事实，不允许派生字段、数量或接收定位。 */
+            /** @description 目标专用字段的受限点路径；保存制程规则必填 factoryCode 来源路径，不允许派生字段、数量或接收定位。 */
             mapping: {
                 [key: string]: string;
             };
@@ -11512,7 +11512,7 @@ export interface components {
             /** @enum {string} */
             match: "ALL" | "ANY";
             conditions: components["schemas"]["IngestionConditionDto"][];
-            /** @description 目标专用字段的受限点路径；制程仅允许来源事实，不允许派生字段、数量或接收定位。 */
+            /** @description 目标专用字段的受限点路径；保存制程规则必填 factoryCode 来源路径，不允许派生字段、数量或接收定位。 */
             mapping: {
                 [key: string]: string;
             };
@@ -11560,8 +11560,9 @@ export interface components {
             errorCode?: string;
             /** @description 受控来源路径或target字段标识，不含业务值。 */
             errorField?: string;
+            /** @description 受控目标字段；制程工厂未映射时省略，映射为空或非法时为 null。 */
             fields?: {
-                [key: string]: string;
+                [key: string]: string | null;
             };
             differences?: components["schemas"]["IngestionDifferenceDto"][];
             /** Format: uuid */
@@ -11713,8 +11714,9 @@ export interface components {
             pendingConfiguration?: boolean;
             defectQuantity?: number | null;
             differences: components["schemas"]["IngestionDifferenceDto"][];
+            /** @description 受控目标字段；制程工厂未映射时省略，映射为空或非法时为 null。 */
             fields?: {
-                [key: string]: string;
+                [key: string]: string | null;
             };
             stale: boolean;
             registrationIssues?: string[];
@@ -14501,7 +14503,7 @@ export interface components {
         };
         ProcessDefectFilterDto: {
             /** @enum {string} */
-            field: "description" | "defectTypeCode" | "batchCode" | "workOrderCode" | "operationCode" | "lineCode" | "projectCode" | "productCode" | "materialCode" | "traceCode" | "lineName" | "operationName" | "operationSector" | "productSubcategory" | "occurredAt" | "defectQuantity" | "shift" | "projectStage" | "ledgerStatus" | "responsibilityCategory" | "pendingCompletion" | "pendingConfiguration";
+            field: "description" | "defectTypeCode" | "batchCode" | "workOrderCode" | "operationCode" | "lineCode" | "projectCode" | "productCode" | "materialCode" | "traceCode" | "lineName" | "operationName" | "operationSector" | "productSubcategory" | "occurredAt" | "defectQuantity" | "shift" | "projectStage" | "ledgerStatus" | "responsibilityCategory" | "pendingCompletion" | "pendingConfiguration" | "factoryCode";
             /** @enum {string} */
             operator: "CONTAINS" | "NOT_CONTAINS" | "EQ" | "NE" | "EMPTY" | "NOT_EMPTY" | "BEFORE" | "AFTER" | "GT" | "GTE" | "LT" | "LTE";
             value?: string | number | boolean;
@@ -14716,6 +14718,8 @@ export interface components {
             lineName: string | null;
             operationName: string | null;
             /** @enum {string|null} */
+            factoryCode: "FACTORY_1" | "FACTORY_2" | null;
+            /** @enum {string|null} */
             shift: "DAY" | "NIGHT" | null;
             operationSector: string | null;
             productCategory: string | null;
@@ -14923,6 +14927,8 @@ export interface components {
         CreateProcessDefectDto: {
             /** Format: uuid */
             organizationId?: string;
+            /** @enum {string} */
+            factoryCode: "FACTORY_1" | "FACTORY_2";
             defectTypeCode?: string | null;
             description: string;
             /** @default 1 */
@@ -15050,6 +15056,8 @@ export interface components {
             /** Format: uuid */
             organizationId?: string;
             expectedVersion: number;
+            /** @enum {string} */
+            factoryCode?: "FACTORY_1" | "FACTORY_2";
             defectTypeCode?: string | null;
             description?: string;
             defectQuantity?: number | null;

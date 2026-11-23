@@ -69,7 +69,7 @@ describe('N3 manual process ledger: real PostgreSQL and protected HTTP', () => {
     return request(app.getHttpServer())[method](`/api/v1/process-quality/${path}`).set('Cookie', people[who].cookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
   }
   function read(id: string) { return request(app.getHttpServer()).get(`/api/v1/process-quality/defects/${id}`).set('Cookie', people.leader.cookie); }
-  async function create(body: object = {}): Promise<ProcessDefectDto> { return (await send('leader', 'post', 'defects', { occurredAt: '2026-11-16T00:30:00Z', productCode: 'N3-PRODUCT', traceCode: randomUUID(), description: '现场不良事实', ...body }).expect(201)).body; }
+  async function create(body: object = {}): Promise<ProcessDefectDto> { return (await send('leader', 'post', 'defects', { occurredAt: '2026-11-16T00:30:00Z', factoryCode: 'FACTORY_1', productCode: 'N3-PRODUCT', traceCode: randomUUID(), description: '现场不良事实', ...body }).expect(201)).body; }
   const actor = () => ({ id: people.leader.id, organizationId, accountType: 'INTERNAL' as const, sessionId: people.leader.sessionId });
   function editable(material: ProcessDefectDto['materials'][number]): ProcessDefectMaterialInputDto {
     const { id, materialCode, materialName, supplierOrganizationId, supplierProfileId, materialBatch, sqeUserId, notes } = material;
@@ -162,7 +162,7 @@ describe('N3 manual process ledger: real PostgreSQL and protected HTTP', () => {
     expect(filtered.body.items.some((item: ProcessDefectDto) => item.id === record.id)).toBe(true);
     const reference = await ledger.sourceReference(actor(), record.id);
     expect(reference.sourceSnapshot.materials).toHaveLength(2);
-    const validFacts = { occurredAt: '2026-11-16T00:30:00Z', productCode: 'N3-PRODUCT', traceCode: randomUUID(), description: '材料校验' };
+    const validFacts = { occurredAt: '2026-11-16T00:30:00Z', factoryCode: 'FACTORY_1', productCode: 'N3-PRODUCT', traceCode: randomUUID(), description: '材料校验' };
     await send('leader', 'post', 'defects', { ...validFacts, materials: [{ supplierProfileId: foreignProfileId }] }).expect(404);
     await send('leader', 'post', 'defects', { ...validFacts, materials: [{ sqeUserId: people.leader.id }] }).expect(400);
   });
@@ -359,7 +359,7 @@ describe('N3 manual process ledger: real PostgreSQL and protected HTTP', () => {
       expect(record.materials[0]!.sqeUserId).toBe(candidates[0]!.user.id);
       await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: candidates[0]!.role.id, permissionId: marker.id } } });
       expect(await ledger.materialSqes(actor(), { page: 1, pageSize: 1, search })).toMatchObject({ items: [], total: 0 });
-      await send('leader', 'post', 'defects', { occurredAt: '2026-11-16T00:30:00Z', productCode: 'N3-PRODUCT', traceCode: randomUUID(), description: '撤销权限校验', materials: [{ materialCode: 'REVOKED-MARKER', sqeUserId: candidates[0]!.user.id }] }).expect(400);
+      await send('leader', 'post', 'defects', { occurredAt: '2026-11-16T00:30:00Z', factoryCode: 'FACTORY_1', productCode: 'N3-PRODUCT', traceCode: randomUUID(), description: '撤销权限校验', materials: [{ materialCode: 'REVOKED-MARKER', sqeUserId: candidates[0]!.user.id }] }).expect(400);
     } finally {
       await prisma.rolePermission.deleteMany({ where: { roleId: { in: candidates.map(item => item.role.id) }, permissionId: marker.id } });
     }

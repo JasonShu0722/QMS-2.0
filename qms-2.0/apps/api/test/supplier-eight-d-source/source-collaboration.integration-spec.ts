@@ -143,7 +143,7 @@ describe('source SQE collaboration public ports', () => {
     }
     const rows = [];
     for (let i = 0; i < 2; i++) {
-      const row = await f.process.create(f.manager.actor, { description: 'Two actor collaboration race', productCode: f.productCode, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z'),
+      const row = await f.process.create(f.manager.actor, { description: 'Two actor collaboration race', productCode: f.productCode, traceCode: randomUUID(), factoryCode: 'FACTORY_1', occurredAt: new Date('2026-11-16T00:30:00Z'),
         materials: [{ materialCode: 'RACE-MATERIAL', sqeUserId: f.owner.user.id }] }, randomUUID(), randomUUID());
       let sourceId = row.id;
       let problemId: string;
