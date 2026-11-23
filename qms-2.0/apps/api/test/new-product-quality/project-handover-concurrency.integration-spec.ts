@@ -66,7 +66,7 @@ describe('new-product project handover/link lock protocol on PostgreSQL', () => 
 
   async function select(project = f.project): Promise<Source> {
     const fact = await f.process.create(f.manager.actor,
-      { description: 'Concurrent source', productCode: project.product_code, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+      { description: 'Concurrent source', productCode: project.product_code, traceCode: randomUUID(), factoryCode: 'FACTORY_1', occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     const selection = await f.quality.selectProcessDefect(f.manager.actor, project.id,
       { defectId: fact.id, expectedVersion: fact.version }, randomUUID(), randomUUID());
     return { sourceId: selection.id, expectedVersion: selection.source_version, factId: fact.id };

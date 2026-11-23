@@ -153,7 +153,7 @@ describe('customer and new-product real internal 8D domain chains', () => {
           { expectedVersion: f.chainSource.expectedVersion, defectQuantity: 7 }, randomUUID(), randomUUID());
         await f.mappings.updateProject(f.professional.actor, f.org.id, f.projectRecord.id,
           { expectedVersion: f.projectRecord.version, stage: 'MASS_PRODUCTION' }, randomUUID(), randomUUID());
-        const afterMass = await f.process.create(f.manager.actor, { description: 'After mass-production', productCode: f.productCode, traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+        const afterMass = await f.process.create(f.manager.actor, { description: 'After mass-production', productCode: f.productCode, traceCode: randomUUID(), factoryCode: 'FACTORY_1', occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
         await expect(f.quality.selectProcessDefect(f.professional.actor, f.project.id,
           { defectId: afterMass.id, expectedVersion: afterMass.version }, randomUUID(), randomUUID()))
           .rejects.toMatchObject({ status: 409, response: { code: 'NEW_PRODUCT_DEFECT_STAGE_INELIGIBLE' } });
