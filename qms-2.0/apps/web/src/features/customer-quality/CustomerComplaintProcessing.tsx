@@ -1,4 +1,4 @@
-import { Alert, Button, Input, Select, Space, Spin, Tag, Typography } from 'antd';
+import { Alert, Button, Input, Popconfirm, Select, Space, Spin, Tag, Typography } from 'antd';
 import { useEffect, useState } from 'react';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
@@ -126,7 +126,12 @@ export function CustomerComplaintProcessing({ complaint, canWrite, refresh }: { 
         {complaint.status === 'IN_ANALYSIS' ? <><Button disabled={!note.trim() || busy} onClick={() => void mutate('progress')}>记录进展</Button><Button type="primary" disabled={!note.trim() || busy} onClick={() => void mutate('resolve')}>标记解决</Button></> : null}
         {complaint.status === 'RESOLVED' ? <Button type="primary" disabled={!note.trim() || busy} onClick={() => void mutate('close')}>复核关闭</Button> : null}
         {['RESOLVED', 'CLOSED'].includes(complaint.status) ? <Button disabled={!note.trim() || busy} onClick={() => void mutate('reopen')}>重新打开</Button> : null}
-        {complaint.status === 'CLOSED' ? <Button disabled={busy} onClick={() => void mutate('archive')}>归档</Button> : null}
+        {complaint.status === 'CLOSED' ? <Popconfirm
+          title={`归档客诉 · ${complaint.complaint_number}`}
+          description={note.trim() ? '从当前台账移除，处理历史保留。未提交的处理说明不会保存。' : '从当前台账移除，处理历史保留。'}
+          okText="确认归档" cancelText="取消" onConfirm={() => mutate('archive')}>
+          <Button disabled={busy}>归档</Button>
+        </Popconfirm> : null}
       </div>
     </Space> : null}
     <Typography.Title level={5}>处理时间线</Typography.Title>

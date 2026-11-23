@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
+import { resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { components } from '@qms/contracts';
 import { completeMfa } from './mfa-login';
@@ -24,7 +26,7 @@ const username = `sticky159_${randomUUID().slice(0, 8)}`;
 const actorPassword = `Aa1!${randomUUID()}`;
 
 test.setTimeout(240_000);
-test.use({ trace: 'off', screenshot: 'off', video: 'off', actionTimeout: 8_000, navigationTimeout: 20_000 });
+test.use({ trace: 'off', screenshot: 'off', video: 'off', timezoneId: 'Asia/Shanghai', actionTimeout: 8_000, navigationTimeout: 20_000 });
 
 async function login(page: Page, identifier: string, password: string) {
   await page.goto('/login');
@@ -69,6 +71,125 @@ async function canClickWithoutScrolling(locator: Locator) {
     return element.contains(document.elementFromPoint(x, y));
   });
 }
+
+test('deletes a whole 1000-row page with a short confirmation and returns to a valid page', async ({ page: adminPage, browser }, testInfo) => {
+  const admin = await login(adminPage, 'local.internal', adminPassword!);
+  const label = `BULK163-${randomUUID().slice(0, 8)}`;
+  const grant = await createPositionGrant(adminPage.request, admin.organizationId, {
+    name: label, permissionCodes: ['workbench:read', 'process-quality:defects:read', 'process-quality:defects:delete'],
+  });
+  const actorName = `bulk163_${randomUUID().slice(0, 8)}`;
+  const password = `Aa1!${randomUUID()}`;
+  await createPositionUser(adminPage.request, admin.organizationId, [grant.position.id], { username: actorName, initialPassword: password });
+  const context = await browser.newContext({ baseURL: gateway, locale: 'zh-CN', timezoneId: 'Asia/Shanghai' });
+  const month = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit' }).format(new Date());
+  const occurrence = new Date(`${month}-01T12:34:56+08:00`).toISOString();
+  const requireApi = createRequire(resolve(process.cwd(), '../api/package.json'));
+  const { Client } = requireApi('pg') as typeof import('pg');
+  const client = new Client({ connectionString: database });
+  try {
+    const page = await context.newPage();
+    const user = await login(page, actorName, password);
+    await client.connect();
+    await client.query(`INSERT INTO process_defects
+      (id, organization_id, description, occurred_at, product_code, trace_code, factory_code, created_by_id, updated_by_id, updated_at)
+      SELECT gen_random_uuid(), $1, $2 || '-' || ordinal, $3::timestamptz,
+        $2, $2 || '-TRACE-' || ordinal, 'FACTORY_1', $4, $4, now()
+      FROM generate_series(1, 2000) AS ordinal`, [user.organizationId, label, occurrence, user.id]);
+
+    await page.setViewportSize({ width: 1440, height: 740 });
+    await page.goto(route);
+    const timings: Record<string, number> = {};
+    const recordTiming = (stage: string, started: number) => {
+      timings[stage] = Math.round(performance.now() - started);
+      console.log(`1000-row ledger ${stage}: ${timings[stage]} ms`);
+    };
+    const ledger = page.locator('.process-quality-compact-ledger');
+    const search = ledger.getByLabel('搜索制程不良');
+    const pager = ledger.locator('.ant-pagination');
+    const rows = ledger.locator('tbody tr[data-row-key]');
+    await expect(ledger.getByRole('checkbox', { name: '选择当前页制程不良', exact: true })).toBeEnabled();
+    await expect(rows.first().getByRole('button', { name: '删除台账', exact: true })).toBeEnabled();
+    await search.fill(label);
+    const searched = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === defects && url.searchParams.get('search') === label;
+    });
+    await ledger.getByRole('button', { name: 'search', exact: true }).click();
+    expect((await searched).status()).toBe(200);
+    await expect(pager.getByText('共 2000 条', { exact: true })).toBeVisible();
+    await pager.getByRole('combobox').click();
+    const firstPageStarted = performance.now();
+    const requestedPage = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === defects && url.searchParams.get('pageSize') === '1000';
+    }, { timeout: 15_000 });
+    await page.getByRole('option', { name: /^1000\s*(?:条\s*)?\// }).click();
+    expect((await requestedPage).status()).toBe(200);
+    await expect(rows).toHaveCount(1000, { timeout: 15_000 });
+    recordTiming('first page', firstPageStarted);
+    const firstPageRecord = await rows.first().getAttribute('data-row-key');
+    const date = new Date(occurrence).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' });
+    const dateCell = rows.first().getByRole('cell', { name: date, exact: true });
+    await expect(dateCell).toBeVisible();
+    await dateCell.hover();
+    await expect(dateCell).toHaveAttribute('title', `${date} 12:34:56`);
+    await expect(ledger.getByRole('slider', { name: '横向滚动台账' })).toBeInViewport();
+    for (const [name, ceiling] of [['发生时间', 120], ['板块', 90], ['不良数量', 96]] as const) {
+      const header = ledger.getByRole('columnheader', { name, exact: true });
+      expect((await header.boundingBox())?.width).toBeLessThan(ceiling);
+    }
+    const quantityHeader = ledger.getByRole('columnheader', { name: '不良数量', exact: true });
+    await expect(quantityHeader.getByRole('button').first()).toBeEnabled();
+
+    const secondPageStarted = performance.now();
+    const secondPage = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === defects && url.searchParams.get('pageSize') === '1000' && url.searchParams.get('page') === '2';
+    }, { timeout: 15_000 });
+    await pager.locator('.ant-pagination-next button').click({ timeout: 15_000 });
+    expect((await secondPage).status()).toBe(200);
+    await expect(rows.first()).not.toHaveAttribute('data-row-key', firstPageRecord!, { timeout: 15_000 });
+    await expect(rows).toHaveCount(1000, { timeout: 15_000 });
+    recordTiming('second page', secondPageStarted);
+    const selectionStarted = performance.now();
+    await ledger.getByRole('checkbox', { name: '选择当前页制程不良', exact: true }).check({ timeout: 15_000 });
+    recordTiming('selection', selectionStarted);
+    await ledger.getByRole('button', { name: '删除所选', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '删除制程不良台账' });
+    await expect(dialog).toContainText(/1000\s*条/);
+    await expect(dialog).not.toContainText(label);
+    await expect(dialog.getByRole('textbox')).toHaveCount(0);
+    const deletionStarted = performance.now();
+    const submitted = page.waitForResponse(response => new URL(response.url()).pathname === `${defects}/deletion` && response.request().method() === 'POST');
+    const reloaded = page.waitForResponse(response => {
+      const url = new URL(response.url());
+      return url.pathname === defects && url.searchParams.get('pageSize') === '1000' && url.searchParams.get('page') === '1';
+    }, { timeout: 30_000 });
+    await dialog.getByRole('button', { name: '确认删除', exact: true }).click();
+    expect((await submitted).status()).toBe(201);
+    recordTiming('delete response', deletionStarted);
+    await expect(dialog).not.toBeVisible();
+    expect((await reloaded).status()).toBe(200);
+    recordTiming('reloaded response', deletionStarted);
+    await expect(pager.getByText('共 1000 条', { exact: true })).toBeVisible();
+    await expect(rows).toHaveCount(1000, { timeout: 15_000 });
+    await expect(rows.first()).toHaveAttribute('data-row-key', firstPageRecord!);
+    recordTiming('reloaded rows', deletionStarted);
+    const archived = await client.query<{ count: number }>(`SELECT count(*)::int AS count FROM process_defects
+      WHERE organization_id = $1 AND product_code = $2 AND archived_at IS NOT NULL`, [user.organizationId, label]);
+    expect(archived.rows[0]?.count).toBe(1000);
+    const audit = await client.query<{ count: number }>(`SELECT count(*)::int AS count FROM audit_events
+      INNER JOIN process_defects ON audit_events.resource_id = process_defects.id::text
+      WHERE audit_events.actor_user_id = $1 AND process_defects.product_code = $2
+        AND audit_events.action = 'PROCESS_DEFECTS_DELETED'`, [user.id, label]);
+    expect(audit.rows[0]?.count).toBe(1000);
+    await testInfo.attach('1000-row interaction timings', { body: JSON.stringify(timings), contentType: 'application/json' });
+  } finally {
+    await client.end();
+    await context.close();
+  }
+});
 
 test('authenticated process defect ledger keeps controls and aligned columns on one page scroll', async ({ page, browser }, testInfo) => {
   const admin = await login(page, 'local.internal', adminPassword!);
@@ -211,6 +332,21 @@ test('authenticated process defect ledger keeps controls and aligned columns on 
               await expect.poll(() => ledger.locator('.ant-table-body').evaluate(body => body.scrollLeft)).toBe(0);
               await cancel.click();
               await expect(checkbox).not.toBeChecked();
+              if (width === 1440 && count === 100) {
+                await scrollbar.press('End');
+                const detailButton = row(count).getByRole('button', { name: '查看详情', exact: true });
+                await expect.poll(() => canClickWithoutScrolling(detailButton)).toBe(true);
+                await detailButton.focus();
+                await expect(detailButton).toBeFocused();
+                await expect(detailButton).toHaveCSS('outline-offset', '-2px');
+                await detailButton.press('Enter');
+                const drawer = ledgerPage.getByRole('dialog', { name: '不良品详情' });
+                await expect(drawer).toBeVisible();
+                await ledgerPage.keyboard.press('Escape');
+                await expect(drawer).not.toBeVisible();
+                await scrollbar.press('Home');
+                await expect.poll(() => ledger.locator('.ant-table-body').evaluate(body => body.scrollLeft)).toBe(0);
+              }
             }
           }
           await testInfo.attach(`layout-${width}-${count}`, { body: JSON.stringify(samples, null, 2), contentType: 'application/json' });

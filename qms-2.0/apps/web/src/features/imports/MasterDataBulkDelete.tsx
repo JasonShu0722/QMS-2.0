@@ -13,6 +13,7 @@ type RecordVersion = { id: string; version: number };
 type Selection = Record<string, RecordVersion>;
 type Options = {
   organizationId?: string; allowed: boolean; disabled: boolean; path: string; noun: string;
+  impact?: { zh: string; en: string };
   selection: Selection; setSelection: (selection: Selection) => void; label?: (id: string) => string;
   onDeleted: (ids: string[]) => void | Promise<void>; onDenied?: (cause: ApiError) => void;
 };
@@ -121,7 +122,7 @@ export function useMasterDataBulkDelete(options: Options) {
       closable={!busy} keyboard={!busy} mask={{ closable: !busy }} cancelButtonProps={{ disabled: busy, 'aria-label': text('取消', 'Cancel') }}
       okText={text(unknown ? '重试删除' : '删除', unknown ? 'Retry delete' : 'Delete')} cancelText={text('取消', 'Cancel')}
       okButtonProps={{ danger: true, loading: deleting, 'aria-label': text(unknown ? '重试删除' : '删除', unknown ? 'Retry delete' : 'Delete') }} onOk={() => void execute()}>
-      <p>{text(`确认删除选中的 ${command?.records.length ?? 0} 条${options.noun}？删除后不可恢复。`, `Delete ${command?.records.length ?? 0} selected ${noun}? This cannot be undone.`)}</p>
+      <p>{text(`确认删除选中的 ${command?.records.length ?? 0} 条${options.noun}？删除后不可恢复。`, `Delete ${command?.records.length ?? 0} selected ${noun}? This cannot be undone.`)}{options.impact && ` ${text(options.impact.zh, options.impact.en)}`}</p>
       {unknown && <Alert type="error" showIcon title={errorText} />}
     </Modal>
   </> : null;

@@ -92,6 +92,7 @@ it('uses the existing component selection for mapping deletion and never deletes
   expect(screen.getByRole('button', { name: '批量设置' })).toBeEnabled();
   fireEvent.click(screen.getByRole('button', { name: '删除所选' }));
   const dialog = within(await screen.findByRole('dialog', { name: '删除组件项目映射' }));
+  await waitFor(() => expect(dialog.getByText(/共享项目保留/)).toBeVisible());
   fireEvent.click(dialog.getByRole('button', { name: '删除' }));
   await screen.findByText('COMP-001 · 驱动总成：已删除');
   await waitFor(() => expect(screen.queryByText(mapping.componentCode)).not.toBeInTheDocument());

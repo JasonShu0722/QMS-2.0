@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
@@ -133,15 +133,42 @@ it('displays the mapped product category even without a linked project and shows
   }
 });
 
-it('starts the six compact columns narrower and preserves individually saved widths', () => {
-  const saved = JSON.stringify({ schema: 1, value: { widths: { project: 222, shift: 48 } } });
+it('starts the ledger columns narrower and preserves individually saved widths', () => {
+  const mounted = mount();
+  for (const [name, width] of [['发生时间', 104], ['板块', 76], ['不良数量', 80]] as const) {
+    expect(within(screen.getByRole('columnheader', { name })).getByRole('separator')).toHaveAttribute('aria-valuenow', String(width));
+  }
+  mounted.unmount();
+  const saved = JSON.stringify({ schema: 1, value: { widths: { project: 222, shift: 48, occurredAt: 158, operationSector: 136, defectQuantity: 140 } } });
   localStorage.setItem(columnsKey, saved);
   mount();
-  for (const [name, width] of [['发生时间', 132], ['班次', 64], ['项目号', 222], ['产品类型', 84], ['细分类型', 112], ['项目状态', 100]] as const) {
+  for (const [name, width] of [['发生时间', 158], ['板块', 136], ['不良数量', 140], ['班次', 64], ['项目号', 222], ['产品类型', 84], ['细分类型', 112], ['项目状态', 100]] as const) {
     const handle = within(screen.getByRole('columnheader', { name })).getByRole('separator');
     expect(handle).toHaveAttribute('aria-valuenow', String(width));
   }
   expect(localStorage.getItem(columnsKey)).toBe(saved);
+});
+
+it('shows the local date with the complete local timestamp on hover and keeps the sector readable', async () => {
+  const occurredAt = '2026-11-10T23:07:42.000Z';
+  const operationSector = '较长的制程板块名称示例';
+  items = [{ ...defect, occurredAt, operationSector }];
+  const { container } = mount();
+  const row = within((await screen.findByLabelText(`选择制程不良 ${defect.description}`)).closest('tr')!);
+  const date = new Date(occurredAt);
+  const dateOptions = { year: 'numeric', month: '2-digit', day: '2-digit' } as const;
+  expect(row.getByText(date.toLocaleDateString('zh-CN', dateOptions))).toHaveAttribute('title', date.toLocaleString('zh-CN', { ...dateOptions, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
+  expect(row.getByText(operationSector)).toHaveAttribute('title', operationSector);
+  expect(within(container.querySelector('thead')!).getByLabelText('按板块筛选')).toBeVisible();
+  expect(container.querySelector('.qms-ledger__horizontal-scroll')).toBeInTheDocument();
+});
+
+it('uses the compact quantity title without changing its filter controls', async () => {
+  mount();
+  const { trigger, queries } = await openPanel('按不良数量筛选');
+  expect(trigger.parentElement).toHaveClass('process-quality-filter-title--compact');
+  expect(queries.getByLabelText('筛选字段 1')).toHaveValue('defectQuantity');
+  expect(queries.getByLabelText('筛选值 1')).toHaveAttribute('type', 'number');
 });
 
 it('places the single controlled paginator before the defect table', async () => {
@@ -256,6 +283,45 @@ it('keeps the default month independent of an ANY condition', async () => {
   expect(JSON.parse(latestQuery().get('filters')!)).toEqual({ logic: 'ANY', items: [{ field: 'description', operator: 'CONTAINS', value: '划伤' }] });
   expect(latestQuery().get('occurredFrom')).toBe(monthFrom);
   expect(latestQuery().get('occurredTo')).toBe(monthTo);
+});
+
+it('preserves selected sources on a same-month refresh and resets them and the page at Beijing month rollover', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  try {
+    vi.setSystemTime(new Date('2026-01-31T15:59:59Z'));
+    const read = vi.mocked(apiRequest).getMockImplementation()!;
+    vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+      if (!path.includes('/defects?')) return read(path, init);
+      const query = new URL(path, 'http://localhost').searchParams;
+      return { items: [defect], total: 41, page: Number(query.get('page')), pageSize: 20 };
+    });
+    const { container } = mount();
+    await screen.findByLabelText(`选择制程不良 ${defect.description}`);
+    fireEvent.click(within(container.querySelector<HTMLElement>('.ant-pagination')!).getByTitle('2'));
+    const selection = screen.getByLabelText(`选择制程不良 ${defect.description}`);
+    await waitFor(() => expect(selection).toBeEnabled());
+    fireEvent.click(selection);
+    const refresh = screen.getByLabelText('刷新');
+    fireEvent.click(refresh);
+    await waitFor(() => expect(selection).toBeEnabled());
+    expect(selection).toBeChecked();
+    expect(latestQuery().get('page')).toBe('2');
+    expect(latestQuery().get('occurredFrom')).toBe('2025-12-31T16:00:00.000Z');
+
+    vi.setSystemTime(new Date('2026-01-31T16:00:00Z'));
+    const previousReads = listCalls().length;
+    fireEvent.click(refresh);
+    const refreshedSelection = await screen.findByLabelText(`选择制程不良 ${defect.description}`);
+    await waitFor(() => expect(refreshedSelection).toBeEnabled());
+    expect(refreshedSelection).not.toBeChecked();
+    expect(screen.queryByLabelText('台账批量操作')).not.toBeInTheDocument();
+    const rolledReads = listCalls().slice(previousReads).map(([path]) => new URL(path, 'http://localhost').searchParams);
+    expect(rolledReads.map(query => query.get('page'))).toEqual(['1']);
+    expect(rolledReads[0].get('occurredFrom')).toBe('2026-01-31T16:00:00.000Z');
+    expect(rolledReads[0].get('occurredTo')).toBe('2026-02-28T16:00:00.000Z');
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it('closes an untouched header filter without submitting or clearing the selected row', async () => {

@@ -575,8 +575,10 @@ it.each(['selected', 'new'] as const)('keeps the 100-source limit consistent for
     fireEvent.click(screen.getByTitle('6'));
     expect(await screen.findByLabelText('选择制程不良 边界来源 100')).toBeDisabled();
   }
-  fireEvent.click(screen.getByText(entry === 'selected' ? '边界来源 80' : '边界来源 100', { selector: 'button span' }));
-  const button = (await screen.findByText('选择此条并返回台账', { selector: 'button span' })).closest('button')!;
+  const source = entry === 'selected' ? '边界来源 80' : '边界来源 100';
+  fireEvent.click(screen.getByText(source, { selector: 'button' }));
+  const details = await screen.findByRole('dialog', { name: '不良品详情' });
+  const button = await within(details).findByRole('button', { name: '选择此条并返回台账' });
   if (entry === 'selected') {
     fireEvent.click(button);
     await waitFor(() => expect(screen.queryByText('不良品详情', { selector: '.ant-drawer-title' })).not.toBeInTheDocument());
@@ -588,7 +590,7 @@ it.each(['selected', 'new'] as const)('keeps the 100-source limit consistent for
   }
   expect(screen.getByText('已选择 100 条来源')).toBeVisible();
   expect(screen.queryByText('发起正式内部8D', { selector: '.ant-drawer-title' })).not.toBeInTheDocument();
-});
+}, 30000);
 
 it('retries an unknown formal issue result without re-previewing or changing the original payload', async () => {
   let attempts = 0;

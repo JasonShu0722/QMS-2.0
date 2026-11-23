@@ -1,6 +1,6 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Form, Input, Select, Space, Spin, Tag, Typography } from 'antd';
-import { useEffect, useRef, useState } from 'react';
+import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Form, Input, Modal, Select, Space, Spin, Tag, Typography } from 'antd';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
@@ -131,16 +131,26 @@ function ReportDetail({ report, canWrite, canReadCustomers, changed }: { report:
   const [problemId, setProblemId] = useState('');
   const [problemVersion, setProblemVersion] = useState<number>(1);
   const [savedFileIds, setSavedFileIds] = useState(report.evidence.map((item) => item.fileId));
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const [archiveSucceeded, setArchiveSucceeded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>();
   const pending = useRef<{ signature: string; key: string } | undefined>(undefined);
-  const editable = canWrite && report.status === 'DRAFT';
+  const archived = archiveSucceeded || report.status === 'ARCHIVED';
+  const editable = canWrite && report.status === 'DRAFT' && !archived;
+  const attachmentScope = useRef(useWorkTabsStore.getState().sessionScope);
+  const acceptsScans = useRef(false);
   const boundIds = report.evidence.map((item) => item.fileId);
   const previousBoundIds = useRef(boundIds);
   const requestLeave = useNavigationGuard();
   const evidenceDirty = fileIds.join('|') !== savedFileIds.join('|');
-  useUnsavedChanges(evidenceDirty || Boolean(customerId) || Boolean(problemId) || problemVersion !== 1);
+  const dirty = evidenceDirty || Boolean(customerId) || Boolean(problemId) || problemVersion !== 1;
+  useUnsavedChanges(dirty);
   useNavigationBusy(busy);
+  useLayoutEffect(() => {
+    acceptsScans.current = editable;
+    return () => { acceptsScans.current = false; };
+  }, [editable]);
   useEffect(() => {
     const next = report.evidence.map((item) => item.fileId);
     const previous = previousBoundIds.current;
@@ -154,21 +164,40 @@ function ReportDetail({ report, canWrite, canReadCustomers, changed }: { report:
     const signature = JSON.stringify({ path, method, body });
     if (pending.current?.signature !== signature) pending.current = { signature, key: crypto.randomUUID() };
     setBusy(true); setError(undefined);
-    try { await apiRequest(`${base}/${report.id}${path}`, { method, headers: { 'x-csrf-token': await csrfToken(), 'Idempotency-Key': pending.current.key }, body: JSON.stringify(body) }); pending.current = undefined; if (path === '/evidence') setSavedFileIds(fileIds); if (path === '/customer') setCustomerId(undefined); if (path === '/issues') { setProblemId(''); setProblemVersion(1); } changed(); }
+    try {
+      await apiRequest(`${base}/${report.id}${path}`, { method, headers: { 'x-csrf-token': await csrfToken(), 'Idempotency-Key': pending.current.key }, body: JSON.stringify(body) });
+      pending.current = undefined;
+      if (path === '/evidence') setSavedFileIds(fileIds);
+      if (path === '/customer') setCustomerId(undefined);
+      if (path === '/issues') { setProblemId(''); setProblemVersion(1); }
+      if (path === '/archive') {
+        acceptsScans.current = false;
+        setArchiveSucceeded(true);
+        setArchiveOpen(false);
+        setFileIds(savedFileIds);
+        setCustomerId(undefined);
+        setProblemId('');
+        setProblemVersion(1);
+      }
+      changed();
+    }
     catch (cause) { setError(cause); }
     finally { setBusy(false); }
   }
   return <Space orientation="vertical" size={6} className="process-quality-report-detail">
     <Descriptions bordered column={1} size="small" items={[
-      { key: 'status', label: '状态', children: report.status === 'ARCHIVED' ? '已归档' : '草稿' },
+      { key: 'status', label: '状态', children: archived ? '已归档' : '草稿' },
       { key: 'period', label: '统计期间', children: `${new Date(report.periodStart).toLocaleString('zh-CN')} 至 ${new Date(report.periodEnd).toLocaleString('zh-CN')}` },
       { key: 'product', label: '产品', children: report.productCode ?? '全部' },
       { key: 'counts', label: '批次 / 良品 / 不良', children: `${report.batchCount} / ${report.goodQuantity} / ${report.defectQuantity}` },
       { key: 'version', label: '报告版本', children: report.version },
     ]} />
-    {error ? <Alert type={denied(error) ? 'warning' : 'error'} showIcon title={error instanceof ApiError && error.status === 409 ? '版本已变化，请刷新后重试' : message(error, '操作失败，请重试')} action={<Button disabled={busy} onClick={() => requestLeave(() => { setFileIds(boundIds); setCustomerId(undefined); setProblemId(''); setProblemVersion(1); changed(); })}>刷新详情</Button>} /> : null}
+    {error && !archiveOpen ? <Alert type={denied(error) ? 'warning' : 'error'} showIcon title={error instanceof ApiError && error.status === 409 ? '版本已变化，请刷新后重试' : message(error, '操作失败，请重试')} action={<Button disabled={busy} onClick={() => requestLeave(() => { setFileIds(boundIds); setCustomerId(undefined); setProblemId(''); setProblemVersion(1); changed(); })}>刷新详情</Button>} /> : null}
     <Typography.Title level={4}>扫描文件版本</Typography.Title>
-    <AttachmentPanel resource={{ resourceType: 'process-shipment-report', resourceId: report.id }} fileIds={fileIds} readOnly={!editable || busy} onReady={(file) => setFileIds((current) => [...new Set([...current, file.id])])} onRemoved={(id) => setFileIds((current) => current.filter((fileId) => fileId !== id))} />
+    <AttachmentPanel resource={{ resourceType: 'process-shipment-report', resourceId: report.id }} fileIds={fileIds} readOnly={!editable || busy} onReady={(file) => {
+      if (!acceptsScans.current || attachmentScope.current !== useWorkTabsStore.getState().sessionScope) return false;
+      setFileIds((current) => [...new Set([...current, file.id])]);
+    }} onRemoved={(id) => setFileIds((current) => current.filter((fileId) => fileId !== id))} />
     {editable ? <Button disabled={!fileIds.length || fileIds.join('|') === boundIds.join('|')} loading={busy} onClick={() => void write('/evidence', 'PUT', { expectedVersion: report.version, fileIds })}>绑定扫描文件</Button> : null}
     <RecordList compact items={report.evidence} itemKey={item => item.fileId} empty={<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未绑定扫描文件" />} renderItem={item => <>文件 {item.fileId} · 第 {item.fileVersion} 版 · 扫描于 {new Date(item.scannedAt).toLocaleString('zh-CN')}</>} />
     <Typography.Title level={4}>客户关联</Typography.Title>
@@ -177,6 +206,12 @@ function ReportDetail({ report, canWrite, canReadCustomers, changed }: { report:
     <Typography.Title level={4}>正式问题</Typography.Title>
     <RecordList compact items={report.issues} itemKey={item => item.id} empty={<Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未关联正式问题" />} renderItem={item => <span><Link to={`/app/problem-workspace/${item.id}`}>{item.reportNumber}</Link> · {item.status} · 第 {item.version} 版</span>} />
     {editable ? <Space wrap><Input disabled={busy} aria-label="正式问题 ID" placeholder="正式问题 ID" value={problemId} onChange={(event) => setProblemId(event.target.value)} /><Input disabled={busy} aria-label="正式问题版本" type="number" min={1} className="process-quality-report-version" value={problemVersion} onChange={(event) => setProblemVersion(Number(event.target.value))} /><Button disabled={!problemId || problemVersion < 1} loading={busy} onClick={() => void write('/issues', 'POST', { problemId, expectedVersion: report.version, expectedProblemVersion: problemVersion })}>关联正式问题</Button></Space> : null}
-    {editable ? <Button danger loading={busy} aria-label="归档出货报告" onClick={() => void write('/archive', 'PUT', { expectedVersion: report.version })}>归档出货报告</Button> : null}
+    {editable ? <Button danger disabled={busy} aria-label="归档出货报告" onClick={() => { setError(undefined); setArchiveOpen(true); }}>归档出货报告</Button> : null}
+    <Modal open={archiveOpen && editable} title={`归档出货报告 · ${report.reportNumber}`}
+      onOk={() => { if (editable) void write('/archive', 'PUT', { expectedVersion: report.version }); }} onCancel={() => { if (!busy) setArchiveOpen(false); }}
+      okText="确认归档" cancelText="取消" confirmLoading={busy} okButtonProps={{ danger: true }} cancelButtonProps={{ disabled: busy }} closable={!busy} keyboard={!busy} mask={{ closable: false }}>
+      <p>{dirty ? '移出默认列表，报告及关联记录保留。未保存的更改不会归档。' : '移出默认列表，报告及关联记录保留。'}</p>
+      {error ? <Alert type={denied(error) ? 'warning' : 'error'} showIcon title={error instanceof ApiError && error.status === 409 ? '版本已变化，请取消后刷新详情' : message(error, '操作失败，请重试')} /> : null}
+    </Modal>
   </Space>;
 }

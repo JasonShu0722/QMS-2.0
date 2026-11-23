@@ -314,8 +314,9 @@ export function NewProductQualityPage({ projectId: initialProjectId }: { project
         <Input.TextArea aria-label="退出条件" value={earlyFlowExitCriteria} onChange={(event) => { setEarlyFlowExitCriteria(event.target.value); setEarlyFlowDirty(true); }} maxLength={10000} rows={3} disabled={earlyFlowBusy} />
       </Space>
     </Modal>
-    <Modal open={handoverOpen} title="量产移交确认" onCancel={closeHandover} closable={!writing} keyboard={!writing} mask={{ closable: !writing }} onOk={() => void handover()} okText="确认移交" okButtonProps={{ disabled: !riskStatement.trim(), loading: handoverBusy }} cancelButtonProps={{ disabled: handoverBusy }} footer={(_, { CancelBtn, OkBtn }) => <div className="qms-dialog-actions" role="group" aria-label="量产移交确认"><CancelBtn /><OkBtn /></div>}>
-      <Typography.Paragraph>系统将检查阶段评审、交付物、经验教训、试产指标和未关闭问题。移交成功后项目归档。</Typography.Paragraph>
+    <Modal open={handoverOpen} title={project ? `量产移交 · ${project.code} ${project.name}` : '量产移交'} onCancel={closeHandover} closable={!writing} keyboard={!writing} mask={{ closable: !writing }} onOk={() => void handover()} okText="确认移交" okButtonProps={{ disabled: !riskStatement.trim(), loading: handoverBusy }} cancelButtonProps={{ disabled: handoverBusy }} footer={(_, { CancelBtn, OkBtn }) => <div className="qms-dialog-actions" role="group" aria-label="量产移交确认"><CancelBtn /><OkBtn /></div>}>
+      <Typography.Paragraph>移交后项目归档，历史资料保留。</Typography.Paragraph>
+      <Typography.Paragraph>移交须通过阶段评审并完成交付物、经验教训及试产检查。未关闭问题须签署风险审批。</Typography.Paragraph>
       {handoverError ? <Alert type={permissionDenied(handoverError) ? 'warning' : 'error'} showIcon title={handoverError instanceof ApiError ? safeAccountError(handoverError) : '量产移交失败，请重试。'} description={handoverError instanceof ApiError && handoverError.status === 409 ? '请核对项目资料和风险签署，刷新后重试。' : undefined} /> : null}
       <Typography.Text>遗留风险说明</Typography.Text>
       <Input.TextArea aria-label="遗留风险说明" value={riskStatement} onChange={(event) => setRiskStatement(event.target.value)} maxLength={10000} rows={4} disabled={handoverBusy} />

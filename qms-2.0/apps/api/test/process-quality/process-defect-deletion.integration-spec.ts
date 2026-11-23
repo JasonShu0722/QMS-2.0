@@ -2,9 +2,12 @@ import 'reflect-metadata';
 import { randomUUID } from 'node:crypto';
 import { Test } from '@nestjs/testing';
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { jest } from '@jest/globals';
+import pg from 'pg';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
+import { Prisma } from '../../src/generated/prisma/client.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 import { ProcessDefectIngestionAdapter } from '../../src/modules/process-quality/process-defect-ingestion.adapter.js';
@@ -47,6 +50,24 @@ describe('process ledger soft deletion with actual protected HTTP and PostgreSQL
     return prisma.processDefect.create({ data: { organizationId, description: 'Deletion source fact', createdById: actorId, updatedById: actorId, ...extra } });
   }
   const selection = (record: { id: string; version: number }) => ({ defectId: record.id, expectedVersion: record.version });
+  const list = (query: Record<string, string | number>) => request(app.getHttpServer()).get('/api/v1/process-quality/defects').set('Cookie', cookie).query(query);
+
+  async function expectBoundedQueries<Result>(operation: () => Promise<Result>) {
+    const queries = jest.spyOn(pg.Client.prototype, 'query');
+    try {
+      const result = await operation();
+      const ledgerQueries = queries.mock.calls.filter(([query]) => {
+        const sql = typeof query === 'string' ? query : query.text;
+        return /\b(?:process_defects|process_defect_material_items|process_defect_material_verifications|process_defect_ledger_history|process_defect_classification_history|audit_events)\b/.test(sql)
+          || /\busers\b/.test(sql) && /\bfull_name\b/.test(sql);
+      });
+      expect(ledgerQueries.length).toBeGreaterThan(0);
+      expect(ledgerQueries.length).toBeLessThan(20);
+      return result;
+    } finally {
+      queries.mockRestore();
+    }
+  }
 
   it('previews and atomically deletes, preserves original identity and replays only while permission remains', async () => {
     const first = await create({ externalSourceSystem: 'IMS', externalRecordKey: randomUUID(), sourceKind: 'IMS', sourceReceiptId: randomUUID(), sourceRowIndex: 0 });
@@ -80,6 +101,23 @@ describe('process ledger soft deletion with actual protected HTTP and PostgreSQL
     expect(await prisma.processDefect.count({ where: { id: { in: [first.id, second.id] }, archivedAt: null } })).toBe(2);
   });
 
+  it('rolls back the entire batch and permits retry if PostgreSQL rejects an audit row', async () => {
+    const first = await create(), second = await create();
+    const sources = [selection(first), selection(second)], ids = [first.id, second.id], key = randomUUID();
+    const rejectedId = [...ids].sort()[1]!;
+    const constraint = Prisma.raw(`process_delete_test_${rejectedId.replaceAll('-', '')}`);
+    await prisma.$executeRaw`ALTER TABLE audit_events ADD CONSTRAINT ${constraint}
+      CHECK (action <> 'PROCESS_DEFECTS_DELETED' OR resource_id::text <> ${Prisma.raw(`'${rejectedId}'`)}) NOT VALID`;
+    try {
+      await post('deletion', { sources }, key).expect(500);
+      expect(await prisma.processDefect.count({ where: { id: { in: ids }, archivedAt: null, version: 1 } })).toBe(2);
+      expect(await prisma.auditEvent.count({ where: { resourceId: { in: ids }, action: 'PROCESS_DEFECTS_DELETED' } })).toBe(0);
+    } finally {
+      await prisma.$executeRaw`ALTER TABLE audit_events DROP CONSTRAINT ${constraint}`;
+    }
+    await post('deletion', { sources }, key).expect(201);
+  });
+
   it('blocks a newly linked formal issue and the legacy archive route', async () => {
     const record = await create(), sources = [selection(record)];
     await post('deletion-preview', { sources }).expect(201);
@@ -98,12 +136,25 @@ describe('process ledger soft deletion with actual protected HTTP and PostgreSQL
     expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: record.id } })).archivedAt).toBeNull();
   });
 
-  it('rejects blank reasons, duplicate selections and the 101st selected record', async () => {
+  it('rejects blank reasons, duplicate selections and the 1001st selected record', async () => {
     const record = await create(), source = selection(record);
     await post('deletion', { sources: [source], reason: '   ' }).expect(400);
     await post('deletion-preview', { sources: [source, source] }).expect(400);
     await post('deletion-preview', { sources: [source, { ...source, defectId: source.defectId.toUpperCase() }] }).expect(400);
-    await post('deletion-preview', { sources: Array.from({ length: 101 }, () => ({ defectId: randomUUID(), expectedVersion: 1 })) }).expect(400);
+    const sources = Array.from({ length: 1001 }, () => ({ defectId: randomUUID(), expectedVersion: 1 }));
+    await post('deletion-preview', { sources }).expect(400);
+    await post('deletion', { sources }).expect(400);
+    await list({ pageSize: 1001 }).expect(400);
+  });
+
+  it('archives through the legacy route without inventing a reason and retains a supplied reason', async () => {
+    for (const reason of [undefined, '旧客户端的原因']) {
+      const record = await create();
+      await request(app.getHttpServer()).put(`/api/v1/process-quality/defects/${record.id}/archive`).set('Cookie', cookie).set('x-csrf-token', csrf)
+        .set('Idempotency-Key', randomUUID()).send({ expectedVersion: 1, reason }).expect(200);
+      const event = await prisma.auditEvent.findFirstOrThrow({ where: { resourceId: record.id, action: 'PROCESS_DEFECTS_DELETED' } });
+      expect(event.metadata).toEqual({ rowCount: 1, previousResourceVersion: 1, resourceVersion: 2, ...(reason === undefined ? {} : { deletionReason: reason }) });
+    }
   });
 
   it.each([123, {}, []].flatMap(defectId => ['deletion-preview', 'deletion'].map(path => [path, defectId] as const)))('rejects malformed defect ID at %s: %j', async (path, defectId) => {
@@ -144,13 +195,40 @@ describe('process ledger soft deletion with actual protected HTTP and PostgreSQL
     await post('deletion', { sources: [selection(record)], reason: '新品来源受保护' }).expect(409);
   });
 
-  it('deletes the supported selection limit of 100 records atomically', async () => {
-    const ids = Array.from({ length: 100 }, () => randomUUID());
-    await prisma.processDefect.createMany({ data: ids.map(id => ({ id, organizationId, description: 'Batch deletion limit', createdById: actorId, updatedById: actorId })) });
+  it('uses bounded queries to list, delete, and replay an ordinary selection', async () => {
+    const ids = Array.from({ length: 40 }, () => randomUUID());
+    const traceCode = randomUUID();
+    await prisma.processDefect.createMany({ data: ids.map(id => ({ id, organizationId, description: 'Query budget', createdById: actorId, updatedById: actorId, traceCode, operationCode: 'OP' })) });
+    const command = { sources: ids.map(defectId => ({ defectId, expectedVersion: 1 })), reason: '查询预算' };
+    const key = randomUUID();
+    const result = await expectBoundedQueries(() => list({ traceCode, pageSize: 40 }).expect(200));
+    expect(result.body).toMatchObject({ total: 40, items: Array.from({ length: 40 }, () => expect.objectContaining({ duplicateCount: 39 })) });
+    await expectBoundedQueries(() => post('deletion', command, key).expect(201));
+    await expectBoundedQueries(() => post('deletion', command, key).expect(201));
+  });
+
+  it('lists, previews, atomically deletes, and replays 1000 selected records without a reason', async () => {
+    const ids = Array.from({ length: 1000 }, () => randomUUID());
+    const orderedIds = [...ids].sort();
+    const description = `Batch deletion limit ${randomUUID()}`;
+    await prisma.processDefect.createMany({ data: ids.map(id => ({ id, organizationId, description, createdById: actorId, updatedById: actorId })) });
     const sources = ids.map(defectId => ({ defectId, expectedVersion: 1 }));
-    expect((await post('deletion-preview', { sources }).expect(201)).body).toMatchObject({ count: 100, canDelete: true });
-    expect((await post('deletion', { sources, reason: '删除所选100条' }).expect(201)).body).toMatchObject({ count: 100 });
-    expect(await prisma.processDefect.count({ where: { id: { in: ids }, archivedAt: { not: null }, version: 2 } })).toBe(100);
+    const page = await expectBoundedQueries(() => list({ search: description, pageSize: 1000 }).expect(200));
+    expect(page.body).toMatchObject({ total: 1000, pageSize: 1000 });
+    expect(page.body.items.map((item: { id: string }) => item.id)).toEqual([...orderedIds].reverse());
+    const preview = await expectBoundedQueries(() => post('deletion-preview', { sources }).expect(201));
+    expect(preview.body).toMatchObject({ count: 1000, canDelete: true });
+    expect(preview.body.items[0]).toEqual({ defectId: orderedIds[0], expectedVersion: 1, description, blocked: false, blockers: [] });
+    const key = randomUUID();
+    const deleted = await expectBoundedQueries(() => post('deletion', { sources }, key).expect(201));
+    expect(deleted.body).toEqual({ deletedIds: orderedIds, count: 1000 });
+    const replay = await expectBoundedQueries(() => post('deletion', { sources: [...sources].reverse() }, key).expect(201));
+    expect(replay.body).toEqual(deleted.body);
+    await post('deletion', { sources, reason: '另一请求' }, key).expect(409);
+    expect(await prisma.processDefect.count({ where: { id: { in: ids }, archivedAt: { not: null }, version: 2, descriptionAiStatus: 'STALE' } })).toBe(1000);
+    const events = await prisma.auditEvent.findMany({ where: { organizationId, resourceId: { in: ids }, action: 'PROCESS_DEFECTS_DELETED' }, select: { resourceId: true, metadata: true } });
+    expect(events.map(event => event.resourceId).sort()).toEqual(orderedIds);
+    for (const event of events) expect(event.metadata).toEqual({ rowCount: 1000, previousResourceVersion: 1, resourceVersion: 2 });
   });
 
   it('waits on the shared source lock and detects a formal issue committed while deletion is waiting', async () => {

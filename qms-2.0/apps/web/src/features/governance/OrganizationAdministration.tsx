@@ -12,9 +12,9 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { AdministrativeForceDeleteDialog } from './AdministrativeForceDeleteDialog';
 
 export function StructureLifecycleActions({ path, record, onChanged, auditOrganizationId, showDelete = true }: {
-  path: string; record: { id: string; name: string; code: string; version: number; status: 'ACTIVE' | 'DISABLED' }; onChanged: () => void; auditOrganizationId?: string; showDelete?: boolean;
+  path: string; record: components['schemas']['OrganizationDto'] | components['schemas']['DepartmentDto']; onChanged: () => void; auditOrganizationId?: string; showDelete?: boolean;
 }) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const completeSessionNavigation = useCompletedSessionNavigation();
   const navigate = useNavigate();
@@ -33,6 +33,9 @@ export function StructureLifecycleActions({ path, record, onChanged, auditOrgani
   useNavigationBusy(busy);
   useEffect(() => { alive.current = true; return () => { alive.current = false; generation.current++; reading.current?.abort(); }; }, []);
   const label = action === 'delete' ? '删除' : action === 'disable' ? '停用' : '启用';
+  const deleteImpact = 'organizationId' in record
+    ? locale === 'en-US' ? 'Business data is retained.' : '业务数据保留。'
+    : locale === 'en-US' ? 'The organization’s initialization role and grant, if present, are also removed. Business data is retained.' : '同时移除该组织的初始化角色和授权（如有），业务数据保留。';
   const blockers = !check ? [] : action === 'delete' ? check.deleteBlockers : action === 'disable' ? check.disableBlockers : [];
   const details = !check ? [] : action === 'delete' ? check.deleteBlockerDetails : action === 'disable' ? check.disableBlockerDetails : [];
   function fail(cause: unknown) {
@@ -88,7 +91,8 @@ export function StructureLifecycleActions({ path, record, onChanged, auditOrgani
     <Space wrap><Button disabled={busy} onClick={() => requestLeave(() => void inspect(record.status === 'ACTIVE' ? 'disable' : 'enable'))}>{t(record.status === 'ACTIVE' ? '停用' : '启用')}</Button>{showDelete && <Button danger disabled={busy} onClick={() => requestLeave(() => void inspect('delete'))}>{t('删除')}</Button>}</Space>
     <Modal title={`${t(label)} · ${record.name} · ${record.code}`} open={!!action} onCancel={close} onOk={() => void confirm()} okText={t(`确认${label}`)} cancelText={t('取消')} confirmLoading={busy} okButtonProps={{ danger: action !== 'enable', disabled: checking || !check || !!error || blockers.length > 0 || busy || unknownDelete }} cancelButtonProps={{ disabled: busy }} closable={!busy} keyboard={!busy} mask={{ closable: !busy }}>
       <GovernanceFeedback error={error} />
-      {checking ? <Spin /> : <>
+      {checking ? <Spin /> : action === 'delete' && check && !error && !blockers.length
+        ? <p>{deleteImpact}</p> : <>
         <Alert type={blockers.length ? 'warning' : 'info'} showIcon title={t(blockers.length ? '请先处理以下依赖' : '当前无阻断依赖；不连带删除业务数据。')} />
         <ul>{blockers.map((blocker, index) => <li key={index}>{blocker}</li>)}</ul>
         {!!details?.length && <ul>{details.map(detail => <li key={detail.code}>{detail.message} · {detail.count}</li>)}</ul>}

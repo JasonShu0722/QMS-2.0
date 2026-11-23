@@ -309,9 +309,8 @@ it('names the personal view and explains the delete scope before sending DELETE'
   fireEvent.change(await screen.findByLabelText('保存视图'), { target: { value: 'view-1' } });
   fireEvent.click(screen.getByText('删除视图', { selector: 'button span' }));
   const dialog = await screen.findByRole('tooltip');
-  expect(dialog).toHaveTextContent('我的逾期问题');
-  expect(dialog).toHaveTextContent('个人视图');
-  expect(dialog).toHaveTextContent('问题');
+  await waitFor(() => expect(within(dialog).getByText('删除个人视图 · 我的逾期问题')).toBeVisible());
+  expect(within(dialog).getByText('仅移除视图配置，问题记录保留。')).toBeVisible();
   fireEvent.click(within(dialog).getByRole('button', { name: /^取\s*消$/ }));
   expect(api.deleteProblemView).not.toHaveBeenCalled();
 });

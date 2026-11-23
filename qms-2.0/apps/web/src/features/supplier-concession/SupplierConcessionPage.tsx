@@ -133,6 +133,7 @@ function ConcessionDrawer({ id, close, changed }: { id: string; close: () => voi
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
   const [action, setAction] = useState<Action>();
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
   const [note, setNote] = useState('');
   const [actionError, setActionError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -166,16 +167,21 @@ function ConcessionDrawer({ id, close, changed }: { id: string; close: () => voi
       key.current ??= crypto.randomUUID();
       const body: DecideConcession | { expectedVersion: number } = target === 'submit' || target === 'withdraw' ? { expectedVersion: record.version } : { expectedVersion: record.version, note: decisionNote ?? '' };
       await mutation<Concession>(`${basePath}/${id}/${target}`, body, key.current);
-      key.current = undefined; setAction(undefined); setNote(''); await load(); changed();
+      key.current = undefined; setAction(undefined); setWithdrawOpen(false); setNote(''); await load(); changed();
     } catch (cause) { setActionError(errorText(cause, '操作失败，请重试')); }
     finally { pending.current = false; setBusy(false); }
   }
 
-  const actions = record ? <Space wrap>{record.canSubmit ? <Button type="primary" disabled={busy} onClick={() => void run('submit')}>提交审批</Button> : null}{record.canApprove ? <><Button type="primary" disabled={busy} onClick={() => { setAction('approve'); setActionError(undefined); }}>批准</Button><Button danger disabled={busy} onClick={() => { setAction('reject'); setActionError(undefined); }}>驳回</Button></> : null}{record.canRelease ? <Button type="primary" disabled={busy} onClick={() => { setAction('release'); setActionError(undefined); }}>登记批次放行</Button> : null}{record.canWithdraw ? <Button disabled={busy} onClick={() => void run('withdraw')}>撤回申请</Button> : null}</Space> : null;
+  const actions = record ? <Space wrap>
+    {record.canSubmit ? <Button type="primary" disabled={busy} onClick={() => void run('submit')}>提交审批</Button> : null}
+    {record.canApprove ? <><Button type="primary" disabled={busy} onClick={() => { setAction('approve'); setActionError(undefined); }}>批准</Button><Button danger disabled={busy} onClick={() => { setAction('reject'); setActionError(undefined); }}>驳回</Button></> : null}
+    {record.canRelease ? <Button type="primary" disabled={busy} onClick={() => { setAction('release'); setActionError(undefined); }}>登记批次放行</Button> : null}
+    {record.canWithdraw ? <Button disabled={busy} onClick={() => { setActionError(undefined); setWithdrawOpen(true); }}>撤回申请</Button> : null}
+  </Space> : null;
 
   return <Drawer open title="特采申请详情" size={680} onClose={closeDrawer} closable={!busy} keyboard={!busy} mask={{ closable: !busy }}>
     {loading ? <div className="supplier-concession-loading"><Spin /></div> : error ? <Alert type="error" showIcon title={error} action={<Button onClick={() => void load()}>重试</Button>} /> : record ? <div className="supplier-concession-detail">
-      {actionError ? <Alert type="error" showIcon title={actionError} /> : null}
+      {actionError && !withdrawOpen ? <Alert type="error" showIcon title={actionError} /> : null}
       <Descriptions column={{ xs: 1, sm: 2 }} bordered size="small" items={[
         { key: 'status', label: '状态', children: statusTag(record.status) }, { key: 'supplier', label: '供应商', children: record.supplierName },
         { key: 'material', label: '物料编码', children: record.materialCode }, { key: 'batch', label: '来料批次', children: record.incomingBatch },
@@ -188,6 +194,12 @@ function ConcessionDrawer({ id, close, changed }: { id: string; close: () => voi
       {actions}
       <section><Typography.Title level={4}>操作轨迹</Typography.Title><Timeline items={record.events.map((event) => ({ children: <span>{labels[event.eventType] ?? event.eventType} · 第 {event.requestVersion} 版 · {new Date(event.createdAt).toLocaleString('zh-CN')}{event.note ? ` · ${event.note}` : ''}</span> }))} /></section>
     </div> : <Empty description="特采申请不存在或无权访问" />}
+    <Modal open={withdrawOpen && !!record?.canWithdraw} title={record && `撤回特采申请 · ${record.supplierName} · ${record.materialCode} · ${record.incomingBatch}`}
+      onOk={() => { if (record?.canWithdraw) void run('withdraw'); }} onCancel={() => { if (!pending.current) setWithdrawOpen(false); }}
+      okText="确认撤回" cancelText="取消" confirmLoading={busy} okButtonProps={{ danger: true }} cancelButtonProps={{ disabled: busy }} closable={!busy} keyboard={!busy} mask={{ closable: false }}>
+      <p>{record?.status === 'APPROVED' ? '此申请将无法用于批次放行，历史记录保留。' : '此申请将无法继续审批，历史记录保留。'}</p>
+      {actionError ? <Alert type="error" showIcon title={actionError} /> : null}
+    </Modal>
     <Modal open={!!action} title={action === 'approve' ? '批准特采申请' : action === 'reject' ? '驳回特采申请' : '登记批次放行'} onCancel={cancelAction} closable={!busy} keyboard={!busy} cancelButtonProps={{ disabled: busy }} onOk={() => { if (action && note.trim()) void run(action, note); }} okButtonProps={{ disabled: !note.trim(), loading: busy }} okText="确认" cancelText="取消" mask={{ closable: false }}>
       {actionError ? <Alert type="error" showIcon title={actionError} /> : null}
       <Input.TextArea aria-label="处理意见" disabled={busy} rows={4} maxLength={2000} showCount placeholder="请说明审批结论或批次放行依据" value={note} onChange={(event) => { setNote(event.target.value); key.current = undefined; }} />

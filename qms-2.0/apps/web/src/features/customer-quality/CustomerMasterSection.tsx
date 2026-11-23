@@ -27,7 +27,7 @@ export function CustomerMasterSection({ organizationId, organizationPermissions,
 }
 
 function CustomerMasterContent({ organizationId, organizationPermissions, embedded }: { organizationId?: string; organizationPermissions?: string[]; embedded?: boolean }) {
-  const { t } = useLanguage();
+  const { locale, t } = useLanguage();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selected, setSelected] = useState<string>();
   const [relations, setRelations] = useState<Relation[]>([]);
@@ -186,6 +186,11 @@ function CustomerMasterContent({ organizationId, organizationPermissions, embedd
     finally { setBusy(false); }
   }
 
+  const selectedCustomerName = customers.find(item => item.id === selected)?.name ?? selected;
+  const relationTarget = (row: Relation) => row.relation_type === 'CUSTOMER_PARENT'
+    ? customers.find(item => item.id === String(row.related_customer_id))?.name ?? String(row.related_customer_id ?? '')
+    : `${row.related_code} · ${row.related_name}`;
+
   const actionBar = <>
     {canRead ? <Space wrap><Select aria-label="选择客户" placeholder="选择客户" style={{ minWidth: 220 }} value={selected} options={customers.map((customer) => ({ value: customer.id, label: `${customer.code} · ${customer.name}` }))} disabled={busy && !relationSubmitting.current} onChange={changeCustomer} /><Button disabled={busy} onClick={refreshFromUser}>刷新客户</Button>{canRead ? <Button onClick={() => void exportCustomers()} loading={exporting} disabled={!customersLoaded || !customers.length || exporting}>{t('导出当前客户清单')}</Button> : null}{selected && canWrite ? <Button onClick={() => requestLeave(() => { const customer = customers.find((item) => item.id === selected); if (customer) { setEditDirty(false); setEdit({ kind: 'customer', id: customer.id, version: customer.version, name: customer.name }); } })} disabled={busy}>编辑客户</Button> : null}</Space> : null}
     {canWrite ? <Space wrap><Button disabled={busy} onClick={() => setCreating(true)}>{t('新增客户')}</Button><Form component={false} disabled={busy}><CustomerMasterImport organizationId={organizationId} onImported={canRead ? () => refreshCustomers(true) : () => undefined} /></Form></Space> : null}
@@ -208,7 +213,17 @@ function CustomerMasterContent({ organizationId, organizationPermissions, embedd
         <div className="qms-dialog-actions" role="group" aria-label={t('新增客户')}><Button type="primary" htmlType="submit" loading={busy}>{t('保存')}</Button></div>
       </Form>
     </Modal> : null}
-    {selected ? <><Table<Relation> rowKey="id" dataSource={relations} pagination={false} columns={[{ title: '类型', dataIndex: 'relation_type', render: (value: Relation['relation_type']) => labels[value] }, { title: '关系', render: (_, row) => row.relation_type === 'CUSTOMER_PARENT' ? customers.find((item) => item.id === String(row.related_customer_id))?.name ?? String(row.related_customer_id ?? '') : `${row.related_code} · ${row.related_name}` }, ...(canWrite ? [{ title: '操作', render: (_: unknown, row: Relation) => <Space><Button onClick={() => requestLeave(() => { setEditDirty(false); setEdit({ kind: 'relation', id: row.id, version: row.version, name: typeof row.related_name === 'string' ? row.related_name : '' }); })} disabled={row.relation_type === 'CUSTOMER_PARENT' || busy}>编辑</Button><Popconfirm title="删除客户关系" description="确认删除这条关系？" okText="删除" cancelText="取消" onConfirm={() => void removeRelation(row)}><Button danger disabled={busy}>删除</Button></Popconfirm></Space> }] : [])]} />
+    {selected ? <><Table<Relation> rowKey="id" dataSource={relations} pagination={false} columns={[
+      { title: '类型', dataIndex: 'relation_type', render: (value: Relation['relation_type']) => labels[value] },
+      { title: '关系', render: (_, row) => relationTarget(row) },
+      ...(canWrite ? [{ title: '操作', render: (_: unknown, row: Relation) => <Space>
+        <Button onClick={() => requestLeave(() => { setEditDirty(false); setEdit({ kind: 'relation', id: row.id, version: row.version, name: typeof row.related_name === 'string' ? row.related_name : '' }); })} disabled={row.relation_type === 'CUSTOMER_PARENT' || busy}>编辑</Button>
+        <Popconfirm title={`${locale === 'en-US' ? 'Delete customer relation' : '删除客户关系'} · ${selectedCustomerName} → ${relationTarget(row)}`}
+          okText={t('删除')} cancelText={t('取消')} okButtonProps={{ danger: true }} onConfirm={() => void removeRelation(row)}>
+          <Button danger disabled={busy}>{t('删除')}</Button>
+        </Popconfirm>
+      </Space> }] : []),
+    ]} />
       {canWrite ? <Form form={form} disabled={busy} onValuesChange={() => setRelationDirty(true)} layout="inline" onFinish={(values: CreateRelation) => void addRelation(values)}><Form.Item name="relationType" rules={[{ required: true }]}><Select aria-label="关系类型" placeholder="关系类型" style={{ minWidth: 130 }} options={Object.entries(labels).map(([value, label]) => ({ value, label }))} /></Form.Item><Form.Item noStyle shouldUpdate={(prev, next) => prev.relationType !== next.relationType}>{({ getFieldValue }) => getFieldValue('relationType') === 'CUSTOMER_PARENT' ? <Form.Item name="relatedCustomerId" rules={[{ required: true }]}><Select aria-label="上级客户" placeholder="上级客户" style={{ minWidth: 160 }} options={customers.filter((item) => item.id !== selected).map((item) => ({ value: item.id, label: item.name }))} /></Form.Item> : <><Form.Item name="relatedCode" rules={[{ required: true }]}><Input aria-label="关系代码" placeholder="代码" maxLength={100} /></Form.Item><Form.Item name="relatedName" rules={[{ required: true }]}><Input aria-label="关系名称" placeholder="名称" maxLength={200} /></Form.Item></>}</Form.Item><Button htmlType="submit" loading={busy}>新增关系</Button></Form> : null}</> : null}
     <Modal title={edit?.kind === 'customer' ? '编辑客户' : '编辑关系'} open={Boolean(edit)} onCancel={cancelEdit} closable={!busy} keyboard={!busy} mask={{ closable: !busy }} footer={null} destroyOnHidden><Input disabled={busy} aria-label="编辑名称" value={edit?.name ?? ''} maxLength={200} onChange={(event) => { setEdit((current) => current ? { ...current, name: event.target.value } : current); setEditDirty(true); }} />{error ? <Alert type="error" title={safeAccountError(error)} /> : null}<div className="qms-dialog-actions" role="group" aria-label={edit?.kind === 'customer' ? '编辑客户' : '编辑关系'}><Button onClick={cancelEdit} disabled={busy}>取消</Button><Button type="primary" onClick={() => void saveEdit()} disabled={!edit?.name.trim()} loading={busy}>保存</Button></div></Modal>
   </section>;

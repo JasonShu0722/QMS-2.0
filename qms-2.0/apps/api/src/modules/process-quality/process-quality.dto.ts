@@ -2,7 +2,7 @@ import { ApiProperty, ApiPropertyOptional, PickType } from '@nestjs/swagger';
 import { AiDescriptionInputSnapshotDto } from '../../common/contracts/ai-description.dto.js';
 import { Transform, Type } from 'class-transformer';
 import { Allow, ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
-import { PROCESS_FILTER_FIELDS, PROCESS_FILTER_MAX_ITEMS, PROCESS_FILTER_MAX_LENGTH, PROCESS_FILTER_OPERATORS, PROCESS_MATERIAL_VERIFICATIONS, PROCESS_RESPONSIBILITY_CATEGORIES, type ProcessMaterialVerification, type ProcessResponsibilityCategory } from './process-defect-ledger.service.js';
+import { PROCESS_DEFECT_LEDGER_MAX_ROWS, PROCESS_FILTER_FIELDS, PROCESS_FILTER_MAX_ITEMS, PROCESS_FILTER_MAX_LENGTH, PROCESS_FILTER_OPERATORS, PROCESS_MATERIAL_VERIFICATIONS, PROCESS_RESPONSIBILITY_CATEGORIES, type ProcessMaterialVerification, type ProcessResponsibilityCategory } from './process-defect-ledger.service.js';
 import { PROCESS_FACTORY_CODES, type ProcessFactoryCode } from './process-defect-registration.policy.js';
 
 import { ComponentProjectMappingDto, ComponentProjectRecordDto } from '../platform-configuration/component-project.dto.js';
@@ -165,15 +165,15 @@ export class ProcessDefectSelectionDto {
 }
 
 export class PreviewProcessDefectDeletionDto extends ProcessScopeDto {
-  @ApiProperty({ type: [ProcessDefectSelectionDto], minItems: 1, maxItems: 100 }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ArrayUnique((item: ProcessDefectSelectionDto | null) => typeof item?.defectId === 'string' ? item.defectId.toLowerCase() : item?.defectId) @IsObject({ each: true }) @ValidateNested({ each: true }) @Type(() => ProcessDefectSelectionDto) sources!: ProcessDefectSelectionDto[];
+  @ApiProperty({ type: [ProcessDefectSelectionDto], minItems: 1, maxItems: PROCESS_DEFECT_LEDGER_MAX_ROWS }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(PROCESS_DEFECT_LEDGER_MAX_ROWS) @ArrayUnique((item: ProcessDefectSelectionDto | null) => typeof item?.defectId === 'string' ? item.defectId.toLowerCase() : item?.defectId) @IsObject({ each: true }) @ValidateNested({ each: true }) @Type(() => ProcessDefectSelectionDto) sources!: ProcessDefectSelectionDto[];
 }
 
 export class DeleteProcessDefectsDto extends PreviewProcessDefectDeletionDto {
-  @ApiProperty({ minLength: 1, maxLength: 300 }) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(300) reason!: string;
+  @ApiPropertyOptional({ type: String, minLength: 1, maxLength: 300 }) @ValidateIf((_, value) => value !== undefined) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(300) reason?: string;
 }
 
 export class DeleteLegacyProcessDefectDto extends ArchiveProcessDefectDto {
-  @ApiProperty({ minLength: 1, maxLength: 300 }) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(300) reason!: string;
+  @ApiPropertyOptional({ type: String, minLength: 1, maxLength: 300 }) @ValidateIf((_, value) => value !== undefined) @Transform(({ value }) => typeof value === 'string' ? value.trim() : value) @IsString() @IsNotEmpty() @MaxLength(300) reason?: string;
 }
 
 export class ProcessDefectDeletionBlockerDto {
@@ -245,7 +245,7 @@ export class ProcessDefectFiltersDto {
 
 export class ProcessDefectQueryDto extends ProcessScopeDto {
   @ApiPropertyOptional({ default: 1, minimum: 1 }) @Type(() => Number) @IsInt() @Min(1) page = 1;
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 }) @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
+  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: PROCESS_DEFECT_LEDGER_MAX_ROWS }) @Type(() => Number) @IsInt() @Min(1) @Max(PROCESS_DEFECT_LEDGER_MAX_ROWS) pageSize = 20;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) search?: string;
   @ApiPropertyOptional({ maxLength: 64 }) @IsOptional() @IsString() @MaxLength(64) defectTypeCode?: string;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) batchCode?: string;

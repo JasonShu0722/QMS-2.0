@@ -163,7 +163,7 @@ function AttachmentContent({ resource, fileIds, readOnly = false, onReady, onFil
           <span>{new Intl.NumberFormat(locale).format(file.sizeBytes)} {t('字节')}</span>
           {file.status === 'AVAILABLE' && file.scanStatus === 'CLEAN' && <Button aria-label={t('下载附件')} disabled={busy} onClick={() => void operate(file, 'download')}>{t('下载附件')}</Button>}
           {!readOnly && file.status === 'QUARANTINED' && file.scanStatus === 'ERROR' && <Button aria-label={t('重试安全扫描')} disabled={busy} onClick={() => void operate(file, 'retry-scan')}>{t('重试安全扫描')}</Button>}
-          {!readOnly && file.status !== 'DELETED' && <Popconfirm title={t('确认删除此附件？')} description={t('删除后无法继续下载，历史记录和保留对象不受影响。')} okText={t('确认删除附件')} cancelText={t('取消')} onConfirm={() => operate(file, 'delete')}>
+          {!readOnly && file.status !== 'DELETED' && <Popconfirm title={`${t('删除附件')} · ${file.originalName}`} description={t('删除后无法继续下载，历史记录和保留对象不受影响。')} okText={t('确认删除附件')} cancelText={t('取消')} okButtonProps={{ danger: true }} onConfirm={() => operate(file, 'delete')}>
             <Button aria-label={t('删除附件')} disabled={busy} danger>{t('删除附件')}</Button>
           </Popconfirm>}
         </Space>

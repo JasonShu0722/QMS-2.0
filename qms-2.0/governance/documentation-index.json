@@ -414,7 +414,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "287f4f3d4beffcec666dcec5b9e70baa1ba36ddc6b0f4b6f2c5a1168e63f1860"
+            "sha256": "57c1d0bcf885c027b126a5f44dfa8ca960f3c97fc6ec2a39c0f3d288620eb580"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -494,7 +494,7 @@
           },
           {
             "path": "apps/web/src/features/governance/OrganizationAdministration.tsx",
-            "sha256": "28e5c0f0388eaac02e65f6dc69af7ca1887fbdba42368aea81c9782435723f25"
+            "sha256": "9688f1f38dc8abcc6266eb3e918d9766d074a9e65eaf7901b80dd4bf44ee11a9"
           },
           {
             "path": "apps/web/src/features/governance/StructureAdministration.tsx",
@@ -506,7 +506,7 @@
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.test.tsx",
-            "sha256": "fe0f305ae05cd98a536894056e932b8a86b0dc88a735ae0bea3a0593efae30e9"
+            "sha256": "e959c4f443c1a3081de66ff3cd3d17a2d9b9457fc84978f930a5fe14a123e72d"
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.css",
@@ -558,11 +558,11 @@
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.tsx",
-            "sha256": "0561fc4883dbd320cc9c35664e250b3caf872499bdf3c7e0adb8a062ec16a3f0"
+            "sha256": "b9be381658fc1bd42e962bac4db6de423de5f179ecffe4eb1650d39cff21eda1"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.test.tsx",
-            "sha256": "d68dec8ffbd1b89c30541d3e262dcdd47a85adc41333d7db057dd91d8edab0cd"
+            "sha256": "7300858de2196a00ff0ce05eb6e86dbc344eca10edeeca60aa8655c8e6568894"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectImport.tsx",

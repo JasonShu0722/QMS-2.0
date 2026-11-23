@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { apiRequest } from '../../api/client';
+import { apiRequest, csrfToken } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { SupplierConcessionPage } from './SupplierConcessionPage';
@@ -12,7 +12,7 @@ vi.setConfig({ testTimeout: 30_000 });
 
 vi.mock('../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client');
-  return { ...actual, apiRequest: vi.fn() };
+  return { ...actual, apiRequest: vi.fn(), csrfToken: vi.fn(async () => 'csrf') };
 });
 
 const render = (ui: ReactElement) => renderView(ui, { wrapper: LanguageProvider });
@@ -71,6 +71,28 @@ it('keeps a concession decision note when cancelling the action is declined', as
   fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
   expect(within(modal).getByLabelText('处理意见')).toHaveValue('已核查批次风险，待补依据');
   expect(apiRequest).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ method: 'POST' }));
+});
+
+it('confirms withdrawal before taking an approved concession out of the release workflow', async () => {
+  const record = { id: 'request-1', supplierName: '供应商甲', materialCode: 'MAT-01', incomingBatch: 'B-01', status: 'APPROVED', version: 4, expiresAt: '2026-10-30T10:00:00Z', events: [], canWithdraw: true, canRelease: true };
+  vi.mocked(apiRequest).mockImplementation(async path => path.endsWith('/request-1') ? record : { items: [record], total: 1, canCreate: false });
+  render(<SupplierConcessionPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '供应商甲' }));
+  const withdraw = await screen.findByRole('button', { name: '撤回申请' });
+  withdraw.focus();
+  await userEvent.keyboard('{Enter}');
+  const dialog = await screen.findByRole('dialog', { name: '撤回特采申请 · 供应商甲 · MAT-01 · B-01' });
+  const confirmation = within(dialog);
+  await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement), { container: dialog });
+  expect(confirmation.getByText('此申请将无法用于批次放行，历史记录保留。')).toBeVisible();
+  expect(confirmation.queryByRole('textbox')).not.toBeInTheDocument();
+  await userEvent.keyboard('{Escape}');
+  await waitFor(() => expect(withdraw).toHaveFocus());
+  expect(screen.getByRole('dialog', { name: '特采申请详情' })).toBeVisible();
+  expect(csrfToken).not.toHaveBeenCalled();
+  await userEvent.keyboard('{Enter}');
+  fireEvent.click(within(await screen.findByRole('dialog', { name: '撤回特采申请 · 供应商甲 · MAT-01 · B-01' })).getByRole('button', { name: '确认撤回' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-concessions/request-1/withdraw', expect.objectContaining({ method: 'POST', body: JSON.stringify({ expectedVersion: 4 }) })));
 });
 
 it('protects the decision note when closing the parent concession drawer', async () => {

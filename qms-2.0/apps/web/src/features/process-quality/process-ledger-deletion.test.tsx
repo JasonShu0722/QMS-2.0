@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
+import { preferenceKey } from '../../ui/ledger/model';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessDefectLedgerPage } from './ProcessDefectLedgerPage';
 import type { ReactNode } from 'react';
@@ -16,7 +17,11 @@ vi.mock('antd', async () => {
     if (!compact.enabled) return <actual.Table {...props} />;
     const selection = props.columns?.find(column => column.key === 'select');
     const pagination = props.pagination;
-    return <div>{selection && (typeof selection.title === 'function' ? selection.title({}) : selection.title)}{props.dataSource?.map((row, index) => <div key={row.id}>{selection?.render?.('', row, index) as ReactNode}</div>)}{pagination && Array.from({ length: Math.ceil((pagination.total ?? 0) / 20) }, (_, index) => <button key={index} title={String(index + 1)} onClick={() => pagination.onChange?.(index + 1, 20)}>{index + 1}</button>)}</div>;
+    const pageSize = pagination ? pagination.pageSize ?? 20 : 20;
+    return <div>{selection && (typeof selection.title === 'function' ? selection.title({}) : selection.title)}{props.dataSource?.map((row, index) => <div key={row.id}>{selection?.render?.('', row, index) as ReactNode}</div>)}{pagination && <>
+      <select aria-label="每页条数" value={pageSize} onChange={event => pagination.onChange?.(pagination.current ?? 1, Number(event.target.value))}>{pagination.pageSizeOptions?.map(size => <option key={size} value={size}>{size}</option>)}</select>
+      {Array.from({ length: Math.ceil((pagination.total ?? 0) / pageSize) }, (_, index) => <button key={index} title={String(index + 1)} onClick={() => pagination.onChange?.(index + 1, pageSize)}>{index + 1}</button>)}
+    </>}</div>;
   } };
 });
 vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() }));
@@ -49,7 +54,11 @@ async function openDelete() {
   fireEvent.click(within(screen.getByLabelText('台账批量操作')).getByText('删除所选'));
   return deletionDialog();
 }
-async function deletionDialog() { return (await screen.findByText('删除制程不良台账', { selector: '.ant-modal-title' })).closest('[role="dialog"]') as HTMLElement; }
+async function deletionDialog() {
+  const title = await screen.findByText('删除制程不良台账', { selector: '.ant-modal-title' });
+  await waitFor(() => expect(title).toBeVisible());
+  return title.closest<HTMLElement>('[role="dialog"]')!;
+}
 const pageSelection = () => within(document.querySelector<HTMLElement>('.qms-ledger thead')!).getByLabelText('选择当前页制程不良');
 
 it('orders the default recording columns and keeps optional facts recoverable without unlocking selection', async () => {
@@ -89,36 +98,89 @@ it('keeps row actions as accessible icons and previews the same source before de
   fireEvent.click(within(detail).getByLabelText('关闭', { selector: 'button' }));
   fireEvent.click(remove);
   const dialog = await deletionDialog();
-  expect(await within(dialog).findByRole('listitem')).toHaveTextContent(record.description);
+  await waitFor(() => expect(within(dialog).getByRole('button', { name: '确认删除' })).toBeEnabled());
+  expect(within(dialog).getByText(/删除 1 条制程不良台账/)).toBeVisible();
+  expect(within(dialog).queryByText(record.description)).not.toBeInTheDocument();
   const call = vi.mocked(apiRequest).mock.calls.find(([path]) => path.endsWith('/deletion-preview'));
   expect(JSON.parse(String(call?.[1]?.body))).toEqual({ sources: [{ defectId: record.id, expectedVersion: record.version }] });
 });
 
-it('caps header selection at 100 and allows a partially selected capped page to cancel', async () => {
+it('caps cross-page selection at 1000 and allows a partially selected capped page to cancel', async () => {
   compact.enabled = true;
-  const sources = Array.from({ length: 102 }, (_, index) => ({ ...record, id: `source-${index}`, description: `来源 ${index}` }));
+  const pageSizeKey = preferenceKey({ sessionScope: `INTERNAL:${organizationId}:user`, organizationId, portal: 'business' }, 'process-defects', 'pageSize')!;
+  localStorage.setItem(pageSizeKey, JSON.stringify({ schema: 1, value: 500 }));
+  const sources = Array.from({ length: 1001 }, (_, index) => ({ ...record, id: `source-${index}`, description: `来源 ${index}` }));
   vi.mocked(apiRequest).mockImplementation(async path => {
     if (!path.includes('/defects?')) return response(path);
-    const page = Number(new URL(path, 'http://localhost').searchParams.get('page'));
-    return { items: sources.slice((page - 1) * 20, page * 20), total: sources.length, page, pageSize: 20 };
+    const query = new URL(path, 'http://localhost').searchParams;
+    const page = Number(query.get('page'));
+    const pageSize = Number(query.get('pageSize'));
+    return { items: sources.slice((page - 1) * pageSize, page * pageSize), total: sources.length, page, pageSize };
   });
   mount();
-  for (let page = 1; page <= 4; page++) {
-    if (page > 1) fireEvent.click(screen.getByTitle(String(page)));
-    await screen.findByLabelText(`选择制程不良 来源 ${(page - 1) * 20}`);
-    fireEvent.click(screen.getByLabelText('选择当前页制程不良'));
-  }
-  fireEvent.click(screen.getByTitle('5'));
-  await screen.findByLabelText('选择制程不良 来源 80');
-  act(() => { screen.getAllByLabelText(/^选择制程不良 /).slice(0, 19).forEach(checkbox => fireEvent.click(checkbox)); });
-  expect(screen.getByText('已选择 99 条来源')).toBeVisible();
-  fireEvent.click(screen.getByTitle('6'));
-  await screen.findByLabelText('选择制程不良 来源 100');
+  await screen.findByLabelText('选择制程不良 来源 499');
+  expect(screen.getByLabelText('每页条数')).toHaveValue('500');
   fireEvent.click(screen.getByLabelText('选择当前页制程不良'));
-  expect(screen.getByText('已选择 100 条来源')).toBeVisible();
+  expect(screen.getByText('已选择 500 条来源')).toBeVisible();
+  fireEvent.click(screen.getByTitle('3'));
+  fireEvent.click(await screen.findByLabelText('选择制程不良 来源 1000'));
+  fireEvent.click(screen.getByTitle('2'));
+  await screen.findByLabelText('选择制程不良 来源 999');
   fireEvent.click(screen.getByLabelText('选择当前页制程不良'));
-  expect(screen.getByText('已选择 99 条来源')).toBeVisible();
+  expect(screen.getByText('已选择 1000 条来源')).toBeVisible();
+  expect(screen.getByLabelText('选择制程不良 来源 999')).not.toBeChecked();
+  fireEvent.click(screen.getByLabelText('选择当前页制程不良'));
+  expect(screen.getByText('已选择 501 条来源')).toBeVisible();
 });
+
+it('selects and deletes one 1000-row page in one request, then moves back from the empty last page', async () => {
+  compact.enabled = true;
+  const sources = Array.from({ length: 2000 }, (_, index) => ({ ...record, id: `source-${index}`, description: `来源 ${index}` }));
+  const expected = sources.slice(1000).map(source => ({ defectId: source.id, expectedVersion: source.version }));
+  let total = sources.length;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/my-permissions')) return { permissions: [...permissions, 'process-quality:issues:issue'] };
+    if (path.includes('/defects?')) {
+      const query = new URL(path, 'http://localhost').searchParams;
+      const page = Number(query.get('page'));
+      const pageSize = Number(query.get('pageSize'));
+      return { items: sources.slice(0, total).slice((page - 1) * pageSize, page * pageSize), total, page, pageSize };
+    }
+    if (path.endsWith('/deletion-preview')) return { count: expected.length, canDelete: true, items: [...expected].reverse().map(source => ({ ...source, description: '行级预览', blocked: false, blockers: [] })) };
+    if (path.endsWith('/deletion')) {
+      expect(JSON.parse(String(init?.body))).toEqual({ sources: expected });
+      total = 1000;
+      return { count: expected.length, deletedIds: expected.map(source => source.defectId) };
+    }
+    return response(path);
+  });
+  mount();
+  await screen.findByLabelText('选择制程不良 来源 19');
+  fireEvent.change(screen.getByLabelText('每页条数'), { target: { value: '1000' } });
+  await screen.findByLabelText('选择制程不良 来源 999');
+  fireEvent.click(screen.getByTitle('2'));
+  await screen.findByLabelText('选择制程不良 来源 1999');
+  fireEvent.click(screen.getByLabelText('选择当前页制程不良'));
+  expect(screen.getByText('已选择 1000 条来源')).toBeVisible();
+  expect(screen.getByLabelText('发起 8D')).toBeDisabled();
+  fireEvent.click(within(screen.getByLabelText('台账批量操作')).getByText('删除所选'));
+  const dialog = await deletionDialog();
+  const confirm = within(dialog).getByRole('button', { name: '确认删除' });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  expect(within(dialog).queryByText('行级预览')).not.toBeInTheDocument();
+  expect(within(dialog).getByText(/删除 1000 条制程不良台账/)).toBeVisible();
+  await act(async () => { fireEvent.click(confirm); });
+  const reads = vi.mocked(apiRequest).mock.calls.filter(([path]) => path.includes('/defects?'));
+  expect(reads.slice(-2).map(([path]) => new URL(path, 'http://localhost').searchParams.get('page'))).toEqual(['2', '1']);
+  expect(screen.getByLabelText('选择制程不良 来源 999')).toBeEnabled();
+  expect(screen.getByText('已选择 0 条来源')).toBeVisible();
+  expect(screen.queryByTitle('2')).not.toBeInTheDocument();
+  for (const route of ['/deletion-preview', '/deletion']) {
+    const calls = vi.mocked(apiRequest).mock.calls.filter(([path]) => path.endsWith(route));
+    expect(calls).toHaveLength(1);
+    expect(JSON.parse(String(calls[0][1]?.body))).toEqual({ sources: expected });
+  }
+}, 30000);
 
 it('keeps current-page selection separate from preserved pages and previews the exact recorded versions', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/defects?') ? { items: path.includes('page=2&') ? [other] : [record], total: 21, page: 1, pageSize: 20 } : response(path));
@@ -147,40 +209,49 @@ it.each(['delete', 'read'])('requires %s permission without granting deletion th
 });
 
 it('displays formal reference blockers and never confirms a partly blocked batch', async () => {
-  vi.mocked(apiRequest).mockImplementation(async path => path.endsWith('/deletion-preview') ? { ...preview, canDelete: false, items: [{ ...preview.items[0], blocked: true, blockers: [{ code: 'FORMAL_PROBLEM', reportNumber: 'PQ-2026-123' }] }] } : response(path));
-  mount(); const dialog = await openDelete();
-  await within(dialog).findByText(/PQ-2026-123/);
-  await waitFor(() => expect(within(dialog).getByText(/已关联正式问题/)).toBeVisible());
-  fireEvent.change(within(dialog).getByLabelText('删除原因'), { target: { value: '重复来源' } });
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.includes('/defects?')) return { items: [record, other], total: 2, page: 1, pageSize: 20 };
+    if (path.endsWith('/deletion-preview')) return {
+      count: 2, canDelete: false, items: [
+        { ...preview.items[0], blocked: true, blockers: [{ code: 'FORMAL_PROBLEM', reportNumber: 'PQ-2026-123' }, { code: 'FORMAL_PROBLEM', reportNumber: 'PQ-2026-124' }] },
+        { ...preview.items[0], defectId: other.id, expectedVersion: other.version, description: other.description },
+      ],
+    };
+    return response(path);
+  });
+  mount();
+  await screen.findByLabelText(`选择制程不良 ${record.description}`);
+  fireEvent.click(pageSelection());
+  fireEvent.click(within(screen.getByLabelText('台账批量操作')).getByText('删除所选'));
+  const dialog = await deletionDialog();
+  expect(await within(dialog).findByText('1 条记录无法删除')).toBeVisible();
+  expect(within(dialog).getByText('1 条已关联正式问题')).toBeVisible();
+  expect(within(dialog).queryByText(/PQ-2026-12[34]|删除测试来源|第二页来源/)).not.toBeInTheDocument();
   expect(within(dialog).getByRole('button', { name: '确认删除' })).toBeDisabled();
   expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/deletion'))).toBe(false);
 });
 
-it('requires a nonblank deletion reason of at most 300 characters', async () => {
+it('only offers cancel and confirm after a clean deletion preview', async () => {
   mount(); const dialog = await openDelete();
-  const reason = within(dialog).getByLabelText('删除原因');
   const confirm = within(dialog).getByRole('button', { name: '确认删除' });
-  fireEvent.change(reason, { target: { value: '   ' } });
-  expect(confirm).toBeDisabled();
-  fireEvent.change(reason, { target: { value: '原'.repeat(301) } });
-  expect(confirm).toBeDisabled();
-  expect(within(dialog).getByText('删除原因最多300字')).toBeInTheDocument();
-  fireEvent.change(reason, { target: { value: '原'.repeat(300) } });
   await waitFor(() => expect(confirm).toBeEnabled());
+  expect(within(dialog).getByRole('button', { name: /^取\s?消$/ })).toBeEnabled();
+  expect(within(dialog).queryByLabelText('删除原因')).not.toBeInTheDocument();
+  expect(within(dialog).queryByRole('button', { name: '重新预览' })).not.toBeInTheDocument();
 });
 
 it('allows an unfinished preview to close without retaining a write-unknown state', async () => {
   let complete!: (value: typeof preview) => void;
   vi.mocked(apiRequest).mockImplementation(async path => path.endsWith('/deletion-preview') ? new Promise(done => { complete = done; }) : response(path));
   mount(); const dialog = await openDelete();
-  fireEvent.click(within(dialog).getByRole('button', { name: '返回台账' }));
+  fireEvent.click(within(dialog).getByRole('button', { name: /^取\s?消$/ }));
   await waitFor(() => expect(screen.queryByRole('dialog', { name: '删除制程不良台账' })).not.toBeInTheDocument());
   await act(async () => complete(preview));
   expect(screen.queryByText('恢复删除操作')).not.toBeInTheDocument();
   expect(screen.getByLabelText(`选择制程不良 ${record.description}`)).not.toBeDisabled();
 });
 
-it('submits a trimmed reason with CAS versions then clears deleted selection and an open detail', async () => {
+it('submits the recorded version without a reason and closes the deleted detail', async () => {
   let deleted = false;
   vi.mocked(apiRequest).mockImplementation(async path => {
     if (path.endsWith('/deletion')) { deleted = true; return { deletedIds: [record.id], count: 1 }; }
@@ -192,13 +263,14 @@ it('submits a trimmed reason with CAS versions then clears deleted selection and
   const detail = screen.getByRole('dialog', { name: '不良品详情' });
   fireEvent.click(within(detail).getByRole('button', { name: '删除台账' }));
   const dialog = await deletionDialog();
-  fireEvent.change(within(dialog).getByLabelText('删除原因'), { target: { value: '  重复录入  ' } });
-  fireEvent.click(within(dialog).getByRole('button', { name: '确认删除' }));
+  const confirm = within(dialog).getByRole('button', { name: '确认删除' });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
   await screen.findByText('没有匹配的不良记录');
   expect(screen.queryByRole('dialog', { name: '不良品详情' })).not.toBeInTheDocument();
   expect(screen.queryByLabelText('台账批量操作')).not.toBeInTheDocument();
   const call = vi.mocked(apiRequest).mock.calls.find(([path]) => path.endsWith('/deletion'));
-  expect(JSON.parse(String(call?.[1]?.body))).toEqual({ sources: [{ defectId: record.id, expectedVersion: 2 }], reason: '重复录入' });
+  expect(JSON.parse(String(call?.[1]?.body))).toEqual({ sources: [{ defectId: record.id, expectedVersion: 2 }] });
 });
 
 it('retains an unknown deletion while returning to the table then retries the original request and key', async () => {
@@ -208,13 +280,14 @@ it('retains an unknown deletion while returning to the table then retries the or
     return response(path);
   });
   mount(); const dialog = await openDelete();
-  fireEvent.change(within(dialog).getByLabelText('删除原因'), { target: { value: '未知结果原原因' } });
-  fireEvent.click(within(dialog).getByRole('button', { name: '确认删除' }));
+  const confirm = within(dialog).getByRole('button', { name: '确认删除' });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
   await within(dialog).findByText('删除结果未知，请使用原请求重试。');
   fireEvent.click(within(dialog).getByRole('button', { name: '返回台账' }));
   fireEvent.click(await screen.findByText('恢复删除操作'));
   const restored = await deletionDialog();
-  expect(within(restored).getByLabelText('删除原因')).toBeDisabled();
+  expect(within(restored).queryByRole('button', { name: '确认删除' })).not.toBeInTheDocument();
   fireEvent.click(within(restored).getByRole('button', { name: '同请求重试删除' }));
   await waitFor(() => expect(attempts).toBe(2));
   const calls = vi.mocked(apiRequest).mock.calls.filter(([path]) => path.endsWith('/deletion'));
@@ -226,9 +299,33 @@ it('retains an unknown deletion while returning to the table then retries the or
 it('reports a known submit conflict without deleting or keeping an unknown lock', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => { if (path.endsWith('/deletion')) throw new ApiError({ code: 'PROCESS_DEFECT_DELETE_BLOCKED', message: '' }, 409); return response(path); });
   mount(); const dialog = await openDelete();
-  fireEvent.change(within(dialog).getByLabelText('删除原因'), { target: { value: '预览后新增引用' } });
-  fireEvent.click(within(dialog).getByRole('button', { name: '确认删除' }));
+  const confirm = within(dialog).getByRole('button', { name: '确认删除' });
+  await waitFor(() => expect(confirm).toBeEnabled());
+  fireEvent.click(confirm);
   await waitFor(() => expect(within(dialog).getByRole('button', { name: '重新预览' })).toBeEnabled());
   expect(within(dialog).queryByText('同请求重试删除')).not.toBeInTheDocument();
   expect(screen.getByText('已选择 1 条来源')).toBeInTheDocument();
+});
+
+it('refreshes and drops stale deletion targets before selecting their updated versions', async () => {
+  const updated = { ...record, version: 3 };
+  let refreshed = false;
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.endsWith('/deletion-preview')) {
+      if (!refreshed) throw new ApiError({ code: 'CONCURRENCY_CONFLICT', message: '' }, 409);
+      return { ...preview, items: [{ ...preview.items[0], expectedVersion: updated.version }] };
+    }
+    if (refreshed && path.includes('/defects?')) return { items: [updated], total: 1, page: 1, pageSize: 20 };
+    return response(path);
+  });
+  mount(); const dialog = await openDelete();
+  const refresh = await within(dialog).findByRole('button', { name: '刷新台账' });
+  refreshed = true;
+  fireEvent.click(refresh);
+  await waitFor(() => expect(screen.getByLabelText(`选择制程不良 ${record.description}`)).toBeEnabled());
+  expect(screen.getByText('已选择 0 条来源')).toBeVisible();
+  const updatedDialog = await openDelete();
+  await waitFor(() => expect(within(updatedDialog).getByRole('button', { name: '确认删除' })).toBeEnabled());
+  const calls = vi.mocked(apiRequest).mock.calls.filter(([path]) => path.endsWith('/deletion-preview'));
+  expect(JSON.parse(String(calls.at(-1)?.[1]?.body))).toEqual({ sources: [{ defectId: updated.id, expectedVersion: 3 }] });
 });
