@@ -9,6 +9,7 @@ import { ProcessDefectCompletionService } from './process-defect-completion.serv
 import { normalizeProcessDefectFacts } from './process-defect-ledger.service.js';
 import { processDefectRequiredIssues } from './process-defect-registration.policy.js';
 import { ProcessLedgerWorkflowConfigurationService } from './process-ledger-workflow-configuration.service.js';
+import { recordProcessDefectUpdate } from './process-defect-update-records.js';
 
 const sourceFields = ['occurredAt', 'factoryCode', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey', 'sourceObservedAt'] as const;
 const isFactoryIssue = (issue: string) => processDefectIssueField(issue) === 'factoryCode';
@@ -206,6 +207,9 @@ export class ProcessDefectIngestionAdapter {
     await ProcessDefectCompletionService.history(tx, record, row, actor.id, adopt ? 'AI_DESCRIPTION_ADOPTED' : 'AI_DESCRIPTION_APPLIED');
     await this.audit.record({ organizationId: row.organizationId, actorUserId: actor.id, action: adopt ? 'PROCESS_DEFECT_AI_DESCRIPTION_ADOPTED' : 'PROCESS_DEFECT_AI_DESCRIPTION_APPLIED',
       resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version } }, tx);
+    if (adopt && row.description !== record.description) {
+      await recordProcessDefectUpdate(this.audit, tx, { organizationId: row.organizationId, actorUserId: actor.id, resourceId: id, traceId }, ['description']);
+    }
     return 'APPLIED' as const;
   }
 }

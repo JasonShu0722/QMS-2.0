@@ -70,24 +70,26 @@ it('starts the real material-free ledger with selection instead of an empty expa
   expect(screen.getByText('已选择 1 条来源')).toBeVisible();
 });
 
-it('keeps native expansion and the real material detail table for mixed process rows', async () => {
+it('opens the material detail table from a mixed ledger without an expansion column', async () => {
   const material: components['schemas']['ProcessDefectMaterialDto'] = { id: '55555555-5555-4555-8555-555555555555', organizationId, defectId: section.id, position: 0, materialName: '真实明细物料', materialBatch: 'BATCH-DETAIL', verification: 'UNREVIEWED', verificationNotes: null, verifiedById: null, verifiedAt: null, verificationHistory: [] };
   const withMaterial: components['schemas']['ProcessDefectDto'] = { ...defect, id: section.id, description: '含物料不良', materials: [material] };
-  vi.mocked(apiRequest).mockImplementation(async path => path.includes('/defects?') ? { ...list, items: [defect, withMaterial], total: 2 } : baseResponse(path));
-  mount();
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.includes('/defects?')) return { ...list, items: [defect, withMaterial], total: 2 };
+    if (path.split('?')[0] === `/api/v1/process-quality/defects/${withMaterial.id}`) return withMaterial;
+    return baseResponse(path);
+  });
+  const { container } = mount();
   const materialRow = (await screen.findByLabelText(`选择制程不良 ${withMaterial.description}`)).closest('tr')!;
-  const noMaterialRow = screen.getByLabelText(`选择制程不良 ${defect.description}`).closest('tr')!;
-  expect(screen.getByRole('columnheader', { name: '明细' })).toHaveClass('ant-table-row-expand-icon-cell');
-  expect(noMaterialRow.querySelector('button.ant-table-row-expand-icon:not(.ant-table-row-expand-icon-spaced)')).toBeNull();
-  expect(noMaterialRow.querySelector('button.ant-table-row-expand-icon')).toHaveClass('ant-table-row-expand-icon-spaced');
-  const expand = materialRow.querySelector('button.ant-table-row-expand-icon')!;
-  expect(expand).toHaveAttribute('aria-expanded', 'false');
+  const ledger = container.querySelector('.qms-ledger') as HTMLElement;
+  expect(within(ledger).getAllByRole('columnheader')[0]).toHaveAccessibleName('选择');
+  expect(within(ledger).queryByRole('columnheader', { name: '明细' })).not.toBeInTheDocument();
+  expect(ledger.querySelector('button.ant-table-row-expand-icon')).toBeNull();
   expect(screen.queryByText(material.materialName!)).not.toBeInTheDocument();
-  fireEvent.click(expand);
-  expect(expand).toHaveAttribute('aria-expanded', 'true');
-  expect(screen.getByText(material.materialName!)).toBeVisible();
+  fireEvent.click(within(materialRow).getByRole('button', { name: '查看详情' }));
+  const materialName = await screen.findByText(material.materialName!);
+  expect(materialName).toBeVisible();
   expect(screen.getByText(material.materialBatch!)).toBeVisible();
-  const details = screen.getByText(material.materialName!).closest('table')!;
+  const details = materialName.closest('table')!;
   expect(within(details).getByRole('columnheader', { name: '物料名称' })).toBeInTheDocument();
   expect(within(details).getByRole('columnheader', { name: '复核状态' })).toBeInTheDocument();
   expect(within(details).getByText('未复核')).toBeVisible();

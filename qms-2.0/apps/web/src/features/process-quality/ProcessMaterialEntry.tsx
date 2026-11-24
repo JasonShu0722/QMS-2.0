@@ -1,9 +1,11 @@
 import type { components } from '@qms/contracts';
 import { Alert, Button, Form, Input, Select, Spin } from 'antd';
+import { ScanBarcode } from 'lucide-react';
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { apiRequest, ApiError } from '../../api/client';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessTraceScanner } from './ProcessTraceScanner';
+import './process-material-entry.css';
 
 type Material = components['schemas']['ProcessDefectMaterialInputDto'];
 type MaterialMasterPage = components['schemas']['MaterialMasterPageDto'];
@@ -95,7 +97,7 @@ export function ProcessMaterialEntry({ number, value, suppliers, canReadSupplier
       } else {
         callbacks.current.onChange({ materialName });
       }
-      if (!material) setMaterialWarning(`未找到物料「${code}」，请核对物料编码。`);
+      if (!material) setMaterialWarning(`物料「${code}」未匹配主数据，可按原编码保存。`);
     } catch (cause) {
       if (!current()) return;
       const denied = cause instanceof ApiError && cause.status === 403;
@@ -126,8 +128,16 @@ export function ProcessMaterialEntry({ number, value, suppliers, canReadSupplier
     supplierOptions.push({ value: value.supplierProfileId, label: '原供应商（资料不可用）', name: '' });
   }
   const scanPending = pending === 'scan';
+  const missingMaterial = !value?.materialCode?.trim();
+  const missingSupplier = !value?.supplierProfileId;
   return <>
-    <Form.Item label={`物料编码 ${number}`} htmlFor={`${fieldId}-material`} validateStatus={materialWarning ? 'warning' : undefined} help={materialWarning || undefined}>
+    <div className="process-material-entry-tools">
+      <Button type="primary" icon={<ScanBarcode size={16} />} disabled={disabled || !!pending || !canReadSuppliers} onClick={() => setScanning(true)}>扫描批次标签</Button>
+    </div>
+    {scanWarning ? <Alert type="warning" showIcon title={scanWarning} /> : null}
+    <div className="process-material-entry-grid">
+    <Form.Item label={`物料编码 ${number}`} htmlFor={`${fieldId}-material`} required
+      validateStatus={missingMaterial ? 'error' : materialWarning ? 'warning' : undefined} help={missingMaterial ? '请输入物料编码。' : materialWarning || undefined}>
       <Input id={`${fieldId}-material`} value={value?.materialCode ?? ''} maxLength={100} disabled={disabled || scanPending} onChange={event => {
         const code = event.target.value;
         cancelLookup();
@@ -140,20 +150,18 @@ export function ProcessMaterialEntry({ number, value, suppliers, canReadSupplier
       }} />
     </Form.Item>
     <Form.Item label={`物料名称 ${number}`} htmlFor={`${fieldId}-name`}>
-      <Input id={`${fieldId}-name`} value={value?.materialName ?? ''} readOnly disabled={disabled} suffix={pending ? <Spin size="small" aria-label="查询物料" /> : <span />} />
+      <Input id={`${fieldId}-name`} value={value?.materialName ?? ''} placeholder={missingMaterial || pending ? undefined : '未匹配'} readOnly disabled={disabled} suffix={pending ? <Spin size="small" aria-label="查询物料" /> : <span />} />
     </Form.Item>
-    <Form.Item label={`供应商 ${number}`} htmlFor={`${fieldId}-supplier`} validateStatus={supplierWarning ? 'warning' : undefined} help={supplierWarning || undefined}>
+    <Form.Item label={`供应商名称 ${number}`} htmlFor={`${fieldId}-supplier`} required
+      validateStatus={missingSupplier ? 'error' : supplierWarning ? 'warning' : undefined} help={supplierWarning || (missingSupplier ? '请选择供应商。' : undefined)}>
       <Select id={`${fieldId}-supplier`} value={value?.supplierProfileId ?? undefined} allowClear disabled={disabled || scanPending || !canReadSuppliers}
         showSearch={{ optionFilterProp: 'name' }} options={supplierOptions} notFoundContent="没有匹配的供应商"
         onChange={id => { setSupplierWarning(''); onChange(supplierFields(suppliers.find(supplier => supplier.id === id))); }} />
     </Form.Item>
     <Form.Item label={`物料批次 ${number}`} htmlFor={`${fieldId}-batch`}>
-      <div className="process-trace-input">
-        <Input id={`${fieldId}-batch`} value={value?.materialBatch ?? ''} maxLength={100} disabled={disabled || scanPending} onChange={event => { setScanWarning(''); onChange({ materialBatch: event.target.value }); }} />
-        <Button disabled={disabled || !!pending || !canReadSuppliers} onClick={() => setScanning(true)}>扫描批次标签</Button>
-      </div>
-      {scanWarning ? <Alert type="warning" showIcon title={scanWarning} /> : null}
+      <Input id={`${fieldId}-batch`} value={value?.materialBatch ?? ''} maxLength={100} disabled={disabled || scanPending} onChange={event => { setScanWarning(''); onChange({ materialBatch: event.target.value }); }} />
     </Form.Item>
+    </div>
     {scanning && !disabled && canReadSuppliers ? <ProcessTraceScanner purpose="material-batch" onScan={scan} onClose={() => setScanning(false)} /> : null}
   </>;
 }

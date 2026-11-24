@@ -58,7 +58,7 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
     ]));
     expect(document.components!.schemas!.ProcessDefectFiltersDto).toMatchObject({ properties: { logic: { enum: ['ALL', 'ANY'] }, items: { minItems: 1, maxItems: 10 } } });
     expect(document.components!.schemas!.ProcessDefectFilterDto).toMatchObject({ properties: {
-      field: { enum: expect.arrayContaining(['projectCode', 'projectStage', 'defectQuantity', 'pendingCompletion', 'factoryCode', 'productCategory']) },
+      field: { enum: expect.arrayContaining(['projectCode', 'projectStage', 'defectQuantity', 'pendingCompletion', 'factoryCode', 'productCategory', 'analysisProgress', 'dispositionPlan', 'dispositionProgress', 'dispositionCompletedAt', 'registeredByName', 'firstMaterialCode', 'manualProjectCode', 'batchOrWorkOrder']) },
       operator: { enum: expect.arrayContaining(['NE', 'NOT_CONTAINS', 'BEFORE', 'LTE', 'EMPTY']) },
       value: { oneOf: [{ type: 'string' }, { type: 'integer' }, { type: 'boolean' }] },
     } });
@@ -177,6 +177,74 @@ describe('process defect ledger HTTP and PostgreSQL', () => {
       expect(response.body.items.map((row: { id: string }) => row.id)).toEqual(ids);
     }
     await list({ organizationId: other.id, batchCode, filters: filters('ALL', matching) }).expect(403);
+  });
+
+  it('filters optional maintenance and registration columns on the full authorized ledger', async () => {
+    const [recent, older, automatic] = Array.from({ length: 3 }, () => randomUUID());
+    const other = await prisma.organization.create({ data: { code: `OTHER-${randomUUID()}`, name: 'Other', type: 'INTERNAL' } });
+    const traceCode = randomUUID();
+    const supplier = await prisma.supplierBusinessProfile.create({ data: { ownerOrganizationId: organizationId, businessCode: 'SUP-TEST', displayName: '首条物料测试供应商' } });
+    const supplierOrganization = await prisma.organization.create({ data: { code: `SUP-${randomUUID()}`, name: 'Linked supplier', type: 'SUPPLIER' } });
+    const linkedSupplier = await prisma.supplierBusinessProfile.create({ data: { ownerOrganizationId: organizationId, supplierOrganizationId: supplierOrganization.id, businessCode: 'SUP-LINKED', displayName: 'Linked supplier profile' } });
+    const foreignSupplier = await prisma.supplierBusinessProfile.create({ data: { ownerOrganizationId: other.id, supplierOrganizationId: supplierOrganization.id, businessCode: 'SUP-FOREIGN', displayName: 'Other owner supplier profile' } });
+    await prisma.user.update({ where: { id: userId }, data: { fullName: '台账登记测试员' } });
+    const shared = { organizationId, createdById: userId, updatedById: userId, traceCode, description: 'Column filters test', batchCode: 'Batch A' };
+    const maintained = { ...shared, workOrderCode: 'Work A', projectCode: 'Manual A', analysisProgress: '分析 100%_完成', dispositionPlan: 'REWORK' as const, dispositionProgress: '处置完成' };
+    await prisma.processDefect.createMany({ data: [
+      { ...maintained, id: recent, occurredAt: new Date('2026-11-12T18:00:00+08:00'), dispositionCompletedAt: new Date('2026-11-12T23:59:59.999+08:00') },
+      { ...maintained, id: older, occurredAt: new Date('2026-11-11T06:00:00+08:00'), dispositionCompletedAt: new Date('2026-11-12T00:00:00+08:00') },
+      { ...shared, id: automatic, sourceKind: 'IMS', externalSourceSystem: 'IMS', sourceReceiptId: randomUUID(), sourceRowIndex: 0, occurredAt: new Date('2026-11-12T23:00:00+08:00'), dispositionCompletedAt: new Date('2026-11-13T00:00:00+08:00') },
+      { ...maintained, organizationId: other.id, dispositionCompletedAt: new Date('2026-11-12T06:00:00+08:00') },
+      { ...maintained, archivedAt: new Date(), dispositionCompletedAt: new Date('2026-11-12T06:00:00+08:00') },
+    ] });
+    await prisma.$executeRaw`INSERT INTO process_defect_material_items (id, organization_id, defect_id, position, material_code, created_by_id, updated_by_id)
+      VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${recent}::uuid, 0, 'MAT-A', ${userId}::uuid, ${userId}::uuid),
+             (${randomUUID()}::uuid, ${organizationId}::uuid, ${older}::uuid, 1, 'MAT-A', ${userId}::uuid, ${userId}::uuid),
+             (${randomUUID()}::uuid, ${organizationId}::uuid, ${older}::uuid, 0, 'MAT-B', ${userId}::uuid, ${userId}::uuid)`;
+    await prisma.$executeRaw`UPDATE process_defect_material_items SET supplier_profile_id = ${supplier.id}::uuid WHERE organization_id = ${organizationId}::uuid AND defect_id = ${recent}::uuid`;
+    await prisma.$executeRaw`UPDATE process_defect_material_items SET supplier_organization_id = ${supplierOrganization.id}::uuid
+      WHERE organization_id = ${organizationId}::uuid AND defect_id = ${older}::uuid AND position = 0`;
+    const filter = (field: string, operator: string, value?: string) => JSON.stringify({ logic: 'ALL', items: [{ field, operator, value }] });
+    for (const [field, operator, value, ids] of [
+      ['analysisProgress', 'CONTAINS', '100%_', [recent, older]],
+      ['dispositionPlan', 'EQ', 'REWORK', [recent, older]],
+      ['dispositionProgress', 'EQ', '处置完成', [recent, older]],
+      ['dispositionCompletedAt', 'EQ', '2026-11-12', [recent, older]],
+      ['registeredByName', 'CONTAINS', '登记测试', [recent, older]],
+      ['registeredByName', 'EQ', '自动', [automatic]],
+      ['manualProjectCode', 'EQ', 'MANUAL A', [recent, older]],
+      ['batchOrWorkOrder', 'CONTAINS', 'Work A', [recent, older]],
+      ['firstMaterialCode', 'EQ', 'MAT-A', [recent]],
+    ] as const) {
+      const filters = filter(field, operator, value);
+      for (const [index, id] of ids.entries()) {
+        const response = await list({ traceCode, filters, page: index + 1, pageSize: 1 }).expect(200);
+        expect(response.body.total).toBe(ids.length);
+        expect(response.body.items.map((row: { id: string }) => row.id)).toEqual([id]);
+      }
+    }
+    const supplierName = filter('firstMaterialCode', 'CONTAINS', '测试供应商');
+    expect((await list({ traceCode, filters: supplierName }).expect(200)).body.total).toBe(0);
+    const linkedSupplierCode = filter('firstMaterialCode', 'EQ', linkedSupplier.businessCode);
+    expect((await list({ traceCode, filters: linkedSupplierCode }).expect(200)).body.total).toBe(0);
+    const role = await prisma.role.findFirstOrThrow({ where: { organizationId, code: 'PQE' } });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'supplier-quality:profiles:read' } });
+    await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
+    try {
+      for (const filters of [supplierName, filter('firstMaterialCode', 'EQ', supplier.businessCode), filter('firstMaterialCode', 'EQ', 'MAT-A')]) {
+        const response = await list({ traceCode, filters }).expect(200);
+        expect(response.body.items.map((row: { id: string }) => row.id)).toEqual([recent]);
+      }
+      const linked = await list({ traceCode, filters: linkedSupplierCode }).expect(200);
+      expect(linked.body.total).toBe(1);
+      expect(linked.body.items.map((row: { id: string }) => row.id)).toEqual([older]);
+      expect((await list({ traceCode, filters: filter('firstMaterialCode', 'EQ', foreignSupplier.businessCode) }).expect(200)).body.total).toBe(0);
+      const excluded = await list({ traceCode, filters: filter('firstMaterialCode', 'NOT_CONTAINS', '测试供应商') }).expect(200);
+      expect(excluded.body.items.map((row: { id: string }) => row.id)).toEqual([older]);
+    } finally {
+      await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permissionId: permission.id } });
+    }
+    await list({ filters: filter('dispositionPlan', 'EQ', 'UNKNOWN') }).expect(400);
   });
 
   it('rejects malformed filters, unknown properties and invalid field/operator/value combinations', async () => {

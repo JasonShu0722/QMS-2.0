@@ -50,7 +50,7 @@ describe('process defect ledger on PostgreSQL', () => {
   const facts = () => ({
     defectTypeCode: 'OXIDATION', description: '端子表面氧化', defectQuantity: 12,
     occurredAt: new Date('2026-09-24T02:00:00Z'), batchCode: 'B-001', workOrderCode: 'WO-001',
-    operationCode: 'ASSEMBLY', lineCode: 'L-01', materialCode: 'MAT-001',
+    operationCode: 'ASSEMBLY', lineCode: 'L-01',
     productCode: 'PD-00001', traceCode: 'PD-TRACE', factoryCode: 'FACTORY_1' as const,
     responsibilityCategory: 'MATERIAL' as const,
   });
@@ -155,7 +155,7 @@ describe('process defect ledger on PostgreSQL', () => {
   it('grants scanned evidence access only inside the live defect organization and prevents upload after archive', async () => {
     const record = await create();
     const resources = new FileResourceAccess([]);
-    new ProcessDefectFileResourceAdapter(resources).onModuleInit();
+    new ProcessDefectFileResourceAdapter(resources, audit).onModuleInit();
     const grant = await prisma.$transaction((tx) => resources.authorizeAndLock(tx, actor, { resourceType: 'process-defect', resourceId: record.id }, 'upload'));
     expect(grant).toMatchObject({ organizationId, version: 1 });
     await expect(prisma.$transaction((tx) => resources.authorizeAndLock(tx, { ...actor, organizationId: otherOrganizationId }, { resourceType: 'process-defect', resourceId: record.id }, 'read'))).rejects.toMatchObject({ status: 403 });

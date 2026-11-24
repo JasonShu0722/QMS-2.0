@@ -1,6 +1,10 @@
 import { Injectable, Module } from '@nestjs/common';
 import { Prisma, type User } from '../../generated/prisma/client.js';
 
+export function administrativeUserDisplayName(userId: Prisma.Sql): Prisma.Sql {
+  return Prisma.sql`(SELECT COALESCE(person.full_name, person.username) FROM users person WHERE person.id = ${userId})`;
+}
+
 // Server-authorized lifecycle callers only; authorization and transaction ownership stay with the caller.
 @Injectable()
 export class AdministrativeIdentityReadModel {

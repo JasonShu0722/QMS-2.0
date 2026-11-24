@@ -29,6 +29,18 @@ import { supplierProfileHasAccounts } from '../../common/master-data/master-data
 const problemInclude = { profile: true, responseDraft: true } as const;
 type ProblemRecord = Prisma.SupplierQualityProblemGetPayload<{ include: typeof problemInclude }>;
 
+export function supplierProfileIdentityForReference(ownerOrganizationId: Prisma.Sql, profileId: Prisma.Sql, supplierOrganizationId: Prisma.Sql) {
+  return {
+    join: Prisma.sql`LEFT JOIN LATERAL (
+      SELECT profile.display_name AS name, profile.business_code AS code
+      FROM supplier_business_profiles profile
+      WHERE profile.owner_organization_id = ${ownerOrganizationId}
+        AND (profile.id = ${profileId} OR (${profileId} IS NULL AND profile.supplier_organization_id = ${supplierOrganizationId}))
+    ) supplier_identity ON TRUE`,
+    columns: [Prisma.sql`supplier_identity.name`, Prisma.sql`supplier_identity.code`],
+  };
+}
+
 @Injectable()
 export class SupplierQualityService {
   constructor(

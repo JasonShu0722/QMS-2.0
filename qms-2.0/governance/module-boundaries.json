@@ -62,6 +62,7 @@
     "process-quality -> audit-log",
     "process-quality -> authorization",
     "process-quality -> file-management",
+    "process-quality -> identity",
     "process-quality -> material-master",
     "process-quality -> organization",
     "process-quality -> platform-configuration",

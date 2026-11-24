@@ -71,7 +71,7 @@ it('regenerates an existing result and tracks the replacement task without chang
       return replacement as never;
     }
     if (regenerated && path.includes('/ai-tasks?')) return { items: [replacement, task] } as never;
-    if (regenerated && path.includes(`/defects/${defect.id}?`)) {
+    if (regenerated && path.split('?')[0] === `/api/v1/process-quality/defects/${defect.id}`) {
       return { ...defect, descriptionTaskId: replacement.id, descriptionAiStatus: 'PENDING', descriptionAi: null } as never;
     }
     return original(path, init, ...args);

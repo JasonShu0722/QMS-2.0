@@ -73,6 +73,42 @@ async function worker() {
   expect(result.stderr).not.toContain('QMS_WORKER_FAILED');
 }
 
+test('keeps the selection column fixed and shows named maintenance history in the defect drawer', async ({ page }) => {
+  await login(page);
+  const organization = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { organizationId_username: { organizationId: organization.id, username: 'local.internal' } } });
+  const description = `POLISH172-${suffix}`;
+  await prisma.processDefect.create({ data: { organizationId: organization.id, occurredAt: new Date(), description, productCode: description,
+    createdById: user.id, updatedById: user.id } });
+  await page.goto('/app/process-quality');
+  const ledger = page.locator('.process-quality-ledger');
+  await page.getByLabel('搜索制程不良').fill(description);
+  await page.getByLabel('搜索制程不良').press('Enter');
+  const selected = ledger.getByRole('checkbox', { name: `选择制程不良 ${description}` });
+  await expect(selected).toBeVisible();
+  await expect(ledger.getByRole('columnheader', { name: '明细' })).toHaveCount(0);
+  await expect(ledger.getByRole('columnheader', { name: '分析进度' })).toHaveCount(0);
+  const initialX = (await selected.boundingBox())!.x;
+  const scroll = ledger.locator('.ant-table-content, .ant-table-body').first();
+  await scroll.evaluate(element => { element.scrollLeft = element.scrollWidth; });
+  await expect.poll(() => scroll.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+  expect(Math.abs((await selected.boundingBox())!.x - initialX)).toBeLessThan(2);
+  await selected.check();
+  await selected.uncheck();
+  await scroll.evaluate(element => { element.scrollLeft = 0; });
+  await ledger.getByRole('button', { name: description, exact: true }).click();
+  const detail = page.getByRole('dialog', { name: '不良品详情' });
+  await expect(detail.getByText('附件', { exact: true })).toBeVisible();
+  await expect(detail.getByRole('table', { name: '更新记录' })).toContainText('暂无更新记录');
+  await detail.getByRole('button', { name: '分析进度维护', exact: true }).click();
+  const analysis = page.getByRole('dialog', { name: '分析进度维护' });
+  await analysis.getByRole('textbox').fill('已核对产线异常');
+  await analysis.getByRole('button', { name: '保存维护' }).click();
+  await expect(detail.getByText('已核对产线异常')).toBeVisible();
+  await expect(detail.getByRole('table', { name: '更新记录' })).toContainText('更新分析进度');
+  if (user.fullName) await expect(detail.getByRole('table', { name: '更新记录' })).toContainText(user.fullName);
+});
+
 test('centers filter labels and filters product type on the server', async ({ page }) => {
   await login(page);
   const organization = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });
@@ -454,15 +490,25 @@ test('maintains a closed ledger through the disposition and analysis boards', as
   expect(disposed).toMatchObject({ ledgerStatus: 'CLOSED', dispositionPlan: 'SCRAP' });
 
   const materialBatch = `BATCH_${suffix}`;
+  const materialCode = `MATERIAL_${suffix}`;
+  const supplier = await prisma.supplierBusinessProfile.create({ data: { ownerOrganizationId: record.organizationId,
+    businessCode: `SUP_${suffix}`, displayName: `制程测试供应商 ${suffix}` } });
+  await page.reload();
+  await page.getByRole('button', { name: description, exact: true }).click();
   const responsibility = page.getByRole('dialog', { name: '责任判定', exact: true });
   await detail.getByRole('button', { name: '责任判定', exact: true }).click();
+  await responsibility.getByRole('radio', { name: '物料', exact: true }).check();
   await responsibility.getByRole('button', { name: '新增物料明细', exact: true }).click();
+  await responsibility.getByLabel('物料编码 1', { exact: true }).fill(materialCode);
+  await responsibility.getByRole('combobox', { name: '供应商名称 1' }).fill(supplier.displayName);
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: supplier.displayName }).click();
   await responsibility.getByLabel('物料批次 1', { exact: true }).fill(materialBatch);
-  const added = await saveBoard('责任判定', 'RESPONSIBILITY', { defectId: record.id, expectedVersion: disposed.version, fields: { materials: [{ materialBatch }] } });
+  const added = await saveBoard('责任判定', 'RESPONSIBILITY', { defectId: record.id, expectedVersion: disposed.version,
+    fields: { responsibilityCategory: 'MATERIAL', materials: [{ materialCode, materialBatch, supplierProfileId: supplier.id }] } });
   expect(added.materials).toHaveLength(1);
   const materialId = added.materials[0]!.id!;
   await detail.getByRole('button', { name: '责任判定', exact: true }).click();
-  await responsibility.getByLabel(`移除物料 ${materialBatch}`, { exact: true }).check();
+  await responsibility.getByLabel(`移除物料 ${materialCode} / ${materialBatch}`, { exact: true }).check();
   const removed = await saveBoard('责任判定', 'RESPONSIBILITY', { defectId: record.id, expectedVersion: added.version, fields: { removedMaterialIds: [materialId] } });
   expect(removed.materials).toHaveLength(0);
   await detail.getByRole('button', { name: '关闭', exact: true }).click();

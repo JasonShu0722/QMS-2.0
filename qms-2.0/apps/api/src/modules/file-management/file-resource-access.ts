@@ -8,10 +8,12 @@ export type FileActor = WorkflowActor;
 export interface FileResourceRef { resourceType: string; resourceId: string }
 export type FileResourceAction = 'upload' | 'complete' | 'read' | 'delete' | 'attach';
 export interface FileResourceGrant { organizationId: string; version: number; readonly readableFileIds?: readonly string[] }
+export type FileResourceChange = { resource: FileResourceRef; organizationId: string; actorUserId: string; action: 'added' | 'removed'; traceId: string };
 export interface FileResourceAccessAdapter {
   readonly resourceType: string;
   validateUpload?(input: { contentType: string; sizeBytes: number }): void;
   quotaFilter?(transaction: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef): Promise<Prisma.FileObjectWhereInput>;
+  recordChange?(transaction: Prisma.TransactionClient, change: FileResourceChange): Promise<void>;
   authorizeAndLock(transaction: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, action: FileResourceAction): Promise<FileResourceGrant>;
 }
 export const FILE_RESOURCE_ADAPTERS = Symbol('FILE_RESOURCE_ADAPTERS');
@@ -28,6 +30,10 @@ export class FileResourceAccess {
   register(adapter: FileResourceAccessAdapter): void {
     if (!adapter.resourceType || this.adapters.some((candidate) => candidate.resourceType === adapter.resourceType)) throw new Error('FILE_RESOURCE_ADAPTER_DUPLICATE');
     this.adapters.push(adapter);
+  }
+
+  async recordChange(transaction: Prisma.TransactionClient, change: FileResourceChange): Promise<void> {
+    await this.adapters.find(adapter => adapter.resourceType === change.resource.resourceType)?.recordChange?.(transaction, change);
   }
 
   validateUpload(resource: FileResourceRef, input: { contentType: string; sizeBytes: number }): void {

@@ -236,6 +236,8 @@ class ProcessDefectMaintenanceFieldsDto {
 }
 
 class ProcessDefectMaintenanceSourceDto extends ProcessDefectSelectionDto {
+  @ApiPropertyOptional({ description: 'RESPONSIBILITY only. Check the expected version without writing. Fields must be empty.' })
+  @ValidateIf((_, value) => value !== undefined) @IsBoolean() compareOnly?: boolean;
   @ApiProperty({ type: ProcessDefectMaintenanceFieldsDto, description: 'Supply fields from the selected board only. Omitted fields retain their current value.' })
   @IsObject() @ValidateNested() @Type(() => ProcessDefectMaintenanceFieldsDto) fields!: ProcessDefectMaintenanceFieldsDto;
 }
@@ -433,6 +435,18 @@ export class ProcessDefectDto {
   @ApiProperty({ type: ProcessDefectProjectResolutionDto, nullable: true }) componentProject!: ProcessDefectProjectResolutionDto | null;
   @ApiProperty() duplicateCount!: number;
   @ApiProperty({ type: [String] }) issues!: string[];
+}
+
+export class ProcessDefectUpdateRecordDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ type: String, format: 'date-time' }) occurredAt!: string;
+  @ApiProperty() content!: string;
+  @ApiProperty() actorName!: string;
+}
+
+export class ProcessDefectDetailDto extends ProcessDefectDto {
+  @ApiProperty({ type: [String] }) attachmentIds!: string[];
+  @ApiProperty({ type: [ProcessDefectUpdateRecordDto] }) updateRecords!: ProcessDefectUpdateRecordDto[];
 }
 
 export class ProcessDefectPageDto {
