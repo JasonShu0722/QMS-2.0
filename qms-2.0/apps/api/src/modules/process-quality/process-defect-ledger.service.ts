@@ -1,7 +1,7 @@
 import { HttpException, Injectable, Optional } from '@nestjs/common';
 import { isISO8601 } from 'class-validator';
 import { randomUUID } from 'node:crypto';
-import { Prisma, type ProcessDefect } from '../../generated/prisma/client.js';
+import { Prisma, ProcessDefectDispositionPlan, type ProcessDefect } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { ControlledValidationException } from '../../common/contracts/controlled-validation.exception.js';
 import { AdminMutationService, adminPermissions, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
@@ -10,6 +10,7 @@ import { featurePredicate } from '../workflow/workflow-access-policy.js';
 import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
 import type { SupplierCollaborationProjection } from '../../common/eight-d/supplier-collaboration.types.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
+import { MaterialMasterService } from '../material-master/material-master.service.js';
 import type { DomainSourceRecord, DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
 import { ComponentProjectService } from '../platform-configuration/component-project.service.js';
 import { SupplierQualityService } from '../supplier-quality/supplier-quality.service.js';
@@ -20,12 +21,27 @@ import { processDeletionProblemReferences } from '../problem-index/process-delet
 import { processDeletionSelectionReferences } from '../new-product-quality/process-deletion-references.read-model.js';
 import { processDeletionCopyReferences } from '../supplier-eight-d-source/process-deletion-references.read-model.js';
 import { ProblemDomainRegistry } from '../problem-index/problem-domain-registry.js';
+import type { BulkMaintainProcessDefectsDto } from './process-quality.dto.js';
+import { ProcessLedgerWorkflowConfigurationService } from './process-ledger-workflow-configuration.service.js';
 
 type DeletionSelection = { defectId: string; expectedVersion: number };
 
 export const PROCESS_RESPONSIBILITY_CATEGORIES = ['MATERIAL', 'OPERATION', 'EQUIPMENT', 'PROCESS', 'DESIGN', 'FALSE_POSITIVE'] as const;
 export const PROCESS_MATERIAL_VERIFICATIONS = ['UNREVIEWED', 'CONFIRMED_DEFECT', 'NOT_MATERIAL', 'NEGOTIATED', 'RETURN_ANALYSIS'] as const;
+export const PROCESS_DISPOSITION_PLANS = Object.values(ProcessDefectDispositionPlan);
+const PROCESS_LEDGER_BOARD_FIELDS = {
+  ANALYSIS: ['analysisProgress'],
+  RESPONSIBILITY: ['responsibilityCategory', 'materials', 'removedMaterialIds'],
+  DISPOSITION: ['dispositionPlan', 'dispositionProgress', 'dispositionCompletedAt'],
+  CLOSURE: ['status', 'reason'],
+  MATERIAL_REVIEW: ['reviews'],
+} as const;
+export const PROCESS_LEDGER_BOARDS = Object.keys(PROCESS_LEDGER_BOARD_FIELDS) as ProcessLedgerBoard[];
+export const PROCESS_LEDGER_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/;
 export const PROCESS_DEFECT_LEDGER_MAX_ROWS = 1000;
+export type ProcessDispositionPlan = ProcessDefectDispositionPlan;
+export type ProcessLedgerBoard = keyof typeof PROCESS_LEDGER_BOARD_FIELDS;
+type ConfiguredLedgerBoard = Exclude<ProcessLedgerBoard, 'MATERIAL_REVIEW'> | 'REGISTRATION';
 export type ProcessMaterialVerification = (typeof PROCESS_MATERIAL_VERIFICATIONS)[number];
 export type ProcessLedgerStatus = 'FOLLOWING' | 'CLOSED';
 export type ProcessResponsibilityCategory = (typeof PROCESS_RESPONSIBILITY_CATEGORIES)[number];
@@ -204,6 +220,43 @@ function version(value: number) {
   return value;
 }
 
+export function processLedgerBoardPermission(board: unknown) {
+  if (board === 'CLOSURE') return 'process-quality:defects:close';
+  if (board === 'MATERIAL_REVIEW') return 'process-quality:materials:review';
+  return 'process-quality:defects:write';
+}
+
+export function processDefectWriteBoards(input: ProcessDefectInput & { organizationId?: string; expectedVersion?: number }, operation: 'create' | 'update') {
+  const fields = Object.entries(input).filter(([, value]) => value !== undefined).map(([field]) => field);
+  const responsibilityFields = ['responsibilityCategory', 'materials', 'materialCode', 'supplierOrganizationId'];
+  const nonRegistration = [...responsibilityFields, 'analysisProgress', 'organizationId', 'expectedVersion'];
+  const boards: ConfiguredLedgerBoard[] = [];
+  if (operation === 'create' || fields.some(field => !nonRegistration.includes(field))) boards.push('REGISTRATION');
+  if (input.analysisProgress !== undefined) boards.push('ANALYSIS');
+  if (responsibilityFields.some(field => fields.includes(field) && !(operation === 'create' && field === 'materials' && input.materials?.length === 0))) boards.push('RESPONSIBILITY');
+  return boards;
+}
+
+type ProcessMaterialReviewInput = {
+  materialId: string;
+  verification: Exclude<ProcessMaterialVerification, 'UNREVIEWED'>;
+  verificationNotes?: string | null;
+};
+
+function materialReview(input: ProcessMaterialReviewInput): ProcessMaterialReviewInput {
+  if (!(PROCESS_MATERIAL_VERIFICATIONS.slice(1) as readonly string[]).includes(input.verification)) reject('PROCESS_DEFECT_VERIFICATION_INVALID', 400);
+  return { materialId: uuid(input.materialId), verification: input.verification,
+    verificationNotes: input.verificationNotes === undefined ? undefined : optional(input.verificationNotes, 2000) };
+}
+
+function dispositionTime(value: string | null): Date | null {
+  if (value === null) return null;
+  if (typeof value !== 'string' || !PROCESS_LEDGER_TIMESTAMP.test(value) || !isISO8601(value, { strict: true, strictSeparator: true })) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+  return date;
+}
+
 export const PROCESS_FILTER_MAX_LENGTH = 12000;
 export const PROCESS_FILTER_MAX_ITEMS = 10;
 
@@ -323,7 +376,7 @@ export function normalizeProcessDefectFacts(input: ProcessDefectInput, mode: 'MA
 
 const materialFields = ['id', 'materialCode', 'materialName', 'supplierOrganizationId', 'supplierProfileId', 'materialBatch', 'sqeUserId', 'notes'] as const;
 
-export function normalizeProcessDefectMaterials(items: ProcessDefectMaterialInput[]) {
+export function normalizeProcessDefectMaterials(items: ProcessDefectMaterialInput[], keepIdentified = false) {
   if (!Array.isArray(items) || items.length > 100) reject('PROCESS_DEFECT_MATERIALS_INVALID', 400);
   const normalized = items.map(item => {
     if (!item || typeof item !== 'object' || Array.isArray(item) || Object.keys(item).some(key => !(materialFields as readonly string[]).includes(key))) reject('PROCESS_DEFECT_MATERIALS_INVALID', 400);
@@ -333,7 +386,7 @@ export function normalizeProcessDefectMaterials(items: ProcessDefectMaterialInpu
       materialBatch: optional(item.materialBatch, 100), sqeUserId: item.sqeUserId == null ? null : uuid(item.sqeUserId), notes: optional(item.notes, 2000),
     };
     return row;
-  }).filter(item => Object.entries(item).some(([key, value]) => key !== 'id' && value !== null));
+  }).filter(item => (keepIdentified && item.id) || Object.entries(item).some(([key, value]) => key !== 'id' && value !== null));
   const ids = normalized.flatMap(item => item.id ? [item.id] : []);
   if (new Set(ids).size !== ids.length) reject('PROCESS_DEFECT_MATERIALS_INVALID', 400);
   return normalized;
@@ -360,7 +413,9 @@ const materialColumns = Prisma.sql`id, organization_id AS "organizationId", defe
 export class ProcessDefectLedgerService {
   constructor(private readonly prisma: PrismaService, private readonly mutations: AdminMutationService, private readonly audit: AuditLogService,
     @Optional() private readonly projects?: ComponentProjectService, @Optional() private readonly suppliers?: SupplierQualityService,
-    @Optional() private readonly completion?: ProcessDefectCompletionService, @Optional() private readonly readRegistry?: ProblemDomainRegistry) {}
+    @Optional() private readonly completion?: ProcessDefectCompletionService, @Optional() private readonly readRegistry?: ProblemDomainRegistry,
+    @Optional() private readonly workflowConfiguration: ProcessLedgerWorkflowConfigurationService = new ProcessLedgerWorkflowConfigurationService(prisma, mutations, audit),
+    @Optional() private readonly materialMaster?: MaterialMasterService) {}
 
   private scope(actor: AdminActor): string {
     if (actor.accountType !== 'INTERNAL') reject('ORGANIZATION_SCOPE_DENIED', 403);
@@ -404,10 +459,11 @@ export class ProcessDefectLedgerService {
   async create(actor: AdminActor, input: ProcessDefectInput, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
     this.validateInputFields(input);
+    const boards = processDefectWriteBoards(input, 'create');
     const facts = normalizeProcessDefectFacts(input, 'MANUAL');
     const materials = this.materialInput(input, []);
     if (materials?.some(item => item.id)) reject('PROCESS_DEFECT_MATERIALS_INVALID', 400);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_CREATED', payload: { ...facts, materials, occurredAt: facts.occurredAt?.toISOString() ?? null, sourceObservedAt: facts.sourceObservedAt?.toISOString() }, permission: 'process-quality:defects:write', authentication: 'active' }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_CREATED', payload: { ...facts, materials, occurredAt: facts.occurredAt?.toISOString() ?? null, sourceObservedAt: facts.sourceObservedAt?.toISOString() }, permission: 'process-quality:defects:write', authentication: 'active', isolationLevel: 'ReadCommitted' }, async (tx) => {
       await this.validateReferences(tx, organizationId, facts);
       const derived = await this.completionFor(tx, organizationId, facts);
       const record = await tx.processDefect.create({ data: { ...facts, ...derived, registrationVersion: 1,
@@ -420,17 +476,19 @@ export class ProcessDefectLedgerService {
       }
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_CREATED', resourceType: 'ProcessDefect', resourceId: record.id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version, changedFields: 'factoryCode' } }, tx);
       return this.view(tx, await this.find(tx, organizationId, record.id));
-    });
+    }, tx => this.workflowConfiguration.assertCanMaintain(tx, actor, organizationId, boards));
   }
 
   async update(actor: AdminActor, id: string, input: Partial<ProcessDefectInput> & { expectedVersion: number }, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
     version(input.expectedVersion);
     this.validateInputFields(input);
+    const boards = processDefectWriteBoards(input, 'update');
+    if (!boards.length) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
     if (input.externalSourceSystem !== undefined || input.sourceObservedAt !== undefined) reject('PROCESS_DEFECT_EXTERNAL_IDENTITY_IMMUTABLE', 409);
     const { externalRecordKey: supplementIdentity, ...updateInput } = input;
     normalizeProcessDefectFacts(updateInput, 'UPDATE');
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_UPDATED', payload: { id, ...input, occurredAt: input.occurredAt === undefined ? undefined : input.occurredAt?.toISOString() ?? null }, permission: 'process-quality:defects:write', authentication: 'active' }, async (tx) => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_UPDATED', payload: { id, ...input, occurredAt: input.occurredAt === undefined ? undefined : input.occurredAt?.toISOString() ?? null }, permission: 'process-quality:defects:write', authentication: 'active', isolationLevel: 'ReadCommitted' }, async (tx) => {
       if (supplementIdentity !== undefined) {
         const identity = `${organizationId}:IMS:${required(supplementIdentity ?? '', 200)}`;
         await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${identity}, 0))::text`;
@@ -462,7 +520,10 @@ export class ProcessDefectLedgerService {
       await this.classificationHistory(tx, actor, existing, record);
       await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_UPDATED', resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version, previousResponsibilityCategory: existing.responsibilityCategory, responsibilityCategory: record.responsibilityCategory, changedFields: existing.factoryCode === record.factoryCode ? undefined : 'factoryCode' } }, tx);
       return this.view(tx, await this.find(tx, organizationId, id));
-    }, async (tx) => { await this.find(tx, organizationId, id); });
+    }, async tx => {
+      await this.workflowConfiguration.assertCanMaintain(tx, actor, organizationId, boards);
+      if ((await this.find(tx, organizationId, id)).archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
+    });
   }
 
   async archive(actor: AdminActor, id: string, expectedVersion: number, traceId: string, key?: string, reason?: string) {
@@ -559,19 +620,156 @@ export class ProcessDefectLedgerService {
     version(input.expectedVersion);
     const reason = status === 'FOLLOWING' ? required(input.reason ?? '', 2000) : optional(input.reason, 2000);
     const action = status === 'CLOSED' ? 'PROCESS_DEFECT_CLOSED' : 'PROCESS_DEFECT_REOPENED';
-    return this.mutations.run({ actor, organizationId, key, traceId, action, payload: { id, expectedVersion: input.expectedVersion, reason }, permission: 'process-quality:defects:close', authentication: 'active' }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action, payload: { id, expectedVersion: input.expectedVersion, reason }, permission: 'process-quality:defects:close', authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
       await this.lock(tx, organizationId, id);
       const current = await this.find(tx, organizationId, id);
       if (current.archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
       if (current.ledgerStatus === status) reject('PROCESS_DEFECT_STATUS_CONFLICT', 409);
       const changed = await tx.processDefect.updateMany({ where: { id, organizationId, version: input.expectedVersion, archivedAt: null, ledgerStatus: current.ledgerStatus },
-        data: { ledgerStatus: status, closedAt: status === 'CLOSED' ? new Date() : null, closedById: status === 'CLOSED' ? actor.id : null, updatedById: actor.id, version: { increment: 1 } } });
+        data: { ...this.statusFields(actor, status), updatedById: actor.id, version: { increment: 1 } } });
       if (changed.count !== 1) reject('CONCURRENCY_CONFLICT', 409);
-      await tx.$executeRaw`INSERT INTO process_defect_ledger_history (id, organization_id, defect_id, from_status, to_status, actor_user_id, reason, defect_version)
-        VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${id}::uuid, ${current.ledgerStatus}, ${status}, ${actor.id}::uuid, ${reason}, ${input.expectedVersion + 1})`;
-      await this.audit.record({ organizationId, actorUserId: actor.id, action, resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: input.expectedVersion + 1, status } }, tx);
+      await this.statusHistory(tx, actor, current, status, reason, traceId);
       return this.view(tx, await this.find(tx, organizationId, id));
-    }, async tx => { await this.find(tx, organizationId, id); });
+    }, async tx => {
+      await this.workflowConfiguration.assertCanMaintain(tx, actor, organizationId, 'CLOSURE');
+      if ((await this.find(tx, organizationId, id)).archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
+    });
+  }
+
+  private statusFields(actor: AdminActor, status: ProcessLedgerStatus) {
+    return { ledgerStatus: status, closedAt: status === 'CLOSED' ? new Date() : null, closedById: status === 'CLOSED' ? actor.id : null };
+  }
+
+  private async statusHistory(tx: AdminTransaction, actor: AdminActor, current: ProcessDefect, status: ProcessLedgerStatus, reason: string | null, traceId: string) {
+    const { organizationId, id, ledgerStatus, version } = current;
+    const action = status === 'CLOSED' ? 'PROCESS_DEFECT_CLOSED' : 'PROCESS_DEFECT_REOPENED';
+    await tx.$executeRaw`INSERT INTO process_defect_ledger_history (id, organization_id, defect_id, from_status, to_status, actor_user_id, reason, defect_version)
+      VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${id}::uuid, ${ledgerStatus}, ${status}, ${actor.id}::uuid, ${reason}, ${version + 1})`;
+    await this.audit.record({ organizationId, actorUserId: actor.id, action, resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: version + 1, status } }, tx);
+  }
+
+  async bulkMaintenance(actor: AdminActor, input: BulkMaintainProcessDefectsDto, traceId: string, key?: string) {
+    const organizationId = this.scope(actor);
+    if (uuid(input.organizationId) !== organizationId) reject('ORGANIZATION_SCOPE_DENIED', 403);
+    const { board } = input;
+    if (!PROCESS_LEDGER_BOARDS.includes(board) || !Array.isArray(input.sources) || input.sources.length < 1 || input.sources.length > 100) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+    const sources = input.sources.map(source => {
+      if (!source || !source.fields || typeof source.fields !== 'object' || Array.isArray(source.fields)) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+      const provided = Object.entries(source.fields).filter(([, value]) => value !== undefined).map(([field]) => field);
+      const allowed: readonly string[] = PROCESS_LEDGER_BOARD_FIELDS[board];
+      if (!provided.length || provided.some(field => !allowed.includes(field))) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+      const removed = source.fields.removedMaterialIds;
+      if (removed !== undefined && (input.sources.length !== 1 || !Array.isArray(removed) || !removed.length || removed.length > 100)) reject('PROCESS_DEFECT_MATERIALS_INVALID', 400);
+      const removedMaterialIds = (removed ?? []).map(uuid);
+      if (new Set(removedMaterialIds).size !== removedMaterialIds.length) reject('PROCESS_DEFECT_MATERIALS_INVALID', 400);
+      const reviews = board === 'MATERIAL_REVIEW' ? this.normalizeReviews(source.fields.reviews) : [];
+      return { defectId: uuid(source.defectId), expectedVersion: version(source.expectedVersion), fields: source.fields, reviews, removedMaterialIds };
+    });
+    if (new Set(sources.map(source => source.defectId)).size !== sources.length) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+    const ordered = [...sources].sort((left, right) => left.defectId.localeCompare(right.defectId));
+    const targets = new Map<string, { current: ProcessDefect; materials: ProcessDefectMaterial[] }>();
+    const authorize = async (tx: AdminTransaction) => {
+      if (board !== 'MATERIAL_REVIEW') await this.workflowConfiguration.assertCanMaintain(tx, actor, organizationId, board);
+      for (const { defectId, fields, reviews, removedMaterialIds } of ordered) {
+        await this.lock(tx, organizationId, defectId);
+        const current = await this.find(tx, organizationId, defectId);
+        if (current.archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
+        const materials = reviews.length ? await this.designatedMaterials(tx, actor, current, reviews)
+          : fields.materials !== undefined || removedMaterialIds.length ? await this.materials(tx, organizationId, defectId) : [];
+        if (Array.isArray(fields.materials)) {
+          for (const patch of fields.materials) {
+            if (patch?.id === undefined) continue;
+            const materialId = uuid(patch.id);
+            if (!materials.some(item => item.id === materialId)) reject('PROCESS_DEFECT_MATERIAL_NOT_FOUND', 404);
+          }
+        }
+        targets.set(defectId, { current, materials });
+      }
+    };
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECTS_MAINTAINED', payload: { board, sources }, permission: processLedgerBoardPermission(board), authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
+      const records = new Map<string, ProcessDefect>();
+      for (const source of ordered) {
+        const { current, materials } = targets.get(source.defectId)!;
+        records.set(current.id, await this.maintainSource(tx, actor, board, current, materials, source, traceId));
+      }
+      return { items: await this.views(tx, organizationId, sources.map(source => records.get(source.defectId)!)) };
+    }, authorize);
+  }
+
+  private normalizeReviews(reviews: ProcessMaterialReviewInput[] | undefined) {
+    if (!Array.isArray(reviews) || reviews.length < 1 || reviews.length > 100) reject('PROCESS_DEFECT_VERIFICATION_INVALID', 400);
+    const normalized = reviews.map(review => {
+      if (!review || typeof review !== 'object' || Array.isArray(review) || Object.keys(review).some(field => !['materialId', 'verification', 'verificationNotes'].includes(field))) reject('PROCESS_DEFECT_VERIFICATION_INVALID', 400);
+      return materialReview(review);
+    });
+    if (new Set(normalized.map(review => review.materialId)).size !== normalized.length) reject('PROCESS_DEFECT_VERIFICATION_INVALID', 400);
+    return normalized;
+  }
+
+  private async maintainSource(tx: AdminTransaction, actor: AdminActor, board: ProcessLedgerBoard, current: ProcessDefect, materials: ProcessDefectMaterial[],
+    source: { expectedVersion: number; fields: BulkMaintainProcessDefectsDto['sources'][number]['fields']; reviews: ProcessMaterialReviewInput[]; removedMaterialIds: string[] }, traceId: string) {
+    const { id, organizationId } = current;
+    const { fields, expectedVersion, removedMaterialIds } = source;
+    if (current.version !== expectedVersion) reject('CONCURRENCY_CONFLICT', 409);
+    const data: Prisma.ProcessDefectUpdateManyMutationInput = { updatedById: actor.id, version: { increment: 1 } };
+    let reason: string | null = null;
+    let materialChanges: ReturnType<typeof normalizeProcessDefectMaterials> | undefined;
+    let action = 'PROCESS_DEFECT_UPDATED';
+    switch (board) {
+      case 'ANALYSIS':
+        data.analysisProgress = optional(fields.analysisProgress, 10000);
+        data.manualFields = [...new Set([...current.manualFields, 'analysisProgress'])];
+        action = 'PROCESS_DEFECT_ANALYSIS_UPDATED';
+        break;
+      case 'RESPONSIBILITY':
+        if (removedMaterialIds.some(materialId => !materials.some(item => item.id === materialId))) reject('PROCESS_DEFECT_MATERIAL_NOT_FOUND', 404);
+        if (fields.responsibilityCategory !== undefined) {
+          if (fields.responsibilityCategory !== null && !PROCESS_RESPONSIBILITY_CATEGORIES.includes(fields.responsibilityCategory)) reject('PROCESS_DEFECT_CLASSIFICATION_INVALID', 400);
+          data.responsibilityCategory = fields.responsibilityCategory;
+        }
+        if (fields.materials !== undefined) {
+          const patches = fields.materials;
+          if (!Array.isArray(patches) || !patches.length || patches.some(patch => !patch || typeof patch !== 'object' || Array.isArray(patch) || !Object.entries(patch).some(([field, value]) => field !== 'id' && value !== undefined))) reject('PROCESS_DEFECT_MATERIALS_INVALID', 400);
+          materialChanges = this.materialInput({ materials: patches }, materials, true);
+          if (!materialChanges || materialChanges.length !== patches.length || materialChanges.some(item => item.id && removedMaterialIds.includes(item.id))
+            || materials.length - removedMaterialIds.length + materialChanges.filter(item => !item.id).length > 100) reject('PROCESS_DEFECT_MATERIALS_INVALID', 400);
+        }
+        data.manualFields = [...new Set([...current.manualFields, ...Object.entries(fields).filter(([, value]) => value !== undefined).map(([field]) => field === 'removedMaterialIds' ? 'materials' : field)])];
+        action = 'PROCESS_DEFECT_RESPONSIBILITY_UPDATED';
+        break;
+      case 'DISPOSITION':
+        if (fields.dispositionPlan !== undefined) {
+          if (fields.dispositionPlan !== null && !PROCESS_DISPOSITION_PLANS.includes(fields.dispositionPlan)) reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+          data.dispositionPlan = fields.dispositionPlan;
+        }
+        if (fields.dispositionProgress !== undefined) data.dispositionProgress = optional(fields.dispositionProgress, 10000);
+        if (fields.dispositionCompletedAt !== undefined) data.dispositionCompletedAt = dispositionTime(fields.dispositionCompletedAt);
+        action = 'PROCESS_DEFECT_DISPOSITION_UPDATED';
+        break;
+      case 'CLOSURE':
+        if (fields.status !== 'CLOSED' && fields.status !== 'FOLLOWING') reject('PROCESS_DEFECT_INPUT_INVALID', 400);
+        if (current.ledgerStatus === fields.status) reject('PROCESS_DEFECT_STATUS_CONFLICT', 409);
+        reason = fields.status === 'FOLLOWING' ? required(fields.reason ?? '', 2000) : optional(fields.reason, 2000);
+        Object.assign(data, this.statusFields(actor, fields.status));
+        break;
+    }
+    const changed = await tx.processDefect.updateMany({ where: { id, organizationId, version: expectedVersion, archivedAt: null }, data });
+    if (changed.count !== 1) reject('CONCURRENCY_CONFLICT', 409);
+    const record = await this.find(tx, organizationId, id);
+    if (removedMaterialIds.length) await this.removeMaterials(tx, actor, record, removedMaterialIds);
+    if (materialChanges) await this.saveMaterials(tx, actor, record, materialChanges, materials, true);
+    if (board === 'RESPONSIBILITY') await this.classificationHistory(tx, actor, current, record);
+    if (board === 'DISPOSITION') {
+      const { dispositionPlan, dispositionProgress, dispositionCompletedAt } = record;
+      await tx.processDefectDispositionHistory.create({ data: { organizationId, defectId: id, dispositionPlan, dispositionProgress, dispositionCompletedAt, actorUserId: actor.id, defectVersion: record.version } });
+    }
+    if (board === 'CLOSURE') await this.statusHistory(tx, actor, current, fields.status!, reason, traceId);
+    else if (board === 'MATERIAL_REVIEW') {
+      for (const [index, review] of source.reviews.entries()) await this.saveMaterialReview(tx, actor, record, materials[index]!, review, traceId);
+    } else {
+      await this.audit.record({ organizationId, actorUserId: actor.id, action, resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: record.version } }, tx);
+    }
+    return record;
   }
 
   async classify(actor: AdminActor, input: { sources: Array<{ defectId: string; expectedVersion: number }>; responsibilityCategory: ProcessResponsibilityCategory | null }, traceId: string, key?: string) {
@@ -583,13 +781,13 @@ export class ProcessDefectLedgerService {
       return { defectId: uuid(item.defectId), expectedVersion: version(item.expectedVersion) };
     });
     if (new Set(sources.map(item => item.defectId)).size !== sources.length) reject('PROCESS_DEFECT_CLASSIFICATION_INVALID', 400);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECTS_CLASSIFIED', payload: { sources, responsibilityCategory: input.responsibilityCategory }, permission: 'process-quality:defects:write', authentication: 'active' }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECTS_CLASSIFIED', payload: { sources, responsibilityCategory: input.responsibilityCategory }, permission: 'process-quality:defects:write', authentication: 'active', isolationLevel: 'ReadCommitted' }, async tx => {
       const results = [];
       for (const source of [...sources].sort((a, b) => a.defectId.localeCompare(b.defectId))) {
         await this.lock(tx, organizationId, source.defectId);
         const current = await this.find(tx, organizationId, source.defectId);
         if (current.archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
-        const changed = await tx.processDefect.updateMany({ where: { id: source.defectId, organizationId, version: source.expectedVersion, archivedAt: null }, data: { responsibilityCategory: input.responsibilityCategory, updatedById: actor.id, version: { increment: 1 } } });
+        const changed = await tx.processDefect.updateMany({ where: { id: source.defectId, organizationId, version: source.expectedVersion, archivedAt: null }, data: { responsibilityCategory: input.responsibilityCategory, manualFields: [...new Set([...current.manualFields, 'responsibilityCategory'])], updatedById: actor.id, version: { increment: 1 } } });
         if (changed.count !== 1) reject('CONCURRENCY_CONFLICT', 409);
         const record = await this.find(tx, organizationId, source.defectId);
         await this.classificationHistory(tx, actor, current, record);
@@ -597,34 +795,54 @@ export class ProcessDefectLedgerService {
         results.push(await this.view(tx, record));
       }
       return { items: results.sort((a, b) => sources.findIndex(source => source.defectId === a.id) - sources.findIndex(source => source.defectId === b.id)) };
-    }, async tx => { for (const source of sources) await this.find(tx, organizationId, source.defectId); });
+    }, async tx => {
+      await this.workflowConfiguration.assertCanMaintain(tx, actor, organizationId, 'RESPONSIBILITY');
+      for (const source of sources) if ((await this.find(tx, organizationId, source.defectId)).archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
+    });
   }
 
   async verifyMaterial(actor: AdminActor, id: string, materialId: string, input: { expectedVersion: number; verification: Exclude<ProcessMaterialVerification, 'UNREVIEWED'>; verificationNotes?: string | null }, traceId: string, key?: string) {
     const organizationId = this.scope(actor);
     version(input.expectedVersion);
-    materialId = uuid(materialId);
-    if (!(PROCESS_MATERIAL_VERIFICATIONS.slice(1) as readonly string[]).includes(input.verification)) reject('PROCESS_DEFECT_VERIFICATION_INVALID', 400);
-    const verificationNotes = optional(input.verificationNotes, 2000);
+    const review = materialReview({ materialId, verification: input.verification, verificationNotes: input.verificationNotes ?? null });
     const designated = async (tx: AdminTransaction) => {
-      await this.find(tx, organizationId, id);
-      const material = (await this.materials(tx, organizationId, id)).find(item => item.id === materialId);
-      if (!material) reject('PROCESS_DEFECT_MATERIAL_NOT_FOUND', 404);
-      if (material.sqeUserId !== actor.id || !(await this.validSqe(tx, organizationId, actor.id))) reject('PROCESS_DEFECT_SQE_REQUIRED', 403);
-      return material;
+      const current = await this.find(tx, organizationId, id);
+      if (current.archivedAt) reject('PROCESS_DEFECT_ARCHIVED', 409);
+      return (await this.designatedMaterials(tx, actor, current, [review]))[0]!;
     };
-    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_MATERIAL_VERIFIED', payload: { id, materialId, expectedVersion: input.expectedVersion, verification: input.verification, verificationNotes }, permission: 'process-quality:materials:review', authentication: 'active' }, async tx => {
+    return this.mutations.run({ actor, organizationId, key, traceId, action: 'PROCESS_DEFECT_MATERIAL_VERIFIED', payload: { id, expectedVersion: input.expectedVersion, ...review }, permission: 'process-quality:materials:review', authentication: 'active' }, async tx => {
       await this.lock(tx, organizationId, id);
       const material = await designated(tx);
       const changed = await tx.processDefect.updateMany({ where: { id, organizationId, version: input.expectedVersion, archivedAt: null }, data: { updatedById: actor.id, version: { increment: 1 } } });
       if (changed.count !== 1) reject('CONCURRENCY_CONFLICT', 409);
-      await tx.$executeRaw`UPDATE process_defect_material_items SET verification = ${input.verification}, verification_notes = ${verificationNotes}, verified_by_id = ${actor.id}::uuid,
-        verified_at = CURRENT_TIMESTAMP, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${materialId}::uuid AND organization_id = ${organizationId}::uuid AND defect_id = ${id}::uuid AND removed_at IS NULL`;
-      await tx.$executeRaw`INSERT INTO process_defect_material_verifications (id, organization_id, defect_id, material_item_id, verification, verification_notes, actor_user_id, defect_version, material_snapshot)
-        VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${id}::uuid, ${materialId}::uuid, ${input.verification}, ${verificationNotes}, ${actor.id}::uuid, ${input.expectedVersion + 1}, ${JSON.stringify(this.editableMaterial(material))}::jsonb)`;
-      await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_MATERIAL_VERIFIED', resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: input.expectedVersion + 1, status: input.verification } }, tx);
-      return this.view(tx, await this.find(tx, organizationId, id));
+      const record = await this.find(tx, organizationId, id);
+      await this.saveMaterialReview(tx, actor, record, material, review, traceId);
+      return this.view(tx, record);
     }, async tx => { await designated(tx); });
+  }
+
+  private async designatedMaterials(tx: AdminTransaction, actor: AdminActor, record: ProcessDefect, reviews: ProcessMaterialReviewInput[]) {
+    const materials = await this.materials(tx, record.organizationId, record.id);
+    const selected = reviews.map(review => {
+      const material = materials.find(item => item.id === review.materialId);
+      if (!material) reject('PROCESS_DEFECT_MATERIAL_NOT_FOUND', 404);
+      if (material.sqeUserId !== actor.id) reject('PROCESS_DEFECT_SQE_REQUIRED', 403);
+      return material;
+    });
+    if (!(await this.validSqe(tx, record.organizationId, actor.id))) reject('PROCESS_DEFECT_SQE_REQUIRED', 403);
+    return selected;
+  }
+
+  private async saveMaterialReview(tx: AdminTransaction, actor: AdminActor, record: ProcessDefect, material: ProcessDefectMaterial, review: ProcessMaterialReviewInput, traceId: string) {
+    const { id, organizationId, version } = record;
+    const { materialId, verification } = review;
+    const notes = review.verificationNotes === undefined ? material.verificationNotes : review.verificationNotes;
+    const changed = await tx.$executeRaw`UPDATE process_defect_material_items SET verification = ${verification}, verification_notes = ${notes}, verified_by_id = ${actor.id}::uuid,
+      verified_at = CURRENT_TIMESTAMP, updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP WHERE id = ${materialId}::uuid AND organization_id = ${organizationId}::uuid AND defect_id = ${id}::uuid AND removed_at IS NULL`;
+    if (changed !== 1) reject('CONCURRENCY_CONFLICT', 409);
+    await tx.$executeRaw`INSERT INTO process_defect_material_verifications (id, organization_id, defect_id, material_item_id, verification, verification_notes, actor_user_id, defect_version, material_snapshot)
+      VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${id}::uuid, ${materialId}::uuid, ${verification}, ${notes}, ${actor.id}::uuid, ${version}, ${JSON.stringify(this.editableMaterial(material))}::jsonb)`;
+    await this.audit.record({ organizationId, actorUserId: actor.id, action: 'PROCESS_DEFECT_MATERIAL_VERIFIED', resourceType: 'ProcessDefect', resourceId: id, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: version, status: verification } }, tx);
   }
 
   async materialSqes(actor: AdminActor, query: { page: number; pageSize: number; search?: string }) {
@@ -825,7 +1043,7 @@ export class ProcessDefectLedgerService {
       supplierProfileId: item.supplierProfileId, materialBatch: item.materialBatch, sqeUserId: item.sqeUserId, notes: item.notes };
   }
 
-  private materialInput(input: Partial<ProcessDefectInput>, previous: ProcessDefectMaterial[]) {
+  private materialInput(input: Partial<ProcessDefectInput>, previous: ProcessDefectMaterial[], patch = false) {
     const legacy = input.materialCode !== undefined || input.supplierOrganizationId !== undefined;
     if (input.materials !== undefined) {
       if (legacy) reject('PROCESS_DEFECT_MATERIAL_OWNERSHIP_CONFLICT', 400);
@@ -839,15 +1057,17 @@ export class ProcessDefectLedgerService {
         const old = changes.id ? previous.find(row => row.id === changes.id) : undefined;
         if (item.id !== undefined && !old) reject('PROCESS_DEFECT_MATERIAL_NOT_FOUND', 404);
         return { ...(old ? this.editableMaterial(old) : {}),
+          ...(old && changes.materialCode !== undefined && optional(changes.materialCode as string | null, 100) !== old.materialCode ? { materialName: null } : {}),
           ...(old && changes.supplierProfileId !== undefined && changes.supplierProfileId !== old.supplierProfileId && changes.supplierOrganizationId === undefined ? { supplierOrganizationId: null } : {}),
           ...(old && changes.supplierOrganizationId !== undefined && changes.supplierOrganizationId !== old.supplierOrganizationId && changes.supplierProfileId === undefined ? { supplierProfileId: null } : {}),
           ...changes };
-      }));
+      }), patch);
     }
     if (!legacy) return undefined;
     const [first, ...rest] = previous.map(item => this.editableMaterial(item));
     const supplierOrganizationId = input.supplierOrganizationId == null ? input.supplierOrganizationId : uuid(input.supplierOrganizationId);
-    return normalizeProcessDefectMaterials([{ ...first, ...(input.materialCode === undefined ? {} : { materialCode: input.materialCode }),
+    return normalizeProcessDefectMaterials([{ ...first, ...(input.materialCode === undefined ? {} : { materialCode: input.materialCode,
+      ...(optional(input.materialCode, 100) !== first?.materialCode ? { materialName: null } : {}) }),
       ...(supplierOrganizationId === undefined ? {} : { supplierOrganizationId,
         ...(supplierOrganizationId !== first?.supplierOrganizationId ? { supplierProfileId: null } : {}) }) }, ...rest]);
   }
@@ -875,7 +1095,7 @@ export class ProcessDefectLedgerService {
       FROM process_defect_material_verifications WHERE ${scope} ORDER BY defect_version, id`;
   }
 
-  private async saveMaterials(tx: AdminTransaction, actor: AdminActor, record: ProcessDefect, items: ReturnType<typeof normalizeProcessDefectMaterials>, previous: ProcessDefectMaterial[]) {
+  private async saveMaterials(tx: AdminTransaction, actor: AdminActor, record: ProcessDefect, items: ReturnType<typeof normalizeProcessDefectMaterials>, previous: ProcessDefectMaterial[], patch = false) {
     for (const item of items) {
       const old = item.id ? previous.find(row => row.id === item.id) : undefined;
       if (item.id && !old) reject('PROCESS_DEFECT_MATERIAL_NOT_FOUND', 404);
@@ -891,25 +1111,40 @@ export class ProcessDefectLedgerService {
       }
     }
     // Soft removal keeps each SQE conclusion attached to its historical material identity.
-    const ids = items.flatMap(item => item.id ? [item.id] : []);
-    await tx.$executeRaw(Prisma.sql`UPDATE process_defect_material_items SET removed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, updated_by_id = ${actor.id}::uuid
-      WHERE organization_id = ${record.organizationId}::uuid AND defect_id = ${record.id}::uuid AND removed_at IS NULL ${ids.length ? Prisma.sql`AND id NOT IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))})` : Prisma.empty}`);
-    for (const [position, item] of items.entries()) {
+    if (!patch) await this.removeMaterials(tx, actor, record, previous.filter(old => !items.some(item => item.id === old.id)).map(old => old.id));
+    let nextPosition = Math.max(-1, ...previous.map(item => item.position)) + 1;
+    let canReadMaterialMaster: boolean | undefined;
+    for (const [index, item] of items.entries()) {
+      const old = item.id ? previous.find(row => row.id === item.id) : undefined;
+      if (this.materialMaster && item.materialCode && item.materialCode !== old?.materialCode && !item.materialName) {
+        canReadMaterialMaster ??= (await adminPermissions(tx, actor.id, record.organizationId)).includes('material-master:read');
+        if (canReadMaterialMaster) {
+          const master = await this.materialMaster.findByCode(tx, actor, item.materialCode);
+          item.materialName = master?.materialName ?? null;
+        }
+      }
       if (item.id) {
-        const old = previous.find(row => row.id === item.id)!;
+        const position = patch ? old!.position : index;
         // A conclusion describes the reviewed facts, not a reusable material row id; its history stays immutable.
-        const resetReview = processMaterialIdentityChanged(old, item)
+        const resetReview = processMaterialIdentityChanged(old!, item)
           ? Prisma.sql`verification = 'UNREVIEWED', verification_notes = NULL, verified_by_id = NULL, verified_at = NULL,` : Prisma.empty;
         await tx.$executeRaw(Prisma.sql`UPDATE process_defect_material_items SET position = ${position}, material_code = ${item.materialCode}, material_name = ${item.materialName},
           supplier_organization_id = ${item.supplierOrganizationId}::uuid, supplier_profile_id = ${item.supplierProfileId}::uuid, material_batch = ${item.materialBatch},
           sqe_user_id = ${item.sqeUserId}::uuid, notes = ${item.notes}, ${resetReview} updated_by_id = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP
           WHERE id = ${item.id}::uuid AND organization_id = ${record.organizationId}::uuid AND defect_id = ${record.id}::uuid AND removed_at IS NULL`);
       } else {
+        const position = patch ? nextPosition++ : index;
         await tx.$executeRaw`INSERT INTO process_defect_material_items (id, organization_id, defect_id, position, material_code, material_name, supplier_organization_id, supplier_profile_id, material_batch, sqe_user_id, notes, created_by_id, updated_by_id)
           VALUES (${randomUUID()}::uuid, ${record.organizationId}::uuid, ${record.id}::uuid, ${position}, ${item.materialCode}, ${item.materialName}, ${item.supplierOrganizationId}::uuid,
             ${item.supplierProfileId}::uuid, ${item.materialBatch}, ${item.sqeUserId}::uuid, ${item.notes}, ${actor.id}::uuid, ${actor.id}::uuid)`;
       }
     }
+  }
+
+  private async removeMaterials(tx: AdminTransaction, actor: AdminActor, record: ProcessDefect, ids: string[]) {
+    if (!ids.length) return;
+    await tx.$executeRaw(Prisma.sql`UPDATE process_defect_material_items SET removed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, updated_by_id = ${actor.id}::uuid
+      WHERE organization_id = ${record.organizationId}::uuid AND defect_id = ${record.id}::uuid AND removed_at IS NULL AND id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))})`);
   }
 
   private async classificationHistory(tx: AdminTransaction, actor: AdminActor, previous: ProcessDefect, record: ProcessDefect) {
@@ -928,7 +1163,7 @@ export class ProcessDefectLedgerService {
     const ids = Prisma.join(records.map(record => Prisma.sql`${record.id}::uuid`));
     const scope = Prisma.sql`organization_id = ${organizationId}::uuid AND defect_id IN (${ids})`;
     const registrantIds = [...new Set(records.filter(record => record.sourceKind !== 'IMS').map(record => record.createdById))];
-    const [materialRows, verificationRows, ledgerRows, classificationRows, duplicateRows, registrants] = await Promise.all([
+    const [materialRows, verificationRows, ledgerRows, classificationRows, duplicateRows, registrants, dispositionRows] = await Promise.all([
       this.materialRows(tx, scope),
       this.materialVerificationHistory(tx, scope),
       tx.$queryRaw<(ProcessLedgerHistory & { defectId: string })[]>`SELECT id, defect_id AS "defectId", from_status AS "fromStatus", to_status AS "toStatus", actor_user_id AS "actorUserId", reason,
@@ -945,6 +1180,9 @@ export class ProcessDefectLedgerService {
           WHERE organization_id = ${organizationId}::uuid AND archived_at IS NULL GROUP BY operation_code, trace_code
         ) SELECT selected.id, counts.total AS "duplicateCount" FROM selected JOIN counts USING (operation_code, trace_code)` : [],
       registrantIds.length ? tx.user.findMany({ where: { id: { in: registrantIds } }, select: { id: true, fullName: true, username: true } }) : [],
+      tx.processDefectDispositionHistory.findMany({ where: { organizationId, defectId: { in: records.map(record => record.id) } },
+        select: { id: true, defectId: true, dispositionPlan: true, dispositionProgress: true, dispositionCompletedAt: true, actorUserId: true, defectVersion: true, recordedAt: true },
+        orderBy: { defectVersion: 'asc' } }),
     ]);
     const verificationsByDefect = groupByDefect(verificationRows);
     const verificationsByMaterial = new Map<string, ProcessMaterialVerificationHistory[]>();
@@ -955,6 +1193,7 @@ export class ProcessDefectLedgerService {
     for (const item of materialRows) appendToGroup(materialsByDefect, item.defectId, { ...item, verificationHistory: verificationsByMaterial.get(item.id) ?? [] });
     const ledgerByDefect = groupByDefect(ledgerRows);
     const classificationsByDefect = groupByDefect(classificationRows);
+    const dispositionsByDefect = groupByDefect(dispositionRows);
     const countsByDefect = new Map(duplicateRows.map(row => [row.id, Number(row.duplicateCount)]));
     const registrantsById = new Map(registrants.map(user => [user.id, user.fullName ?? user.username]));
     return records.map(record => {
@@ -981,7 +1220,7 @@ export class ProcessDefectLedgerService {
         registeredByName: record.sourceKind === 'IMS' ? '自动' : registrantsById.get(record.createdById) ?? null,
         materialCode: materials[0]?.materialCode ?? null, supplierOrganizationId: materials[0]?.supplierOrganizationId ?? null,
         materials, materialVerificationHistory: verificationsByDefect.get(record.id) ?? [], ledgerHistory: ledgerByDefect.get(record.id) ?? [],
-        classificationHistory: classificationsByDefect.get(record.id) ?? [], componentProject, duplicateCount, issues };
+        classificationHistory: classificationsByDefect.get(record.id) ?? [], dispositionHistory: dispositionsByDefect.get(record.id) ?? [], componentProject, duplicateCount, issues };
     });
   }
 

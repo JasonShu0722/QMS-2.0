@@ -38,7 +38,11 @@ it('loads the defect ledger and opens source detail with linked issues', async (
 });
 
 it('keeps shipment requests out of the defect ledger and retains authorized registration in the toolbar', async () => {
-  vi.mocked(apiRequest).mockImplementation(async path => path === '/api/v1/system/my-permissions' ? { permissions: ['process-quality:defects:read', 'process-quality:defects:write'] } : { ...page, items: [], total: 0 });
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path === '/api/v1/system/my-permissions') return { permissions: ['process-quality:defects:read', 'process-quality:defects:write'] };
+    if (path.endsWith('/ledger-workflow-configuration/capabilities')) return { boards: ['REGISTRATION'] };
+    return { ...page, items: [], total: 0 };
+  });
   render(<MemoryRouter><ProcessDefectLedgerPage /></MemoryRouter>);
   const toolbar = within(screen.getByLabelText('台账工具栏'));
   expect(await toolbar.findByText('登记不良')).toBeVisible();

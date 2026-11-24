@@ -30,7 +30,8 @@ const items: (ConsoleNavigationItem & { permissions?: string[] })[] = [
   { path: '/console/configuration', label: '平台配置', english: 'Platform configuration', group: 'configuration', icon: Settings, module: 'configuration' },
   { path: '/console/ai-connections', label: '模型渠道', english: 'Model channels', group: 'ai', icon: Bot, module: 'ai-connections', permissions: ['ai:connections:read'] },
   { path: '/console/ai-applications', label: '提示词应用', english: 'Prompt applications', group: 'ai', icon: MessageSquareText, module: 'ai-applications', permissions: ['ai:applications:read'] },
-  { path: '/console/workflows', label: '流程管理', english: 'Workflow management', group: 'configuration', icon: GitBranch, module: 'workflows' },
+  { path: '/console/workflows', label: '流程管理', english: 'Workflow management', group: 'configuration', icon: GitBranch, module: 'workflows', permissions: ['workflow:manage'] },
+  { path: '/console/eight-d-bindings', label: '8D 流程绑定', english: '8D workflow bindings', group: 'configuration', icon: Link2, module: 'workflows', permissions: ['workflow:manage'] },
   { path: '/console/audit-log', label: '管理审计', english: 'Management audit', group: 'security', icon: ClipboardList, module: 'audit' },
   { path: '/console/outbox', label: '失败队列', english: 'Failed events', group: 'security', icon: ListRestart, module: 'outbox' },
   { path: '/console/api-monitoring', label: 'API 技术观测', english: 'API observations', group: 'security', icon: Activity, module: 'api-monitoring', permissions: ['console:api:read'] },
@@ -44,11 +45,9 @@ export function consoleNavigation(context: ConsoleContext): ConsoleNavigationIte
   const allowed = items.filter(item => permitted(item, context));
   return allowed.length ? [home, ...allowed] : [];
 }
-const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
-const workflowDetail = new RegExp(`^/console/workflows/${uuid}/${uuid}$`, 'i');
 export function consoleRoute(path: string, context: ConsoleContext): { status: 'allowed' | 'forbidden' | 'not-found'; item?: ConsoleNavigationItem; module?: ConsoleModule } {
   if (path === '/console' || path === '/console/') return { status: consoleNavigation(context).length ? 'allowed' : 'forbidden', item: home };
-  const item = items.find(candidate => candidate.path === path || candidate.module === 'workflows' && workflowDetail.test(path));
+  const item = items.find(candidate => candidate.path === path);
   if (!item) return { status: 'not-found' };
   const module = permitted(item, context);
   return { status: module ? 'allowed' : 'forbidden', item, module };

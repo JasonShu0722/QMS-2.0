@@ -147,9 +147,9 @@ it('does not show a target organization selector for a session-home route', asyn
   await screen.findByText('受保护内容');
   expect(screen.getByRole('banner').querySelector('[aria-label="管理目标组织"]')).toBeNull();
 });
-it('retains a real return link and heading focus on a deep workflow route', async () => {
+it('retains a real return link and heading focus on the workflow configuration route', async () => {
   getContext.mockResolvedValue(context('b'));
-  renderLayout('/console/workflows/12345678-1234-4234-8234-123456789abc/87654321-4321-4321-8321-123456789abc?organizationId=b');
+  renderLayout('/console/workflows?organizationId=b');
   await screen.findByText('受保护内容');
   const breadcrumb = screen.getByRole('navigation', { name: '面包屑' });
   expect(within(breadcrumb).getByRole('link', { name: '管理控制台' })).toHaveAttribute('href', '/console?organizationId=b');
@@ -216,12 +216,12 @@ it('opens a group from the icon rail and shares expansion with the mobile drawer
   expect(within(await screen.findByRole('dialog', { name: '管理导航' })).getByRole('link', { name: '流程管理' })).toHaveAttribute('aria-current', 'page');
 });
 it('renders semantic icons for every menu and reserves the gear for platform configuration', async () => {
-  const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'process-quality:configuration:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
+  const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'process-quality:configuration:read', 'console:api:read', 'console:exchanges:read', 'console:services:read', 'workflow:manage'];
   getContext.mockResolvedValue({ ...context(), modules: (['users', 'organizations', 'supplier-accounts', 'reconfiguration', 'problem-reconfiguration', 'master-data', 'configuration', 'workflows', 'audit', 'outbox', 'api-monitoring', 'data-exchanges', 'services'] as const).map(key => ({ key, scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: 'a', permissions })) });
   renderLayout('/console');
   await screen.findByText('受保护内容');
   const links = screen.getByRole('navigation', { name: '管理导航' }).querySelectorAll('a');
-  expect(links).toHaveLength(19);
+  expect(links).toHaveLength(20);
   links.forEach(link => {
     const icon = link.querySelector('svg');
     expect(icon).toHaveAttribute('aria-hidden', 'true');

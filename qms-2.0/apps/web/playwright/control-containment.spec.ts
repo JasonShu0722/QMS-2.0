@@ -1,7 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import type { components } from '@qms/contracts';
 import { completeMfa } from './mfa-login';
@@ -70,14 +68,6 @@ async function loginAs(page: Page, username: string, loginPassword: string, expe
   await page.getByRole('button', { name: '登录', exact: true }).click();
   await completeMfa(page.request, await response, username, page);
   await expect(page).toHaveURL(expectedPath);
-}
-
-function workflowFixture(action: string, fixturePassword: string, organizationId?: string) {
-  const result = spawnSync(process.execPath, ['test/fixtures/workflow-designer-browser.mjs', action, ...(organizationId ? [organizationId] : [])], {
-    cwd: resolve(process.cwd(), '../api'), env: { ...process.env, QMS_ACCEPTANCE_DISPOSABLE_DATABASE: 'true', QMS_DESIGNER_FIXTURE_PASSWORD: fixturePassword }, encoding: 'utf8', timeout: 30_000, windowsHide: true,
-  });
-  if (result.status !== 0) throw new Error(`Workflow fixture ${action} failed: ${result.stderr}`);
-  return result.stdout;
 }
 
 async function assertControlsFit(dialog: Locator) {
@@ -179,44 +169,16 @@ test('real management controls stay contained through modal, drawer and resizabl
   }
 });
 
-test('real workflow native textarea stays within its column when manually resized', async ({ page }) => {
-  const fixturePassword = `${randomUUID()}Aa8!`;
-  const data = JSON.parse(workflowFixture('setup', fixturePassword)) as { organizationId: string; users: { username: string }[] };
-  try {
-    await loginAs(page, data.users[0]!.username, fixturePassword);
-    await page.goto('/console/workflows');
-    await page.getByRole('button', { name: '新建流程', exact: true }).click();
-    const suffix = randomUUID().replaceAll('-', '').slice(0, 12);
-    await page.getByLabel('流程代码', { exact: true }).fill(`CTRL_${suffix}`);
-    await page.getByLabel('流程名称', { exact: true }).fill(`控件尺寸原生文本 ${suffix}`);
-    const creating = page.waitForResponse(response => new URL(response.url()).pathname === '/api/v1/workflows' && response.request().method() === 'POST');
-    await page.getByRole('button', { name: '创建草稿', exact: true }).click();
-    const created = await creating;
-    expect(created.status()).toBe(201);
-    const workflow = await created.json() as Schema['WorkflowDefinitionResponseDto'];
-    await expect(page).toHaveURL(new RegExp(`/console/workflows/${workflow.id}/${workflow.version.id}$`));
-    const description = page.getByRole('textbox', { name: '流程说明', exact: true });
-    const next = page.getByRole('textbox', { name: '发布说明', exact: true });
-    for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 760 }, { width: 320, height: 760 }]) {
-      await page.setViewportSize(viewport);
-      await description.scrollIntoViewIfNeeded();
-      const before = await description.boundingBox();
-      const nextBefore = await next.boundingBox();
-      expect(await description.evaluate(element => getComputedStyle(element).resize)).toMatch(/vertical|both/);
-      await page.mouse.move(before!.x + before!.width - 3, before!.y + before!.height - 3);
-      await page.mouse.down();
-      await page.mouse.move(before!.x + before!.width + 120, before!.y + before!.height + 70, { steps: 8 });
-      await page.mouse.up();
-      const after = await description.boundingBox();
-      const nextAfter = await next.boundingBox();
-      const parent = await description.locator('xpath=..').boundingBox();
-      expect(after!.height).toBeGreaterThan(before!.height + 20);
-      expect(after!.x + after!.width).toBeLessThanOrEqual(parent!.x + parent!.width + 1);
-      if (viewport.width <= 640) expect(nextAfter!.y).toBeGreaterThan(nextBefore!.y + 20);
-      await description.evaluate(element => { element.style.height = ''; element.style.width = ''; });
-    }
-  } finally {
-    workflowFixture('cleanup', fixturePassword, data.organizationId);
+test('real workflow position selectors fit the configuration form at all three widths', async ({ page }) => {
+  await login(page);
+  await page.goto('/console/workflows');
+  await page.getByRole('button', { name: '制程不合格台账', exact: true }).click();
+  const form = page.locator('main form');
+  await expect(form.getByRole('combobox')).toHaveCount(5);
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 760 }, { width: 320, height: 760 }]) {
+    await page.setViewportSize(viewport);
+    await assertControlsFit(form);
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(viewport.width);
   }
 });
 
@@ -226,10 +188,10 @@ test('real business drawer keeps number, native date and growing textarea inside
   await page.getByRole('button', { name: '登记不良', exact: true }).click();
   const drawer = page.getByRole('dialog', { name: '登记不良', exact: true });
   await expect(drawer).toBeVisible();
-  const description = drawer.getByRole('textbox', { name: '失效现象', exact: true });
+  const description = drawer.getByLabel(/不良描述$/);
   await description.fill(`真实业务草稿 ${'长中英文 ABCDEFGHIJKLMNOP '.repeat(60)}`);
-  await drawer.getByRole('spinbutton', { name: '不良数量', exact: true }).fill('123');
-  await drawer.getByLabel('发生时间', { exact: true }).fill('2026-11-14T10:00');
+  await drawer.getByRole('spinbutton', { name: /不良数量$/ }).fill('123');
+  await drawer.getByLabel(/发生时间$/).fill('2026-11-14T10:00');
   for (const viewport of [{ width: 1440, height: 900 }, { width: 390, height: 760 }, { width: 320, height: 760 }]) {
     await page.setViewportSize(viewport);
     await assertControlsFit(drawer);

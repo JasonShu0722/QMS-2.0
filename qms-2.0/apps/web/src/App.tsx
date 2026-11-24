@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Result } from 'antd';
 import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 'react-router-dom';
 import { ThemeProvider } from './theme/ThemeProvider';
 import { LoginPage } from './features/auth/LoginPage';
@@ -6,7 +7,7 @@ import { AuthenticatedRoute } from './features/auth/AuthenticatedRoute';
 import { InternalLayout } from './layouts/InternalLayout';
 import { SupplierLayout } from './layouts/SupplierLayout';
 import { ResetPasswordPage } from './features/auth/ResetPasswordPage';
-import { LanguageProvider } from './i18n/Language';
+import { LanguageProvider, useLanguage } from './i18n/Language';
 import { SecurityPage } from './features/auth/SecurityPage';
 import { ReauthenticationProvider } from './features/auth/ReauthenticationProvider';
 import { PasswordRecoveryPage } from './features/auth/PasswordRecoveryPage';
@@ -14,7 +15,7 @@ import { AuthToolbar } from './features/auth/AuthToolbar';
 import { RequiredPasswordChangePage } from './features/auth/RequiredPasswordChangePage';
 import { ConsoleLayout } from './console/ConsoleLayout';
 import { ConsoleManagementPage } from './console/ConsoleManagementPage';
-import { ConsoleWorkflowPage } from './console/ConsoleWorkflowPage';
+import { ConsoleEightDBindingsPage, ConsoleWorkflowPage } from './console/ConsoleWorkflowPage';
 import { ConsoleHome } from './console/ConsoleHome';
 import { ApiMonitoringPage } from './console/ApiMonitoringPage';
 import { DataExchangePage } from './console/DataExchangePage';
@@ -34,6 +35,7 @@ export function App() {
 }
 
 function AppRoutes() {
+  const { locale } = useLanguage();
   return (
     <>
       <AuthToolbar />
@@ -44,7 +46,7 @@ function AppRoutes() {
         <Route path="/password-recovery" element={<PasswordRecoveryPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/app/admin/*" element={<AuthenticatedRoute accountType="INTERNAL"><LegacyConsoleRedirect /></AuthenticatedRoute>} />
-        <Route path="/app/workflow-designer/*" element={<AuthenticatedRoute accountType="INTERNAL"><LegacyConsoleRedirect /></AuthenticatedRoute>} />
+        <Route path="/app/workflow-designer/*" element={<main><Result status="404" title={locale === 'en-US' ? 'Management page not found' : '管理页面不存在'} /></main>} />
         <Route path="/console/*" element={<AuthenticatedRoute accountType="INTERNAL"><ConsoleLayout /></AuthenticatedRoute>}>
           <Route index element={<ConsoleHome />} />
           <Route path="api-monitoring" element={<ApiMonitoringPage />} />
@@ -53,7 +55,8 @@ function AppRoutes() {
           <Route path="api-integrations" element={<ApiIntegrationsPage />} />
           <Route path="api-ingestion" element={<ApiIngestionPage />} />
           {['users', 'organizations', 'master-data/suppliers', 'master-data/customers', 'master-data/materials', 'master-data/component-projects', 'master-data/projects', 'master-data/operations', 'configuration', 'ai-connections', 'ai-applications', 'audit-log', 'outbox', 'reconfiguration', 'problem-reconfiguration', 'supplier-accounts'].map(path => <Route key={path} path={path} element={<ConsoleManagementPage />} />)}
-          <Route path="workflows/*" element={<ConsoleWorkflowPage />} />
+          <Route path="workflows" element={<ConsoleWorkflowPage />} />
+          <Route path="eight-d-bindings" element={<ConsoleEightDBindingsPage />} />
         </Route>
         <Route
           path="/app/*"

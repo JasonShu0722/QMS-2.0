@@ -1,6 +1,23 @@
 import 'reflect-metadata';
 import * as ledger from '../../src/modules/process-quality/process-defect-ledger.service.js';
 
+describe('legacy ledger write board routing', () => {
+  it('requires registration on create and skips an empty initial material list', () => {
+    const boards = Reflect.get(ledger, 'processDefectWriteBoards');
+    expect(typeof boards).toBe('function');
+    expect(boards({ factoryCode: 'FACTORY_1', materials: [], analysisProgress: undefined }, 'create')).toEqual(['REGISTRATION']);
+    expect(boards({ analysisProgress: 'Investigating', responsibilityCategory: 'MATERIAL' }, 'create')).toEqual(['REGISTRATION', 'ANALYSIS', 'RESPONSIBILITY']);
+  });
+
+  it('routes partial patches and explicit clears to the affected boards only', () => {
+    const boards = Reflect.get(ledger, 'processDefectWriteBoards');
+    expect(typeof boards).toBe('function');
+    expect(boards({ expectedVersion: 2, organizationId: 'scope', analysisProgress: null }, 'update')).toEqual(['ANALYSIS']);
+    expect(boards({ expectedVersion: 2, materialCode: null, materials: [] }, 'update')).toEqual(['RESPONSIBILITY']);
+    expect(boards({ description: 'Registration', analysisProgress: null, supplierOrganizationId: null }, 'update')).toEqual(['REGISTRATION', 'ANALYSIS', 'RESPONSIBILITY']);
+  });
+});
+
 describe('manual process ledger normalization', () => {
   it('retains unknown facts as null rather than manufacturing quantities, dates or categories', () => {
     expect(typeof ledger.normalizeProcessDefectFacts).toBe('function');

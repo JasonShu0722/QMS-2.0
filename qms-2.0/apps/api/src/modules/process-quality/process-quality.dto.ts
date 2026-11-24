@@ -1,8 +1,8 @@
 import { ApiProperty, ApiPropertyOptional, PickType } from '@nestjs/swagger';
 import { AiDescriptionInputSnapshotDto } from '../../common/contracts/ai-description.dto.js';
 import { Transform, Type } from 'class-transformer';
-import { Allow, ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
-import { PROCESS_DEFECT_LEDGER_MAX_ROWS, PROCESS_FILTER_FIELDS, PROCESS_FILTER_MAX_ITEMS, PROCESS_FILTER_MAX_LENGTH, PROCESS_FILTER_OPERATORS, PROCESS_MATERIAL_VERIFICATIONS, PROCESS_RESPONSIBILITY_CATEGORIES, type ProcessMaterialVerification, type ProcessResponsibilityCategory } from './process-defect-ledger.service.js';
+import { Allow, ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsISO8601, IsNotEmpty, IsObject, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf, ValidateNested } from 'class-validator';
+import { PROCESS_DEFECT_LEDGER_MAX_ROWS, PROCESS_DISPOSITION_PLANS, PROCESS_LEDGER_BOARDS, PROCESS_LEDGER_TIMESTAMP, PROCESS_FILTER_FIELDS, PROCESS_FILTER_MAX_ITEMS, PROCESS_FILTER_MAX_LENGTH, PROCESS_FILTER_OPERATORS, PROCESS_MATERIAL_VERIFICATIONS, PROCESS_RESPONSIBILITY_CATEGORIES, type ProcessDispositionPlan, type ProcessLedgerBoard, type ProcessLedgerStatus, type ProcessMaterialVerification, type ProcessResponsibilityCategory } from './process-defect-ledger.service.js';
 import { PROCESS_FACTORY_CODES, type ProcessFactoryCode } from './process-defect-registration.policy.js';
 
 import { ComponentProjectMappingDto, ComponentProjectRecordDto } from '../platform-configuration/component-project.dto.js';
@@ -212,6 +212,41 @@ export class VerifyProcessDefectMaterialDto extends ArchiveProcessDefectDto {
   @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000 }) @IsOptional() @IsString() @MaxLength(2000) verificationNotes?: string | null;
 }
 
+class ProcessDefectMaterialReviewDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID() materialId!: string;
+  @ApiProperty({ enum: PROCESS_MATERIAL_VERIFICATIONS.slice(1) }) @IsIn(PROCESS_MATERIAL_VERIFICATIONS.slice(1)) verification!: Exclude<ProcessMaterialVerification, 'UNREVIEWED'>;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000 }) @IsOptional() @IsString() @MaxLength(2000) verificationNotes?: string | null;
+}
+
+class ProcessDefectMaintenanceFieldsDto {
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 10000, description: 'ANALYSIS' }) @IsOptional() @IsString() @MaxLength(10000) analysisProgress?: string | null;
+  @ApiPropertyOptional({ type: String, enum: PROCESS_RESPONSIBILITY_CATEGORIES, nullable: true, description: 'RESPONSIBILITY' }) @IsOptional() @IsIn(PROCESS_RESPONSIBILITY_CATEGORIES) responsibilityCategory?: ProcessResponsibilityCategory | null;
+  @ApiPropertyOptional({ type: [ProcessDefectMaterialInputDto], minItems: 1, maxItems: 100, description: 'RESPONSIBILITY. Omit id to add a line.' })
+  @ValidateIf((_, value) => value !== undefined) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @IsObject({ each: true }) @ValidateNested({ each: true }) @Type(() => ProcessDefectMaterialInputDto) materials?: ProcessDefectMaterialInputDto[];
+  @ApiPropertyOptional({ type: 'array', items: { type: 'string', format: 'uuid' }, minItems: 1, maxItems: 100, description: 'RESPONSIBILITY. Explicit removal on a single record.' })
+  @ValidateIf((_, value) => value !== undefined) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ArrayUnique() @IsUUID(undefined, { each: true }) removedMaterialIds?: string[];
+  @ApiPropertyOptional({ type: String, enum: PROCESS_DISPOSITION_PLANS, nullable: true, description: 'DISPOSITION' }) @IsOptional() @IsIn(PROCESS_DISPOSITION_PLANS) dispositionPlan?: ProcessDispositionPlan | null;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 10000, description: 'DISPOSITION' }) @IsOptional() @IsString() @MaxLength(10000) dispositionProgress?: string | null;
+  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true, description: 'DISPOSITION. Timestamp with time zone.' })
+  @IsOptional() @IsISO8601({ strict: true, strictSeparator: true }) @Matches(PROCESS_LEDGER_TIMESTAMP) dispositionCompletedAt?: string | null;
+  @ApiPropertyOptional({ enum: ['CLOSED', 'FOLLOWING'], description: 'CLOSURE. Required for this board.' }) @ValidateIf((_, value) => value !== undefined) @IsIn(['CLOSED', 'FOLLOWING']) status?: ProcessLedgerStatus;
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000, description: 'CLOSURE. Required and nonblank when reopening.' }) @IsOptional() @IsString() @MaxLength(2000) reason?: string | null;
+  @ApiPropertyOptional({ type: [ProcessDefectMaterialReviewDto], minItems: 1, maxItems: 100, description: 'MATERIAL_REVIEW. Required for this board.' })
+  @ValidateIf((_, value) => value !== undefined) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @IsObject({ each: true }) @ValidateNested({ each: true }) @Type(() => ProcessDefectMaterialReviewDto) reviews?: ProcessDefectMaterialReviewDto[];
+}
+
+class ProcessDefectMaintenanceSourceDto extends ProcessDefectSelectionDto {
+  @ApiProperty({ type: ProcessDefectMaintenanceFieldsDto, description: 'Supply fields from the selected board only. Omitted fields retain their current value.' })
+  @IsObject() @ValidateNested() @Type(() => ProcessDefectMaintenanceFieldsDto) fields!: ProcessDefectMaintenanceFieldsDto;
+}
+
+export class BulkMaintainProcessDefectsDto {
+  @ApiProperty({ format: 'uuid' }) @IsUUID() organizationId!: string;
+  @ApiProperty({ enum: PROCESS_LEDGER_BOARDS }) @IsIn(PROCESS_LEDGER_BOARDS) board!: ProcessLedgerBoard;
+  @ApiProperty({ type: [ProcessDefectMaintenanceSourceDto], minItems: 1, maxItems: 100 })
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @IsObject({ each: true }) @ValidateNested({ each: true }) @Type(() => ProcessDefectMaintenanceSourceDto) sources!: ProcessDefectMaintenanceSourceDto[];
+}
+
 export class ProcessMaterialSqeQueryDto extends ProcessScopeDto {
   @ApiPropertyOptional({ default: 1, minimum: 1 }) @Type(() => Number) @IsInt() @Min(1) page = 1;
   @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 }) @Type(() => Number) @IsInt() @Min(1) @Max(100) pageSize = 20;
@@ -329,6 +364,16 @@ export class ProcessDefectProjectResolutionDto {
   @ApiProperty({ type: [String] }) issues!: string[];
 }
 
+export class ProcessDefectDispositionHistoryDto {
+  @ApiProperty({ format: 'uuid' }) id!: string;
+  @ApiProperty({ type: String, enum: PROCESS_DISPOSITION_PLANS, nullable: true }) dispositionPlan!: ProcessDispositionPlan | null;
+  @ApiProperty({ type: String, nullable: true }) dispositionProgress!: string | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) dispositionCompletedAt!: string | null;
+  @ApiProperty({ format: 'uuid' }) actorUserId!: string;
+  @ApiProperty() defectVersion!: number;
+  @ApiProperty({ format: 'date-time' }) recordedAt!: string;
+}
+
 export class ProcessDefectDto {
   @ApiProperty({ format: 'uuid' }) id!: string;
   @ApiProperty({ format: 'uuid' }) organizationId!: string;
@@ -363,6 +408,10 @@ export class ProcessDefectDto {
   @ApiPropertyOptional({ type: String, nullable: true }) productCode?: string | null;
   @ApiProperty({ type: String, nullable: true }) traceCode!: string | null;
   @ApiProperty({ type: String, nullable: true }) analysisProgress!: string | null;
+  @ApiProperty({ type: String, enum: PROCESS_DISPOSITION_PLANS, nullable: true }) dispositionPlan!: ProcessDispositionPlan | null;
+  @ApiProperty({ type: String, nullable: true }) dispositionProgress!: string | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) dispositionCompletedAt!: string | null;
+  @ApiProperty({ type: [ProcessDefectDispositionHistoryDto] }) dispositionHistory!: ProcessDefectDispositionHistoryDto[];
   @ApiProperty({ enum: ['FOLLOWING', 'CLOSED'] }) ledgerStatus!: 'FOLLOWING' | 'CLOSED';
   @ApiProperty({ type: String, nullable: true, format: 'uuid' }) closedById!: string | null;
   @ApiProperty({ type: String, nullable: true, format: 'date-time' }) closedAt!: string | null;
@@ -394,6 +443,10 @@ export class ProcessDefectPageDto {
 }
 
 export class ProcessDefectClassificationResultDto {
+  @ApiProperty({ type: [ProcessDefectDto] }) items!: ProcessDefectDto[];
+}
+
+export class BulkMaintainProcessDefectsResultDto {
   @ApiProperty({ type: [ProcessDefectDto] }) items!: ProcessDefectDto[];
 }
 

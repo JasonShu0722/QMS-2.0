@@ -150,7 +150,7 @@ function BindingScope({ session, domain, onDomainChange }: Props & { session?: s
       {binding === null && <Alert type="warning" title={t('当前组织尚未绑定8D流程，请选择真实已发布版本后保存。')} />}
       {binding && <p>{t(`${label}8D${binding.enabled ? '已启用' : '未启用'}`)} · {t('配置版本')} {binding.version} · <code>{binding.workflowVersionId}</code></p>}
       {!canManage && <Alert type="info" title={t('当前会话仅可查看8D配置，管理需要流程与配置权限。')} />}
-      {!loading && !readFailed && canManage && !candidates.length && <Alert type="error" title={t(`没有可选的${label}质量内部已发布流程，请先在流程设计器完成草稿与发布。`)} />}
+      {!loading && !readFailed && canManage && !candidates.length && <Alert type="error" title={t(`没有可选的${label}质量内部已发布流程。`)} />}
       <label>{t('8D已发布流程版本')}<select aria-label={t('8D已发布流程版本')} disabled={locked || !!uncertain} value={selected} onChange={event => setSelected(event.target.value)}>
         <option value="">{t('请选择真实已发布流程')}</option>
         {selected && !candidate && <option value={selected} disabled>{t('当前绑定版本不可选择')} · {selected}</option>}

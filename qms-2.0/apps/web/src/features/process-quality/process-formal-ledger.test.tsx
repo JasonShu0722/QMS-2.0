@@ -32,7 +32,7 @@ vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource 
 vi.mock('./ProcessShipmentReportPanel', () => ({ ProcessShipmentReportPanel: () => null }));
 
 const organizationId = '22222222-2222-4222-8222-222222222222';
-const defect: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '表面划伤', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-1', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, factoryCode: 'FACTORY_1', shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人' };
+const defect: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '表面划伤', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE-1', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, dispositionPlan: null, dispositionProgress: null, dispositionCompletedAt: null, dispositionHistory: [], closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, factoryCode: 'FACTORY_1', shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人' };
 const section = { id: '33333333-3333-4333-8333-333333333333', code: 'SEC', name: '制造科' };
 const owner = { id: '44444444-4444-4444-8444-444444444444', username: 'owner', fullName: '真实负责人', departmentName: '制造科' };
 const preview = [{ defectId: defect.id, relatedProblems: [{ problemId: 'old', reportNumber: 'PQ-OLD', title: '已有问题', status: 'CLOSED', primary: true }], hasHiddenRelations: true, relatedSetToken: 'opaque-exact-1' }];
@@ -134,6 +134,7 @@ it('hides supplier copy without its real copy permission', async () => {
 
 function baseResponse(path: string) {
   if (path.includes('/my-permissions')) return { permissions };
+  if (path.includes('/ledger-workflow-configuration/capabilities')) return { boards: ['REGISTRATION'] };
   if (path.includes('/defects?')) return list;
   if (path.endsWith('/defects')) return { ...defect, version: 1 };
   if (path.endsWith('/issues')) return [];
@@ -309,7 +310,7 @@ it('previews visible and hidden relations without defaulting recurrence; posts s
 });
 
 it('partially completes imported facts without inventing classification, date or SQE tasks', async () => {
-  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectEditor record={{ ...defect, sourceKind: 'IMS' }} suppliers={[]} canReadSuppliers={false} onClose={vi.fn()} onSaved={vi.fn()} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
+  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectEditor record={{ ...defect, sourceKind: 'IMS' }} onClose={vi.fn()} onSaved={vi.fn()} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   fireEvent.change(await screen.findByLabelText('不良描述'), { target: { value: '待分析' } });
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}`, expect.objectContaining({ method: 'PUT' }), { replayAfterReauthentication: false }));
@@ -318,19 +319,29 @@ it('partially completes imported facts without inventing classification, date or
   expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/tasks'))).toBe(false);
 });
 
-it('uses independent close permission and clears sensitive rows after an actual close 403', async () => {
+it('refreshes the detail and close capability after a close 403 while keeping readable rows', async () => {
+  useWorkTabsStore.getState().bindSession(`INTERNAL:${organizationId}:${owner.id}`);
+  let canClose = true;
   vi.mocked(apiRequest).mockImplementation(async (path, init) => {
-    if (path.endsWith('/close') && init?.method === 'PUT') throw new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: 'private' }, 403);
+    if (path.includes('/ledger-workflow-configuration/capabilities')) return { boards: canClose ? ['CLOSURE'] : [] };
+    if (path.endsWith('/bulk-maintenance') && init?.method === 'PATCH') {
+      canClose = false;
+      throw new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: 'private' }, 403);
+    }
     return baseResponse(path);
   });
   mount();
   fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
   fireEvent.click(await screen.findByText('关闭台账'));
-  const title = await screen.findByText('确认关闭', { selector: '.ant-modal-title' });
+  const title = await screen.findByText('关闭判定', { selector: '.ant-modal-title' });
   await waitFor(() => expect(title).toBeVisible());
-  fireEvent.click(within(title.closest('[role="dialog"]') as HTMLElement).getByText('确认关闭', { selector: 'button span' }));
-  await screen.findByText('暂无制程不良访问权限');
-  expect(screen.queryByText('表面划伤')).not.toBeInTheDocument();
+  fireEvent.click(within(title.closest('[role="dialog"]') as HTMLElement).getByRole('button', { name: '保存维护' }));
+  await screen.findByText('当前板块操作已被拒绝，正在刷新台账与操作权限。');
+  await waitFor(() => expect(screen.queryByText('关闭判定', { selector: '.ant-modal-title' })).not.toBeInTheDocument());
+  const details = within(await screen.findByRole('dialog', { name: '不良品详情' }));
+  expect(await details.findByText('表面划伤')).toBeVisible();
+  expect(details.queryByRole('button', { name: '关闭台账' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.filter(([path]) => path.endsWith(`/defects/${defect.id}`))).toHaveLength(2);
 });
 
 it('keeps keyboard-accessible warning explanations and saved manual mapping rather than applying suggestions', async () => {
@@ -397,10 +408,10 @@ it.each([401, 403])('clears parent sources, relations and draft when the preflig
   if (status === 401) expect(useWorkTabsStore.getState().sessionScope).toBeUndefined();
 });
 
-it.each(['material-sqes', 'defect-types'])('ends the parent session when only editor %s candidates return 401', async endpoint => {
+it('ends the parent session when editor defect types return 401', async () => {
   let reject!: (cause: unknown) => void;
   vi.mocked(apiRequest).mockImplementation(async path => {
-    if (path.includes(`/${endpoint}`)) return new Promise((_, fail) => { reject = fail; });
+    if (path.includes('/defect-types')) return new Promise((_, fail) => { reject = fail; });
     return baseResponse(path);
   });
   useWorkTabsStore.getState().bindSession(`INTERNAL:${organizationId}:${owner.id}`);
@@ -436,7 +447,7 @@ it.each([
   });
   mount();
   fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
-  fireEvent.click(await screen.findByText('维护台账'));
+  fireEvent.click(await screen.findByText('维护登记信息'));
   const time = await screen.findByLabelText('发生时间', { selector: 'input' });
   expect(time).toHaveValue(display);
   if (action !== 'untouched') fireEvent.change(time, { target: { value: action === 'cleared' ? '' : '2026-10-26T14:15' } });
@@ -627,7 +638,7 @@ it('never shows PQC close or material review merely because the account can main
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('/my-permissions') ? { permissions: ['process-quality:defects:write'] } : baseResponse(path));
   mount();
   fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
-  await screen.findByText('维护台账');
+  await screen.findByText('维护登记信息');
   expect(screen.queryByText('关闭台账')).not.toBeInTheDocument();
   expect(screen.queryByText('恢复跟进')).not.toBeInTheDocument();
   expect(screen.queryByText('复核此物料')).not.toBeInTheDocument();

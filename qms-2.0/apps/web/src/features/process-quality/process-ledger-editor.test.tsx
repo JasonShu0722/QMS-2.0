@@ -13,20 +13,20 @@ vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof impo
 vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource }: { resource: { resourceType: string; resourceId: string } }) => <div>附件资源 {resource.resourceType}:{resource.resourceId}</div> }));
 vi.mock('./ProcessTraceScanner', () => ({ ProcessTraceScanner: ({ onScan, onClose }: { onScan: (value: string) => void; onClose: () => void }) => <div role="dialog" aria-label="测试本地扫码"><button onClick={() => { onScan('SCANNED-0001'); onClose(); }}>回填测试码</button><button onClick={onClose}>取消扫码</button></div> }));
 const record: components['schemas']['ProcessDefectDto'] = {
+  dispositionPlan: null, dispositionProgress: null, dispositionCompletedAt: null, dispositionHistory: [],
   id: 'defect', organizationId: 'org', description: '原始线索', defectTypeCode: null, defectQuantity: null, occurredAt: null, responsibilityCategory: null, traceCode: 'TRACE', analysisProgress: null, ledgerStatus: 'FOLLOWING', closedAt: null, closedById: null,
   sourceKind: 'MANUAL', factoryCode: 'FACTORY_1', version: 2, materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0, issues: [], evidence: [], projectCode: 'MANUAL',
   lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人',
   materials: [{ id: 'material', organizationId: 'org', defectId: 'defect', position: 0, materialCode: 'MAT-1', materialName: '物料一', supplierProfileId: 'profile-a', supplierOrganizationId: 'supplier-a', materialBatch: 'BATCH-1', sqeUserId: 'sqe', notes: '原物料线索', verification: 'NOT_MATERIAL', verificationNotes: '历史结论', verifiedById: 'sqe', verifiedAt: null, verificationHistory: [] }],
 };
-const suppliers: components['schemas']['SupplierProfileDto'][] = [{ id: 'profile-a', version: 1, supplierOrganizationId: 'supplier-a', businessCode: 'A', displayName: '供应商甲' }, { id: 'profile-b', version: 1, supplierOrganizationId: 'supplier-b', businessCode: 'B', displayName: '供应商乙' }];
 beforeEach(() => {
   vi.mocked(csrfToken).mockResolvedValue('csrf');
   vi.mocked(getSession).mockResolvedValue({ userId: 'user', organizationId: 'org', accountType: 'INTERNAL', landingPath: '/app/workbench' });
-  vi.mocked(apiRequest).mockReset().mockImplementation(async (path, init) => init?.method ? { ...record, version: 3 } : path.includes('material-sqes') ? { items: [{ id: 'sqe', username: 'sqe', fullName: '有效SQE' }], total: 1, page: 1, pageSize: 100 } : []);
+  vi.mocked(apiRequest).mockReset().mockImplementation(async (_path, init) => init?.method ? { ...record, version: 3 } : []);
 });
 function editor(initial: typeof record | 'new' = record) {
   const onSaved = vi.fn();
-  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectEditor record={initial === 'new' ? undefined : initial} suppliers={suppliers} canReadSuppliers onSaved={onSaved} onClose={vi.fn()} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
+  render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessDefectEditor record={initial === 'new' ? undefined : initial} onSaved={onSaved} onClose={vi.fn()} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
   return onSaved;
 }
 async function chooseFactory(label: string) {
@@ -108,15 +108,6 @@ it.each([['FACTORY_2', '二工厂'], [null, '/']] as const)('shows IMS factory %
   expect(body).toMatchObject({ description: '人工补充', expectedVersion: 2 });
   for (const field of ['factoryCode', 'productCode', 'traceCode', 'occurredAt', 'workOrderCode', 'operationName', 'lineName']) expect(body).not.toHaveProperty(field);
 });
-it('preserves an IMS material edit when saving only changed facts', async () => {
-  const saved = editor({ ...record, sourceKind: 'IMS' });
-  fireEvent.click(screen.getByText('多物料、供应商与SQE'));
-  fireEvent.change(await screen.findByLabelText('物料说明 1'), { target: { value: '现场补充物料说明' } });
-  fireEvent.click(screen.getByText('保存登记'));
-  await waitFor(() => expect(saved).toHaveBeenCalled());
-  const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
-  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ materials: [{ id: 'material', notes: '现场补充物料说明', sqeUserId: 'sqe', supplierProfileId: 'profile-a' }] });
-});
 it('fills the scanned trace code without saving and keeps other registration drafts after cancellation', async () => {
   const saved = editor('new');
   await fillRequiredFacts(false);
@@ -138,66 +129,23 @@ it('keeps a scanner-gun Enter suffix from submitting the registration', async ()
   expect(fireEvent.keyDown(screen.getByLabelText('追溯码'), { key: 'Enter', code: 'Enter' })).toBe(false);
   expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
 });
-it('starts a new registration with one optional material row and preserves appended partial facts while collapsed', async () => {
+it('exposes the attachment resource once registration is saved', async () => {
   const saved = editor('new');
   await fillRequiredFacts();
   expect(screen.queryByRole('heading', { name: '附件与扫描' })).not.toBeInTheDocument();
   expect(screen.queryByText(/附件资源 process-defect:/)).not.toBeInTheDocument();
-  fireEvent.click(screen.getByText('多物料、供应商与SQE'));
-  expect(await screen.findByLabelText('物料编码 1')).toHaveValue('');
-  expect(screen.queryByLabelText('物料编码 2')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByText('添加物料'));
-  fireEvent.change(screen.getByLabelText('物料说明 2'), { target: { value: '  仅补充物料线索  ' } });
-  fireEvent.click(screen.getByText('添加物料'));
-  expect(screen.getByLabelText('物料编码 3')).toHaveValue('');
-  fireEvent.click(screen.getByText('多物料、供应商与SQE'));
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(saved).toHaveBeenCalled());
   expect(screen.getByRole('heading', { name: '附件与扫描' })).toBeVisible();
   expect(screen.getByText('附件资源 process-defect:defect')).toBeVisible();
-  const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'POST');
-  expect(JSON.parse(String(call?.[1]?.body)).materials).toEqual([{ materialCode: null, materialName: null, materialBatch: null, notes: '仅补充物料线索', sqeUserId: null, supplierProfileId: null, supplierOrganizationId: null }]);
 });
 
-it('preserves the selected SQE label while paging and retires it after session A to B to A', async () => {
-  vi.mocked(apiRequest).mockImplementation(async path => path.includes('material-sqes') ? { items: new URL(path, 'http://localhost').searchParams.get('page') === '2' ? [{ id: 'other', username: 'other', fullName: '其他SQE', departmentName: '质量部' }] : [{ id: 'sqe', username: 'sqe', fullName: '有效SQE', departmentName: '质量部' }], total: 101, pageSize: 100 } : []);
+it('retires the original editor after session A to B to A', () => {
   editor();
-  fireEvent.click(screen.getByText('多物料、供应商与SQE'));
-  await waitFor(() => expect(screen.getByLabelText('SQE 1').closest('.ant-select')).toHaveTextContent('有效SQE / 质量部（sqe）'));
-  fireEvent.click(screen.getByLabelText('SQE候选分页').querySelector('[title="2"]')!);
-  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('material-sqes') && new URL(path, 'http://localhost').searchParams.get('page') === '2')).toBe(true));
-  expect(screen.getByLabelText('SQE 1').closest('.ant-select')).toHaveTextContent('有效SQE / 质量部（sqe）');
   const originalScope = useWorkTabsStore.getState().sessionScope;
   act(() => { useWorkTabsStore.getState().bindSession('other'); if (originalScope) useWorkTabsStore.getState().bindSession(originalScope); else useWorkTabsStore.getState().reset(); });
-  expect(screen.getByLabelText('SQE 1')).toBeDisabled();
-  expect(screen.getByLabelText('SQE 1').closest('.ant-select')).not.toHaveTextContent('有效SQE / 质量部（sqe）');
+  expect(screen.getByLabelText('不良描述')).toBeDisabled();
   expect(screen.getByText('保存登记').closest('button')).toBeDisabled();
-});
-it('prunes blank added material rows without requiring material facts for a new registration', async () => {
-  const saved = editor('new');
-  await fillRequiredFacts();
-  fireEvent.click(screen.getByText('多物料、供应商与SQE'));
-  fireEvent.click(screen.getByText('添加物料'));
-  fireEvent.change(screen.getByLabelText('物料编码 1'), { target: { value: '   ' } });
-  fireEvent.change(screen.getByLabelText('物料说明 1'), { target: { value: '   ' } });
-  fireEvent.click(screen.getByText('保存登记'));
-  await waitFor(() => expect(saved).toHaveBeenCalled());
-  const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'POST');
-  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '测试不良', defectQuantity: 1, responsibilityCategory: null, materials: [] });
-});
-it('preserves manual mapping, material identity, batch and SQE without sending read-only review fields', async () => {
-  const saved = editor();
-  fireEvent.click(screen.getByText('多物料、供应商与SQE'));
-  fireEvent.mouseDown(await screen.findByLabelText('供应商 1'));
-  fireEvent.click(await screen.findByText('供应商乙', { selector: '.ant-select-item-option-content' }));
-  fireEvent.click(screen.getByText('保存登记'));
-  await waitFor(() => expect(saved).toHaveBeenCalled());
-  const call = vi.mocked(apiRequest).mock.calls.find(([path, init]) => path.endsWith('/defect') && init?.method === 'PUT');
-  const body = JSON.parse(String(call?.[1]?.body));
-  expect(body).toMatchObject({ expectedVersion: 2, defectQuantity: null, occurredAt: null, materials: [{ id: 'material', materialCode: 'MAT-1', materialBatch: 'BATCH-1', supplierProfileId: 'profile-b', supplierOrganizationId: 'supplier-b', sqeUserId: 'sqe' }] });
-  expect(body).not.toHaveProperty('projectCode');
-  expect(body.materials[0]).not.toHaveProperty('verification');
-  expect(screen.getByText('附件资源 process-defect:defect')).toBeVisible();
 });
 it('keeps a manual edit intact after a real 409 instead of replacing it with fetched suggestions', async () => {
   vi.mocked(apiRequest).mockImplementation(async (path, init) => {
@@ -210,14 +158,15 @@ it('keeps a manual edit intact after a real 409 instead of replacing it with fet
   await screen.findByText('记录已被其他用户更新，请刷新后重试');
   expect(screen.getByLabelText('不良描述')).toHaveValue('人工修改保留');
 });
-it('preserves unexpanded clue and material fields when saving only the description', async () => {
-  const saved = editor();
+it('preserves unexpanded registration clues and omits derived or maintenance facts', async () => {
+  const saved = editor({ ...record, batchCode: 'BATCH' });
   fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '只补充现象' } });
   fireEvent.click(screen.getByText('保存登记'));
   await waitFor(() => expect(saved).toHaveBeenCalled());
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
-  expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ description: '只补充现象', traceCode: 'TRACE', materials: [{ id: 'material', materialCode: 'MAT-1', supplierProfileId: 'profile-a', sqeUserId: 'sqe' }] });
-  expect(JSON.parse(String(call?.[1]?.body))).not.toHaveProperty('projectCode');
+  const body = JSON.parse(String(call?.[1]?.body));
+  expect(body).toMatchObject({ description: '只补充现象', traceCode: 'TRACE', batchCode: 'BATCH' });
+  for (const field of ['projectCode', 'materials', 'responsibilityCategory', 'analysisProgress']) expect(body).not.toHaveProperty(field);
 });
 it('leaves retry available after an unknown save outcome and replays the exact create request', async () => {
   let attempts = 0;

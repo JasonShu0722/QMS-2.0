@@ -19,6 +19,7 @@ const defect: components['schemas']['ProcessDefectDto'] = {
   defectQuantity: 2, occurredAt: '2026-11-10T02:00:00.000Z', responsibilityCategory: null, traceCode: 'TRACE-1',
   ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null,
   evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL',
+  dispositionPlan: null, dispositionProgress: null, dispositionCompletedAt: null, dispositionHistory: [],
   materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: '一线', operationName: '贴片',
   factoryCode: 'FACTORY_1', shift: 'DAY', operationSector: 'SMT', productCategory: 'PCBA', productSubcategory: '主板', projectStage: 'MASS_PRODUCTION', projectName: null,
   pendingCompletion: false, pendingConfiguration: false, registrationIssues: [], registeredByName: '登记人',
@@ -41,6 +42,7 @@ beforeEach(() => {
   vi.mocked(csrfToken).mockReset().mockResolvedValue('csrf');
   vi.mocked(apiRequest).mockReset().mockImplementation(async path => {
     if (path.includes('/my-permissions')) return { permissions };
+    if (path.includes('/ledger-workflow-configuration/capabilities')) return { boards: ['REGISTRATION'] };
     if (path.includes('/defects?')) return { items, total: items.length, page: 1, pageSize: 20 };
     return [];
   });
@@ -264,6 +266,7 @@ it('keeps configuration prompts in detail completion and puts permitted record a
   const read = vi.mocked(apiRequest).getMockImplementation()!;
   vi.mocked(apiRequest).mockImplementation(async (path, init) => {
     if (path.includes('/my-permissions')) return { permissions: [...permissions, 'process-quality:defects:close', 'process-quality:defects:delete'] };
+    if (path.includes('/ledger-workflow-configuration/capabilities')) return { boards: ['REGISTRATION', 'CLOSURE'] };
     if (path.endsWith(`/defects/${pending.id}`)) return pending;
     return read(path, init);
   });
@@ -278,9 +281,10 @@ it('keeps configuration prompts in detail completion and puts permitted record a
   expect(within(completion).queryByText('待补配', { exact: true })).not.toBeInTheDocument();
   expect(within(dialog).queryByText(/细分类型待补配|来源明细编号待补充|失效类型未知|记录版本/)).not.toBeInTheDocument();
   const header = within(dialog.querySelector<HTMLElement>('.ant-drawer-header')!);
-  for (const name of ['维护台账', '关闭台账', '删除台账', '选择此条并返回台账']) {
+  for (const name of ['维护登记信息', '删除台账', '选择此条并返回台账']) {
     expect(header.getByText(name, { selector: 'button span' })).toBeInTheDocument();
   }
+  expect(within(dialog).getByRole('button', { name: '关闭台账' })).toBeInTheDocument();
   fireEvent.click(header.getByText('选择此条并返回台账', { selector: 'button span' }));
   expect(within(row).getByLabelText(`选择制程不良 ${pending.description}`)).toBeChecked();
 });

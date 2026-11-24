@@ -1,5 +1,11 @@
 # 流程设计器
 
+## 制程台账流程配置切换（2026-11-24）
+
+新版流程管理入口为 `/console/workflows`，首项为制程不合格台账的板块岗位配置。`/app/workflow-designer/*` 和原控制台流程版本详情地址退役。旧编辑器专用前端代码以 Git 基线 `2bebf798231edb35425b890389a37341a2571b7e` 封存。存量定义、版本、运行实例及签批历史保留。既有 8D 绑定由 `/console/eight-d-bindings` 维护。
+
+本页下方内容记录旧版的交付和运行历史。新版方案及验收条件见[制程不合格台账流转与流程配置开发方案](../../docs/superpowers/plans/2026-11-24-qms-process-defect-ledger-flow.md)。
+
 ## REQ-0032 CP-2 运行发布确认（2026-10-30）
 
 [PR85](https://github.com/JasonShu0722/QMS-2.0/pull/85) / V0.0.37已部署 `89c2ddde71b97683805487729f230b357aef63f6`。精确PR及main各16CI成功、同head审查无发现，[deploy41042556792](https://github.com/JasonShu0722/QMS-2.0/actions/runs/41042556792)实际成功；迁移前加密快照→五追加迁移/141链→同SHA API/Worker/Web与健康→公网新bundle `index-v5CJ-axp.js`、六契约/六匿名401均机器核验通过，部署后默认builder cache回收1.515GB。完整证据及最终人工清单见[总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。

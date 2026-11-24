@@ -7,14 +7,14 @@ const uuid = new RegExp(`^${uuidSource}$`, 'i');
 const graphId = /^[a-z][a-z0-9-]{0,127}$/;
 const paths = new Set([
   ...internalNavigation.map(item => item.path), ...supplierNavigation.map(item => item.path),
-  '/app', '/app/workbench', '/app/admin', '/app/workflow-designer',
+  '/app', '/app/workbench', '/app/admin',
   '/app/supplier-quality/new', '/app/supplier-quality/profiles',
-  '/console', '/console/users', '/console/organizations', '/console/configuration', '/console/workflows',
+  '/console', '/console/users', '/console/organizations', '/console/configuration', '/console/workflows', '/console/eight-d-bindings',
   '/console/master-data/suppliers', '/console/master-data/customers', '/console/master-data/materials', '/console/master-data/component-projects',
   '/console/audit-log', '/console/outbox', '/console/reconfiguration', '/console/problem-reconfiguration', '/console/supplier-accounts',
   '/console/api-monitoring', '/console/data-exchanges', '/console/services',
 ]);
-const detailPath = new RegExp(`^(?:(?:/app/workflow-designer|/console/workflows)/${uuidSource}/${uuidSource}|/app/problem-workspace/${uuidSource}|(?:/app/supplier-quality/(?:problems|eight-d)|/supplier/corrections/problems)/${uuidSource})$`, 'i');
+const detailPath = new RegExp(`^(?:/app/problem-workspace/${uuidSource}|(?:/app/supplier-quality/(?:problems|eight-d)|/supplier/corrections/problems)/${uuidSource})$`, 'i');
 const queryRules: Record<string, RegExp> = {
   organizationId: uuid, userId: uuid, instanceId: uuid, defectId: uuid, complaintId: uuid,
   section: /^[a-z][a-z0-9-]{0,127}$/,
@@ -35,8 +35,7 @@ export function readReturnTo(state: unknown, accountType?: AccountType): string 
   const pathname = separator < 0 ? target : target.slice(0, separator);
   const search = separator < 0 ? '' : target.slice(separator + 1);
   if (!pathname || pathname.includes('%') || !(paths.has(pathname) || detailPath.test(pathname))) return undefined;
-  if ((pathname === '/app/admin' || pathname.startsWith('/app/workflow-designer'))
-    && !legacyConsoleTarget({ pathname, search: search ? `?${search}` : '', hash: '' })) return undefined;
+  if (pathname === '/app/admin' && !legacyConsoleTarget({ pathname, search: search ? `?${search}` : '', hash: '' })) return undefined;
   if (accountType === 'SUPPLIER' && !pathname.startsWith('/supplier/') || accountType === 'INTERNAL' && pathname.startsWith('/supplier/')) return undefined;
   const query = new URLSearchParams(search);
   const accepted = new URLSearchParams();

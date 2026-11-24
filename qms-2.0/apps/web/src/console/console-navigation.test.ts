@@ -24,10 +24,10 @@ it('exposes AI and process mappings only through their dedicated read capabiliti
 });
 
 it('provides explicit icons for all authorized paths with a gear only for configuration', () => {
-  const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'console:api:read', 'console:exchanges:read', 'console:services:read'];
+  const permissions = ['supplier-quality:profiles:read', 'customer-quality:complaints:read', 'material-master:read', 'component-project:read', 'console:api:read', 'console:exchanges:read', 'console:services:read', 'workflow:manage'];
   const value = context(...(['users', 'organizations', 'supplier-accounts', 'reconfiguration', 'problem-reconfiguration', 'master-data', 'configuration', 'workflows', 'audit', 'outbox', 'api-monitoring', 'data-exchanges', 'services'] as const).map(key => module(key, permissions)));
   const entries = consoleNavigation(value);
-  expect(entries).toHaveLength(18);
+  expect(entries).toHaveLength(19);
   for (const entry of entries) {
     expect(entry).toHaveProperty('icon');
     if (entry.path === '/console/configuration') expect(entry.icon).toBe(Settings);
@@ -36,13 +36,15 @@ it('provides explicit icons for all authorized paths with a gear only for config
   }
 });
 
-it('allows workflow-only home and design routes without user administration', () => {
+it('allows workflow management and binding routes, and removes version deep links', () => {
   const value = context(module('workflows', ['workflow:manage']));
-  expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/workflows']);
+  expect(consoleNavigation(value).map(item => item.path)).toEqual(['/console', '/console/workflows', '/console/eight-d-bindings']);
   expect(consoleRoute('/console', value).status).toBe('allowed');
   expect(consoleRoute('/console/users', value).status).toBe('forbidden');
   const route = consoleRoute('/console/workflows/12345678-1234-4234-8234-123456789abc/87654321-4321-4321-8321-123456789abc', value);
-  expect(route.module?.scope).toBe('SESSION_HOME');
+  expect(route.status).toBe('not-found');
+  expect(consoleRoute('/console/eight-d-bindings', value)).toMatchObject({ status: 'allowed', module: value.modules[0] });
+  expect(consoleRoute('/console/eight-d-bindings', context(module('configuration', ['configuration:manage']))).status).toBe('forbidden');
 });
 it('allows an explicitly assigned API monitoring specialist without user administration', () => {
   const value = context(module('api-monitoring', ['console:api:read']));
@@ -101,7 +103,7 @@ it('does not treat an unknown capability as console access', () => {
 });
 it.each([
   ['users', '/console/users'], ['organizations', '/console/organizations'], ['configuration', '/console/configuration'],
-  ['workflows', '/console/workflows'], ['audit', '/console/audit-log'], ['outbox', '/console/outbox'],
+  ['audit', '/console/audit-log'], ['outbox', '/console/outbox'],
   ['reconfiguration', '/console/reconfiguration'], ['problem-reconfiguration', '/console/problem-reconfiguration'], ['supplier-accounts', '/console/supplier-accounts'],
 ] as const)('keeps the exact module and resource scope for %s', (key, path) => {
   const capability = { ...module(key), scope: 'SESSION_HOME' as const, coverage: 'PLATFORM' as const };

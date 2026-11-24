@@ -397,6 +397,83 @@ test('manual registration retains the trace draft after closing the camera and s
   expect(await response.json()).toMatchObject({ sourceKind: 'MANUAL', factoryCode: 'FACTORY_2', defectQuantity: 1, shift: 'DAY' });
 });
 
+test('maintains a closed ledger through the disposition and analysis boards', async ({ page }) => {
+  await login(page);
+  await page.goto('/app/process-quality');
+  const defects = '/api/v1/process-quality/defects';
+  const description = `板块维护 ${suffix}`;
+  const now = new Date();
+  const localTime = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  await page.getByRole('button', { name: '登记不良', exact: true }).click();
+  const registration = page.getByRole('dialog', { name: '登记不良', exact: true });
+  await registration.getByLabel(/发生时间$/).fill(localTime);
+  await registration.getByLabel(/成品编码$/).fill(`BOARD_${suffix}`);
+  await registration.getByLabel('追溯码', { exact: true }).fill(`BOARD_TRACE_${suffix}`);
+  await registration.getByLabel(/不良描述$/).fill(description);
+  await registration.getByLabel('工厂', { exact: true }).click();
+  await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ hasText: '一工厂' }).click();
+  const creating = page.waitForResponse(response => new URL(response.url()).pathname === defects && response.request().method() === 'POST');
+  await registration.getByRole('button', { name: '保存登记', exact: true }).click();
+  const created = await creating;
+  expect(created.status()).toBe(201);
+  const requestBody = created.request().postDataJSON();
+  for (const field of ['analysisProgress', 'responsibilityCategory', 'materials']) expect(requestBody).not.toHaveProperty(field);
+  const record = await created.json() as Schema['ProcessDefectDto'];
+  await registration.getByRole('button', { name: '关闭', exact: true }).click();
+
+  async function saveBoard(name: string, board: Schema['BulkMaintainProcessDefectsDto']['board'], source: Schema['BulkMaintainProcessDefectsDto']['sources'][number]) {
+    const saving = page.waitForResponse(response => new URL(response.url()).pathname === `${defects}/bulk-maintenance` && response.request().method() === 'PATCH');
+    const dialog = page.getByRole('dialog', { name, exact: true });
+    await dialog.getByRole('button', { name: '保存维护', exact: true }).click();
+    const response = await saving;
+    expect(response.status()).toBe(200);
+    expect(response.request().postDataJSON()).toEqual({ organizationId: record.organizationId, board, sources: [source] });
+    const result = await response.json() as Schema['BulkMaintainProcessDefectsResultDto'];
+    await expect(dialog).toHaveCount(0);
+    return result.items[0]!;
+  }
+
+  await page.getByRole('button', { name: description, exact: true }).click();
+  const detail = page.getByRole('dialog', { name: '不良品详情', exact: true });
+  await detail.getByRole('button', { name: '关闭台账', exact: true }).click();
+  const closure = page.getByRole('dialog', { name: '关闭判定', exact: true });
+  const reason = '现场确认可以关闭';
+  await closure.getByLabel('关闭说明', { exact: true }).fill(reason);
+  const closed = await saveBoard('关闭判定', 'CLOSURE', { defectId: record.id, expectedVersion: record.version, fields: { status: 'CLOSED', reason } });
+  expect(closed).toMatchObject({ ledgerStatus: 'CLOSED', dispositionCompletedAt: null });
+
+  await detail.getByRole('button', { name: '处置维护', exact: true }).click();
+  const disposition = page.getByRole('dialog', { name: '处置维护', exact: true });
+  await disposition.getByRole('radio', { name: '报废', exact: true }).check();
+  await disposition.getByLabel('处置进度', { exact: true }).fill('已报废');
+  await disposition.getByRole('button', { name: '填写完成时间', exact: true }).click();
+  const completionTime = disposition.getByLabel('完成时间', { exact: true });
+  await expect(completionTime).not.toHaveValue('');
+  await completionTime.fill(localTime);
+  const disposed = await saveBoard('处置维护', 'DISPOSITION', { defectId: record.id, expectedVersion: closed.version, fields: { dispositionPlan: 'SCRAP', dispositionProgress: '已报废', dispositionCompletedAt: new Date(localTime).toISOString() } });
+  expect(disposed).toMatchObject({ ledgerStatus: 'CLOSED', dispositionPlan: 'SCRAP' });
+
+  const materialBatch = `BATCH_${suffix}`;
+  const responsibility = page.getByRole('dialog', { name: '责任判定', exact: true });
+  await detail.getByRole('button', { name: '责任判定', exact: true }).click();
+  await responsibility.getByRole('button', { name: '新增物料明细', exact: true }).click();
+  await responsibility.getByLabel('物料批次 1', { exact: true }).fill(materialBatch);
+  const added = await saveBoard('责任判定', 'RESPONSIBILITY', { defectId: record.id, expectedVersion: disposed.version, fields: { materials: [{ materialBatch }] } });
+  expect(added.materials).toHaveLength(1);
+  const materialId = added.materials[0]!.id!;
+  await detail.getByRole('button', { name: '责任判定', exact: true }).click();
+  await responsibility.getByLabel(`移除物料 ${materialBatch}`, { exact: true }).check();
+  const removed = await saveBoard('责任判定', 'RESPONSIBILITY', { defectId: record.id, expectedVersion: added.version, fields: { removedMaterialIds: [materialId] } });
+  expect(removed.materials).toHaveLength(0);
+  await detail.getByRole('button', { name: '关闭', exact: true }).click();
+
+  await page.getByLabel(`选择制程不良 ${description}`, { exact: true }).check();
+  await page.getByLabel('台账批量操作', { exact: true }).getByRole('button', { name: '分析进度维护', exact: true }).click();
+  await page.getByRole('dialog', { name: '分析进度维护', exact: true }).getByLabel('分析进度', { exact: true }).fill('完成原因分析');
+  const analyzed = await saveBoard('分析进度维护', 'ANALYSIS', { defectId: record.id, expectedVersion: removed.version, fields: { analysisProgress: '完成原因分析' } });
+  expect(analyzed).toMatchObject({ ledgerStatus: 'CLOSED', dispositionPlan: 'SCRAP', analysisProgress: '完成原因分析' });
+});
+
 test('AI channels keep credentials private and real Worker applies structured descriptions with failure and manual fallback', async ({ page }) => {
   await login(page);
   const secret = `disposable-ai-${randomUUID()}`;

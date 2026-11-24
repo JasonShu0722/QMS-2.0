@@ -1,5 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { components } from '@qms/contracts';
+import { randomUUID } from 'node:crypto';
 import { completeMfa } from './mfa-login';
+import { createPositionGrant, positionRead, retirePositionGrant } from './position-fixture';
 import { fillSecret } from './secret-input';
 
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
@@ -125,22 +128,30 @@ for (const supplier of [false, true]) {
       await checkRow(page, 390);
       await page.getByRole('button', { name: '退出专注', exact: true }).click();
       await checkRow(page, 390);
-      await page.setViewportSize({ width: 1440, height: 1000 });
-      await page.goto('/app/workflow-designer');
-      await page.getByRole('button', { name: '新建流程', exact: true }).click();
-      const name = `compact-shell-${Date.now()}`;
-      await page.getByLabel('流程代码', { exact: true }).fill(name);
-      await page.getByLabel('流程名称', { exact: true }).fill(name);
-      await page.getByRole('button', { name: '创建草稿', exact: true }).click();
-      await page.getByLabel('流程说明', { exact: true }).fill('unsaved shell acceptance');
-      await page.setViewportSize({ width: 390, height: 844 });
-      await header.getByRole('button', { name: '全部标签' }).click();
-      await page.getByRole('dialog').getByRole('button', { name: `关闭 ${name} · 编辑`, exact: true }).click();
-      await page.getByRole('button', { name: '继续编辑', exact: true }).click();
-      await expect(page.getByLabel('流程说明', { exact: true })).toHaveValue('unsaved shell acceptance');
-      await page.getByRole('dialog').getByRole('button', { name: `关闭 ${name} · 编辑`, exact: true }).click();
-      await page.getByRole('button', { name: '放弃修改并关闭', exact: true }).click();
-      await expect(page).toHaveURL(/\/app\/workflow-designer$/);
+      const { user } = await positionRead<components['schemas']['SessionResponseDto']>(page.request, '/api/v1/auth/session');
+      const grant = await createPositionGrant(page.request, user.organizationId, { name: `紧凑外壳 ${randomUUID()}`, permissionCodes: [] });
+      try {
+        await page.goto('/console/workflows');
+        await page.getByRole('button', { name: '制程不合格台账', exact: true }).click();
+        const select = page.getByRole('combobox', { name: '分析进度维护', exact: true });
+        await select.fill(grant.position.name);
+        await page.locator('.ant-select-dropdown:visible .ant-select-item-option').filter({ has: page.getByText(grant.position.name, { exact: true }) }).click();
+        await select.press('Escape');
+        await page.getByRole('button', { name: '打开管理导航', exact: true }).click();
+        const drawer = page.getByRole('dialog', { name: '管理导航', exact: true });
+        const home = drawer.getByRole('link', { name: '管理首页', exact: true });
+        await home.click();
+        await page.getByRole('button', { name: '继续编辑', exact: true }).click();
+        await expect(page.getByRole('button', { name: '保存配置', exact: true })).toBeEnabled();
+        const selected = page.locator('.ant-select-selection-item-content').filter({ hasText: grant.position.name });
+        await expect(selected).toBeVisible();
+        await expect(page).toHaveURL(/\/console\/workflows$/);
+        await home.click();
+        await page.getByRole('button', { name: '放弃修改', exact: true }).click();
+        await expect(page).toHaveURL(/\/console$/);
+      } finally {
+        await retirePositionGrant(page.request, user.organizationId, grant);
+      }
     }
     expect(runtimeErrors).toEqual([]);
   });

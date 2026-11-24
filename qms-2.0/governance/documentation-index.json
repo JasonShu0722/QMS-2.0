@@ -601,22 +601,6 @@
             "sha256": "5b8d42224efef70d5f88dec70056504e9e7d6010ce3a3ab53040e4a68d9cf416"
           },
           {
-            "path": "apps/web/src/features/workflows/WorkflowProperties.tsx",
-            "sha256": "229392b20abc873ce207b57739143576a2ac903d5f386e7eb63dac69eadfc91e"
-          },
-          {
-            "path": "apps/web/src/features/workflows/WorkflowListPage.tsx",
-            "sha256": "bd5874443e037c53e49de535e3c925d3c873d2d21db2a1a0c8310758e2676801"
-          },
-          {
-            "path": "apps/web/src/features/workflows/WorkflowClosurePreview.tsx",
-            "sha256": "1bbf01d29348c73a2387ee33363ebbfa15b5584645a57214ff97a4dd7b53ea67"
-          },
-          {
-            "path": "apps/web/src/features/workflows/WorkflowClosureTemplateDialog.tsx",
-            "sha256": "380dc8efed284ed727331b888a75e029da85e58ca01f4d428b2f6fc85d333689"
-          },
-          {
             "path": "apps/web/src/features/tasks/MyTasksPage.tsx",
             "sha256": "ad532fb3c2dec5c99b82cf2dbd01e1ae8d08d3c7c62d83f994bb5082f628cf41"
           },
@@ -638,7 +622,7 @@
           },
           {
             "path": "apps/web/src/features/supplier-pcn/SupplierPcnPage.test.tsx",
-            "sha256": "a3a7c6a3b2ff139d60d5fd398d5a9e2cd4629263d3a346c867e0c6b035344891"
+            "sha256": "c1bea985f8d671316dc68bdc9cd29a9f4665a14ea3203df1ac7e20dc5a34722b"
           },
           {
             "path": "apps/web/src/features/supplier-quality/SupplierUsersPanel.test.tsx",

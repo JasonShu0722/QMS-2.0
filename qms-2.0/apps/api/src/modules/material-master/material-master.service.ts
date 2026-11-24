@@ -54,7 +54,7 @@ export class MaterialMasterService {
     });
   }
 
-  async findForIngestion(transaction: AdminTransaction, actor: AdminActor, materialCode: string): Promise<{ id: string; version: number; materialCode: string; materialName: string } | null> {
+  async findByCode(transaction: AdminTransaction, actor: AdminActor, materialCode: string): Promise<{ id: string; version: number; materialCode: string; materialName: string } | null> {
     const organizationId = this.scope(actor);
     await assertAdminAccess(transaction, actor, organizationId, 'material-master:read');
     await this.assertInternalOrganization(transaction, organizationId);

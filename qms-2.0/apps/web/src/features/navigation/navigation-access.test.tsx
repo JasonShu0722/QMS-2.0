@@ -4,11 +4,10 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { App } from '../../App';
 import { InternalLayout } from '../../layouts/InternalLayout';
-import { ApiError, apiRequest, getSession } from '../../api/client';
+import { apiRequest, getSession } from '../../api/client';
 import { getAdminOrganizations } from '../admin/admin';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LanguageProvider } from '../../i18n/Language';
-import { getWorkflowVersion, getWorkflowOptions } from '../workflows/workflow-api';
 import { ConsoleLayout } from '../../console/ConsoleLayout';
 import type { ConsoleContext } from '../../console/console-navigation';
 
@@ -16,21 +15,16 @@ vi.mock('../../api/client', async original => ({ ...await original<typeof import
 vi.mock('../admin/admin', async original => ({ ...await original<typeof import('../admin/admin')>(), getAdminOrganizations: vi.fn() }));
 vi.mock('../announcements/AnnouncementsPage', () => ({ AnnouncementsPage: () => <div>Announcements</div> }));
 vi.mock('../../layouts/AnnouncementReminder', () => ({ AnnouncementReminder: () => null }));
-vi.mock('../workflows/workflow-api', async original => ({ ...await original<typeof import('../workflows/workflow-api')>(), getWorkflowVersion: vi.fn(), getWorkflowOptions: vi.fn() }));
-vi.mock('../workflows/WorkflowCanvas', () => ({ WorkflowCanvas: () => null }));
 const id = '11111111-1111-4111-8111-111111111111';
 const definitionId = '22222222-2222-4222-8222-222222222222';
 const versionId = '33333333-3333-4333-8333-333333333333';
-const path = `/console/workflows/${definitionId}/${versionId}`;
+const path = '/console/workflows';
 const organization = { id, name: '组织', code: 'org', type: 'INTERNAL', status: 'ACTIVE', configurationRequired: false } as const;
 function context(workflow = true, users = false, actor = 'actor'): ConsoleContext {
   const modules: ConsoleContext['modules'] = [];
   if (workflow) modules.push({ key: 'workflows', scope: 'SESSION_HOME', coverage: 'ORGANIZATION', organizationId: id, permissions: ['workflow:manage'] });
   if (users) modules.push({ key: 'users', scope: 'TARGET', coverage: 'ORGANIZATION', organizationId: id, permissions: ['account:users:read'] });
   return { actor: { id: actor, accountType: 'INTERNAL', homeOrganization: organization }, targetOrganization: organization, organizations: [organization], hasPlatformAdministrator: false, modules };
-}
-function definition(name = '来料 · 质量流程') {
-  return { id: definitionId, organizationId: id, description: null, code: 'QA', name, revision: 1, version: { id: versionId, workflowDefinitionId: definitionId, publishedAt: null, publishedById: null, changeNote: null, status: 'DRAFT' as const, version: 2, structureSnapshot: { nodes: [], transitions: [] } } };
 }
 function LocationProbe() { return <output aria-label="current path">{useLocation().pathname}</output>; }
 function mountBusiness() { return render(<MemoryRouter initialEntries={['/app/announcements']}><LanguageProvider><InternalLayout /><LocationProbe /></LanguageProvider></MemoryRouter>); }
@@ -43,8 +37,6 @@ beforeEach(() => {
   vi.mocked(getSession).mockResolvedValue({ accountType: 'INTERNAL', landingPath: '/app/workbench', userId: 'actor', organizationId: id });
   vi.mocked(getAdminOrganizations).mockResolvedValue([]);
   vi.mocked(apiRequest).mockResolvedValue(context());
-  vi.mocked(getWorkflowVersion).mockResolvedValue(definition());
-  vi.mocked(getWorkflowOptions).mockResolvedValue({ roles: [], users: [], permissions: [] });
 });
 afterEach(() => { vi.unstubAllGlobals(); window.history.replaceState({}, '', '/'); });
 
@@ -70,10 +62,10 @@ it('keeps console context read failure explicit and retryable without reading wo
   vi.mocked(apiRequest).mockRejectedValueOnce(new Error('offline')).mockResolvedValue(context());
   mountConsole();
   expect(await screen.findByText('无法验证管理权限，请重试')).toBeVisible();
-  expect(getWorkflowVersion).not.toHaveBeenCalled();
+  expect(vi.mocked(apiRequest).mock.calls.every(([url]) => url.startsWith('/api/v1/admin/console/context'))).toBe(true);
   expect(useWorkTabsStore.getState().tabs).toEqual(tabs);
   fireEvent.click(screen.getByRole('button', { name: '重试' }));
-  expect(await screen.findByRole('heading', { name: definition().name })).toBeVisible();
+  expect(await screen.findByRole('button', { name: '制程不合格台账' })).toBeVisible();
   expect(useWorkTabsStore.getState().tabs).toEqual(tabs);
 });
 
@@ -81,7 +73,7 @@ it.each(['workflow', 'platform'])('does not infer missing %s access from the oth
   vi.mocked(apiRequest).mockResolvedValue(context(missing !== 'workflow', missing !== 'platform'));
   mountConsole(missing === 'workflow' ? path : '/console/users');
   expect(await screen.findByText('无权访问此管理模块')).toBeVisible();
-  expect(getWorkflowVersion).not.toHaveBeenCalled();
+  expect(vi.mocked(apiRequest).mock.calls.every(([url]) => url.startsWith('/api/v1/admin/console/context'))).toBe(true);
   expect(getAdminOrganizations).not.toHaveBeenCalled();
 });
 
@@ -104,36 +96,24 @@ it('updates the business menu, header and work tab when language changes', async
   expect(await screen.findByRole('button', { name: 'Announcements' })).toBeVisible();
 });
 
-it('keeps the real loaded workflow name in console navigation without creating a business work tab or another detail read', async () => {
+it.each([
+  `/app/workflow-designer/${definitionId}/${versionId}`, `/console/workflows/${definitionId}/${versionId}`,
+])('renders not found for %s without reading workflow data or changing work tabs', async retired => {
   const tabs = preserveBusiness();
-  mountConsole(`/app/workflow-designer/${definitionId}/${versionId}`);
-  expect(await screen.findByRole('heading', { name: definition().name })).toBeVisible();
-  expect(window.location.pathname).toBe(path);
-  expect(screen.getByRole('link', { name: '流程管理' })).toHaveAttribute('aria-current', 'page');
+  mountConsole(retired);
+  expect(await screen.findByText('管理页面不存在')).toBeVisible();
+  expect(window.location.pathname).toBe(retired);
   expect(useWorkTabsStore.getState().tabs).toEqual(tabs);
-  fireEvent.click(screen.getByRole('radio', { name: 'EN' }));
-  expect(screen.getByRole('heading', { name: definition().name })).toBeVisible();
-  expect(useWorkTabsStore.getState().tabs).toEqual(tabs);
-  expect(getWorkflowVersion).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(apiRequest).mock.calls.every(([url]) => url.startsWith('/api/v1/admin/console/context'))).toBe(true);
 });
 
-it.each([[403, false], [404, false], [403, true], [404, true]])('keeps workflow failure %s explicit without creating a console work tab, prior business=%s', async (status, priorPages) => {
-  const tabs = priorPages ? preserveBusiness() : [];
-  vi.mocked(getWorkflowVersion).mockRejectedValue(new ApiError({ code: status === 403 ? 'FEATURE_PERMISSION_DENIED' : 'WORKFLOW_NOT_FOUND', message: 'unsafe' }, status));
-  mountConsole();
-  expect(await screen.findByText(status === 403 ? '无权执行此操作' : '请求被拒绝，请检查权限和填写内容后重试')).toBeVisible();
-  expect(useWorkTabsStore.getState().tabs).toEqual(tabs);
-  expect(screen.queryByRole('button', { name: '全部标签' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: /关闭 .*流程/ })).not.toBeInTheDocument();
-  expect(getWorkflowVersion).toHaveBeenCalledTimes(1);
-});
-
-it('does not translate an actual workflow name matching a static translation key or add it to business tabs', async () => {
-  localStorage.setItem('qms:locale:v1', 'en-US');
-  vi.mocked(getWorkflowVersion).mockResolvedValue(definition('流程设计'));
-  const tabs = preserveBusiness(); mountConsole();
-  expect(await screen.findByRole('heading', { name: '流程设计' })).toBeVisible();
-  expect(screen.getByRole('navigation', { name: 'Workflow hierarchy' })).toHaveTextContent('流程设计');
-  expect(useWorkTabsStore.getState().tabs).toEqual(tabs);
-  expect(getWorkflowVersion).toHaveBeenCalledTimes(1);
+it('opens the separate 8D maintenance route while preserving the panels’ configuration permission checks', async () => {
+  vi.mocked(apiRequest).mockImplementation(async url => url.startsWith('/api/v1/admin/console/context')
+    ? context() : { organizationId: id, permissions: ['workflow:manage'] });
+  mountConsole('/console/eight-d-bindings');
+  expect(await screen.findByText('当前会话无配置读取权限')).toBeVisible();
+  expect(screen.getByText('当前会话无供应商配置读取权限')).toBeVisible();
+  expect(screen.getByRole('link', { name: '8D 流程绑定' })).toHaveAttribute('aria-current', 'page');
+  expect(screen.queryByRole('button', { name: '制程不合格台账' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.every(([url]) => url === '/api/v1/system/my-permissions' || url.startsWith('/api/v1/admin/console/context'))).toBe(true);
 });

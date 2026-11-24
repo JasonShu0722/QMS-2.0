@@ -30,6 +30,63 @@ it('opens a read-only internal PCN without accessing an unmounted edit form', as
   expect(errors.mock.calls.flat().map(String).filter(message => /useForm.*not connected/.test(message))).toEqual([]);
 });
 
+it('offers only same-organization published flows with the required PCN nodes and transitions', async () => {
+  const row = { id: 'p1', ownerOrganizationId: 'org-1', title: '待审批变更', status: 'SUBMITTED', version: 2, events: [], workflow: null };
+  const header = { id: 'flow', organizationId: 'org-1', code: 'PCN', name: 'PCN 审批' };
+  const eligible = { id: 'eligible', workflowDefinitionId: 'flow', status: 'PUBLISHED', version: 1 };
+  const invalid = { ...eligible, id: 'invalid', version: 2 };
+  const graph = {
+    nodes: [
+      { id: 'start', type: 'ACTION', config: { isStart: true, assignment: { permission: 'supplier-pcn:submissions:write' } } },
+      { id: 'approval', type: 'APPROVAL', config: { assignment: { permission: 'supplier-pcn:requests:approve' } } },
+      { id: 'close', type: 'CLOSE', config: { isEnd: true, assignment: { permission: 'supplier-pcn:requests:approve' } } },
+    ],
+    transitions: [{ from: 'start', to: 'approval', action: 'SUBMIT' }, { from: 'approval', to: 'close', action: 'APPROVE' }, { from: 'approval', to: 'start', action: 'RETURN' }],
+  };
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/my-permissions')) return { organizationId: 'org-1', permissions: ['workflow:manage'] };
+    if (path.startsWith('/api/v1/workflows?')) return { total: 2, items: [{ ...header, version: invalid }, { ...header, id: 'foreign', organizationId: 'foreign-org', version: invalid }] };
+    if (path === '/api/v1/workflows/flow') return { ...header, versions: [invalid, eligible] };
+    if (path.endsWith('/versions/invalid')) return { ...header, version: { ...invalid, structureSnapshot: { ...graph, transitions: graph.transitions.slice(0, 2) } } };
+    if (path.endsWith('/versions/eligible')) return { ...header, version: { ...eligible, structureSnapshot: graph } };
+    if (init?.method === 'POST' || path.endsWith('/p1')) return row;
+    return { items: [row], total: 1 };
+  });
+  render(<SupplierPcnPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '待审批变更' }));
+  fireEvent.click(await screen.findByRole('button', { name: '查找已发布流程' }));
+  fireEvent.mouseDown(await screen.findByRole('combobox', { name: '已发布流程版本' }));
+  expect(screen.queryByText('PCN 审批 · PCN · v2')).not.toBeInTheDocument();
+  expect(apiRequest).not.toHaveBeenCalledWith('/api/v1/workflows/foreign', expect.anything());
+  fireEvent.click(await screen.findByText('PCN 审批 · PCN · v1'));
+  expect(screen.getByPlaceholderText('流程定义 ID')).toHaveValue('flow');
+  expect(screen.getByPlaceholderText('流程版本 ID')).toHaveValue('eligible');
+  fireEvent.click(screen.getByRole('button', { name: '启动审批流程' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests/p1/start', expect.objectContaining({
+    method: 'POST', body: JSON.stringify({ expectedVersion: 2, workflowDefinitionId: 'flow', workflowVersionId: 'eligible' }),
+  })));
+});
+
+it('keeps manual PCN IDs usable when the session cannot read workflow definitions', async () => {
+  const row = { id: 'p1', ownerOrganizationId: 'org-1', title: '待审批变更', status: 'SUBMITTED', version: 2, events: [], workflow: null };
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/my-permissions')) return { organizationId: 'org-1', permissions: ['workflow:start', 'supplier-pcn:requests:approve'] };
+    if (init?.method === 'POST' || path.endsWith('/p1')) return row;
+    return { items: [row], total: 1 };
+  });
+  render(<SupplierPcnPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '待审批变更' }));
+  fireEvent.change(await screen.findByPlaceholderText('流程定义 ID'), { target: { value: 'manual-definition' } });
+  fireEvent.change(screen.getByPlaceholderText('流程版本 ID'), { target: { value: 'manual-version' } });
+  fireEvent.click(screen.getByRole('button', { name: '查找已发布流程' }));
+  expect(await screen.findByText('无法查看当前组织的流程版本，可手动填写 ID。')).toBeVisible();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.startsWith('/api/v1/workflows'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: '启动审批流程' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests/p1/start', expect.objectContaining({
+    method: 'POST', body: JSON.stringify({ expectedVersion: 2, workflowDefinitionId: 'manual-definition', workflowVersionId: 'manual-version' }),
+  })));
+});
+
 it('passes the changed PCN page size to the server and resets page one', async () => {
   vi.mocked(apiRequest).mockResolvedValue({ items: [], total: 125 } as never);
   render(<SupplierPcnPage />);

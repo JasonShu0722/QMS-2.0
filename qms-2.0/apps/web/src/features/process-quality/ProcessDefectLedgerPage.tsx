@@ -16,7 +16,7 @@ import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { ProcessEightDIssueDrawer } from './ProcessEightDIssueDrawer';
 import { ProcessDefectEditor } from './ProcessDefectEditor';
 import { ProcessDefectDeletionDialog } from './ProcessDefectDeletionDialog';
-import { ProcessLedgerAction } from './ProcessLedgerAction';
+import { boardLabels, dispositionLabels, maintenanceLimit, ProcessDefectBoardDialog, type MaintenanceBoard, type MaintenanceTarget } from './ProcessDefectBoardDialog';
 import { ProcessAiDescription } from './ProcessAiDescription';
 import { categoryLabels, categoryOptions, CompletionStatus, denied, MappingHint, ProcessError, verificationLabels } from './process-ledger';
 import { factoryChoices, factoryFieldLabel, factoryLabel } from './process-factory';
@@ -25,6 +25,7 @@ type Defect = components['schemas']['ProcessDefectDto'];
 type DefectPage = components['schemas']['ProcessDefectPageDto'];
 type IssueResult = components['schemas']['ProcessIssueResultDto'];
 type LinkedProblem = components['schemas']['ProcessIssueProblemDto'];
+type BoardCapabilities = components['schemas']['ProcessLedgerWorkflowCapabilitiesDto'];
 
 const deletionLimit = 1000;
 const formalIssueLimit = 100;
@@ -121,14 +122,15 @@ export function ProcessDefectLedgerPage() {
   const organizationId = query.get('organizationId') ?? undefined;
   const defectId = query.get('defectId') ?? undefined;
   if (organizationId !== undefined && !uuidPattern.test(organizationId) || defectId !== undefined && !uuidPattern.test(defectId)) return <Alert type="error" showIcon title="制程来源链接参数无效" />;
-  return <ProcessLedgerContent key={`${scope ?? 'unbound'}:${organizationId ?? 'current'}`} organizationId={organizationId} initialDefectId={defectId} />;
+  const targetOrganizationId = organizationId ?? scope?.split(':')[1];
+  return <ProcessLedgerContent key={`${scope ?? 'unbound'}:${targetOrganizationId ?? 'current'}`} organizationId={organizationId} targetOrganizationId={targetOrganizationId} initialDefectId={defectId} />;
 }
 
-function ProcessLedgerContent({ organizationId, initialDefectId }: { organizationId?: string; initialDefectId?: string }) {
+function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDefectId }: { organizationId?: string; targetOrganizationId?: string; initialDefectId?: string }) {
   const english = useLanguage().locale === 'en-US';
   const factoryTitle = factoryFieldLabel[english ? 1 : 0];
-  const sessionOrganizationId = useWorkTabsStore(state => state.sessionScope?.split(':')[1]);
-  const targetOrganizationId = organizationId ?? sessionOrganizationId;
+  const sessionScope = useWorkTabsStore(state => state.sessionScope);
+  const sessionUserId = sessionScope?.split(':')[2];
   const [pageSize, setPageSize] = useLedgerPageSize('process-defects', targetOrganizationId, deletionLimit);
   const ledgerScope = useLedgerScope(targetOrganizationId);
   const viewId = 'ALL';
@@ -162,7 +164,10 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const [editor, setEditor] = useState<Defect | 'new'>();
   const [suppliers, setSuppliers] = useState<components['schemas']['SupplierProfileDto'][]>([]);
   const [supplierError, setSupplierError] = useState<unknown>();
-  const [action, setAction] = useState<{ mode: 'close' | 'reopen' | 'verification'; record: Defect; materialId?: string }>();
+  const [boardTarget, setBoardTarget] = useState<MaintenanceTarget>();
+  const [boardDenied, setBoardDenied] = useState(false);
+  const [capabilities, setCapabilities] = useState<{ revision: number; value: BoardCapabilities }>();
+  const [capabilityError, setCapabilityError] = useState<unknown>();
   const [deletionTargets, setDeletionTargets] = useState<Defect[]>();
   const [deletionOpen, setDeletionOpen] = useState(false);
   const alive = useRef(true);
@@ -180,15 +185,15 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const canWrite = permissions.includes('process-quality:defects:write');
   const canDelete = canRead && permissions.includes('process-quality:defects:delete');
   const selectionLimit = canDelete ? deletionLimit : formalIssueLimit;
-  const canClose = permissions.includes('process-quality:defects:close');
-  const canReview = permissions.includes('process-quality:materials:review');
+  const boards = capabilities?.revision === revision && Array.isArray(capabilities.value?.boards) ? capabilities.value.boards : [];
+  const canRegister = canWrite && boards.includes('REGISTRATION');
   const canIssue = permissions.includes('process-quality:issues:issue');
   const canReadSuppliers = permissions.includes('supplier-quality:profiles:read');
   function revoke(cause?: unknown) {
     if (!alive.current) return;
     detailController.current?.abort(); listController.current?.abort();
     detailRequest.current += 1; setAccessLost(true); setResult(undefined); setSelected({}); setDetail(undefined); setLinked([]);
-    setDetailOpen(false); setFormalOpen(false); setEditor(undefined); setAction(undefined); setSuppliers([]);
+    setDetailOpen(false); setFormalOpen(false); setEditor(undefined); setBoardTarget(undefined); setSuppliers([]);
     setDeletionTargets(undefined); setDeletionOpen(false);
     if (cause instanceof ApiError && cause.status === 401) setUnauthorized(true);
   }
@@ -202,9 +207,22 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     void apiRequest<components['schemas']['PermissionsResponseDto']>(scoped('/api/v1/system/my-permissions'), { signal: controller.signal }).then(value => { if (!controller.signal.aborted) { setPermissions(value.permissions ?? []); setPermissionsChecked(true); } }).catch(cause => { if (!controller.signal.aborted) { setPermissions([]); setPermissionsChecked(false); if (denied(cause)) revoke(cause); } });
     return () => controller.abort();
   }, [revision, organizationId]);
-  function scoped(path: string) {
-    return organizationId ? `${path}${path.includes('?') ? '&' : '?'}organizationId=${encodeURIComponent(organizationId)}` : path;
+  function scoped(path: string, scopeId = organizationId) {
+    return scopeId ? `${path}${path.includes('?') ? '&' : '?'}organizationId=${encodeURIComponent(scopeId)}` : path;
   }
+  useEffect(() => {
+    if (accessLost) return;
+    const controller = new AbortController();
+    setCapabilityError(undefined);
+    void apiRequest<BoardCapabilities>(scoped('/api/v1/process-quality/ledger-workflow-configuration/capabilities', targetOrganizationId), { signal: controller.signal }).then(value => {
+      if (!controller.signal.aborted) setCapabilities({ revision, value });
+    }).catch(cause => {
+      if (controller.signal.aborted) return;
+      if (cause instanceof ApiError && cause.status === 401) revoke(cause);
+      else setCapabilityError(cause);
+    });
+    return () => controller.abort();
+  }, [revision, targetOrganizationId, accessLost]);
   const serializedFilters = serializeFilters(appliedFilters);
   useEffect(() => {
     if (!canReadSuppliers || accessLost) { setSuppliers([]); return; }
@@ -215,7 +233,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
       const items: components['schemas']['SupplierProfileDto'][] = [];
       let page = 1;
       while (active) {
-        const value = await apiRequest<components['schemas']['SupplierProfilePageDto']>(scoped(`/api/v1/supplier-quality/profiles?page=${page}&pageSize=100`), { signal: controller.signal });
+        const value = await apiRequest<components['schemas']['SupplierProfilePageDto']>(scoped(`/api/v1/supplier-quality/profiles?page=${page}&pageSize=100`, targetOrganizationId), { signal: controller.signal });
         items.push(...value.items);
         if (items.length >= value.total) return items;
         if (!value.items.length) throw new Error('供应商资料分页不完整');
@@ -225,13 +243,16 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     }
     void readSuppliers().then(value => { if (active) setSuppliers(value); }).catch(cause => { if (active) { setSuppliers([]); setSupplierError(cause); } });
     return () => { active = false; controller.abort(); };
-  }, [canReadSuppliers, revision, accessLost]);
+  }, [canReadSuppliers, revision, accessLost, targetOrganizationId]);
   function supplierName(item: Defect['materials'][number]) {
-    const profile = suppliers.find(supplier => supplier.id === item.supplierProfileId || (item.supplierOrganizationId && supplier.supplierOrganizationId === item.supplierOrganizationId));
-    return profile?.displayName ?? (item.supplierProfileId || item.supplierOrganizationId ? '供应商名称不可用' : '—');
+    const profile = item.supplierProfileId
+      ? suppliers.find(supplier => supplier.id === item.supplierProfileId)
+      : item.supplierOrganizationId ? suppliers.find(supplier => supplier.supplierOrganizationId === item.supplierOrganizationId) : undefined;
+    if (profile) return `${profile.displayName}（${profile.businessCode}）`;
+    return item.supplierProfileId || item.supplierOrganizationId ? '供应商名称不可用' : '—';
   }
   function saved(record: Defect) {
-    setDetail(current => current?.id === record.id ? record : current);
+    setDetail(current => current?.id === record.id ? { ...record, evidence: record.evidence ?? current.evidence } : current);
     setRevision(value => value + 1);
   }
   useEffect(() => {
@@ -309,9 +330,38 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   const selectedCount = Object.keys(selected).length;
   const exceedsFormalIssueLimit = selectedCount > formalIssueLimit;
   const staleSelected = (result?.items ?? []).filter(item => selected[item.id] && selected[item.id].version !== item.version);
-  const locked = formalOpen || deletionOpen;
+  const locked = formalOpen || deletionOpen || !!boardTarget;
   const selectablePage = (result?.items ?? []).filter(record => !record.archivedAt);
   const selectedOnPage = selectablePage.filter(record => selected[record.id]);
+  const selectedRecords = Object.values(selected);
+  const selectedArchived = result?.items.some(record => selected[record.id] && record.archivedAt);
+  const exceedsMaintenanceLimit = selectedCount > maintenanceLimit;
+  const boardBatchDisabled = locked || filterOpen || !!deletionTargets || loading || !!listError || !!staleSelected.length || !!selectedArchived || exceedsMaintenanceLimit;
+  const canReviewMaterial = (item: Defect['materials'][number]) => !!sessionUserId && !!item.id && item.sqeUserId === sessionUserId;
+  function openBoard(board: MaintenanceBoard, records: Defect[], materialId?: string) {
+    if (!boards.includes(board) || !targetOrganizationId || !records.length || records.length > maintenanceLimit || records.some(record => record.archivedAt || record.organizationId !== targetOrganizationId)) return;
+    requestLeave(() => { setBoardDenied(false); setBoardTarget({ board, records, materialId }); });
+  }
+  function saveBoard(items: Defect[]) {
+    const updated = new Map(items.map(item => [item.id, item]));
+    setSelected(current => Object.fromEntries(Object.entries(current).map(([id, record]) => [id, updated.get(id) ?? record])));
+    setDetail(current => {
+      if (!current) return current;
+      const next = updated.get(current.id);
+      return next ? { ...next, evidence: next.evidence ?? current.evidence } : current;
+    });
+    setBoardTarget(undefined);
+    setRevision(value => value + 1);
+  }
+  function denyBoard(cause?: unknown) {
+    if (cause instanceof ApiError && cause.status === 403) {
+      setBoardTarget(undefined);
+      setEditor(undefined);
+      setBoardDenied(true);
+      setRevision(value => value + 1);
+      if (detailOpen && detail) void openDetail(detail.id);
+    } else revoke(cause);
+  }
   function openDeletion(records: Defect[]) { requestLeave(() => { setDeletionTargets(records); setDeletionOpen(true); }); }
   function refreshAfterDeletion(ids: string[]) {
     const retired = new Set(ids);
@@ -422,6 +472,10 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     { title: '登记人', key: 'registeredByName', width: 120, render: (_, record) => record.sourceKind === 'IMS' ? '自动' : record.registeredByName ?? '—' },
     { title: '完善情况', key: 'completion', width: 170, render: (_, record) => <CompletionStatus record={record} /> },
     { title: filterTitle('responsibilityCategory', '责任类别'), key: 'responsibilityCategory', dataIndex: 'responsibilityCategory', width: 105, render: responsibility },
+    { title: '分析进度', key: 'analysisProgress', dataIndex: 'analysisProgress', width: 150, ellipsis: true, render: value => value ?? '—' },
+    { title: '处置方案', key: 'dispositionPlan', width: 100, render: (_, record) => record.dispositionPlan ? dispositionLabels[record.dispositionPlan] : '—' },
+    { title: '处置进度', key: 'dispositionProgress', dataIndex: 'dispositionProgress', width: 150, ellipsis: true, render: value => value ?? '—' },
+    { title: '处置完成时间', key: 'dispositionCompletedAt', width: 170, render: (_, record) => record.dispositionCompletedAt ? occurrenceTimestamp.format(new Date(record.dispositionCompletedAt)) : '—' },
     { title: filterTitle('ledgerStatus', '状态'), key: 'ledgerStatus', dataIndex: 'ledgerStatus', width: 100, render: value => <Tag>{value === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
     { title: '首条物料 / 供应商', key: 'material', width: 190, render: (_, record) => record.materials?.length ? <span>{record.materials[0].materialCode ?? '—'} / {supplierName(record.materials[0])}{record.materials.length > 1 ? `（共${record.materials.length}项）` : ''}</span> : '—' },
     { title: '人工项目 / 映射', key: 'mapping', width: 150, render: (_, record) => record.projectCode ?? '—' },
@@ -434,7 +488,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
 
   const toolbar = <div className="process-quality-toolbar-main" role="group" aria-label="台账工具栏">
     <Input.Search aria-label="搜索制程不良" placeholder="搜索追溯码、成品编码、工单、不良描述或批次" value={searchInput} allowClear maxLength={200} disabled={locked || !!deletionTargets} onChange={event => setSearchInput(event.target.value)} onSearch={value => requestLeave(() => saveAppliedFilters(filterOpen ? completeDraft : appliedFilters, value.trim()))} />
-    {canWrite ? <Button type="primary" disabled={locked} onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
+    {canRegister ? <Button type="primary" disabled={locked} onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
     <Popover open={filterOpen} onOpenChange={open => { if (open && filterTrigger.current) openFilters(filterTrigger.current); else if (!open && filterOpen) saveAppliedFilters(completeDraft, undefined, false, false); }} afterOpenChange={open => { if (open) filterControl.current?.focus(); }} content={filterPanel} trigger="click" placement="bottomLeft" align={{ overflow: { shiftX: true } }} destroyOnHidden><Button ref={filterTrigger} aria-label="筛选条件" aria-haspopup="dialog" aria-expanded={filterOpen} disabled={locked || !!deletionTargets} icon={<Filter size={14} />}>筛选条件{appliedFilters.items.length || appliedFilters.currentMonth ? ` ${appliedFilters.items.length + Number(appliedFilters.currentMonth)}` : ''}</Button></Popover>
     {canIssue ? <Button aria-label="发起 8D" disabled={locked || filterOpen || !selectedCount || exceedsFormalIssueLimit || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起 8D</Button> : null}
     <Button aria-label="刷新" disabled={locked} onClick={() => requestLeave(() => { if (!filterOpen || saveAppliedFilters(completeDraft, undefined, false, false)) setRevision(value => value + 1); })} loading={loading}>刷新</Button>
@@ -448,23 +502,29 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
         <span aria-live="polite">已选择 {selectedCount} 条来源</span>
         {canIssue && exceedsFormalIssueLimit ? <span>发起 8D 最多选择 {formalIssueLimit} 条</span> : null}
         <Button disabled={locked || !!deletionTargets} onClick={() => requestLeave(() => setSelected({}))}>取消选择</Button>
+        {boards.some(board => board !== 'REGISTRATION') && exceedsMaintenanceLimit ? <span>板块维护最多选择 {maintenanceLimit} 条</span> : null}
+        {(Object.keys(boardLabels) as MaintenanceBoard[]).filter(board => boards.includes(board) && (board !== 'MATERIAL_REVIEW' || selectedRecords.some(record => record.materials?.some(canReviewMaterial)))).map(board =>
+          <Button key={board} disabled={boardBatchDisabled} onClick={() => openBoard(board, selectedRecords)}>{boardLabels[board]}</Button>)}
         {canDelete ? <Button danger disabled={locked || filterOpen || !!deletionTargets || loading || !!listError || !!staleSelected.length} onClick={() => openDeletion(Object.values(selected))}>删除所选</Button> : null}
       </div> : <span className="sr-only" role="status">已选择 0 条来源</span>}
       {deletionTargets && !deletionOpen ? <Alert type="warning" title="删除结果尚待确认" action={<Button onClick={() => setDeletionOpen(true)}>恢复删除操作</Button>} /> : null}
       {staleSelected.length ? <Alert type="warning" title="所选来源版本已更新。" action={<Button disabled={locked} onClick={() => requestLeave(() => setSelected(current => ({ ...current, ...Object.fromEntries(staleSelected.map(item => [item.id, item])) })))}>更新所选版本</Button>} /> : null}
       <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
+      {boardDenied && !detailOpen ? <Alert showIcon type="warning" title="当前板块操作已被拒绝，正在刷新台账与操作权限。" /> : null}
+      <ProcessError cause={capabilityError} fallback="维护权限加载失败，请刷新重试。" />
       <LedgerTable<Defect> pinnedHorizontalScroll actionBar={toolbar} bodyFallback={listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : undefined} compactHeaders compactLayout ledgerId="process-defects" organizationId={targetOrganizationId} viewId={viewId} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'factoryCode', 'shift', 'project', 'productCategory', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} insertNewColumnsBefore={[["factoryCode", "shift", true], ['productCategory', 'productSubcategory']]} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search || appliedFilters.currentMonth || appliedFilters.items.length ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions, onChange: (next, size) => { if (!locked) requestLeave(() => { if (filterOpen && !saveAppliedFilters(completeDraft, undefined, false, false)) return; setPage(size === pageSize && !changesSelection ? next : 1); setPageSize(size); }); } }} />
     </section>
     <Drawer title="不良品详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden
       classNames={{ header: 'process-quality-drawer-header' }}
-      extra={!detailLoading && !detailError && detail && !detail.archivedAt && (canWrite || canClose || canDelete || canIssue) ? <Space wrap>
-        {canWrite ? <Button onClick={() => requestLeave(() => setEditor(detail))}>维护台账</Button> : null}
-        {canClose ? <Button onClick={() => setAction({ mode: detail.ledgerStatus === 'CLOSED' ? 'reopen' : 'close', record: detail })}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}
+      extra={!detailLoading && !detailError && detail && !detail.archivedAt ? <Space wrap>
+        {canRegister ? <Button disabled={locked} onClick={() => requestLeave(() => setEditor(detail))}>维护登记信息</Button> : null}
         {canDelete ? <Button danger disabled={locked || !!deletionTargets} onClick={() => openDeletion([detail])}>删除台账</Button> : null}
         {canIssue ? <Button disabled={locked || (!selected[detail.id] && selectedCount >= formalIssueLimit)} onClick={() => requestLeave(() => { toggle(detail, true); setDetailOpen(false); })}>选择此条并返回台账</Button> : null}
       </Space> : null}>
+      {boardDenied ? <Alert showIcon type="warning" title="当前板块操作已被拒绝，正在刷新台账与操作权限。" /> : null}
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>
-        <Descriptions bordered size="small" column={1} items={[
+        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
+        <Descriptions title="表单登记" bordered size="small" column={1} items={[
           { key: 'type', label: '失效类型', children: detail.defectTypeCode },
           { key: 'description', label: '不良描述', children: <span className="process-quality-description">{detail.description || '待完善'}</span> },
           { key: 'quantity', label: '数量', children: detail.defectQuantity },
@@ -479,10 +539,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
           { key: 'operationName', label: '工序名称', children: detail.operationName ?? '—' },
           { key: 'registrant', label: '登记人', children: detail.sourceKind === 'IMS' ? '自动' : detail.registeredByName ?? '—' },
           { key: 'completion', label: '完善情况', children: <CompletionStatus record={detail} detail /> },
-          { key: 'responsibility', label: '责任类别', children: responsibility(detail.responsibilityCategory) },
-          { key: 'ledgerStatus', label: '台账状态', children: detail.ledgerStatus === 'CLOSED' ? '已关闭' : '跟进中' },
           { key: 'trace', label: '条码', children: detail.traceCode ?? '—' },
-          { key: 'progress', label: '分析进展', children: detail.analysisProgress ?? '—' },
           { key: 'mapping', label: '人工项目 / 映射建议', children: `${detail.projectCode ?? '—'} / ${detail.componentProject?.project?.code ?? '—'}` },
           { key: 'batch', label: '批次 / 工单', children: `${detail.batchCode ?? '—'} / ${detail.workOrderCode ?? '—'}` },
           { key: 'operation', label: '工序 / 产线', children: `${detail.operationCode ?? '—'} / ${detail.lineCode ?? '—'}` },
@@ -490,28 +547,49 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
           { key: 'source', label: '来源', children: <Space><Tag>{detail.sourceKind === 'IMS' ? '自动' : '人工录入'}</Tag>{detail.externalSourceSystem ? <Tag>{detail.externalSourceSystem}</Tag> : null}</Space> },
         ]} />
         <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} onSaved={saved} onDenied={revoke} />
+        <Descriptions title="分析" bordered size="small" column={1}
+          extra={!detail.archivedAt && boards.includes('ANALYSIS') ? <Button disabled={locked || !!deletionTargets} onClick={() => openBoard('ANALYSIS', [detail])}>{boardLabels.ANALYSIS}</Button> : null}
+          items={[{ key: 'progress', label: '分析进展', children: detail.analysisProgress ?? '—' }]} />
+        <div>
+          <Descriptions title="责任" bordered size="small" column={1}
+            extra={!detail.archivedAt && boards.includes('RESPONSIBILITY') ? <Button disabled={locked || !!deletionTargets} onClick={() => openBoard('RESPONSIBILITY', [detail])}>{boardLabels.RESPONSIBILITY}</Button> : null}
+            items={[{ key: 'responsibility', label: '责任类别', children: responsibility(detail.responsibilityCategory) }]} />
+          <Typography.Title level={4}>物料与复核事实</Typography.Title>
+          <MaterialDetails record={detail} supplierName={supplierName} canReview={boards.includes('MATERIAL_REVIEW') && !detail.archivedAt ? canReviewMaterial : undefined}
+            onReview={materialId => openBoard('MATERIAL_REVIEW', [detail], materialId)} reviewDisabled={locked || !!deletionTargets} />
+        </div>
+        <Descriptions title="处置" bordered size="small" column={1}
+          extra={!detail.archivedAt && boards.includes('DISPOSITION') ? <Button disabled={locked || !!deletionTargets} onClick={() => openBoard('DISPOSITION', [detail])}>{boardLabels.DISPOSITION}</Button> : null}
+          items={[
+            { key: 'dispositionPlan', label: '处置方案', children: detail.dispositionPlan ? dispositionLabels[detail.dispositionPlan] : '—' },
+            { key: 'dispositionProgress', label: '处置进度', children: detail.dispositionProgress ?? '—' },
+            { key: 'dispositionCompletedAt', label: '处置完成时间', children: detail.dispositionCompletedAt ? occurrenceTimestamp.format(new Date(detail.dispositionCompletedAt)) : '—' },
+          ]} />
+        <Descriptions title="台账关闭判定" bordered size="small" column={1}
+          extra={!detail.archivedAt && boards.includes('CLOSURE') ? <Button disabled={locked || !!deletionTargets} onClick={() => openBoard('CLOSURE', [detail])}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}
+          items={[{ key: 'ledgerStatus', label: '台账状态', children: detail.ledgerStatus === 'CLOSED' ? '已关闭' : '跟进中' }]} />
+        </Space>
         <Typography.Title level={4}>已关联问题</Typography.Title>
         <RecordList items={linked} itemKey={problem => problem.id} renderItem={problem => <Link to={`/app/problem-workspace/${problem.id}`}>{problem.reportNumber}</Link>} empty={<Empty description="尚未关联正式问题" />} />
         <Typography.Title level={4}>可用证据</Typography.Title>
         <AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: detail.id }} fileIds={(detail.evidence ?? []).map(evidence => evidence.id)} readOnly={!canWrite} />
-        <Typography.Title level={4}>物料与复核事实</Typography.Title>
-        <MaterialDetails record={detail} supplierName={supplierName} onReview={canReview && !detail.archivedAt ? materialId => setAction({ mode: 'verification', record: detail, materialId }) : undefined} />
         {canIssue && !selected[detail.id] && selectedCount >= formalIssueLimit ? <Alert type="warning" showIcon title={`已选满${formalIssueLimit}条来源，请先取消一条已选来源，再选择此条。`} /> : null}
       </> : null}
     </Drawer>
     {deletionTargets ? <ProcessDefectDeletionDialog sources={deletionTargets} organizationId={organizationId} open={deletionOpen} onClose={uncertain => { setDeletionOpen(false); if (!uncertain) setDeletionTargets(undefined); }} onDenied={revoke} onRefresh={() => refreshAfterDeletion(deletionTargets.map(record => record.id))} onDeleted={response => refreshAfterDeletion(response.deletedIds)} /> : null}
     {formalOpen ? <ProcessEightDIssueDrawer sources={Object.values(selected)} onClose={() => setFormalOpen(false)} onDenied={revoke} onIssued={response => { setIssued(response); setFormalOpen(false); setSelected({}); setRevision(value => value + 1); }} /> : null}
-    {editor ? <ProcessDefectEditor key={editor === 'new' ? 'new' : editor.id} record={editor === 'new' ? undefined : editor} suppliers={suppliers} canReadSuppliers={canReadSuppliers} onClose={() => setEditor(undefined)} onSaved={saved} onDenied={revoke} /> : null}
-    {action ? <ProcessLedgerAction {...action} onClose={() => setAction(undefined)} onSaved={record => { saved(record); setAction(undefined); }} onDenied={revoke} /> : null}
+    {editor ? <ProcessDefectEditor key={editor === 'new' ? 'new' : editor.id} record={editor === 'new' ? undefined : editor} organizationId={organizationId} onClose={() => setEditor(undefined)} onSaved={saved} onDenied={revoke} onWriteDenied={denyBoard} /> : null}
+    {boardTarget && targetOrganizationId ? <ProcessDefectBoardDialog {...boardTarget} organizationId={targetOrganizationId} userId={sessionUserId} suppliers={suppliers} canReadSuppliers={canReadSuppliers}
+      onClose={() => setBoardTarget(undefined)} onSaved={result => saveBoard(result.items)} onDenied={denyBoard} /> : null}
   </main>;
 }
 
-function MaterialDetails({ record, supplierName, onReview }: { record: Defect; supplierName: (item: Defect['materials'][number]) => string; onReview?: (id: string) => void }) {
+function MaterialDetails({ record, supplierName, canReview, onReview, reviewDisabled }: { record: Defect; supplierName: (item: Defect['materials'][number]) => string; canReview?: (item: Defect['materials'][number]) => boolean; onReview?: (id: string) => void; reviewDisabled?: boolean }) {
   return <Table<Defect['materials'][number]> rowKey={item => item.id ?? String(item.position)} dataSource={record.materials ?? []} size="small" pagination={false} scroll={{ x: 850 }} locale={{ emptyText: '暂无物料明细' }} columns={[
     { title: '物料编码', dataIndex: 'materialCode', render: value => value ?? '—' }, { title: '物料名称', dataIndex: 'materialName', render: value => value ?? '—' },
     { title: '供应商', render: (_, item) => supplierName(item) }, { title: '物料批次', dataIndex: 'materialBatch', render: value => value ?? '—' },
     { title: 'SQE', dataIndex: 'sqeUserId', render: value => value ? '已人工分配' : '未分配' }, { title: '复核状态', dataIndex: 'verification', render: (value: keyof typeof verificationLabels) => verificationLabels[value] ?? '未复核' },
     { title: '复核说明', dataIndex: 'verificationNotes', render: value => value ?? '—' },
-    ...(onReview ? [{ title: '操作', render: (_: unknown, item: Defect['materials'][number]) => item.id ? <Button onClick={() => onReview(item.id!)}>复核此物料</Button> : null }] : []),
+    ...(canReview && onReview ? [{ title: '操作', render: (_: unknown, item: Defect['materials'][number]) => item.id && canReview(item) ? <Button disabled={reviewDisabled} onClick={() => onReview(item.id!)}>复核此物料</Button> : null }] : []),
   ]} />;
 }

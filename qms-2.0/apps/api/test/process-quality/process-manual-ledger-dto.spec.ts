@@ -8,6 +8,22 @@ const options = { whitelist: true, forbidNonWhitelisted: true };
 const id = '904385a2-4a34-4d73-a8bd-e670d332dbd9';
 
 describe('manual process ledger DTO boundaries', () => {
+  it('validates a scoped bulk disposition with a single plan and an explicit time zone', async () => {
+    const BulkDto = Reflect.get(dto, 'BulkMaintainProcessDefectsDto');
+    expect(typeof BulkDto).toBe('function');
+    const payload = (fields: object, organizationId: string | undefined = id) => ({
+      organizationId, board: 'DISPOSITION', sources: [{ defectId: id, expectedVersion: 1, fields }],
+    });
+    for (const fields of [{ dispositionPlan: 'REWORK', dispositionCompletedAt: '2026-11-24T11:30:00+08:00' }, { dispositionPlan: null, dispositionCompletedAt: null }]) {
+      expect(await validate(plainToInstance(BulkDto, payload(fields)) as object, options)).toEqual([]);
+    }
+    for (const body of [payload({ dispositionPlan: ['REWORK', 'SCRAP'] }), payload({ dispositionPlan: 'UNKNOWN' }),
+      payload({ dispositionCompletedAt: '2026-11-24T11:30:00' }), payload({ dispositionCompletedAt: 1795519800000 }),
+      payload({ dispositionProgress: 'progress', description: 'registration' }), { ...payload({ dispositionPlan: 'SCRAP' }), organizationId: undefined }]) {
+      expect(await validate(plainToInstance(BulkDto, body) as object, options)).not.toEqual([]);
+    }
+  });
+
   it('allows partial maintenance of unknown facts while new manual registration requires four facts', async () => {
     const body = plainToInstance(dto.UpdateProcessDefectDto, { expectedVersion: 1, description: '', responsibilityCategory: null, defectTypeCode: null, defectQuantity: null, occurredAt: null });
     expect(await validate(body, options)).toEqual([]);

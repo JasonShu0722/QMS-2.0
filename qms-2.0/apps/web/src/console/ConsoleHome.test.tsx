@@ -96,8 +96,9 @@ it('shows workflow-only empty scope and only actual permitted common entries', a
   view();
   expect(await screen.findByText('当前无可汇总事项')).toBeInTheDocument();
   const links = within(screen.getByRole('navigation', { name: '常用入口' })).getAllByRole('link');
-  expect(links).toHaveLength(1);
+  expect(links).toHaveLength(2);
   expect(links[0]).toHaveAttribute('href', `/console/workflows?organizationId=${targetId}`);
+  expect(links[1]).toHaveAttribute('href', `/console/eight-d-bindings?organizationId=${targetId}`);
   expect(screen.queryByRole('region', { name: '失败队列' })).not.toBeInTheDocument();
   expect(screen.queryByText(/在线服务|成功率|系统健康/)).not.toBeInTheDocument();
 });

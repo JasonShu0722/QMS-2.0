@@ -20,14 +20,18 @@ const id = '2c7b3607-1d6d-4304-9a72-f595c8467d88';
 const audit = `/console/audit-log?organizationId=${id}&section=audit-log&resourceType=USER&resourceId=${id}`;
 const internal = { accountType: 'INTERNAL', landingPath: '/app/workbench', securityState: 'AUTHENTICATED' } as const;
 
+it.each(['/app/workflow-designer', `/app/workflow-designer/${id}/${id}`, `/console/workflows/${id}/${id}`])('drops the retired workflow target %s', returnTo => {
+  expect(readReturnTo({ returnTo }, 'INTERNAL')).toBeUndefined();
+});
+
 describe('controlled authentication return target', () => {
   it.each([
-    '/console', '/console/users', '/console/organizations', '/console/configuration', '/console/workflows',
+    '/console', '/console/users', '/console/organizations', '/console/configuration', '/console/workflows', '/console/eight-d-bindings',
     '/console/master-data/suppliers', '/console/master-data/customers', '/console/master-data/materials', '/console/master-data/component-projects',
     '/console/audit-log', '/console/outbox', '/console/reconfiguration', '/console/problem-reconfiguration', '/console/supplier-accounts',
     '/console/api-monitoring', '/console/data-exchanges', '/console/services',
-    `/console/workflows/${id}/${id}`, `/app/workflow-designer/${id}/${id}`, `/app/problem-workspace/${id}`,
-    '/app', '/app/admin', '/app/workflow-designer', '/app/workbench', '/app/customer-quality/problems', '/supplier/inbox', '/supplier/account',
+    `/app/problem-workspace/${id}`,
+    '/app', '/app/admin', '/app/workbench', '/app/customer-quality/problems', '/supplier/inbox', '/supplier/account',
     '/app/supplier-quality/new', '/app/supplier-quality/profiles', `/app/supplier-quality/problems/${id}`, `/supplier/corrections/problems/${id}`,
     `/app/supplier-quality/eight-d/${id}`,
   ])('accepts only a known application target: %s', target => {
