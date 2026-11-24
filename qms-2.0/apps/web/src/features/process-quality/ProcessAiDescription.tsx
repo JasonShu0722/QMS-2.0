@@ -15,15 +15,22 @@ type TaskAction = 'retry' | 'regenerate' | 'adopt';
 const tasksPath = '/api/v1/admin/integrations/ingestion/ai-tasks';
 const states: Record<string, string> = { DISABLED: '直接组合', PENDING: '等待整理', PROCESSING: '整理中', RETRY: '等待重试', FAILED: '整理失败，保留当前描述', APPLIED: '已采用AI结果', SUGGESTED: 'AI建议待采用', STALE: '输入已更新，保留当前描述' };
 
-export function ProcessAiDescription({ record, permissions, onSaved, onDenied }: { record: Defect; permissions: string[]; onSaved: (record: Defect) => void; onDenied: (cause?: unknown) => void }) {
+export function ProcessAiDescription({ record, permissions, canRegister, onSaved, onDenied, onAdoptDenied }: { record: Defect; permissions: string[]; canRegister: boolean; onSaved: (record: Defect) => void; onDenied: (cause?: unknown) => void; onAdoptDenied: (cause: ApiError) => void }) {
   const text = useIngestionText();
   const [tasks, setTasks] = useState<Task[]>([]); const [loading, setLoading] = useState(false); const [revision, setRevision] = useState(0);
   const [error, setError] = useState<unknown>(); const [adopting, setAdopting] = useState(false); const [retired, setRetired] = useState(false);
   const alive = useRef(true); const invalidated = useRef(false); const initialSession = useRef(useWorkTabsStore.getState().sessionScope); const initialEpoch = useRef(getLedgerSessionEpoch());
   const controller = useRef<AbortController>(undefined); const inFlight = useRef(false);
   const pending = useRef<{ task: Task; action: TaskAction }>(undefined);
-  const writer = useProcessWrite(onDenied); useNavigationBusy(writer.busy); useUnsavedChanges(writer.uncertain);
+  const writer = useProcessWrite(cause => {
+    if (pending.current?.action === 'adopt' && cause instanceof ApiError && cause.status === 403) {
+      setAdopting(false);
+      onAdoptDenied(cause);
+    } else onDenied(cause);
+  });
+  useNavigationBusy(writer.busy); useUnsavedChanges(writer.uncertain);
   const canReadTasks = permissions.includes('ingestion:read'); const canRun = canReadTasks && permissions.includes('ingestion:run') && permissions.includes('process-quality:defects:write') && !record.archivedAt;
+  const canAdopt = canRun && canRegister;
   const hasSource = record.descriptionDirect != null || record.descriptionAi != null || record.descriptionInput?.length;
   const hasAi = record.descriptionAiStatus !== 'DISABLED' && (!!record.descriptionTaskId || record.descriptionAi != null || !!record.descriptionAiStatus);
   const current = () => alive.current && !invalidated.current && initialSession.current === useWorkTabsStore.getState().sessionScope && initialEpoch.current === getLedgerSessionEpoch();
@@ -53,19 +60,27 @@ export function ProcessAiDescription({ record, permissions, onSaved, onDenied }:
     finally { if (current()) setLoading(false); }
   }
   async function execute(task?: Task, action?: TaskAction) {
-    if (inFlight.current || !canRun || !current()) return;
+    if (inFlight.current || !canRun || (action === 'adopt' && !canAdopt) || !current()) return;
     const attempt = pending.current ?? (task && action ? { task, action } : undefined); if (!attempt) return;
     pending.current = attempt; inFlight.current = true; setError(undefined);
+    let writeCompleted = false;
     try {
       const body: components['schemas']['AiDescriptionTaskActionDto'] = { organizationId: record.organizationId, expectedVersion: attempt.task.version };
       const result = await writer.write<Task>(`${tasksPath}/${attempt.task.id}/${attempt.action}`, body, 'POST');
+      writeCompleted = true;
       if (!current()) return;
       pending.current = undefined; setAdopting(false);
       if (result.defectId !== record.id) { onDenied(); return; }
       setTasks(previous => [result, ...previous.filter(item => item.id !== result.id)]);
       const updated = await apiRequest<Defect>(`/api/v1/process-quality/defects/${record.id}?organizationId=${encodeURIComponent(record.organizationId)}`, { signal: controller.current?.signal });
       if (current()) { if (updated.id !== record.id || updated.organizationId !== record.organizationId) onDenied(); else onSaved(updated); }
-    } catch (cause) { if (current()) { if (cause instanceof ApiError && cause.status !== undefined && cause.status < 500 && ![408, 425].includes(cause.status)) pending.current = undefined; setError(cause); if (denied(cause)) onDenied(cause); } }
+    } catch (cause) {
+      if (current()) {
+        if (cause instanceof ApiError && cause.status !== undefined && cause.status < 500 && ![408, 425].includes(cause.status)) pending.current = undefined;
+        setError(cause);
+        if (writeCompleted && denied(cause)) onDenied(cause);
+      }
+    }
     finally { inFlight.current = false; }
   }
   if (!hasSource || retired) return null;
@@ -87,8 +102,8 @@ export function ProcessAiDescription({ record, permissions, onSaved, onDenied }:
     ]} />
     <ProcessError cause={error} fallback="描述状态加载或操作失败，请重试。" />
     {writer.uncertain ? <Alert type="warning" title="操作结果未知，请重试原请求。" action={unknownRetry} /> : null}
-    {canRun && !writer.uncertain && task ? <Space wrap>{task.status === 'FAILED' && !task.errorCode?.startsWith('AI_DESCRIPTION_INPUT_') ? <Button loading={writer.busy} onClick={() => void execute(task, 'retry')}>重试AI整理</Button> : null}{task.status === 'SUGGESTED' && task.result ? <Button disabled={writer.busy} onClick={() => setAdopting(true)}>采用AI建议</Button> : null}</Space> : null}
-    <Modal open={adopting} title="采用AI建议" onCancel={() => { if (!writer.busy && !writer.uncertain) setAdopting(false); }} closable={!writer.busy && !writer.uncertain} keyboard={!writer.busy && !writer.uncertain} mask={{ closable: !writer.busy && !writer.uncertain }} footer={writer.uncertain ? unknownRetry : <Space><Button disabled={writer.busy} onClick={() => setAdopting(false)}>取消</Button><Button type="primary" loading={writer.busy} onClick={() => task && void execute(task, 'adopt')}>确认采用</Button></Space>}>
+    {canRun && !writer.uncertain && task ? <Space wrap>{task.status === 'FAILED' && !task.errorCode?.startsWith('AI_DESCRIPTION_INPUT_') ? <Button loading={writer.busy} onClick={() => void execute(task, 'retry')}>重试AI整理</Button> : null}{canAdopt && task.status === 'SUGGESTED' && task.result ? <Button disabled={writer.busy} onClick={() => setAdopting(true)}>采用AI建议</Button> : null}</Space> : null}
+    <Modal open={adopting && (canAdopt || writer.busy || writer.uncertain)} title="采用AI建议" onCancel={() => { if (!writer.busy && !writer.uncertain) setAdopting(false); }} closable={!writer.busy && !writer.uncertain} keyboard={!writer.busy && !writer.uncertain} mask={{ closable: !writer.busy && !writer.uncertain }} footer={writer.uncertain ? unknownRetry : <Space><Button disabled={writer.busy} onClick={() => setAdopting(false)}>取消</Button><Button type="primary" disabled={!canAdopt} loading={writer.busy} onClick={() => task && void execute(task, 'adopt')}>确认采用</Button></Space>}>
       <ProcessError cause={error} fallback="采用结果尚未确认，请重试。" /><p>采用后将替换当前不良描述。</p><p className="process-quality-description">{task?.result}</p>
     </Modal>
   </section>;

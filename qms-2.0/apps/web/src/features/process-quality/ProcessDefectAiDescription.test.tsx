@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { apiRequest, csrfToken, getSession } from '../../api/client';
+import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
@@ -18,6 +18,7 @@ beforeEach(() => {
   vi.mocked(getSession).mockResolvedValue({ userId: 'actor', organizationId: defect.organizationId, accountType: 'INTERNAL', landingPath: '/app/workbench' });
   vi.mocked(apiRequest).mockReset().mockImplementation(async path => {
     if (path.includes('/my-permissions')) return { permissions: ['process-quality:defects:read', 'process-quality:defects:write', 'ingestion:read', 'ingestion:run'] } as never;
+    if (path.includes('/ledger-workflow-configuration/capabilities')) return { boards: ['REGISTRATION'] } as never;
     if (path.includes('/ai-tasks?')) return { items: [task], total: 1 } as never;
     if (path.endsWith('/issues')) return [] as never;
     if (path.endsWith(`/${defect.id}`)) return defect as never;
@@ -47,6 +48,18 @@ it('AI description source inspection has no retry or adoption for an unauthorize
   expect(sources.queryByRole('button', { name: '采用AI建议' })).not.toBeInTheDocument();
   expect(sources.queryByRole('button', { name: '重试AI整理' })).not.toBeInTheDocument();
   expect(sources.queryByRole('button', { name: '重新生成AI描述' })).not.toBeInTheDocument();
+});
+it('requires registration board access to adopt a suggestion while retaining AI task actions', async () => {
+  const original = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, ...args) => path.includes('/ledger-workflow-configuration/capabilities')
+    ? { boards: ['ANALYSIS'] } as never
+    : original(path, ...args));
+  mount();
+  await screen.findByText('人工保留的描述');
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
+  const sources = within(await screen.findByLabelText('描述来源'));
+  expect(await sources.findByRole('button', { name: '重新生成AI描述' })).toBeEnabled();
+  expect(sources.queryByRole('button', { name: '采用AI建议' })).not.toBeInTheDocument();
 });
 it('regenerates an existing result and tracks the replacement task without changing manual text', async () => {
   const original = vi.mocked(apiRequest).getMockImplementation()!;
@@ -106,6 +119,30 @@ it('AI description adoption requires explicit confirmation before writing over m
   fireEvent.click(within(confirmation).getByRole('button', { name: '确认采用' }));
   await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.some(([path, init]) => path.endsWith('/task-1/adopt') && init?.method === 'POST')).toBe(true));
 });
+it('keeps the readable ledger and refreshes registration access when an adoption retry is denied', async () => {
+  const original = vi.mocked(apiRequest).getMockImplementation()!;
+  let attempts = 0;
+  vi.mocked(apiRequest).mockImplementation(async (path, ...args) => {
+    if (path.endsWith('/task-1/adopt')) {
+      attempts += 1;
+      if (attempts === 1) throw new TypeError('network');
+      throw new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: '' }, 403);
+    }
+    if (attempts === 2 && path.includes('/ledger-workflow-configuration/capabilities')) return { boards: ['ANALYSIS'] } as never;
+    return original(path, ...args);
+  });
+  mount();
+  await screen.findByText('人工保留的描述');
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
+  const sources = within(await screen.findByLabelText('描述来源'));
+  fireEvent.click(await sources.findByRole('button', { name: '采用AI建议' }));
+  fireEvent.click(await screen.findByRole('button', { name: '确认采用' }));
+  fireEvent.click(await sources.findByRole('button', { name: '重试原请求' }));
+  await waitFor(() => expect(vi.mocked(apiRequest).mock.calls.filter(([path]) => path.includes('/ledger-workflow-configuration/capabilities'))).toHaveLength(2));
+  expect(await sources.findByRole('button', { name: '重新生成AI描述' })).toBeEnabled();
+  expect(sources.queryByRole('button', { name: '采用AI建议' })).not.toBeInTheDocument();
+  expect(screen.getAllByText('人工保留的描述').length).toBeGreaterThan(0);
+}, 30000);
 it('AI description refresh reads the worker result into the existing ledger description', async () => {
   const user = userEvent.setup();
   let completed = false; const original = vi.mocked(apiRequest).getMockImplementation()!;

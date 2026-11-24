@@ -80,7 +80,13 @@ export function ProcessDefectEditor({ record, organizationId, onSaved, onClose, 
         const create: Create = { ...body, factoryCode: values.factoryCode, description: body.description, occurredAt: body.occurredAt, productCode: body.productCode, traceCode: body.traceCode, defectQuantity: body.defectQuantity };
         result = await writer.write<Defect>('/api/v1/process-quality/defects', create, 'POST');
       }
-      if (current()) { setSaved(result); setDirty(false); onSaved(result); form.setFieldValue('factoryCode', result.factoryCode ?? undefined); }
+      if (current()) {
+        const updated = { ...result, evidence: result.evidence ?? saved?.evidence };
+        setSaved(updated);
+        setDirty(false);
+        onSaved(updated);
+        form.setFieldValue('factoryCode', updated.factoryCode ?? undefined);
+      }
     } catch (cause) { if (current()) setError(cause); }
     finally { submitting.current = false; }
   }

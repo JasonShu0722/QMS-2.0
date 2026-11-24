@@ -546,7 +546,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
           { key: 'product', label: '产品 / 物料', children: `${detail.productCode ?? '—'} / ${detail.materialCode ?? '—'}` },
           { key: 'source', label: '来源', children: <Space><Tag>{detail.sourceKind === 'IMS' ? '自动' : '人工录入'}</Tag>{detail.externalSourceSystem ? <Tag>{detail.externalSourceSystem}</Tag> : null}</Space> },
         ]} />
-        <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} onSaved={saved} onDenied={revoke} />
+        <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} canRegister={canRegister} onSaved={saved} onDenied={revoke} onAdoptDenied={denyBoard} />
         <Descriptions title="分析" bordered size="small" column={1}
           extra={!detail.archivedAt && boards.includes('ANALYSIS') ? <Button disabled={locked || !!deletionTargets} onClick={() => openBoard('ANALYSIS', [detail])}>{boardLabels.ANALYSIS}</Button> : null}
           items={[{ key: 'progress', label: '分析进展', children: detail.analysisProgress ?? '—' }]} />

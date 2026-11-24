@@ -9,6 +9,7 @@ import { ComponentProjectService } from '../../src/modules/platform-configuratio
 import { ProcessDefectCompletionService } from '../../src/modules/process-quality/process-defect-completion.service.js';
 import { ProcessDefectLedgerService } from '../../src/modules/process-quality/process-defect-ledger.service.js';
 import { ProcessDefectIngestionAdapter } from '../../src/modules/process-quality/process-defect-ingestion.adapter.js';
+import { ProcessLedgerWorkflowConfigurationService } from '../../src/modules/process-quality/process-ledger-workflow-configuration.service.js';
 import { ProcessOperationSectorService } from '../../src/modules/process-quality/process-operation-sector.service.js';
 import type { ProcessDefectIntegrationFields } from '../../src/common/integration-master-data.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
@@ -23,7 +24,7 @@ export async function processIngestionFixture() {
   const mappings = new ComponentProjectService(prisma, mutations, audit, organizations);
   const completion = new ProcessDefectCompletionService(prisma, audit, mappings);
   const ledger = new ProcessDefectLedgerService(prisma, mutations, audit, mappings, undefined, completion);
-  const adapter = new ProcessDefectIngestionAdapter(audit, completion);
+  const adapter = new ProcessDefectIngestionAdapter(audit, completion, new ProcessLedgerWorkflowConfigurationService(prisma, mutations, audit));
   const sectors = new ProcessOperationSectorService(prisma, mutations, audit);
   const organization = await prisma.organization.create({ data: { code: randomUUID(), name: 'S2 disposable scope', type: 'INTERNAL' } });
   const user = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), fullName: '真实登记人', passwordHash: 'test-only', accountType: 'INTERNAL' } });

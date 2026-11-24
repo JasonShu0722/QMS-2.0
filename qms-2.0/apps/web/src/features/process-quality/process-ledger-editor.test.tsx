@@ -10,7 +10,7 @@ import { ProcessLedgerAction } from './ProcessLedgerAction';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() }));
-vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource }: { resource: { resourceType: string; resourceId: string } }) => <div>附件资源 {resource.resourceType}:{resource.resourceId}</div> }));
+vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: ({ resource, fileIds }: { resource: { resourceType: string; resourceId: string }; fileIds: string[] }) => <><div>附件资源 {resource.resourceType}:{resource.resourceId}</div>{fileIds.map(id => <div key={id}>附件 {id}</div>)}</> }));
 vi.mock('./ProcessTraceScanner', () => ({ ProcessTraceScanner: ({ onScan, onClose }: { onScan: (value: string) => void; onClose: () => void }) => <div role="dialog" aria-label="测试本地扫码"><button onClick={() => { onScan('SCANNED-0001'); onClose(); }}>回填测试码</button><button onClick={onClose}>取消扫码</button></div> }));
 const record: components['schemas']['ProcessDefectDto'] = {
   dispositionPlan: null, dispositionProgress: null, dispositionCompletedAt: null, dispositionHistory: [],
@@ -72,6 +72,20 @@ it('requires resolving an empty factory on a historical manual record', async ()
   await waitFor(() => expect(saved).toHaveBeenCalled());
   const call = vi.mocked(apiRequest).mock.calls.find(([, init]) => init?.method === 'PUT');
   expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ factoryCode: 'FACTORY_1', expectedVersion: 2 });
+});
+it('keeps associated attachments visible when the registration update omits evidence', async () => {
+  const evidence = [{ id: 'existing-file', originalName: 'evidence.png', scanStatus: 'CLEAN', status: 'READY' }];
+  vi.mocked(apiRequest).mockImplementation(async (_path, init) => init?.method
+    ? { ...record, description: '更新后的描述', version: 3, evidence: undefined }
+    : []);
+  const saved = editor({ ...record, evidence });
+  expect(screen.getByText('附件 existing-file')).toBeVisible();
+
+  fireEvent.change(screen.getByLabelText('不良描述'), { target: { value: '更新后的描述' } });
+  fireEvent.click(screen.getByText('保存登记'));
+  await waitFor(() => expect(saved).toHaveBeenCalledWith(expect.objectContaining({ version: 3 })));
+
+  expect(screen.getByText('附件 existing-file')).toBeVisible();
 });
 it('allows a missing IMS source identity to be supplemented and preserves its draft on a conflict', async () => {
   vi.mocked(apiRequest).mockImplementation(async (path, init) => {
