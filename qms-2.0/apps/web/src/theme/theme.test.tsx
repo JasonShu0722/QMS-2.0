@@ -132,8 +132,7 @@ describe('shared appearance', () => {
     expect(styles('layouts/shell.css')).toMatch(/@media\s*\(pointer:\s*coarse\)\s*\{[^}]*\.qms-context-link[^}]*min-height:\s*44px/);
     expect(styles('features/tasks/tasks.css')).toMatch(/\.task-inbox select\s*\{[^}]*min-height:\s*36px/);
     const workflows = styles('features/workflows/workflows.css');
-    expect(workflows).toMatch(/\.workflow-editor input[^}]*min-height:\s*36px/);
-    expect(workflows).toMatch(/\.workflow-editor input:not\(\[type="checkbox"\], \[type="radio"\]\)[^}]*height:\s*36px;\s*padding-block:\s*6px/);
+    expect(workflows).toMatch(/\.workflow-bindings select\s*\{[^}]*min-height:\s*36px/);
     expect(workflows).toMatch(/\.workflow-canvas\s*\{[^}]*height:\s*440px/);
   });
   it('lets the shared shell supply page padding at every business-page breakpoint', () => {
@@ -149,7 +148,6 @@ describe('shared appearance', () => {
   it('uses themed surfaces and compact native table cells', () => {
     expect(styles('features/audit-standards/audit-standards.css')).not.toMatch(/var\(--(?:surface|border)[,)]/);
     expect(styles('features/supplier-quality/supplier-quality.css')).not.toMatch(/(?:background|border|color):[^;}]*(?:#fff|#dce3ea|#64748b)/);
-    expect(styles('features/workflows/workflows.css')).toMatch(/\.workflow-list th, \.workflow-list td\s*\{[^}]*padding:\s*var\(--qms-table-cell-padding-block\)/);
   });
   it('keeps the mobile and coarse-pointer tab close target from shrinking', () => {
     const shell = styles('layouts/shell.css');

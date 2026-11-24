@@ -28,17 +28,135 @@ if [[ "$tip" != "$sha" ]]; then
   exit 0
 fi
 
+previous_sha=
+if [[ -f /opt/qms2/deployed-sha ]]; then
+  read -r previous_sha </opt/qms2/deployed-sha
+  [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]]
+fi
+deployment_phase=pre-migration
+work_directory=$(mktemp -d /opt/qms2/.deploy.XXXXXXXX)
+compose_files=(deployment/docker-compose.foundation.yml deployment/docker-compose.production.yml deployment/docker-compose.scanning.yml)
+compose=(docker compose --project-name qms2-foundation --env-file "$env_file")
+for compose_file in "${compose_files[@]}"; do
+  compose+=(-f "$app/$compose_file")
+done
+export QMS_IMAGE_TAG=$sha
+
+verify_application() {
+  local worker_id worker_ready=false attempt worker_state worker_started_at worker_logs path url status
+  worker_id=$("$@" ps -q worker) || return 1
+  test -n "$worker_id" || return 1
+  for attempt in {1..60}; do
+    worker_state=$(docker inspect --format '{{.State.Status}}|{{.State.StartedAt}}' "$worker_id") || return 1
+    if [[ "$worker_state" == running\|* ]]; then
+      worker_started_at=${worker_state#*|}
+      if worker_logs=$(docker logs --since "$worker_started_at" "$worker_id" 2>&1) &&
+         grep -Fxq QMS_WORKER_READY <<< "$worker_logs" &&
+         [[ $(docker inspect --format '{{.State.Status}}|{{.State.StartedAt}}' "$worker_id") == "$worker_state" ]]; then
+        worker_ready=true
+        break
+      fi
+    fi
+    sleep 2
+  done
+  if [[ "$worker_ready" != true ]]; then
+    echo 'Worker did not report QMS_WORKER_READY within 120 seconds' >&2
+    return 1
+  fi
+
+  for path in /login /api/v1/openapi.json; do
+    url="https://qms.bigshuaibee.cn$path"
+    status=$(curl --fail --silent --show-error --retry 8 --retry-all-errors \
+      --retry-delay 3 --max-time 20 --output /dev/null --write-out '%{http_code}' "$url") || return 1
+    if [[ "$status" != 200 ]]; then
+      echo "$url returned HTTP $status, expected 200" >&2
+      return 1
+    fi
+  done
+}
+
+previous_application_running() {
+  local service repository container actual expected
+  for service in api worker web; do
+    repository=qms2-foundation-api
+    if [[ "$service" == web ]]; then repository=qms2-foundation-web; fi
+    container=$("$@" ps -q "$service") && [[ -n "$container" ]] || return 1
+    expected=$(docker image inspect --format '{{.Id}}' "$repository:$previous_sha") || return 1
+    actual=$(docker inspect --format '{{.Image}}|{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{end}}' "$container") || return 1
+    if [[ "$service" == api ]]; then
+      [[ "$actual" == "$expected|running|healthy" ]] || return 1
+    else
+      [[ "$actual" == "$expected|running|" || "$actual" == "$expected|running|healthy" ]] || return 1
+    fi
+  done
+}
+
+recover_previous_application() (
+  if [[ -z "$previous_sha" ]]; then
+    echo 'No last successful SHA is recorded; inspect services before retrying' >&2
+    return 1
+  fi
+  if previous_application_running "${compose[@]}" && verify_application "${compose[@]}"; then
+    echo "Previous deployment is still healthy: $previous_sha"
+    return 0
+  fi
+
+  export QMS_IMAGE_TAG=$previous_sha
+  docker image inspect "qms2-foundation-api:$previous_sha" "qms2-foundation-web:$previous_sha" >/dev/null || return 1
+  local compose_file
+  local rollback=(docker compose --project-name qms2-foundation --project-directory "$app" --env-file "$env_file")
+  for compose_file in "${compose_files[@]}"; do
+    git -C "$repo" show "$previous_sha:qms-2.0/$compose_file" > "$work_directory/${compose_file##*/}" || return 1
+    rollback+=(-f "$work_directory/${compose_file##*/}")
+  done
+  "${rollback[@]}" up -d --no-deps --no-build --pull never --wait --wait-timeout 180 api worker web || return 1
+  previous_application_running "${rollback[@]}" && verify_application "${rollback[@]}" || return 1
+  echo "Previous deployment restored and verified: $previous_sha"
+)
+
+finish_deployment() {
+  local result=$1
+  if (( result != 0 )); then
+    echo "Deployment failed: target=$sha phase=$deployment_phase last_successful=${previous_sha:-unknown} exit=$result" >&2
+    if [[ -e /opt/qms2/migration-started-sha ]]; then
+      local migration_sha
+      read -r migration_sha </opt/qms2/migration-started-sha || migration_sha=unknown
+      if [[ ! "$migration_sha" =~ ^[0-9a-f]{40}$ ]]; then migration_sha=unknown; fi
+      echo "Automatic rollback disabled: migration $migration_sha started and its effects must be verified" >&2
+    elif [[ "$deployment_phase" == pre-migration ]]; then
+      recover_previous_application || echo 'Previous application could not be verified or restored; manual recovery required' >&2
+    fi
+    "${compose[@]}" ps --all postgres rustfs clamav api worker web >&2 || :
+  fi
+  rm -f -- "$work_directory/marker" "$work_directory/migration" \
+    "$work_directory/docker-compose.foundation.yml" "$work_directory/docker-compose.production.yml" "$work_directory/docker-compose.scanning.yml"
+  rmdir -- "$work_directory" || :
+  exit "$result"
+}
+trap 'finish_deployment $?' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 git -C "$repo" merge --ff-only "$sha"
 cd "$app"
-export QMS_IMAGE_TAG=$sha
-compose=(docker compose --env-file "$env_file"
-  -f deployment/docker-compose.foundation.yml
-  -f deployment/docker-compose.production.yml
-  -f deployment/docker-compose.scanning.yml)
 
 "${compose[@]}" config --quiet
-"${compose[@]}" build api
-"${compose[@]}" build web
+docker_root=$(docker info --format '{{.DockerRootDir}}')
+minimum_free_bytes=8589934592
+for storage in "$docker_root" /opt/qms2; do
+  available=$(df -B1 --output=avail -- "$storage" | tail -n 1 | tr -d '[:space:]')
+  if [[ ! "$available" =~ ^[0-9]+$ ]] || (( available < minimum_free_bytes )); then
+    echo "Insufficient deployment disk space: $storage available=${available:-unknown} required=$minimum_free_bytes bytes" >&2
+    DRY_RUN=1 bash deployment/deploy-cleanup.sh --lock-held </dev/null || :
+    exit 1
+  fi
+done
+if [[ "$sha" == "$previous_sha" ]]; then
+  docker image inspect "qms2-foundation-api:$sha" "qms2-foundation-web:$sha" >/dev/null
+else
+  "${compose[@]}" build api
+  "${compose[@]}" build web
+fi
 
 # A newer main commit must pass its own CI before it can reach production.
 git -C "$repo" fetch --no-tags origin main
@@ -93,47 +211,18 @@ fi
 )
 # End migration backup checkpoint
 
+deployment_phase=migration
+printf '%s\n' "$sha" > "$work_directory/migration"
+mv -- "$work_directory/migration" /opt/qms2/migration-started-sha
 "${compose[@]}" run --rm --no-deps api node node_modules/prisma/build/index.js migrate deploy </dev/null
+deployment_phase=application
 "${compose[@]}" up -d --no-build --wait --wait-timeout 180 api worker web
-
-worker_id=$("${compose[@]}" ps -q worker)
-test -n "$worker_id"
-worker_ready=false
-for attempt in {1..60}; do
-  worker_state=$(docker inspect --format '{{.State.Status}}|{{.State.StartedAt}}' "$worker_id")
-  if [[ "$worker_state" == running\|* ]]; then
-    worker_started_at=${worker_state#*|}
-    if worker_logs=$(docker logs --since "$worker_started_at" "$worker_id" 2>&1) &&
-       grep -Fxq QMS_WORKER_READY <<< "$worker_logs" &&
-       [[ $(docker inspect --format '{{.State.Status}}|{{.State.StartedAt}}' "$worker_id") == "$worker_state" ]]; then
-      worker_ready=true
-      break
-    fi
-  fi
-  sleep 2
-done
-if [[ "$worker_ready" != true ]]; then
-  echo 'Worker did not report QMS_WORKER_READY within 120 seconds' >&2
-  exit 1
-fi
-
-for path in /login /api/v1/openapi.json; do
-  url="https://qms.bigshuaibee.cn$path"
-  status=$(curl --fail --silent --show-error --retry 8 --retry-all-errors \
-    --retry-delay 3 --max-time 20 --output /dev/null --write-out '%{http_code}' "$url")
-  if [[ "$status" != 200 ]]; then
-    echo "$url returned HTTP $status, expected 200" >&2
-    exit 1
-  fi
-done
-
+verify_application "${compose[@]}"
 "${compose[@]}" ps
-marker_tmp=$(mktemp /opt/qms2/.deployed-sha.XXXXXXXX)
-trap 'rm -f "$marker_tmp"' EXIT
-printf '%s\n' "$sha" > "$marker_tmp"
-mv -- "$marker_tmp" /opt/qms2/deployed-sha
-if ! docker builder prune --force; then
-  echo "Deployment healthy: $sha; builder cache cleanup failed; deployed SHA retained" >&2
-  exit 1
+printf '%s\n' "$sha" > "$work_directory/marker"
+mv -- "$work_directory/marker" /opt/qms2/deployed-sha
+rm -f -- /opt/qms2/migration-started-sha
+if ! bash deployment/deploy-cleanup.sh --lock-held </dev/null; then
+  echo "Deployment healthy: $sha; storage cleanup failed; deployed SHA retained" >&2
 fi
 echo "Deployment successful: $sha"

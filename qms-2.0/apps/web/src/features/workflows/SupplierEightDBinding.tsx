@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Space, Spin, Typography } from 'antd';
 import type { components } from '@qms/contracts';
-import { Link } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -157,13 +156,12 @@ function BindingScope({ session, onDenied }: { session?: string; onDenied: () =>
       }}>{severities.map(item => <option key={item.value} value={item.value}>{t(item.label)}</option>)}</select></label>
       {binding ? <p style={{ overflowWrap: 'anywhere' }}>{t(binding.enabled ? '供应商8D已启用' : '供应商8D未启用')} · {t('配置版本')} {binding.version} · <code>{binding.workflowVersionId}</code></p> : <Alert type="info" title={t('当前风险尚无供应商完整门户8D绑定。')} />}
       {legacy && <Alert type="warning" title={t('旧绑定仅供只读；迁移请联系维护人员。')} />}
-      {!loading && !readFailed && canManage && !candidates.length && <Alert type="warning" title={t('没有可选的供应商完整8D已发布流程，请先初始化模板并在设计器校验发布。')} />}
+      {!loading && !readFailed && canManage && !candidates.length && <Alert type="warning" title={t('没有可选的供应商完整8D已发布流程。')} />}
       <label style={{ display: 'grid', minWidth: 0 }}>{t('供应商8D已发布流程版本')}<select style={{ width: '100%', minWidth: 0 }} aria-label={t('供应商8D已发布流程版本')} disabled={locked} value={selected} onChange={event => setSelected(event.target.value)}>
         <option value="">{t('请选择供应商完整8D已发布版本')}</option>
         {selected && !candidate && <option value={selected} disabled>{t('当前绑定版本仅供查看')} · {selected}</option>}
         {candidates.map(flow => <option key={flow.version.id} value={flow.version.id}>{flow.name} · v{flow.version.version} · {flow.version.id}</option>)}
       </select></label>
-      {candidate && <Link to={`/console/workflows/${candidate.id}/${candidate.version.id}`}>{t('查看供应商绑定候选流程')}</Link>}
       <Space wrap><Button disabled={locked || !candidate} onClick={() => void write(false)}>{t('保存供应商8D绑定')}</Button>
         <Button disabled={locked || !binding || dirty || (!binding.enabled && !candidate)} onClick={() => void write(true)}>{t(binding?.enabled ? '停用供应商8D' : '启用供应商8D')}</Button></Space>
       {bindings.filter(row => row.controlledEightD !== true || row.replyMode !== 'SUPPLIER' || row.responseForm !== 'EIGHT_D').length > 0 && <details><summary>{t('历史绑定（只读）')}</summary><ul>{bindings.filter(row => row.controlledEightD !== true || row.replyMode !== 'SUPPLIER' || row.responseForm !== 'EIGHT_D').map(row => <li key={row.id} style={{ overflowWrap: 'anywhere' }}>{row.severity} · {row.responseForm} · {row.replyMode} · {row.workflowVersionId} · v{row.version} · {t(row.enabled ? '已启用' : '未启用')}</li>)}</ul></details>}

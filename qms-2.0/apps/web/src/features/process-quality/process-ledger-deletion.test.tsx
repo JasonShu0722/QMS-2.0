@@ -27,12 +27,13 @@ vi.mock('antd', async () => {
 vi.mock('../../api/client', async () => ({ ...(await vi.importActual<typeof import('../../api/client')>('../../api/client')), apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() }));
 vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: () => null }));
 const organizationId = '22222222-2222-4222-8222-222222222222';
-const record: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '删除测试来源', defectTypeCode: null, defectQuantity: 1, occurredAt: null, factoryCode: null, responsibilityCategory: null, traceCode: 'TRACE-DELETE', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: true, registrationIssues: ['OCCURRED_AT_REQUIRED', 'PROJECT_MAPPING_PENDING'], registeredByName: '登记人' };
+const record: components['schemas']['ProcessDefectDto'] = { id: '11111111-1111-4111-8111-111111111111', organizationId, description: '删除测试来源', defectTypeCode: null, defectQuantity: 1, occurredAt: null, factoryCode: null, responsibilityCategory: null, traceCode: 'TRACE-DELETE', ledgerStatus: 'FOLLOWING', version: 2, materials: [], issues: [], duplicateCount: 0, componentProject: null, evidence: [], analysisProgress: null, dispositionPlan: null, dispositionProgress: null, dispositionCompletedAt: null, dispositionHistory: [], closedAt: null, closedById: null, sourceKind: 'MANUAL', materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null, pendingCompletion: true, pendingConfiguration: true, registrationIssues: ['OCCURRED_AT_REQUIRED', 'PROJECT_MAPPING_PENDING'], registeredByName: '登记人' };
 const other = { ...record, id: '33333333-3333-4333-8333-333333333333', description: '第二页来源', version: 7 };
 const permissions = ['process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:delete'];
 const preview = { count: 1, canDelete: true, items: [{ defectId: record.id, expectedVersion: record.version, description: record.description, blocked: false, blockers: [] }] };
 function response(path: string) {
   if (path.includes('/my-permissions')) return { permissions };
+  if (path.includes('/ledger-workflow-configuration/capabilities')) return { boards: ['REGISTRATION'] };
   if (path.includes('/defects?')) return { items: [record], total: 1, page: 1, pageSize: 20 };
   if (path.endsWith('/deletion-preview')) return preview;
   if (path.endsWith('/deletion')) return { deletedIds: [record.id], count: 1 };
@@ -259,7 +260,7 @@ it('submits the recorded version without a reason and closes the deleted detail'
     return response(path);
   });
   mount(); fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
-  await screen.findByText('维护台账');
+  await screen.findByText('维护登记信息');
   const detail = screen.getByRole('dialog', { name: '不良品详情' });
   fireEvent.click(within(detail).getByRole('button', { name: '删除台账' }));
   const dialog = await deletionDialog();

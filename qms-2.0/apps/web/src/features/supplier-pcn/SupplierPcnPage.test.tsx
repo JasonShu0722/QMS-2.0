@@ -1,5 +1,6 @@
-import { act, fireEvent, render as renderView, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as renderView, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ConfigProvider } from 'antd';
 import type { ReactElement } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -7,6 +8,7 @@ import { apiRequest, csrfToken } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
+import { PublishedWorkflowPicker } from '../workflows/PublishedWorkflowPicker';
 import { SupplierPcnPage } from './SupplierPcnPage';
 vi.mock('../../api/client', async () => { const actual = await vi.importActual<typeof import('../../api/client')>('../../api/client'); return { ...actual, apiRequest: vi.fn(), csrfToken: vi.fn().mockResolvedValue('csrf') }; });
 vi.mock('../attachments/AttachmentPanel', () => ({ AttachmentPanel: vi.fn(() => null) }));
@@ -18,7 +20,7 @@ beforeEach(() => {
   vi.mocked(AttachmentPanel).mockReset().mockImplementation(() => <></>);
   vi.mocked(apiRequest).mockReset().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 } as never);
 });
-afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 it('opens a read-only internal PCN without accessing an unmounted edit form', async () => {
   const errors = vi.spyOn(console, 'error');
@@ -28,6 +30,58 @@ it('opens a read-only internal PCN without accessing an unmounted edit form', as
   fireEvent.click(await screen.findByRole('button', { name: '待审批变更' }));
   expect(await screen.findByText('启动已发布 PCN 流程')).toBeVisible();
   expect(errors.mock.calls.flat().map(String).filter(message => /useForm.*not connected/.test(message))).toEqual([]);
+});
+
+it('offers only same-organization published flows with the required PCN nodes and transitions', async () => {
+  const header = { id: 'flow', organizationId: 'org-1', code: 'PCN', name: 'PCN 审批' };
+  const eligible = { id: 'eligible', workflowDefinitionId: 'flow', status: 'PUBLISHED', version: 1 };
+  const invalid = { ...eligible, id: 'invalid', version: 2 };
+  const graph = {
+    nodes: [
+      { id: 'start', type: 'ACTION', config: { isStart: true, assignment: { permission: 'supplier-pcn:submissions:write' } } },
+      { id: 'approval', type: 'APPROVAL', config: { assignment: { permission: 'supplier-pcn:requests:approve' } } },
+      { id: 'close', type: 'CLOSE', config: { isEnd: true, assignment: { permission: 'supplier-pcn:requests:approve' } } },
+    ],
+    transitions: [{ from: 'start', to: 'approval', action: 'SUBMIT' }, { from: 'approval', to: 'close', action: 'APPROVE' }, { from: 'approval', to: 'start', action: 'RETURN' }],
+  };
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.includes('/my-permissions')) return { organizationId: 'org-1', permissions: ['workflow:manage'] };
+    if (path.startsWith('/api/v1/workflows?')) return { total: 2, items: [{ ...header, version: invalid }, { ...header, id: 'foreign', organizationId: 'foreign-org', version: invalid }] };
+    if (path === '/api/v1/workflows/flow') return { ...header, versions: [invalid, eligible] };
+    if (path.endsWith('/versions/invalid')) return { ...header, version: { ...invalid, structureSnapshot: { ...graph, transitions: graph.transitions.slice(0, 2) } } };
+    if (path.endsWith('/versions/eligible')) return { ...header, version: { ...eligible, structureSnapshot: graph } };
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  const select = vi.fn();
+  render(<PublishedWorkflowPicker organizationId="org-1" kind="supplier-pcn" disabled={false} onSelect={select} />);
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: '查找已发布流程' })); });
+  fireEvent.mouseDown(screen.getByLabelText('已发布流程版本'));
+  expect(screen.queryByText('PCN 审批 · PCN · v2')).not.toBeInTheDocument();
+  expect(apiRequest).not.toHaveBeenCalledWith('/api/v1/workflows/foreign', expect.anything());
+  fireEvent.click(screen.getByText('PCN 审批 · PCN · v1'));
+  expect(select).toHaveBeenCalledWith({ workflowDefinitionId: 'flow', workflowVersionId: 'eligible' });
+});
+
+it('keeps manual PCN IDs usable when the session cannot read workflow definitions', async () => {
+  const row = { id: 'p1', ownerOrganizationId: 'org-1', title: '待审批变更', status: 'SUBMITTED', version: 2, events: [], workflow: null };
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/my-permissions')) return { organizationId: 'org-1', permissions: ['workflow:start', 'supplier-pcn:requests:approve'] };
+    if (init?.method === 'POST' || path.endsWith('/p1')) return row;
+    return { items: [row], total: 1 };
+  });
+  await act(async () => { render(<ConfigProvider theme={{ token: { motion: false } }}><SupplierPcnPage /></ConfigProvider>); });
+  const entry = screen.getByText('待审批变更');
+  await act(async () => { fireEvent.click(entry); });
+  const drawer = within(screen.getByRole('dialog'));
+  await act(async () => { fireEvent.click(drawer.getByRole('button', { name: '查找已发布流程' })); });
+  expect(drawer.getByText('无法查看当前组织的流程版本，可手动填写 ID。')).toBeVisible();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.startsWith('/api/v1/workflows'))).toBe(false);
+  fireEvent.change(drawer.getByLabelText('流程定义 ID'), { target: { value: 'manual-definition' } });
+  fireEvent.change(drawer.getByLabelText('流程版本 ID'), { target: { value: 'manual-version' } });
+  await act(async () => { fireEvent.click(drawer.getByRole('button', { name: '启动审批流程' })); });
+  expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests/p1/start', expect.objectContaining({
+    method: 'POST', body: JSON.stringify({ expectedVersion: 2, workflowDefinitionId: 'manual-definition', workflowVersionId: 'manual-version' }),
+  }));
 });
 
 it('passes the changed PCN page size to the server and resets page one', async () => {
@@ -84,10 +138,10 @@ it.each([
 ])('keeps the PCN $field when closing is declined', async ({ field, workflow }) => {
   const row = { id: 'p1', title: '待审批变更', status: 'SUBMITTED', version: 2, events: [], workflow };
   vi.mocked(apiRequest).mockImplementation(async (path) => String(path).endsWith('/p1') ? row as never : { items: [row], total: 1 } as never);
-  render(<MemoryRouter><UnsavedChangesProvider><SupplierPcnPage /></UnsavedChangesProvider></MemoryRouter>);
-  fireEvent.click(await screen.findByRole('button', { name: '待审批变更' }));
-  const drawer = await screen.findByRole('dialog', { name: '待审批变更' });
-  const input = field === '审批意见' ? await within(drawer).findByLabelText(field) : await within(drawer).findByPlaceholderText(field);
+  await act(async () => { render(<ConfigProvider theme={{ token: { motion: false } }}><MemoryRouter><UnsavedChangesProvider><SupplierPcnPage /></UnsavedChangesProvider></MemoryRouter></ConfigProvider>); });
+  await act(async () => { fireEvent.click(screen.getByText('待审批变更')); });
+  const drawer = screen.getByRole('dialog', { name: '待审批变更' });
+  const input = within(drawer).getByLabelText(field);
   fireEvent.change(input, { target: { value: '尚未提交的处理输入' } });
   fireEvent.click(within(drawer).getByRole('button', { name: '关闭' }));
   const confirmation = screen.getByText('当前草稿尚未保存，继续将放弃修改。', { selector: '.ant-modal-title' }).closest('[role="dialog"]') as HTMLElement;

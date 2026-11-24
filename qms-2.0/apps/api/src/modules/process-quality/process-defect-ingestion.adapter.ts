@@ -8,6 +8,7 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { ProcessDefectCompletionService } from './process-defect-completion.service.js';
 import { normalizeProcessDefectFacts } from './process-defect-ledger.service.js';
 import { processDefectRequiredIssues } from './process-defect-registration.policy.js';
+import { ProcessLedgerWorkflowConfigurationService } from './process-ledger-workflow-configuration.service.js';
 
 const sourceFields = ['occurredAt', 'factoryCode', 'productCode', 'workOrderCode', 'lineCode', 'lineName', 'operationCode', 'operationName', 'traceCode', 'description', 'externalRecordKey', 'sourceObservedAt'] as const;
 const isFactoryIssue = (issue: string) => processDefectIssueField(issue) === 'factoryCode';
@@ -15,7 +16,12 @@ function fail(code: string, status: number): never { throw new HttpException({ c
 
 @Injectable()
 export class ProcessDefectIngestionAdapter {
-  constructor(private readonly audit: AuditLogService, private readonly completion: ProcessDefectCompletionService) {}
+  constructor(private readonly audit: AuditLogService, private readonly completion: ProcessDefectCompletionService,
+    private readonly workflowConfiguration: ProcessLedgerWorkflowConfigurationService) {}
+
+  assertAiDescriptionRegistrationAccess(tx: AdminTransaction, actor: AdminActor) {
+    return this.workflowConfiguration.assertCanMaintain(tx, actor, actor.scopeOrganizationId ?? actor.organizationId, 'REGISTRATION');
+  }
 
   async results(tx: AdminTransaction, actor: AdminActor, targetIds: string[]) {
     const organizationId = actor.scopeOrganizationId ?? actor.organizationId;
@@ -180,7 +186,7 @@ export class ProcessDefectIngestionAdapter {
       data: { descriptionAiStatus: 'FAILED' } });
   }
 
-  async applyAiDescription(tx: AdminTransaction, actor: AdminActor, id: string, revision: number, direct: string, text: string, traceId: string, adopt = false) {
+  async applyAiDescription(tx: AdminTransaction, actor: AdminActor, id: string, revision: number, direct: string, text: string, traceId: string, mode: 'automatic' | 'adopt' | 'suggestion' = 'automatic') {
     text = validateAiDescription(text);
     const scoped = await this.aiDescriptionState(tx, actor, id);
     await tx.$queryRaw`SELECT id FROM process_defects WHERE organization_id=${scoped.organizationId}::uuid AND id=${id}::uuid FOR UPDATE`;
@@ -188,9 +194,10 @@ export class ProcessDefectIngestionAdapter {
     const decision = aiDescriptionDisposition({ expectedRevision: revision, currentRevision: row.descriptionInputVersion,
       expectedDescription: direct, currentDescription: row.description, manualFields: row.manualFields, archived: !!row.archivedAt });
     if (decision === 'STALE') return decision;
-    if (decision === 'SUGGESTED' && !adopt) {
+    const adopt = mode === 'adopt';
+    if (mode === 'suggestion' || (decision === 'SUGGESTED' && !adopt)) {
       await tx.processDefect.update({ where: { id }, data: { descriptionAi: text, descriptionAiStatus: 'SUGGESTED' } });
-      return decision;
+      return 'SUGGESTED' as const;
     }
     const registrationIssues = row.registrationIssues.filter(issue => issue !== 'DESCRIPTION_REQUIRED' && !issue.startsWith('description:'));
     const record = await tx.processDefect.update({ where: { id }, data: { description: text, descriptionAi: text, descriptionAiStatus: 'APPLIED',

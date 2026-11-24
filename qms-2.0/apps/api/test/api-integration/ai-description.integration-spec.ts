@@ -2,6 +2,10 @@ import 'reflect-metadata';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { randomUUID } from 'node:crypto';
+import { ValidationPipe } from '@nestjs/common';
+import { Test } from '@nestjs/testing';
+import request from 'supertest';
+import { AppModule } from '../../src/app.module.js';
 import { AdminMutationService } from '../../src/common/security/admin-mutation.service.js';
 import { encryptSecret } from '../../src/common/security/security-keyring.js';
 import { AiConnectionService } from '../../src/modules/ai-configuration/ai-connection.service.js';
@@ -11,6 +15,7 @@ import { IngestionService } from '../../src/modules/api-integration/ingestion.se
 import { IngestionTargetsService } from '../../src/modules/api-integration/ingestion-targets.service.js';
 import type { IngestionRuleDto, SaveIngestionRuleDto } from '../../src/modules/api-integration/ingestion.dto.js';
 import { normalizeIngestionRule, selectedDescriptionInput } from '../../src/modules/api-integration/ingestion.policy.js';
+import { SessionService } from '../../src/modules/identity/session.service.js';
 import { processIngestionFixture, type ProcessIngestionFixture } from '../process-quality/process-defect-ingestion.fixture.js';
 
 describe('AI description durable queue with PostgreSQL and actual controlled HTTP', () => {
@@ -23,7 +28,7 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     process.env.NODE_ENV = 'test';
     fixture = await processIngestionFixture();
     await fixture.prisma.$executeRaw`UPDATE integration_ai_description_tasks t SET status='STALE',claim_token=NULL WHERE t.status IN ('PENDING','RETRY','PROCESSING') AND t.organization_id<>${fixture.actor.organizationId}::uuid AND EXISTS(SELECT 1 FROM ai_connections c JOIN organizations o ON o.id=c.organization_id WHERE c.id=t.connection_id AND c.organization_id=t.organization_id AND c.name='测试专用渠道' AND c.base_url LIKE 'http://127.0.0.1:%/v1' AND o.name='S2 disposable scope')`;
-    for (const code of ['ingestion:read','ingestion:run','ingestion:manage','integration:receipts:read','integration:payload:read','ai:connections:read','ai:connections:manage','ai:credentials:manage','ai:applications:manage','ai:applications:publish','process-quality:defects:delete']) {
+    for (const code of ['ingestion:read','ingestion:run','ingestion:manage','integration:receipts:read','integration:payload:read','ai:connections:read','ai:connections:manage','ai:credentials:manage','ai:applications:manage','ai:applications:publish','process-quality:defects:delete','workflow:manage']) {
       const permission = await fixture.prisma.permission.upsert({ where: { code }, create: { code, name: code }, update: {} });
       await fixture.prisma.rolePermission.create({ data: { roleId: fixture.role.id, permissionId: permission.id } });
     }
@@ -60,6 +65,16 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     if (fixture) await fixture.prisma.$executeRaw`UPDATE integration_ai_description_tasks SET status='STALE',claim_token=NULL WHERE organization_id=${fixture.actor.organizationId}::uuid AND status IN ('PENDING','RETRY','PROCESSING')`;
     if (fixture) await fixture.prisma.$executeRaw`UPDATE integration_ingestion_jobs SET status='CANCELLED' WHERE organization_id=${fixture.actor.organizationId}::uuid AND status IN ('PENDING','PAUSED','BLOCKED')`;
   });
+
+  async function waitForBlockedQuery(blockerPid: number, pattern: string) {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const [waiting] = await fixture.prisma.$queryRaw<{ pid: number }[]>`SELECT pid FROM pg_stat_activity
+        WHERE query LIKE ${pattern} AND ${blockerPid}::int = ANY(pg_blocking_pids(pid))`;
+      if (waiting) return waiting.pid;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw new Error(`No blocked PostgreSQL query matched ${pattern}`);
+  }
 
   async function engineSource(direct = '直接组合事实', updateFields = ['description','operationName','lineCode'], strategy: SaveIngestionRuleDto['mode'] = 'UPDATE', name = '真实入库AI接缝') {
     const original = await fixture.prisma.integrationReceipt.findUniqueOrThrow({ where: { id: fixture.fields().receiptId } });
@@ -381,6 +396,167 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
     expect((await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } })).description).toBe('人工决定的描述');
     await service.action(fixture.actor, task.id, { expectedVersion: task.version }, true, randomUUID(), randomUUID());
     expect((await fixture.prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } })).description).toBe('已选事实的整理结果');
+  });
+
+  it('requires the registration position for adoption and replay while permitting task reads and retries', async () => {
+    const { prisma, actor } = fixture;
+    const { organizationId } = actor;
+    const registration = await prisma.position.create({ data: { organizationId, code: randomUUID(), name: '登记岗' } });
+    const analysis = await prisma.position.create({ data: { organizationId, code: randomUUID(), name: '分析岗' } });
+    await prisma.userPosition.create({ data: { organizationId, userId: actor.id, positionId: analysis.id } });
+    const boards = JSON.stringify({ REGISTRATION: [registration.id], ANALYSIS: [analysis.id] });
+    const value = await source();
+    await value.enqueue();
+    await prisma.processDefect.update({ where: { id: value.defect.id }, data: { description: '人工原文', manualFields: ['description'] } });
+    mode = 'SUCCESS';
+    await service.processDue();
+    const task = (await service.list(actor, value.defect.id)).items[0]!;
+    expect(task.status).toBe('SUGGESTED');
+    const failed = await source();
+    await failed.enqueue();
+    mode = 'FAIL';
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await service.processDue();
+      await prisma.$executeRaw`UPDATE integration_ai_description_tasks SET next_attempt_at=clock_timestamp() WHERE defect_id=${failed.defect.id}::uuid AND status='RETRY'`;
+    }
+    const failedTask = (await service.list(actor, failed.defect.id)).items[0]!;
+    expect(failedTask.status).toBe('FAILED');
+    const key = randomUUID(), input = { expectedVersion: task.version };
+    const adopt = () => service.action(actor, task.id, input, true, randomUUID(), key);
+    const denied = { status: 403, response: { code: 'FEATURE_PERMISSION_DENIED' } };
+    await prisma.$executeRaw`INSERT INTO process_ledger_workflow_configuration_revisions (organization_id, version, boards, updated_by_id)
+      VALUES (${organizationId}::uuid, 1, ${boards}::jsonb, ${actor.id}::uuid)`;
+    try {
+      const before = await prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } });
+      await expect(adopt()).rejects.toMatchObject(denied);
+      expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } })).toEqual(before);
+      expect((await service.list(actor, value.defect.id)).items[0]).toEqual(task);
+      const retry = await service.action(actor, failedTask.id, { expectedVersion: failedTask.version }, false, randomUUID(), randomUUID());
+      expect(retry.status).toBe('PENDING');
+      const beforeRetry = await prisma.processDefect.findUniqueOrThrow({ where: { id: failed.defect.id } });
+      mode = 'SUCCESS';
+      await service.processDue();
+      expect((await service.list(actor, failed.defect.id)).items[0]).toMatchObject({ id: retry.id, status: 'SUGGESTED', result: '已选事实的整理结果' });
+      expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: failed.defect.id } })).toMatchObject({
+        description: beforeRetry.description, version: beforeRetry.version, descriptionAiStatus: 'SUGGESTED',
+      });
+
+      const automatic = await source();
+      await automatic.enqueue();
+      await service.processDue();
+      expect((await service.list(actor, automatic.defect.id)).items[0]).toMatchObject({ status: 'APPLIED' });
+
+      const appointment = await prisma.userPosition.create({ data: { organizationId, userId: actor.id, positionId: registration.id } });
+      const adopted = await adopt();
+      expect(adopted.status).toBe('APPLIED');
+      expect(await adopt()).toEqual(adopted);
+      await prisma.userPosition.delete({ where: { id: appointment.id } });
+      await expect(adopt()).rejects.toMatchObject(denied);
+    } finally {
+      await prisma.$executeRaw`DELETE FROM process_ledger_workflow_configuration_revisions WHERE organization_id=${organizationId}::uuid`;
+    }
+  });
+
+  it('rechecks registration at worker commit while the configuration endpoint saves a revocation', async () => {
+    const { prisma, actor } = fixture;
+    const { organizationId } = actor;
+    const registrar = await prisma.position.create({ data: { organizationId, code: randomUUID(), name: '重新生成登记岗' } });
+    const value = await engineSource(undefined, undefined, undefined, randomUUID());
+    const { row } = await value.ingest();
+    mode = 'SUCCESS';
+    await service.processDue();
+    const original = (await service.list(actor, row.id)).items[0]!;
+    expect(original.status).toBe('APPLIED');
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    let saveRevocation: Promise<unknown> | undefined;
+    try {
+      app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+      await app.init();
+      const token = await app.get(SessionService).create(actor.id, prisma, { mfaVerified: true, reauthenticated: true });
+      const csrf = randomUUID();
+      const save = (expectedVersion: number, positionIds: string[]) => request(app.getHttpServer())
+        .put('/api/v1/process-quality/ledger-workflow-configuration').set('Cookie', `qms_session=${token}; qms_csrf=${csrf}`)
+        .set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send({ expectedVersion, boards: [{ board: 'REGISTRATION', positionIds }] });
+      await prisma.userPosition.create({ data: { organizationId, userId: actor.id, positionId: registrar.id } });
+      await save(0, [registrar.id]).expect(200);
+      const first = await service.action(actor, original.id, { expectedVersion: original.version }, 'regenerate', randomUUID(), randomUUID());
+      await service.processDue();
+      const applied = (await service.list(actor, row.id)).items[0]!;
+      expect(applied).toMatchObject({ id: first.id, status: 'APPLIED' });
+
+      const second = await service.action(actor, applied.id, { expectedVersion: applied.version }, 'regenerate', randomUUID(), randomUUID());
+      const before = await prisma.processDefect.findUniqueOrThrow({ where: { id: row.id } });
+      mode = 'WAIT';
+      const startedRequest = new Promise<void>(resolve => { started = resolve; });
+      const run = service.processDue();
+      try {
+        await startedRequest;
+        await prisma.$transaction(async tx => {
+          const lock = `process-ledger-workflow-configuration:${organizationId}`;
+          await tx.$queryRaw`SELECT pg_advisory_xact_lock_shared(hashtextextended(${lock}, 0))::text`;
+          const [holder] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+          saveRevocation = save(1, []).then(result => ({ status: result.status, version: result.body.version }));
+          const savingPid = await waitForBlockedQuery(holder!.pid, '%pg_advisory_xact_lock(%');
+          pending!();
+          pending = undefined;
+          await waitForBlockedQuery(savingPid, '%FROM organizations%FOR UPDATE%');
+        }, { timeout: 10000 });
+        expect(await saveRevocation).toEqual({ status: 200, version: 2 });
+      } finally {
+        pending?.();
+        await run;
+        started = undefined;
+        pending = undefined;
+      }
+      expect((await service.list(actor, row.id)).items[0]).toMatchObject({ id: second.id, status: 'SUGGESTED', result: '已选事实的整理结果' });
+      expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({
+        description: before.description, version: before.version, descriptionAiStatus: 'SUGGESTED',
+      });
+    } finally {
+      await saveRevocation;
+      await app.close();
+      await prisma.$executeRaw`DELETE FROM process_ledger_workflow_configuration_revisions WHERE organization_id=${organizationId}::uuid`;
+    }
+  });
+
+  it('observes a registration revocation that commits while adoption waits for its organization lock', async () => {
+    const { prisma, actor } = fixture;
+    const { organizationId } = actor;
+    const position = await prisma.position.create({ data: { organizationId, code: randomUUID(), name: '登记岗' } });
+    await prisma.userPosition.create({ data: { organizationId, userId: actor.id, positionId: position.id } });
+    const value = await source();
+    await value.enqueue();
+    await prisma.processDefect.update({ where: { id: value.defect.id }, data: { description: '保留原文', manualFields: ['description'] } });
+    mode = 'SUCCESS';
+    await service.processDue();
+    const task = (await service.list(actor, value.defect.id)).items[0]!;
+    expect(task.status).toBe('SUGGESTED');
+
+    const boards = JSON.stringify({ REGISTRATION: [position.id] });
+    const lock = `process-ledger-workflow-configuration:${organizationId}`;
+    await prisma.$executeRaw`INSERT INTO process_ledger_workflow_configuration_revisions (organization_id, version, boards, updated_by_id)
+      VALUES (${organizationId}::uuid, 1, ${boards}::jsonb, ${actor.id}::uuid)`;
+    const before = await prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } });
+    let adoption: Promise<unknown> | undefined;
+    try {
+      await prisma.$transaction(async tx => {
+        await tx.$queryRaw`SELECT id FROM organizations WHERE id=${organizationId}::uuid FOR UPDATE`;
+        await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lock}, 0))::text`;
+        const [holder] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+        adoption = service.action(actor, task.id, { expectedVersion: task.version }, true, randomUUID(), randomUUID()).then(
+          result => ({ result }), error => ({ error }),
+        );
+        await waitForBlockedQuery(holder!.pid, '%FROM organizations%FOR SHARE%');
+        await tx.$executeRaw`INSERT INTO process_ledger_workflow_configuration_revisions (organization_id, version, boards, updated_by_id)
+          VALUES (${organizationId}::uuid, 2, '{}'::jsonb, ${actor.id}::uuid)`;
+      });
+      expect(await adoption).toMatchObject({ error: { status: 403, response: { code: 'FEATURE_PERMISSION_DENIED' } } });
+      expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: value.defect.id } })).toEqual(before);
+      expect((await service.list(actor, value.defect.id)).items[0]).toEqual(task);
+    } finally {
+      await adoption;
+      await prisma.$executeRaw`DELETE FROM process_ledger_workflow_configuration_revisions WHERE organization_id=${organizationId}::uuid`;
+    }
   });
 
   it('rejects an old prompt response and extracts a selected custom JSON output field', async () => {

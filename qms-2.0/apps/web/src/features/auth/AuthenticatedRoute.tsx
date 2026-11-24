@@ -125,11 +125,11 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
     );
   } else if (state.status === 'unauthenticated') {
     const returnTo = readReturnTo({ returnTo: location.pathname + location.search
-      + (location.pathname === '/app/admin' || location.pathname.startsWith('/app/workflow-designer') ? location.hash : '') });
+      + (location.pathname === '/app/admin' ? location.hash : '') });
     return <Navigate to="/login" replace state={returnTo ? { returnTo } : null} />;
   } else if (state.status === 'password-change') {
     const returnTo = readReturnTo({ returnTo: location.pathname + location.search
-      + (location.pathname === '/app/admin' || location.pathname.startsWith('/app/workflow-designer') ? location.hash : '') });
+      + (location.pathname === '/app/admin' ? location.hash : '') });
     return <Navigate to="/change-password" replace state={returnTo ? { returnTo } : null} />;
   } else if (state.session.accountType !== accountType) {
     return <Navigate to={state.session.landingPath} replace />;

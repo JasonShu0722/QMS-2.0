@@ -5,6 +5,20 @@ import { ACCESS_CONTEXT_METADATA } from '../../src/modules/authorization/access.
 import { ProcessQualityController } from '../../src/modules/process-quality/process-quality.controller.js';
 
 describe('manual ledger authorization entry points', () => {
+  it('routes bulk maintenance through the existing permission for the selected board', () => {
+    const handler = Reflect.get(ProcessQualityController.prototype, 'bulkMaintenance');
+    expect(typeof handler).toBe('function');
+    expect(Reflect.getMetadata(PATH_METADATA, handler)).toBe('defects/bulk-maintenance');
+    expect(Reflect.getMetadata(METHOD_METADATA, handler)).toBe(RequestMethod.PATCH);
+    const access = Reflect.getMetadata(ACCESS_CONTEXT_METADATA, handler);
+    expect(access.organizationScope).toEqual({ source: 'body', field: 'organizationId', optional: false });
+    for (const board of ['ANALYSIS', 'RESPONSIBILITY', 'DISPOSITION']) {
+      expect(access.featurePermissions({ board })).toEqual(['process-quality:defects:write']);
+    }
+    expect(access.featurePermissions({ board: 'CLOSURE' })).toEqual(['process-quality:defects:close']);
+    expect(access.featurePermissions({ board: 'MATERIAL_REVIEW' })).toEqual(['process-quality:materials:review']);
+  });
+
   it('does not grant close/reopen with ordinary write, or SQE verification with maintenance', () => {
     for (const [name, path, permission] of [
       ['close', 'defects/:id/close', 'process-quality:defects:close'], ['reopen', 'defects/:id/reopen', 'process-quality:defects:close'],

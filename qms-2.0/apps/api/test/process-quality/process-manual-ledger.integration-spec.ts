@@ -65,7 +65,7 @@ describe('N3 manual process ledger: real PostgreSQL and protected HTTP', () => {
 
   afterAll(async () => { await app?.close(); });
 
-  function send(who: keyof typeof people, method: 'post' | 'put', path: string, body: object, key: string = randomUUID()) {
+  function send(who: keyof typeof people, method: 'post' | 'put' | 'patch', path: string, body: object, key: string = randomUUID()) {
     return request(app.getHttpServer())[method](`/api/v1/process-quality/${path}`).set('Cookie', people[who].cookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
   }
   function read(id: string) { return request(app.getHttpServer()).get(`/api/v1/process-quality/defects/${id}`).set('Cookie', people.leader.cookie); }
@@ -75,6 +75,98 @@ describe('N3 manual process ledger: real PostgreSQL and protected HTTP', () => {
     const { id, materialCode, materialName, supplierOrganizationId, supplierProfileId, materialBatch, sqeUserId, notes } = material;
     return { id, materialCode, materialName, supplierOrganizationId, supplierProfileId, materialBatch, sqeUserId, notes };
   }
+
+  function maintain(who: keyof typeof people, board: string, sources: { defectId: string; expectedVersion: number; fields: object }[], key?: string) {
+    return send(who, 'patch', 'defects/bulk-maintenance', { organizationId, board, sources }, key);
+  }
+
+  it('maintains each board independently on manual and IMS rows and records disposition changes', async () => {
+    const manual = await create();
+    const imported = await prisma.processDefect.create({ data: { organizationId, description: 'IMS preserved', sourceKind: 'IMS', externalSourceSystem: 'IMS', sourceReceiptId: randomUUID(), sourceRowIndex: 0, createdById: people.leader.id, updatedById: people.leader.id } });
+    const sources = [manual, imported].map(row => ({ defectId: row.id, expectedVersion: row.version, fields: { dispositionPlan: 'SCRAP', dispositionCompletedAt: '2026-11-24T11:30:00+08:00' } }));
+    const disposition = await maintain('leader', 'DISPOSITION', sources).expect(200);
+    expect(disposition.body.items.map((item: ProcessDefectDto) => item.id)).toEqual([manual.id, imported.id]);
+    expect(disposition.body.items[0]).toMatchObject({ dispositionPlan: 'SCRAP', dispositionCompletedAt: '2026-11-24T03:30:00.000Z', ledgerStatus: 'FOLLOWING', analysisProgress: null });
+    await maintain('leader', 'CLOSURE', [{ defectId: manual.id, expectedVersion: 2, fields: { status: 'CLOSED' } }]).expect(403);
+    await maintain('pqc', 'CLOSURE', [{ defectId: manual.id, expectedVersion: 2, fields: { status: 'CLOSED' } }]).expect(200);
+    await maintain('leader', 'ANALYSIS', [{ defectId: manual.id, expectedVersion: 3, fields: { analysisProgress: 'Checked line', dispositionPlan: 'REWORK' } }]).expect(400);
+    await maintain('leader', 'ANALYSIS', [{ defectId: manual.id, expectedVersion: 3, fields: { analysisProgress: 'Checked line' } }]).expect(200);
+    const edited = await maintain('leader', 'DISPOSITION', [{ defectId: manual.id, expectedVersion: 4, fields: { dispositionProgress: 'Sorted units', dispositionCompletedAt: null } }]).expect(200);
+    expect(edited.body.items[0]).toMatchObject({ id: manual.id, version: 5, description: manual.description, analysisProgress: 'Checked line', ledgerStatus: 'CLOSED', dispositionPlan: 'SCRAP', dispositionProgress: 'Sorted units', dispositionCompletedAt: null,
+      dispositionHistory: [{ defectVersion: 2, dispositionPlan: 'SCRAP' }, { defectVersion: 5, dispositionPlan: 'SCRAP', dispositionProgress: 'Sorted units' }] });
+    await maintain('pqc', 'CLOSURE', [{ defectId: manual.id, expectedVersion: 5, fields: { status: 'FOLLOWING', reason: '  ' } }]).expect(400);
+    const reopened = await maintain('pqc', 'CLOSURE', [{ defectId: manual.id, expectedVersion: 5, fields: { status: 'FOLLOWING', reason: 'More work' } }]).expect(200);
+    expect(reopened.body.items[0]).toMatchObject({ ledgerStatus: 'FOLLOWING', closedAt: null, dispositionPlan: 'SCRAP', analysisProgress: 'Checked line' });
+  });
+
+  it('resolves a changed material code only for a caller with material master read access', async () => {
+    const materialCode = `N3-${randomUUID()}`;
+    await prisma.materialMaster.create({ data: { organizationId, materialCode, materialName: 'Current master name', createdById: people.leader.id, updatedById: people.leader.id } });
+    const defect = await create({ materials: [{ materialCode: 'OLD', materialName: 'Old name', materialBatch: 'Old batch' }] });
+    const materialId = defect.materials[0]!.id;
+    const sources = (expectedVersion: number, code: string) => [{ defectId: defect.id, expectedVersion, fields: { materials: [{ id: materialId, materialCode: code }] } }];
+    const unprivileged = await maintain('leader', 'RESPONSIBILITY', sources(1, materialCode)).expect(200);
+    expect(unprivileged.body.items[0].materials[0]).toMatchObject({ id: materialId, materialCode, materialName: null, materialBatch: 'Old batch' });
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'material-master:read' } });
+    const grant = { roleId: people.pqc.roleId, permissionId: permission.id };
+    await prisma.rolePermission.create({ data: grant });
+    const unknown = await maintain('pqc', 'RESPONSIBILITY', sources(2, 'UNKNOWN')).expect(200);
+    expect(unknown.body.items[0].materials[0]).toMatchObject({ id: materialId, materialCode: 'UNKNOWN', materialName: null });
+    const changed = await maintain('pqc', 'RESPONSIBILITY', sources(3, materialCode)).expect(200);
+    expect(changed.body.items[0].materials[0]).toMatchObject({ id: materialId, materialCode, materialName: 'Current master name', materialBatch: 'Old batch' });
+    await prisma.rolePermission.deleteMany({ where: grant });
+  });
+
+  it('removes only explicitly identified materials and keeps past SQE review history', async () => {
+    const defect = await create({ materials: [{ materialCode: 'REMOVE', sqeUserId: people.sqe.id }, { materialCode: 'KEEP' }] });
+    const [removed, retained] = defect.materials;
+    await send('sqe', 'put', `defects/${defect.id}/materials/${removed!.id}/verification`, { expectedVersion: 1, verification: 'CONFIRMED_DEFECT' }).expect(200);
+    const source = { defectId: defect.id, expectedVersion: 2, fields: { removedMaterialIds: [removed!.id] } };
+    await maintain('leader', 'ANALYSIS', [source]).expect(400);
+    await maintain('leader', 'RESPONSIBILITY', [{ ...source, fields: { ...source.fields, materials: [{ id: removed!.id, notes: 'Conflicting edit' }] } }]).expect(400);
+    const key = randomUUID();
+    const result = (await maintain('leader', 'RESPONSIBILITY', [source], key).expect(200)).body;
+    expect(result.items[0]).toMatchObject({ version: 3, materials: [retained], materialVerificationHistory: [{ materialItemId: removed!.id, verification: 'CONFIRMED_DEFECT' }] });
+    expect((await maintain('leader', 'RESPONSIBILITY', [source], key).expect(200)).body).toEqual(result);
+  });
+
+  it('groups multiple material edits and reviews by defect version and leaves unselected material alone', async () => {
+    const defect = await create({ materials: [{ materialCode: 'A', notes: 'keep' }, { materialCode: 'B' }, { materialCode: 'C' }] });
+    const [first, second, untouched] = defect.materials;
+    const changed = await maintain('leader', 'RESPONSIBILITY', [{ defectId: defect.id, expectedVersion: 1, fields: { responsibilityCategory: 'MATERIAL', materials: [
+      { id: first!.id, sqeUserId: people.sqe.id }, { id: second!.id, sqeUserId: people.sqe.id, materialBatch: 'LOT-2' },
+    ] } }]).expect(200);
+    expect(changed.body.items[0]).toMatchObject({ version: 2, responsibilityCategory: 'MATERIAL', materials: [
+      { id: first!.id, materialCode: 'A', notes: 'keep', sqeUserId: people.sqe.id }, { id: second!.id, materialCode: 'B', materialBatch: 'LOT-2', sqeUserId: people.sqe.id }, untouched,
+    ] });
+    await maintain('pqc', 'CLOSURE', [{ defectId: defect.id, expectedVersion: 2, fields: { status: 'CLOSED' } }]).expect(200);
+    const sources = [{ defectId: defect.id, expectedVersion: 3, fields: { reviews: [
+      { materialId: first!.id, verification: 'RETURN_ANALYSIS', verificationNotes: 'A notes' }, { materialId: second!.id, verification: 'NOT_MATERIAL' },
+    ] } }];
+    await maintain('otherSqe', 'MATERIAL_REVIEW', sources).expect(403);
+    const key = randomUUID();
+    const reviewed = await maintain('sqe', 'MATERIAL_REVIEW', sources, key).expect(200);
+    expect(reviewed.body.items[0]).toMatchObject({ version: 4, ledgerStatus: 'CLOSED', materials: [
+      { id: first!.id, verification: 'RETURN_ANALYSIS', verificationHistory: [{ defectVersion: 4 }] },
+      { id: second!.id, verification: 'NOT_MATERIAL', verificationHistory: [{ defectVersion: 4 }] }, untouched,
+    ] });
+    expect((await maintain('sqe', 'MATERIAL_REVIEW', sources, key).expect(200)).body).toEqual(reviewed.body);
+    await maintain('leader', 'RESPONSIBILITY', [{ defectId: defect.id, expectedVersion: 4, fields: { materials: [{ id: first!.id, sqeUserId: people.otherSqe.id }] } }]).expect(200);
+    await maintain('sqe', 'MATERIAL_REVIEW', sources, key).expect(403);
+  });
+
+  it('rolls back earlier sources when a later source is stale, archived, foreign, or targets another defect’s material', async () => {
+    const pair = [await create({ materials: [{ materialCode: 'A' }] }), await create({ materials: [{ materialCode: 'B' }] })].sort((first, second) => first.id.localeCompare(second.id));
+    const [first, second] = pair as [ProcessDefectDto, ProcessDefectDto];
+    const patch = { defectId: first.id, expectedVersion: 1, fields: { responsibilityCategory: 'MATERIAL' } };
+    await maintain('leader', 'RESPONSIBILITY', [patch, { ...patch, defectId: second.id, expectedVersion: 2 }]).expect(409);
+    await maintain('leader', 'RESPONSIBILITY', [patch, { ...patch, defectId: second.id, fields: { materials: [{ id: first.materials[0]!.id, materialBatch: 'wrong' }] } }]).expect(404);
+    await prisma.processDefect.update({ where: { id: second.id }, data: { archivedAt: new Date() } });
+    await maintain('leader', 'RESPONSIBILITY', [patch, { ...patch, defectId: second.id }]).expect(409);
+    const foreign = await prisma.processDefect.create({ data: { organizationId: otherOrganizationId, sourceKind: 'IMS', externalSourceSystem: 'IMS', sourceReceiptId: randomUUID(), sourceRowIndex: 0, description: 'Foreign', createdById: people.leader.id, updatedById: people.leader.id } });
+    await maintain('leader', 'RESPONSIBILITY', [patch, { ...patch, defectId: foreign.id }]).expect(404);
+    expect((await read(first.id).expect(200)).body).toMatchObject({ version: 1, responsibilityCategory: null, classificationHistory: [] });
+  });
 
   it('keeps legacy unknown facts nullable without inventing new registration results', async () => {
     const registered = await create({ materials: [{}, { materialCode: '   ' }] });

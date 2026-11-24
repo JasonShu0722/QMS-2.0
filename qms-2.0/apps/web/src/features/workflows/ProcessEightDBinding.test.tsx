@@ -7,11 +7,15 @@ import { ApiError, apiRequest, csrfToken } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { UnsavedChangesProvider, useUnsavedChanges } from '../../layouts/UnsavedChanges';
-import { WorkflowListPage } from './WorkflowListPage';
+import { ConsoleEightDBindingsPage } from '../../console/ConsoleWorkflowPage';
 import { ProcessEightDBinding } from './ProcessEightDBinding';
 import * as api from './workflow-api';
 
 vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn(), csrfToken: vi.fn() }));
+vi.mock('../../console/ConsoleLayout', () => ({ useConsoleContext: () => ({ context: {
+  actor: { id: 'user', homeOrganization: { id: 'org' } }, targetOrganization: { id: 'org' },
+  modules: [{ key: 'workflows', organizationId: 'org', scope: 'SESSION_HOME', coverage: 'ORGANIZATION', permissions: ['workflow:manage'] }],
+} }) }));
 vi.mock('./workflow-api', async original => ({ ...await original<typeof api>(), getWorkflows: vi.fn(), getWorkflow: vi.fn(), getWorkflowVersion: vi.fn() }));
 const binding: components['schemas']['ProcessEightDBindingResultDto'] = { organizationId: 'org', workflowDefinitionId: 'definition', workflowVersionId: 'published', enabled: false, version: 4 };
 const version = { id: 'draft', workflowDefinitionId: 'definition', version: 2, status: 'DRAFT' as const, publishedAt: null, publishedById: null, changeNote: null };
@@ -21,7 +25,7 @@ const publishedWorkflow = (domainCode: string): components['schemas']['WorkflowD
   { id: 'review', name: '关闭审核', type: 'APPROVAL', config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode } } },
 ], transitions: [] } } });
 beforeEach(() => {
-  vi.resetAllMocks(); localStorage.clear(); useWorkTabsStore.getState().reset(); useWorkTabsStore.getState().bindSession('INTERNAL:user:org');
+  vi.resetAllMocks(); localStorage.clear(); useWorkTabsStore.getState().reset(); useWorkTabsStore.getState().bindSession('INTERNAL:org:user');
   vi.mocked(csrfToken).mockResolvedValue('csrf');
   vi.mocked(api.getWorkflows).mockResolvedValue({ items: [{ ...head, version, draftVersionId: 'draft' }], total: 1 });
   vi.mocked(api.getWorkflow).mockResolvedValue({ ...head, versions: [version, { ...version, id: 'published', version: 1, status: 'PUBLISHED' }] });
@@ -33,7 +37,7 @@ beforeEach(() => {
   });
 });
 afterEach(() => vi.unstubAllGlobals());
-const mount = () => render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><WorkflowListPage /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
+const mount = () => render(<MemoryRouter initialEntries={['/console/eight-d-bindings']}><LanguageProvider><UnsavedChangesProvider><ConsoleEightDBindingsPage /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
 it('loads persisted binding and real published history, binding does not activate or publish a draft', async () => {
   mount();
   expect(await screen.findByRole('heading', { name: '过程8D流程绑定与启用' })).toBeVisible();
@@ -92,9 +96,9 @@ it('completes binding 401 navigation past its busy guard and a parent dirty draf
   });
   function Page() { useUnsavedChanges(true); return <ProcessEightDBinding />; }
   const router = createMemoryRouter([
-    { path: '/console/workflows', element: <LanguageProvider><UnsavedChangesProvider><Page /></UnsavedChangesProvider></LanguageProvider> },
+    { path: '/console/eight-d-bindings', element: <LanguageProvider><UnsavedChangesProvider><Page /></UnsavedChangesProvider></LanguageProvider> },
     { path: '/login', element: <p>8D配置登录目的页</p> },
-  ], { initialEntries: ['/console/workflows'] });
+  ], { initialEntries: ['/console/eight-d-bindings'] });
   render(<RouterProvider router={router} />);
   await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('published'));
   fireEvent.click(screen.getByRole('button', { name: '保存8D绑定' }));

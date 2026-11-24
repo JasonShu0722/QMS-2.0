@@ -11,6 +11,7 @@ import './audit-management.css';
 import { ListToolbar } from '../../ui/list/ListToolbar';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useLedgerPageSize } from '../../ui/ledger';
+import { PublishedWorkflowPicker } from '../workflows/PublishedWorkflowPicker';
 
 type AuditPlan = components['schemas']['AuditPlanResponseDto'];
 type AuditImportPage = components['schemas']['AuditImportRowPageDto'];
@@ -53,6 +54,16 @@ function importStatusColor(status: AuditImportRow['status']) {
 
 function optionalText(value: unknown) {
   return typeof value === 'string' ? value : undefined;
+}
+
+function IssueWorkflowPicker({ organizationId, disabled, onDirty }: { organizationId: string; disabled: boolean; onDirty: () => void }) {
+  const form = Form.useFormInstance<IssueFields>();
+  return <Form.Item>
+    <PublishedWorkflowPicker organizationId={organizationId} kind="audit-import" disabled={disabled} onSelect={binding => {
+      form.setFieldsValue(binding);
+      onDirty();
+    }} />
+  </Form.Item>;
 }
 
 export function AuditManagementPage({ planId: initialPlanId }: { planId?: string } = {}) {
@@ -334,6 +345,7 @@ export function AuditManagementPage({ planId: initialPlanId }: { planId?: string
           <Form.Item name="responseForm" label="响应形式" rules={[{ required: true, message: '请选择响应形式' }]}><Select options={[{ value: 'BRIEF', label: '问题简报' }, { value: 'EIGHT_D', label: '8D' }]} /></Form.Item>
           <Form.Item name="responsibleScope" label="责任范围" rules={[{ required: true, whitespace: true, message: '请输入责任范围' }, { max: 100, message: '最多 100 个字符' }]}><Input maxLength={100} /></Form.Item>
           <Form.Item name="severity" label="严重度" rules={[{ required: true, whitespace: true, message: '请输入严重度' }, { max: 32, message: '最多 32 个字符' }]}><Input maxLength={32} /></Form.Item>
+          <IssueWorkflowPicker organizationId={issueRow.organization_id} disabled={issueBusy} onDirty={() => setIssueDirty(true)} />
           <Form.Item name="workflowDefinitionId" label="流程定义 ID" rules={[{ required: true, message: '请输入流程定义 ID' }, { pattern: uuidPattern, message: '请输入有效的 UUID' }]}><Input /></Form.Item>
           <Form.Item name="workflowVersionId" label="流程版本 ID" rules={[{ required: true, message: '请输入流程版本 ID' }, { pattern: uuidPattern, message: '请输入有效的 UUID' }]}><Input /></Form.Item>
           <Form.Item name="instanceKey" label="实例标识" rules={[{ required: true, whitespace: true, message: '请输入实例标识' }, { max: 200, message: '最多 200 个字符' }]}><Input maxLength={200} /></Form.Item>

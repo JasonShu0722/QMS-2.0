@@ -103,6 +103,14 @@ corepack pnpm check:governance
 
 清理输出保留 Docker 回收量；清理失败时 stderr 明确“Deployment healthy / builder cache cleanup failed / deployed SHA retained”，脚本非零退出，服务健康及 deployed-sha 不回滚。此时应先核实实际服务 SHA 与磁盘分类，不把 CD 失败自动解释成生产服务回滚。默认 dangling cache 回收不能保证所有磁盘占用下降；本次只交付脚本、控制流测试和文档，未执行生产清理或测量云端回收量。
 
+### 部署存储保留与失败处理（Issue #171）
+
+部署前检查 Docker 数据目录和 `/opt/qms2` 所在文件系统，任一可用空间低于 8 GiB 时打印清理预览并阻断构建。迁移前失败时核实上一次成功 SHA 的服务，必要时用上一版 Compose 配置和本地镜像恢复 API、Worker、Web。迁移开始时写入 `migration-started-sha`。迁移、启动或探活失败时记录目标 SHA、最后成功 SHA 和 Compose 实际状态，保留迁移标记与快照，交由值班人员核查。新部署完全健康后更新 `deployed-sha` 并移除迁移标记。
+
+发布工作流默认只打印清理预览。负责人审阅 Actions 日志中的实际候选后，通过仓库变量 `QMS_DEPLOY_CLEANUP_APPLY=1` 让后续健康发布执行清理。核实默认 builder 只供 QMS 使用后，设置 `QMS_DEDICATED_BUILDER=1` 回收其所有未使用缓存。共享或无法核实的 builder 沿用现有缓存回收范围。清理告警和磁盘前后读数见部署日志，健康发布仍返回成功。
+
+在生产主机部署目录可运行 `DRY_RUN=1 bash deployment/deploy-cleanup.sh`。初次实际清理经候选清单审阅后可在同目录运行 `bash deployment/deploy-cleanup.sh --apply`，与部署共用锁。清理仅考虑 QMS 的 API、Web 两个 SHA 镜像仓库，保护容器实际镜像引用、最后成功 SHA 和最近 3 套完整历史镜像。快照与配对密钥按每份快照的 14 天保留期处理，保留最近一份有效快照与异常条目。磁盘结果以文件系统读数为准。
+
 ## 维护触发条件
 
 已观察到、需要跟踪到关闭的事项登记在[维护事项台账](MAINTENANCE-REGISTER.md)；复核期限和来源变化由 `check:maintenance` 检查。下表继续定义日常触发类别，不能把未记录的告警或演练描述为已上线。

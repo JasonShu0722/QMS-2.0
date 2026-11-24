@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 
 type NativeDetector = { detect: (video: HTMLVideoElement) => Promise<{ rawValue: string }[]> };
-export function ProcessTraceScanner({ onScan, onClose }: { onScan: (value: string) => void; onClose: () => void }) {
+export function ProcessTraceScanner({ purpose = 'trace', onScan, onClose }: { purpose?: 'trace' | 'material-batch'; onScan: (value: string) => void; onClose: () => void }) {
   const video = useRef<HTMLVideoElement>(null);
   const callbacks = useRef({ onScan, onClose }); callbacks.current = { onScan, onClose };
   const release = useRef<() => void>(() => {});
@@ -70,8 +70,9 @@ export function ProcessTraceScanner({ onScan, onClose }: { onScan: (value: strin
     return () => { unsubscribe(); stop(); };
   }, []);
   function close() { release.current(); callbacks.current.onClose(); }
-  return <Modal open title="扫描追溯码" footer={<Button onClick={close}>返回手动输入</Button>} onCancel={close} destroyOnHidden>
-    {error ? <Alert type="warning" showIcon title={error} /> : <Alert type="info" title="将二维码或条码对准相机，识别后回填追溯码。" />}
+  const materialBatch = purpose === 'material-batch';
+  return <Modal open title={materialBatch ? '扫描批次标签' : '扫描追溯码'} footer={<Button onClick={close}>返回手动输入</Button>} onCancel={close} destroyOnHidden>
+    {error ? <Alert type="warning" showIcon title={error} /> : <Alert type="info" title={materialBatch ? '将批次标签对准相机，识别后回填此物料明细。' : '将二维码或条码对准相机，识别后回填追溯码。'} />}
     <video ref={video} aria-label="扫码相机预览" className="process-trace-video" autoPlay muted playsInline hidden={!!error} />
   </Modal>;
 }

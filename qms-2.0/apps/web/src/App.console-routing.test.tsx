@@ -32,8 +32,6 @@ vi.mock('./console/ConsoleLayout', () => ({ useConsoleContext: () => ({ context:
 } }));
 vi.mock('./console/ConsoleManagementPage', () => ({ ConsoleManagementPage: () => <LocationProbe label="management page" /> }));
 vi.mock('./console/ConsoleHome', () => ({ ConsoleHome: () => <LocationProbe label="management home" /> }));
-vi.mock('./features/workflows/WorkflowListPage', () => ({ WorkflowListPage: () => <LocationProbe label="workflow list" /> }));
-vi.mock('./features/workflows/WorkflowDesignerPage', () => ({ WorkflowDesignerPage: ({ definitionId, versionId }: { definitionId: string; versionId: string }) => <output aria-label="workflow version">{definitionId}/{versionId}</output> }));
 
 const homeId = '2c7b3607-1d6d-4304-9a72-f595c8467d88';
 const targetId = '10380115-6c51-4df7-b18b-fda11be1a976';
@@ -106,18 +104,11 @@ it.each(managementPaths)('registers %s outside the business layout without touch
   assertBusinessUntouched();
 });
 
-it('registers workflow list without requiring the old management directory', async () => {
+it('registers workflow configuration without requiring the old management directory', async () => {
   open('/console/workflows');
-  expect(await screen.findByLabelText('workflow list')).toBeVisible();
+  expect(await screen.findByRole('button', { name: '制程不合格台账' })).toBeVisible();
   expect(fetch).toHaveBeenCalledWith('/api/v1/auth/session', expect.anything());
   expect(vi.mocked(fetch).mock.calls.every(([url]) => !String(url).includes('/admin/organizations'))).toBe(true);
-  assertBusinessUntouched();
-});
-
-it('registers a workflow version in the independent console layout', async () => {
-  open(`/console/workflows/${definitionId}/${versionId}`);
-  expect(await screen.findByLabelText('workflow version')).toHaveTextContent(`${definitionId}/${versionId}`);
-  expect(screen.getByRole('region', { name: 'independent console layout' })).toBeVisible();
   assertBusinessUntouched();
 });
 
@@ -163,25 +154,26 @@ it('redirects bare legacy administration to the console collection without guess
 });
 
 it.each([
-  ['/app/workflow-designer', '/console/workflows', 'workflow list'],
-  [`/app/workflow-designer/${definitionId}/${versionId}`, `/console/workflows/${definitionId}/${versionId}`, 'workflow version'],
-])('redirects %s before creating a business work tab', async (legacy, destination, label) => {
+  '/app/workflow-designer', `/app/workflow-designer/${definitionId}/${versionId}`,
+  `/app/workflow-designer/${definitionId}/${versionId}/extra`,
+])('shows an explicit not-found page at %s without creating a work tab', async legacy => {
   open(`${legacy}?organizationId=${targetId}`);
-  await screen.findByLabelText(label);
-  expect(window.location.pathname).toBe(destination);
+  expect(await screen.findByText('管理页面不存在')).toBeVisible();
+  expect(window.location.pathname).toBe(legacy);
   expect(window.location.search).toBe(`?organizationId=${targetId}`);
+  expect(mounts.console).not.toHaveBeenCalled();
   assertBusinessUntouched();
 });
 
-it('routes an existing legacy work-tab click through compatibility without creating a console work tab', async () => {
+it('shows not found from a previously opened editor work tab', async () => {
   const legacy = { id: 'legacy-workflow', title: 'Legacy workflow', path: `/app/workflow-designer/${definitionId}/${versionId}` };
   useWorkTabsStore.getState().openTab(legacy);
   open('/app/problem-center');
   await screen.findByLabelText('business layout');
   mounts.internal.mockClear();
   fireEvent.click(screen.getByRole('link', { name: legacy.title }));
-  await screen.findByLabelText('workflow version');
-  expect(window.location.pathname).toBe(`/console/workflows/${definitionId}/${versionId}`);
+  await screen.findByText('管理页面不存在');
+  expect(window.location.pathname).toBe(legacy.path);
   expect(mounts.internal).not.toHaveBeenCalled();
   expect(useWorkTabsStore.getState().tabs).toEqual([{ id: 'business', title: 'Business draft', path: '/app/problem-center' }, legacy]);
   expect(useWorkTabsStore.getState().activeTabId).toBe(legacy.id);
@@ -209,10 +201,7 @@ it.each(invalidAdminQueries)('explicitly rejects invalid legacy admin targeting:
 });
 
 it.each([
-  '/app/admin/unknown', '/app/admin#users', '/app/workflow-designer/not-a-uuid/not-a-uuid',
-  `/app/workflow-designer/${definitionId}`, `/app/workflow-designer/${definitionId}/${versionId}/extra`,
-  '/app/workflow-designer?organizationId=bad', `/app/workflow-designer?organizationId=${targetId}&organizationId=${homeId}`,
-  '/app/workflow-designer?section=users', `/app/workflow-designer?organizationId=${targetId}#extra`,
+  '/app/admin/unknown', '/app/admin#users',
 ])('does not silently open a different console object for %s', async path => {
   open(path);
   expect(await screen.findByRole('alert')).toHaveTextContent(/链接无效|定位失败/);
@@ -222,9 +211,9 @@ it.each([
 
 it.each([
   `/console/audit-log?organizationId=${targetId}&resourceType=Organization&resourceId=${targetId}`,
-  `/console/workflows/${definitionId}/${versionId}?organizationId=${targetId}`,
+  `/console/workflows?organizationId=${targetId}`,
+  '/console/eight-d-bindings',
   `/app/admin?organizationId=${targetId}&section=users&userId=${userId}`,
-  `/app/workflow-designer/${definitionId}/${versionId}?organizationId=${targetId}`,
 ])('preserves legal %s through the real unauthenticated guard', async path => {
   useWorkTabsStore.getState().reset();
   vi.stubGlobal('fetch', vi.fn<typeof fetch>(() => Promise.resolve(json({ code: 'AUTH_SESSION_REQUIRED' }, 401))));
@@ -247,7 +236,7 @@ it('preserves the console target through the real forced-password guard', async 
 
 it.each([
   `/app/admin?organizationId=${targetId}&section=users&userId=${userId}&unknown=value`,
-  `/app/workflow-designer/${definitionId}/${versionId}?organizationId=${targetId}&unknown=value`,
+  `/console/workflows/${definitionId}/${versionId}?organizationId=${targetId}`,
   `/app/admin?organizationId=${targetId}&section=users&section=users`,
   `/app/admin?organizationId=${targetId}&section=audit-log&resourceType=User`,
 ])('drops the whole invalid legacy return target rather than sanitizing it into a different valid locator: %s', async path => {
@@ -262,9 +251,7 @@ it.each([
 
 it.each([
   [`/app/admin?organizationId=${targetId}&section=users&userId=${userId}#extra`, false],
-  [`/app/workflow-designer/${definitionId}/${versionId}?organizationId=${targetId}#extra`, false],
   [`/app/admin?organizationId=${targetId}&section=users&userId=${userId}#extra`, true],
-  [`/app/workflow-designer/${definitionId}/${versionId}?organizationId=${targetId}#extra`, true],
 ] as const)('drops a fragment-bearing legacy target before authentication: %s forcedPassword=%s', async (path, forcedPassword) => {
   useWorkTabsStore.getState().reset();
   vi.stubGlobal('fetch', vi.fn<typeof fetch>(url => Promise.resolve(String(url) === '/api/v1/auth/session' || !forcedPassword
@@ -275,10 +262,9 @@ it.each([
   expect(mounts.internal).not.toHaveBeenCalled();
   expect(mounts.console).not.toHaveBeenCalled();
   expect(screen.queryByLabelText('management page')).not.toBeInTheDocument();
-  expect(screen.queryByLabelText('workflow version')).not.toBeInTheDocument();
 });
 
-it.each(['/console/users', '/app/admin', '/app/workflow-designer'])('rejects a supplier at %s before mounting either internal layout', async path => {
+it.each(['/console/users', '/app/admin', '/console/eight-d-bindings'])('rejects a supplier at %s before mounting either internal layout', async path => {
   useWorkTabsStore.getState().reset();
   vi.stubGlobal('fetch', vi.fn<typeof fetch>(() => Promise.resolve(json(session('SUPPLIER')))));
   open(path);

@@ -34,12 +34,14 @@ function mockWithIssuePermissions(...responses: unknown[]) {
   });
 }
 
-function fillIssueForm() {
+function fillIssueForm(manualWorkflow = true) {
   fireEvent.change(screen.getByLabelText('问题类型'), { target: { value: 'AUDIT_FINDING' } });
   fireEvent.change(screen.getByLabelText('责任范围'), { target: { value: 'audit-management' } });
   fireEvent.change(screen.getByLabelText('严重度'), { target: { value: 'HIGH' } });
-  fireEvent.change(screen.getByLabelText('流程定义 ID'), { target: { value: workflowDefinitionId } });
-  fireEvent.change(screen.getByLabelText('流程版本 ID'), { target: { value: workflowVersionId } });
+  if (manualWorkflow) {
+    fireEvent.change(screen.getByLabelText('流程定义 ID'), { target: { value: workflowDefinitionId } });
+    fireEvent.change(screen.getByLabelText('流程版本 ID'), { target: { value: workflowVersionId } });
+  }
   fireEvent.change(screen.getByLabelText('实例标识'), { target: { value: 'audit-import-cust-001' } });
 }
 
@@ -56,6 +58,39 @@ it('protects an unfinished audit issue when navigating away', async () => {
   await waitFor(() => expect(screen.getByRole('button', { name: '继续编辑' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: '继续编辑' }));
   expect(screen.getByLabelText('实例标识')).toHaveValue('audit-import-cust-001');
+});
+
+it('fills and submits the published workflow IDs for an audit import even when the list head is a draft', async () => {
+  const header = { id: workflowDefinitionId, code: 'AUDIT_IMPORT', name: '审核导入处理', organizationId: 'org-1' };
+  const published = { id: workflowVersionId, workflowDefinitionId, version: 1, status: 'PUBLISHED' };
+  const draft = { ...published, id: 'draft', version: 2, status: 'DRAFT' };
+  const controlled = { ...published, id: 'controlled', version: 3 };
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    if (path.includes('/my-permissions')) return { ...issuePermissions, permissions: [...issuePermissions.permissions, 'workflow:manage'] };
+    if (path.startsWith('/api/v1/workflows?')) return { total: 1, items: [{ ...header, version: draft }] };
+    if (path === `/api/v1/workflows/${workflowDefinitionId}`) return { ...header, versions: [controlled, draft, published] };
+    if (path === `/api/v1/workflows/${workflowDefinitionId}/versions/controlled`) {
+      return { ...header, version: { ...controlled, structureSnapshot: { nodes: [{ type: 'ACTION', config: { isStart: true, supplierEightD: {} } }], transitions: [] } } };
+    }
+    if (path === `/api/v1/workflows/${workflowDefinitionId}/versions/${workflowVersionId}`) {
+      return { ...header, version: { ...published, structureSnapshot: { nodes: [{ type: 'ACTION', config: { isStart: true } }], transitions: [] } } };
+    }
+    if (init?.method === 'POST') throw new ApiError({ code: 'CONCURRENCY_CONFLICT', message: '' }, 409);
+    return acceptedPage;
+  });
+  render(<AuditManagementPage />);
+  fireEvent.click(await screen.findByRole('button', { name: '发起正式问题' }));
+  fillIssueForm(false);
+  fireEvent.click(screen.getByRole('button', { name: '查找已发布流程' }));
+  fireEvent.mouseDown(await screen.findByRole('combobox', { name: '已发布流程版本' }));
+  expect(screen.queryByText('审核导入处理 · AUDIT_IMPORT · v3')).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByText('审核导入处理 · AUDIT_IMPORT · v1'));
+  expect(screen.getByLabelText('流程定义 ID')).toHaveValue(workflowDefinitionId);
+  expect(screen.getByLabelText('流程版本 ID')).toHaveValue(workflowVersionId);
+  fireEvent.click(screen.getByRole('button', { name: '确认发单' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/audit-management/imports/import-1/issue', expect.objectContaining({
+    body: expect.stringContaining(`"workflowBinding":{"workflowDefinitionId":"${workflowDefinitionId}","workflowVersionId":"${workflowVersionId}"`),
+  })));
 });
 
 it('loads a plan after the user enters its identifier', async () => {

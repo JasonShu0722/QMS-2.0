@@ -272,7 +272,7 @@ export class IngestionService {
     if (rule.target === 'COMPONENT' && rule.componentNameLookup) {
       if (!this.materials) ingestionError('INTEGRATION_CONFIGURATION_UNAVAILABLE', 503);
       const code = (targetFields as IntegrationFields).code;
-      const material = await this.materials.findForIngestion(tx, actor, code);
+      const material = await this.materials.findByCode(tx, actor, code);
       componentMaterialSnapshot = material ? { id: material.id, version: material.version } : null;
       targetFields = { ...(targetFields as IntegrationFields), name: material?.materialName ?? '', componentNameMissing: !material, componentMaterialSnapshot };
     }

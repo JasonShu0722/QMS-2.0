@@ -18,6 +18,7 @@ it('explains source field issues in the keyboard-focused tooltip without exposin
     id: 'defect-hint', organizationId: 'org', description: '来源行', defectTypeCode: null, defectQuantity: 1, occurredAt: null, factoryCode: null,
     lineName: null, operationName: null, shift: null, operationSector: null, productCategory: null, productSubcategory: null, projectStage: null, projectName: null,
     pendingCompletion: true, pendingConfiguration: false, registeredByName: null, traceCode: null, analysisProgress: null, responsibilityCategory: null,
+    dispositionPlan: null, dispositionProgress: null, dispositionCompletedAt: null, dispositionHistory: [],
     ledgerStatus: 'FOLLOWING', closedAt: null, closedById: null, sourceKind: 'IMS', version: 1,
     materials: [], materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0,
     issues: ['MANUAL_PROJECT_DIFFERS', 'DESCRIPTION_EMPTY', 'OCCURRED_AT_UNKNOWN', 'DEFECT_TYPE_UNKNOWN'],

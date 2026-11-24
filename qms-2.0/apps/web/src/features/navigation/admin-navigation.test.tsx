@@ -51,10 +51,8 @@ it('opens the real read-only user list after legacy routing and matching console
   expect(useWorkTabsStore.getState().tabs).toEqual([]);
 }, 15000);
 
-it.each(['users', 'audit', 'workflow'] as const)('canonicalizes a legacy uppercase organization before the real console request and %s gate', async kind => {
+it.each(['users', 'audit'] as const)('canonicalizes a legacy uppercase organization before the real console request and %s gate', async kind => {
   const canonicalId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-  const definitionId = '22222222-2222-4222-8222-222222222222';
-  const versionId = '33333333-3333-4333-8333-333333333333';
   const target = { ...organization, id: canonicalId };
   const permissions = ['account:users:read', 'audit:read'];
   const verified: ConsoleContext = { ...context(true), actor: { id: 'actor', accountType: 'INTERNAL', homeOrganization: target },
@@ -73,22 +71,16 @@ it.each(['users', 'audit', 'workflow'] as const)('canonicalizes a legacy upperca
     if (path.startsWith('/api/v1/admin/organizations/context')) return { hasPlatformAdministrator: false, homeOrganizationId: canonicalId, targetOrganizationId: canonicalId, accessKind: 'ORGANIZATION', targetOrganizationStatus: 'ACTIVE', targetConfigurationRequired: false, permissions, authorizationSources: [] };
     if (path.startsWith('/api/v1/admin/users?')) return [];
     if (path.startsWith('/api/v1/admin/audit-events?')) return { items: [], total: 0, nextCursor: null };
-    if (path === `/api/v1/workflows/${definitionId}/versions/${versionId}`) return { id: definitionId, organizationId: canonicalId, code: 'QA', name: '真实受控流程', description: null, revision: 1,
-      version: { id: versionId, workflowDefinitionId: definitionId, version: 1, status: 'DRAFT', publishedAt: null, publishedById: null, changeNote: null, structureSnapshot: { nodes: [], transitions: [] } } };
-    if (path.startsWith('/api/v1/workflows/options?')) return { roles: [], users: [], permissions: [] };
     throw new Error(`Unexpected request: ${path}`);
   });
-  const legacy = kind === 'workflow' ? `/app/workflow-designer/${definitionId}/${versionId}?organizationId=${canonicalId.toUpperCase()}`
-    : `/app/admin?organizationId=${canonicalId.toUpperCase()}&section=${kind === 'users' ? 'users' : 'audit-log'}${kind === 'audit' ? '&resourceType=Organization&resourceId=Exact%3AAbC' : ''}`;
+  const legacy = `/app/admin?organizationId=${canonicalId.toUpperCase()}&section=${kind === 'users' ? 'users' : 'audit-log'}${kind === 'audit' ? '&resourceType=Organization&resourceId=Exact%3AAbC' : ''}`;
   window.history.replaceState({}, '', legacy);
   render(<App />);
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/admin/console/context?organizationId=${canonicalId}`, expect.anything()));
   expect(new URLSearchParams(window.location.search).get('organizationId')).toBe(canonicalId);
-  if (kind === 'workflow') expect(screen.queryByRole('combobox', { name: '管理目标组织' })).not.toBeInTheDocument();
-  else expect(await screen.findByRole('combobox', { name: '管理目标组织' })).toHaveValue(canonicalId);
+  expect(await screen.findByRole('combobox', { name: '管理目标组织' })).toHaveValue(canonicalId);
   expect(screen.queryByText('管理访问已失效或无权限')).not.toBeInTheDocument();
-  if (kind === 'workflow') expect(await screen.findByRole('heading', { name: '真实受控流程' })).toBeVisible();
-  else expect(await screen.findByRole('table')).toBeVisible();
+  expect(await screen.findByRole('table')).toBeVisible();
   if (kind === 'audit') {
     expect(new URLSearchParams(window.location.search).get('resourceType')).toBe('Organization');
     expect(new URLSearchParams(window.location.search).get('resourceId')).toBe('Exact:AbC');

@@ -6,11 +6,15 @@ import { ApiError, apiRequest, csrfToken, getSession } from '../../api/client';
 import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
-import { WorkflowListPage } from './WorkflowListPage';
+import { ConsoleEightDBindingsPage } from '../../console/ConsoleWorkflowPage';
 import { SupplierEightDBinding } from './SupplierEightDBinding';
 import * as api from './workflow-api';
 
 vi.mock('../../api/client', async original => ({ ...await original<typeof import('../../api/client')>(), apiRequest: vi.fn(), csrfToken: vi.fn(), getSession: vi.fn() }));
+vi.mock('../../console/ConsoleLayout', () => ({ useConsoleContext: () => ({ context: {
+  actor: { id: 'user', homeOrganization: { id: 'org' } }, targetOrganization: { id: 'org' },
+  modules: [{ key: 'workflows', organizationId: 'org', scope: 'SESSION_HOME', coverage: 'ORGANIZATION', permissions: ['workflow:manage'] }],
+} }) }));
 vi.mock('./workflow-api', async original => ({ ...await original<typeof api>(), getWorkflows: vi.fn(), getWorkflow: vi.fn(), getWorkflowVersion: vi.fn() }));
 type Binding = components['schemas']['SupplierWorkflowBindingDto'];
 const binding: Binding = { id: 'binding', organizationId: 'org', severity: 'LOW', responseForm: 'EIGHT_D', replyMode: 'SUPPLIER', workflowVersionId: 'published', workflowDefinitionId: 'definition', version: 4, enabled: false, controlledEightD: true, workflowStatus: 'PUBLISHED', responseSlaMinutes: null, createdById: 'user', createdAt: '2026-10-28T00:00:00Z' };
@@ -44,7 +48,7 @@ beforeEach(() => {
     return null;
   });
 });
-const mount = () => render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><WorkflowListPage /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
+const mount = () => render(<MemoryRouter initialEntries={['/console/eight-d-bindings']}><LanguageProvider><UnsavedChangesProvider><ConsoleEightDBindingsPage /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
 const writes = () => vi.mocked(apiRequest).mock.calls.filter(([path, init]) => path.includes('supplier-quality/workflow-bindings') && init?.method === 'PUT');
 const ready = async () => { mount(); await waitFor(() => expect(screen.getByLabelText('供应商8D已发布流程版本')).toHaveValue('published')); };
 it('mounts a separate supplier panel and saves disabled before explicit activation with a new key', async () => {
@@ -87,7 +91,7 @@ it.each(['internal', 'legacy', 'duplicate-owner', 'duplicate-review', 'wrong-dom
   if (kind === 'review-end') nodes[1].config!.isEnd = true;
   if (kind === 'review-schema') Object.assign(nodes[1].config!.closureReview!, { schemaVersion: 2 });
   vi.mocked(api.getWorkflowVersion).mockResolvedValue(flow);
-  mount(); await screen.findByText('没有可选的供应商完整8D已发布流程，请先初始化模板并在设计器校验发布。');
+  mount(); await screen.findByText('没有可选的供应商完整8D已发布流程。');
   expect(screen.getByRole('button', { name: '保存供应商8D绑定' })).toBeDisabled();
 });
 it('preserves legacy rows read-only without migration or legacy activation', async () => {
@@ -103,7 +107,7 @@ it('uses an actual published history version even when the list head is a new dr
   await ready();
   expect(api.getWorkflowVersion).toHaveBeenCalledWith('definition', 'published', expect.any(AbortSignal));
   expect(vi.mocked(api.getWorkflowVersion).mock.calls.some(([, id]) => id === 'draft')).toBe(false);
-  expect(screen.getByRole('link', { name: '查看供应商绑定候选流程' })).toHaveAttribute('href', '/console/workflows/definition/published');
+  expect(screen.queryByRole('link', { name: '查看供应商绑定候选流程' })).not.toBeInTheDocument();
   expect(writes()).toHaveLength(0);
 });
 it.each(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const)('creates a disabled independent %s binding without activating it', async severity => {

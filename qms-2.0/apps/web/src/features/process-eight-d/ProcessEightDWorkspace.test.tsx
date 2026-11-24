@@ -30,6 +30,7 @@ function intercept(handler: (path: string, init: RequestInit) => Response | Prom
   fetcher.mockImplementation((path: string, init: RequestInit = {}) => handler(path, init) ?? previous(path, init));
 }
 const defect: components['schemas']['ProcessDefectDto'] = {
+  dispositionPlan: null, dispositionProgress: null, dispositionCompletedAt: null, dispositionHistory: [],
   id: 'defect-1', organizationId: 'org-1', defectTypeCode: null, description: '台账真实划伤', defectQuantity: null, occurredAt: null, traceCode: 'BAR-01', analysisProgress: null,
   ledgerStatus: 'FOLLOWING', closedById: null, closedAt: null, responsibilityCategory: null, sourceKind: 'MANUAL', version: 6,
   materials: [], materialVerificationHistory: [], ledgerHistory: [], classificationHistory: [], componentProject: null, duplicateCount: 0, issues: [],

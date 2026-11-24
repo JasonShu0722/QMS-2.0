@@ -32,7 +32,6 @@ function mount(path: string, state?: unknown, controls = false) {
     <Route path="/password-recovery" element={<div>Recovery destination</div>} />
     <Route path="/away" element={<div>Away destination</div>} />
     <Route path="/console/*" element={<AuthenticatedRoute accountType="INTERNAL"><div>Authorized console</div></AuthenticatedRoute>} />
-    <Route path="/app/workflow-designer/*" element={<AuthenticatedRoute accountType="INTERNAL"><div>Authorized console</div></AuthenticatedRoute>} />
     <Route path="/app/supplier-quality/eight-d/:problemId" element={<AuthenticatedRoute accountType="INTERNAL"><div>Authorized console</div></AuthenticatedRoute>} />
   </Routes></MemoryRouter>;
   render(controls ? <StrictMode>{content}</StrictMode> : content);
@@ -63,8 +62,8 @@ afterEach(async () => {
 
 it.each([
   `/console/audit-log?organizationId=${id}&section=audit-log&resourceType=USER&resourceId=${id}`,
-  `/console/workflows/${id}/${id}?organizationId=${id}`,
-  `/app/workflow-designer/${id}/${id}?organizationId=${id}`,
+  `/console/workflows?organizationId=${id}`,
+  `/console/eight-d-bindings?organizationId=${id}`,
   `/app/supplier-quality/eight-d/${id}?organizationId=${id}`,
 ])('preserves %s through anonymous login, password change and MFA, then rechecks the formal route', async deepLink => {
   let signedIn = false;
@@ -83,7 +82,7 @@ it.each([
   vi.stubGlobal('fetch', fetcher);
   const localWrites = vi.spyOn(Storage.prototype, 'setItem');
   // Legacy management links reject the whole invalid target; other business paths still strip sensitive fields.
-  mount(deepLink.startsWith('/app/workflow-designer/') ? deepLink : `${deepLink}&token=do-not-retain&password=private`);
+  mount(`${deepLink}&token=do-not-retain&password=private`);
   await signIn();
   await screen.findByLabelText('新密码');
   expect(screen.getByLabelText('location')).toHaveTextContent('returnTo');
@@ -110,7 +109,7 @@ it('consumes legacy state.from when a session already exists', async () => {
 
 it.each([
   `/app/admin?organizationId=${id}&section=users&userId=${id}&unknown=value`,
-  `/app/workflow-designer/${id}/${id}?organizationId=${id}&unknown=value`,
+  `/console/workflows/${id}/${id}?organizationId=${id}`,
 ])('drops an invalid legacy login target and uses only the server landing: %s', async returnTo => {
   vi.stubGlobal('fetch', vi.fn(async (path: string) => path.endsWith('/session') ? json({ code: 'AUTH_SESSION_REQUIRED' }, 401)
     : path.endsWith('/csrf') ? json({ csrfToken: 'test-csrf' }) : json(authenticated)));

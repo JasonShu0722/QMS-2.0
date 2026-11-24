@@ -223,7 +223,7 @@ export class AiDescriptionService {
         if (!canRun(task, rule) || task.status !== 'SUGGESTED' || !task.result) ingestionError('CONCURRENCY_CONFLICT', 409);
         const application = taskApplication(task, rule);
         if (application) await this.applications.assertAvailable(tx, organizationId, application.applicationId, application.publishedVersion);
-        const applied = await this.defects.applyAiDescription(tx, actor, task.defect_id, task.input_revision, task.expected_description, task.result, traceId, true);
+        const applied = await this.defects.applyAiDescription(tx, actor, task.defect_id, task.input_revision, task.expected_description, task.result, traceId, 'adopt');
         if (applied !== 'APPLIED') ingestionError('CONCURRENCY_CONFLICT', 409);
         const appliedState = await this.defects.aiDescriptionState(tx, actor, task.defect_id);
         await this.syncSourceVersion(tx, task, appliedState.version - 1, appliedState.version);
@@ -239,7 +239,10 @@ export class AiDescriptionService {
       const response = await this.task(tx, organizationId, responseId);
       await this.audit.record({ organizationId, actorUserId: actor.id, action, resourceType: 'AiDescriptionTask', resourceId: responseId, outcome: 'SUCCESS', traceId, metadata: { ruleVersion: task.rule_version, resourceVersion: response.version } }, tx);
       return taskDto(response);
-    }, tx => assertIntegrationOrganization(tx, organizationId, true));
+    }, async tx => {
+      await assertIntegrationOrganization(tx, organizationId, true);
+      if (adopt) await this.defects.assertAiDescriptionRegistrationAccess(tx, actor);
+    });
   }
 
   private async historicalApplication(tx: AdminTransaction, task: TaskRow) {
@@ -321,10 +324,21 @@ export class AiDescriptionService {
       } catch (error) { errorCode = failureCode(error); }
       await this.prisma.$transaction(async tx => {
         await readOrganizationRuntime(tx, task.organization_id, true);
+        let suggestionOnly = false;
+        let registrationFailure: { cause: unknown } | undefined;
+        if (task.manual_generation && text !== null) {
+          try {
+            await this.defects.assertAiDescriptionRegistrationAccess(tx, task.actor_snapshot);
+          } catch (error) {
+            if (failureCode(error) === 'FEATURE_PERMISSION_DENIED') suggestionOnly = true;
+            else registrationFailure = { cause: error };
+          }
+        }
         const [current] = await tx.$queryRaw<TaskRow[]>`SELECT * FROM integration_ai_description_tasks WHERE organization_id=${task.organization_id}::uuid AND id=${task.id}::uuid FOR UPDATE`;
         if (!current || current.claim_token !== task.claim_token || current.status !== 'PROCESSING') return;
         let status: string = 'FAILED';
         try {
+          if (registrationFailure) throw registrationFailure.cause;
           await this.access(tx, task.actor_snapshot);
           const state = await this.defects.aiDescriptionState(tx, task.actor_snapshot, task.defect_id, true);
           const rule = await this.currentRule(tx, task);
@@ -332,7 +346,7 @@ export class AiDescriptionService {
           else if (text !== null) {
             const application = taskApplication(task, rule);
             if (application) await this.applications.assertAvailable(tx, task.organization_id, application.applicationId, application.publishedVersion, applicationAvailability);
-            status = await this.defects.applyAiDescription(tx, task.actor_snapshot, task.defect_id, task.input_revision, task.expected_description, text, randomUUID());
+            status = await this.defects.applyAiDescription(tx, task.actor_snapshot, task.defect_id, task.input_revision, task.expected_description, text, randomUUID(), suggestionOnly ? 'suggestion' : 'automatic');
             if (status === 'APPLIED') {
               const applied = await this.defects.aiDescriptionState(tx, task.actor_snapshot, task.defect_id);
               await this.syncSourceVersion(tx, task, applied.version - 1, applied.version);

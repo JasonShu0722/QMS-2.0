@@ -2,7 +2,6 @@ import type { Location } from 'react-router-dom';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const uuidPattern = new RegExp(`^${uuid}$`, 'i');
-const workflowDetail = new RegExp(`^/app/workflow-designer/(${uuid})/(${uuid})$`, 'i');
 const sections: Record<string, string> = {
   users: '/console/users', roles: '/console/organizations', organizations: '/console/organizations',
   configuration: '/console/configuration', 'audit-log': '/console/audit-log', failures: '/console/outbox',
@@ -21,12 +20,6 @@ export function legacyConsoleTarget({ pathname, search, hash }: Pick<Location, '
   const organizationId = query.get('organizationId');
   if (organizationId !== null && !uuidPattern.test(organizationId)) return undefined;
   if (organizationId !== null) query.set('organizationId', organizationId.toLowerCase());
-  const detail = workflowDetail.exec(pathname);
-  if (pathname === '/app/workflow-designer' || detail) {
-    if ([...query.keys()].some(key => key !== 'organizationId')) return undefined;
-    const path = detail ? `/console/workflows/${detail[1]}/${detail[2]}` : '/console/workflows';
-    return path + (query.size ? `?${query}` : '');
-  }
   if (pathname !== '/app/admin') return undefined;
   if (!query.size) return '/console';
   const keys = ['organizationId', 'section', 'userId', 'resourceType', 'resourceId'];

@@ -873,6 +873,12 @@ model ProcessDefectType {
   @@map("process_defect_types")
 }
 
+enum ProcessDefectDispositionPlan {
+  REWORK
+  SCRAP
+  CONCESSION
+}
+
 model ProcessDefect {
   id                     String    @id @default(uuid()) @db.Uuid
   organizationId         String    @map("organization_id") @db.Uuid
@@ -917,6 +923,9 @@ model ProcessDefect {
   responsibilityCategory String?   @map("responsibility_category") @db.VarChar(32)
   traceCode              String?   @map("trace_code") @db.VarChar(200)
   analysisProgress       String?   @map("analysis_progress") @db.Text
+  dispositionPlan        ProcessDefectDispositionPlan? @map("disposition_plan")
+  dispositionProgress    String?   @map("disposition_progress") @db.Text
+  dispositionCompletedAt DateTime? @map("disposition_completed_at") @db.Timestamptz(3)
   ledgerStatus           String    @default("FOLLOWING") @map("ledger_status") @db.VarChar(16)
   closedById             String?   @map("closed_by_id") @db.Uuid
   closedAt               DateTime? @map("closed_at") @db.Timestamptz(3)
@@ -931,6 +940,7 @@ model ProcessDefect {
   archivedAt             DateTime? @map("archived_at") @db.Timestamptz(3)
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  dispositionHistory     ProcessDefectDispositionHistory[]
 
   @@unique([organizationId, externalSourceSystem, externalRecordKey], map: "process_defects_external_key")
   @@unique([organizationId, sourceReceiptId, sourceRowIndex], map: "process_defects_receipt_row_key")
@@ -941,6 +951,22 @@ model ProcessDefect {
   @@index([organizationId, operationCode, traceCode])
   @@index([organizationId, ledgerStatus, createdAt])
   @@map("process_defects")
+}
+
+model ProcessDefectDispositionHistory {
+  id                     String    @id @default(uuid()) @db.Uuid
+  organizationId         String    @map("organization_id") @db.Uuid
+  defectId               String    @map("defect_id") @db.Uuid
+  dispositionPlan        ProcessDefectDispositionPlan? @map("disposition_plan")
+  dispositionProgress    String?   @map("disposition_progress") @db.Text
+  dispositionCompletedAt DateTime? @map("disposition_completed_at") @db.Timestamptz(3)
+  actorUserId            String    @map("actor_user_id") @db.Uuid
+  defectVersion          Int       @map("defect_version")
+  recordedAt             DateTime  @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  defect                 ProcessDefect @relation(fields: [organizationId, defectId], references: [organizationId, id], onDelete: Cascade, onUpdate: NoAction, map: "process_defect_disposition_history_defect_fkey")
+
+  @@unique([organizationId, defectId, defectVersion], map: "process_defect_disposition_history_version_key")
+  @@map("process_defect_disposition_history")
 }
 
 model ProcessDefectIngestionAudit {

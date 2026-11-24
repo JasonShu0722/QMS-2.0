@@ -5111,6 +5111,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/process-quality/defects/bulk-maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["ProcessQualityController_bulkMaintenance"];
+        trace?: never;
+    };
     "/api/v1/process-quality/defects/classification": {
         parameters: {
             query?: never;
@@ -5314,6 +5330,38 @@ export interface paths {
         put: operations["ProcessOperationSectorController_update"];
         post?: never;
         delete: operations["ProcessOperationSectorController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/ledger-workflow-configuration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessLedgerWorkflowConfigurationController_get"];
+        put: operations["ProcessLedgerWorkflowConfigurationController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/ledger-workflow-configuration/capabilities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessLedgerWorkflowConfigurationController_capabilities"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -14570,6 +14618,20 @@ export interface components {
             yieldRate?: number | null;
             firstPassRate?: number | null;
         };
+        ProcessDefectDispositionHistoryDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string|null} */
+            dispositionPlan: "REWORK" | "SCRAP" | "CONCESSION" | null;
+            dispositionProgress: string | null;
+            /** Format: date-time */
+            dispositionCompletedAt: string | null;
+            /** Format: uuid */
+            actorUserId: string;
+            defectVersion: number;
+            /** Format: date-time */
+            recordedAt: string;
+        };
         ProcessDefectEvidenceDto: {
             /** Format: uuid */
             id: string;
@@ -14735,6 +14797,12 @@ export interface components {
             productCode?: string | null;
             traceCode: string | null;
             analysisProgress: string | null;
+            /** @enum {string|null} */
+            dispositionPlan: "REWORK" | "SCRAP" | "CONCESSION" | null;
+            dispositionProgress: string | null;
+            /** Format: date-time */
+            dispositionCompletedAt: string | null;
+            dispositionHistory: components["schemas"]["ProcessDefectDispositionHistoryDto"][];
             /** @enum {string} */
             ledgerStatus: "FOLLOWING" | "CLOSED";
             /** Format: uuid */
@@ -15015,6 +15083,64 @@ export interface components {
             deletedIds: string[];
             count: number;
         };
+        ProcessDefectMaterialReviewDto: {
+            /** Format: uuid */
+            materialId: string;
+            /** @enum {string} */
+            verification: "CONFIRMED_DEFECT" | "NOT_MATERIAL" | "NEGOTIATED" | "RETURN_ANALYSIS";
+            verificationNotes?: string | null;
+        };
+        ProcessDefectMaintenanceFieldsDto: {
+            /** @description ANALYSIS */
+            analysisProgress?: string | null;
+            /**
+             * @description RESPONSIBILITY
+             * @enum {string|null}
+             */
+            responsibilityCategory?: "MATERIAL" | "OPERATION" | "EQUIPMENT" | "PROCESS" | "DESIGN" | "FALSE_POSITIVE" | null;
+            /** @description RESPONSIBILITY. Omit id to add a line. */
+            materials?: components["schemas"]["ProcessDefectMaterialInputDto"][];
+            /** @description RESPONSIBILITY. Explicit removal on a single record. */
+            removedMaterialIds?: string[];
+            /**
+             * @description DISPOSITION
+             * @enum {string|null}
+             */
+            dispositionPlan?: "REWORK" | "SCRAP" | "CONCESSION" | null;
+            /** @description DISPOSITION */
+            dispositionProgress?: string | null;
+            /**
+             * Format: date-time
+             * @description DISPOSITION. Timestamp with time zone.
+             */
+            dispositionCompletedAt?: string | null;
+            /**
+             * @description CLOSURE. Required for this board.
+             * @enum {string}
+             */
+            status?: "CLOSED" | "FOLLOWING";
+            /** @description CLOSURE. Required and nonblank when reopening. */
+            reason?: string | null;
+            /** @description MATERIAL_REVIEW. Required for this board. */
+            reviews?: components["schemas"]["ProcessDefectMaterialReviewDto"][];
+        };
+        ProcessDefectMaintenanceSourceDto: {
+            /** Format: uuid */
+            defectId: string;
+            expectedVersion: number;
+            /** @description Supply fields from the selected board only. Omitted fields retain their current value. */
+            fields: components["schemas"]["ProcessDefectMaintenanceFieldsDto"];
+        };
+        BulkMaintainProcessDefectsDto: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            board: "ANALYSIS" | "RESPONSIBILITY" | "DISPOSITION" | "CLOSURE" | "MATERIAL_REVIEW";
+            sources: components["schemas"]["ProcessDefectMaintenanceSourceDto"][];
+        };
+        BulkMaintainProcessDefectsResultDto: {
+            items: components["schemas"]["ProcessDefectDto"][];
+        };
         ClassifyProcessDefectsDto: {
             /** Format: uuid */
             organizationId?: string;
@@ -15169,6 +15295,28 @@ export interface components {
         DeletedProcessOperationSectorDto: {
             /** Format: uuid */
             id: string;
+        };
+        ProcessLedgerBoardPositionsDto: {
+            /** @enum {string} */
+            board: "REGISTRATION" | "ANALYSIS" | "RESPONSIBILITY" | "DISPOSITION" | "CLOSURE";
+            positionIds: string[];
+        };
+        ProcessLedgerPositionDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        ProcessLedgerWorkflowConfigurationDto: {
+            version: number;
+            boards: components["schemas"]["ProcessLedgerBoardPositionsDto"][];
+            positions: components["schemas"]["ProcessLedgerPositionDto"][];
+        };
+        UpdateProcessLedgerWorkflowConfigurationDto: {
+            expectedVersion: number;
+            boards: components["schemas"]["ProcessLedgerBoardPositionsDto"][];
+        };
+        ProcessLedgerWorkflowCapabilitiesDto: {
+            boards: ("REGISTRATION" | "ANALYSIS" | "RESPONSIBILITY" | "DISPOSITION" | "CLOSURE" | "MATERIAL_REVIEW")[];
         };
         ProcessEightDBindingDto: {
             /** Format: uuid */
@@ -31469,6 +31617,41 @@ export interface operations {
             };
         };
     };
+    ProcessQualityController_bulkMaintenance: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkMaintainProcessDefectsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMaintainProcessDefectsResultDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     ProcessQualityController_classifyMany: {
         parameters: {
             query?: never;
@@ -32019,6 +32202,97 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DeletedProcessOperationSectorDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessLedgerWorkflowConfigurationController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessLedgerWorkflowConfigurationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessLedgerWorkflowConfigurationController_update: {
+        parameters: {
+            query?: never;
+            header: {
+                "idempotency-key": string;
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProcessLedgerWorkflowConfigurationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessLedgerWorkflowConfigurationDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessLedgerWorkflowConfigurationController_capabilities: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessLedgerWorkflowCapabilitiesDto"];
                 };
             };
             default: {

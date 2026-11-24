@@ -182,7 +182,7 @@ API只保存有界静态模板/分钟/耗时桶，不存原URL/query/body/cookie
 
 负责人已确认同一QMS共用登录，从个人账号入口新窗口进入独立管理导航和首页，并以shadcn-admin形成区别于业务端的视觉语言。权威范围见[整体设计](../../docs/superpowers/specs/2026-10-29-qms-management-console-design.md)及[两个PR总计划](../../docs/superpowers/plans/2026-10-29-qms-management-console.md)。
 
-本地候选已接入 `/console` 真首页、独立中性主题及分组导航，仍使用 React、React Router、Ant Design、lucide 和原请求/身份机制；业务端及供应商门户不换主题。个人账号按钮使用安全的新窗口链接，管理页不创建业务 WorkTabs。原 `/app/admin` 和 `/app/workflow-designer` 在业务布局挂载前进入严格兼容定位；非法参数不被清洗成另一个合法对象，合法 UUID 表示规范化不改变对象身份。
+控制台使用 `/console` 首页、独立中性主题、分组导航和现有请求及身份机制。个人账号按钮使用安全的新窗口链接，管理页不创建业务 WorkTabs。原 `/app/admin` 在业务布局挂载前进行严格兼容定位。非法参数显示错误，合法 UUID 规范化保留同一对象身份。流程管理使用 `/console/workflows` 配置业务板块岗位，既有 8D 绑定使用 `/console/eight-d-bindings`。旧流程编辑器及流程版本详情地址显示管理页面不存在。
 
 菜单及页面同时使用真实 context 的模块、权限、`TARGET` / `SESSION_HOME` 和资源覆盖范围。流程定义、版本、复制、校验、发布、三域与供应商绑定复用原组件，仍固定真实会话组织；业务待办、审批和签章不迁入管理配置。普通角色只读权限保留受限定义入口，不为完整来源视图隐式补授结构或账号读取权限。
 
