@@ -103,14 +103,21 @@ function pathValue(row: unknown, path: string): unknown {
   return value;
 }
 
-function processTimestamp(value: string, timeZone: string): string | undefined {
-  if (!/^\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(?:\.\d{1,3})?(?:Z|[+-]\d\d:\d\d)?$/.test(value) || !isISO8601(value.replace(' ', 'T'), { strict: true })) return undefined;
-  if (/(?:Z|[+-]\d\d:\d\d)$/.test(value)) return Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : undefined;
-  const normalized = value.replace(' ', 'T'), calendar = Date.parse(`${normalized}Z`);
+function ingestionTimestamp(value: string, timeZone?: string): string | undefined {
+  const input = timeZone === undefined ? value : value.replace(' ', 'T');
+  const match = /^(\d{4}-\d\d-\d\dT)(\d{1,2})(:\d\d:\d\d(?:\.\d{1,3})?)(Z|[+-]\d\d:\d\d)?$/.exec(input);
+  if (!match) return undefined;
+  const [, date, hour, time, offset] = match;
+  const normalized = `${date}${hour!.padStart(2, '0')}${time}${offset ?? ''}`;
+  if (!isISO8601(normalized, { strict: true })) return undefined;
+  if (offset) return Number.isFinite(Date.parse(normalized)) ? new Date(normalized).toISOString() : undefined;
+  if (timeZone === undefined) return undefined;
+  const calendar = Date.parse(`${normalized}Z`);
+  const milliseconds = new Date(calendar).getUTCMilliseconds();
   const formatter = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
   const wallTime = (instant: number) => {
     const parts = Object.fromEntries(formatter.formatToParts(instant).map(part => [part.type, part.value]));
-    return Date.parse(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}Z`) + calendar % 1000;
+    return Date.parse(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}Z`) + milliseconds;
   };
   const offsets = new Set([-86400000, 0, 86400000].map(delta => wallTime(calendar + delta) - calendar - delta));
   const candidates = [...offsets].map(offset => calendar - offset).filter(instant => wallTime(instant) === calendar);
@@ -135,7 +142,7 @@ function evaluateProcessDefect(rule: IngestionRule, row: unknown): { matched: tr
     if (!text) continue;
     if (text.length > maximum || /[\u0000\uD800-\uDFFF]/u.test(text)) { issues.push(`${field}:INVALID`); continue; }
     if (field === 'occurredAt') {
-      const timestamp = processTimestamp(text, rule.sourceTimezone ?? 'Asia/Shanghai');
+      const timestamp = ingestionTimestamp(text, rule.sourceTimezone ?? 'Asia/Shanghai');
       if (timestamp) fields.occurredAt = timestamp; else issues.push('occurredAt:INVALID');
     } else fields[field] = text;
   }
@@ -156,7 +163,7 @@ function evaluateProcessDefect(rule: IngestionRule, row: unknown): { matched: tr
   let sourceUpdatedAt: string | null = null;
   if (rule.sourceUpdatedAtField) {
     const value = pathValue(row, rule.sourceUpdatedAtField);
-    sourceUpdatedAt = typeof value === 'string' ? processTimestamp(value.trim(), rule.sourceTimezone ?? 'Asia/Shanghai') ?? null : null;
+    sourceUpdatedAt = typeof value === 'string' ? ingestionTimestamp(value.trim(), rule.sourceTimezone ?? 'Asia/Shanghai') ?? null : null;
     if (!sourceUpdatedAt) issues.push('sourceObservedAt:INVALID');
     else fields.sourceObservedAt = sourceUpdatedAt;
   }
@@ -192,8 +199,9 @@ export function evaluateIngestionRow(rule: IngestionRule, row: unknown): { match
   let sourceUpdatedAt: string | null = null;
   if (rule.sourceUpdatedAtField) {
     const value = pathValue(row, rule.sourceUpdatedAtField);
-    if (typeof value !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,3})?(?:Z|[+-]\d\d:\d\d)$/.test(value) || !isISO8601(value, { strict: true }) || !Number.isFinite(Date.parse(value))) ingestionError('INGESTION_SOURCE_VERSION_INVALID', 400, rule.sourceUpdatedAtField);
-    sourceUpdatedAt = new Date(value).toISOString();
+    const timestamp = typeof value === 'string' ? ingestionTimestamp(value) : undefined;
+    if (!timestamp) ingestionError('INGESTION_SOURCE_VERSION_INVALID', 400, rule.sourceUpdatedAtField);
+    sourceUpdatedAt = timestamp;
   }
   return { matched: true, fields: fields as IngestionFields, sourceUpdatedAt };
 }

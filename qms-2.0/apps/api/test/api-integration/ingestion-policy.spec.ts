@@ -54,6 +54,37 @@ describe('API ingestion rule policy', () => {
   it('maps process facts without invented master-data keys and composes scalar description in order', () => {
     expect(evaluateIngestionRow(normalizeIngestionRule(processRule), { id: '001', time: '2026-11-16T08:30:00', product: '00002', trace: 'T', test: '失败', zero: 0, flag: false, empty: null })).toMatchObject({ matched: true, fields: { externalRecordKey: '001', occurredAt: '2026-11-16T00:30:00.000Z', productCode: '00002', traceCode: 'T', description: '测试：失败\n0\n结果：false' }, sourceUpdatedAt: null });
   });
+  it('pads a single-digit IMS hour before applying the configured source timezone', () => {
+    const config = normalizeIngestionRule({ ...processRule, mapping: { occurredAt: 'SYS_CRT_DATE' } });
+    expect(evaluateIngestionRow(config, { SYS_CRT_DATE: '2026-11-24 8:01:36' })).toEqual({
+      matched: true, fields: { occurredAt: '2026-11-24T00:01:36.000Z', issues: [] }, sourceUpdatedAt: null,
+    });
+  });
+  it('pads both process timestamp hours and honors an explicit offset', () => {
+    const config = normalizeIngestionRule({ ...processRule, sourceUpdatedAtField: 'observedAt' });
+    const timestamp = '2026-11-24 0:01:36.123+05:45';
+    expect(evaluateIngestionRow(config, { time: timestamp, observedAt: timestamp })).toEqual({
+      matched: true, fields: { occurredAt: '2026-11-23T18:16:36.123Z', sourceObservedAt: '2026-11-23T18:16:36.123Z', issues: [] }, sourceUpdatedAt: '2026-11-23T18:16:36.123Z',
+    });
+  });
+  it.each([
+    [undefined, '2026-11-24 8:01:36', '2026-11-24T00:01:36.000Z'],
+    ['Asia/Kathmandu', '2026-11-24T8:01:36.1', '2026-11-24T02:16:36.100Z'],
+    ['Asia/Shanghai', '1969-12-31 23:59:59.123', '1969-12-31T15:59:59.123Z'],
+  ])('resolves both process timestamps in source timezone %s for %s', (sourceTimezone, timestamp, expected) => {
+    const config = normalizeIngestionRule({ ...processRule, sourceTimezone, sourceUpdatedAtField: 'observedAt' });
+    expect(evaluateIngestionRow(config, { time: timestamp, observedAt: timestamp })).toEqual({
+      matched: true, fields: { occurredAt: expected, sourceObservedAt: expected, issues: [] }, sourceUpdatedAt: expected,
+    });
+  });
+  it.each(['2026-02-30 8:01:36', '2026-13-24T8:01:36Z', '2026-11-24T8:60:36', '2026-11-24T8:01:60Z', '2026-11-24T8:1:36', '2026-11-24T25:01:36', '2026-11-24T8:01:36.1234Z', '8:01:36'])(
+    'flags invalid process timestamps %s for completion', time => {
+      const config = normalizeIngestionRule({ ...processRule, sourceUpdatedAtField: 'observedAt' });
+      expect(evaluateIngestionRow(config, { time, observedAt: time })).toEqual({
+        matched: true, fields: { issues: ['occurredAt:INVALID', 'sourceObservedAt:INVALID'] }, sourceUpdatedAt: null,
+      });
+    },
+  );
   it('keeps process rows bookable when invalid or missing facts need completion', () => {
     const result = evaluateIngestionRow(normalizeIngestionRule(processRule), { time: '2026-02-30T00:00:00', product: 2, test: { secret: 'raw' }, zero: null, flag: null });
     expect(result).toMatchObject({ matched: true, fields: { issues: expect.arrayContaining(['occurredAt:INVALID', 'productCode:TYPE', 'description:TYPE']) } });
@@ -126,16 +157,25 @@ describe('API ingestion rule policy', () => {
     expect(() => evaluateIngestionRow(normalized, { kind: 'supplier', code: '001', name: 'Name', updatedAt: 'yesterday' })).toThrow('INGESTION_SOURCE_VERSION_INVALID');
     expect(evaluateIngestionRow(normalized, { kind: 'supplier', code: '001', name: 'Name', updatedAt: '2026-11-14T00:00:00Z' })).toMatchObject({ sourceUpdatedAt: '2026-11-14T00:00:00.000Z' });
   });
+  it.each(['SUPPLIER', 'CUSTOMER', 'MATERIAL', 'COMPONENT', 'OPERATION'])('pads source version hours for %s with a T separator and explicit timezone', target => {
+    const mapping = target === 'OPERATION' ? { operationCode: 'code', operationName: 'name' } : { code: 'code', name: 'name' };
+    const normalized = normalizeIngestionRule({ ...rule, target, conditions: [], mapping, updateFields: [], sourceUpdatedAtField: 'updatedAt' });
+    const row = { code: '001', name: 'Name' };
+    expect(evaluateIngestionRow(normalized, { ...row, updatedAt: '2026-11-24T8:01:36.123+08:00' })).toMatchObject({ sourceUpdatedAt: '2026-11-24T00:01:36.123Z' });
+    for (const updatedAt of ['2026-11-24 8:01:36Z', '2026-11-24T8:01:36']) {
+      expect(() => evaluateIngestionRow(normalized, { ...row, updatedAt })).toThrow('INGESTION_SOURCE_VERSION_INVALID');
+    }
+  });
   it('rejects nonexistent calendar dates before they can become source watermarks', () => {
     const normalized = normalizeIngestionRule({ ...rule, sourceUpdatedAtField: 'updatedAt' });
-    for (const updatedAt of ['2026-02-30T00:00:00Z', '2026-02-29T12:30:00+08:00', '2026-04-31T23:59:59.123Z']) {
+    for (const updatedAt of ['2026-02-30T00:00:00Z', '2026-02-29T12:30:00+08:00', '2026-04-31T23:59:59.123Z', '2026-13-24T8:01:36Z', '2026-02-30T8:01:36Z']) {
       expect(() => evaluateIngestionRow(normalized, { kind: 'supplier', code: '001', name: 'Name', updatedAt })).toThrow('INGESTION_SOURCE_VERSION_INVALID');
     }
   });
   it('accepts a real leap day while retaining timezone and millisecond precision limits', () => {
     const normalized = normalizeIngestionRule({ ...rule, sourceUpdatedAtField: 'updatedAt' });
     expect(evaluateIngestionRow(normalized, { kind: 'supplier', code: '001', name: 'Name', updatedAt: '2028-02-29T12:30:00.123+08:00' })).toMatchObject({ sourceUpdatedAt: '2028-02-29T04:30:00.123Z' });
-    for (const updatedAt of ['2028-02-29T12:30:00', '2028-02-29T12:30:00.1234Z']) {
+    for (const updatedAt of ['2028-02-29T12:30:00', '2028-02-29T12:30:00.1234Z', '2028-02-29T8:01:36.1234Z', '2028-02-29T8:60:36Z', '2028-02-29T8:01:60Z']) {
       expect(() => evaluateIngestionRow(normalized, { kind: 'supplier', code: '001', name: 'Name', updatedAt })).toThrow('INGESTION_SOURCE_VERSION_INVALID');
     }
   });
