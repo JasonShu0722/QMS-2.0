@@ -313,7 +313,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
   it('books every process object with actual ledger links, preserves anonymous-row identity and exposes completion separately from failure', async () => {
     const item = await fixture();
     const configuration = await service.saveRule(item.actor, { name: '制程来源', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { factoryCode: 'factory', externalRecordKey: 'id', occurredAt: 'time', productCode: 'product', traceCode: 'trace', operationName: 'operation' }, descriptionComposition: { fields: [{ path: 'description' }, { path: 'result', label: '结果：' }], separator: '\n' }, sourceTimezone: 'Asia/Shanghai', mode: 'UPDATE', updateFields: ['description', 'productCode', 'occurredAt', 'traceCode', 'operationName'] }, trace(), key());
-    const response = await machine(item, [{ id: '0001', factory: 1, time: '2026-11-16T08:30:00', product: '00002', trace: 'trace', operation: '目检', description: '不良', result: false }, { product: '00003', result: 0 }, { factory: '01', time: 'bad', product: 4, description: { secret: 'raw' } }]);
+    const response = await machine(item, [{ id: '0001', factory: 1, time: '2026-11-24 8:01:36', product: '00002', trace: 'trace', operation: '目检', description: '不良', result: false }, { product: '00003', result: 0 }, { factory: '01', time: 'bad', product: 4, description: { secret: 'raw' } }]);
     expect(response.status).toBe(200);
     await worker.processDue(20);
     const job = (await service.listJobs(item.actor, {})).items[0]!;
@@ -324,7 +324,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect(items.filter(entry => entry.pendingConfiguration)).toHaveLength(3);
     for (const entry of items) expect(entry).toMatchObject({ status: 'INSERTED', targetId: expect.any(String), defectQuantity: 1 });
     const first = await prisma.processDefect.findUniqueOrThrow({ where: { id: items[0]!.targetId! } });
-    expect(first).toMatchObject({ factoryCode: 'FACTORY_1', productCode: '00002', defectQuantity: 1, sourceKind: 'IMS', description: '不良\n结果：false' });
+    expect(first).toMatchObject({ factoryCode: 'FACTORY_1', productCode: '00002', defectQuantity: 1, sourceKind: 'IMS', description: '不良\n结果：false', occurredAt: new Date('2026-11-24T00:01:36.000Z'), shift: 'NIGHT' });
     expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: items[1]!.targetId! } })).toMatchObject({ factoryCode: null, registrationIssues: expect.arrayContaining(['factory:EMPTY']) });
     expect(await prisma.processDefect.findUniqueOrThrow({ where: { id: items[2]!.targetId! } })).toMatchObject({ factoryCode: null, registrationIssues: expect.arrayContaining(['factory:INVALID']) });
     expect(await service.getItem(item.actor, items[2]!.id, trace())).toMatchObject({ fields: { factoryCode: null }, registrationIssues: expect.arrayContaining(['factory:INVALID']) });
@@ -463,7 +463,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     await service.saveRule(item.actor, { name: '来源观察事实', endpointId: item.endpointId, target: 'PROCESS_DEFECT', enabled: true, match: 'ALL', conditions: [], mapping: { factoryCode: 'factory', externalRecordKey: 'id', description: 'description' }, mode, updateFields: ['description'], sourceUpdatedAtField: 'updated' }, trace(), key());
     await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-01-01T00:00:00Z' }]); await worker.processDue(10);
     const original = await prisma.processDefect.findFirstOrThrow({ where: { organizationId: item.organizationId } });
-    await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-02-01T00:00:00Z' }]); await worker.processDue(10);
+    await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-02-01 8:00:00' }]); await worker.processDue(10);
     const latestJob = (await service.listJobs(item.actor, {})).items[0]!;
     const processed = (await service.listItems(item.actor, latestJob.id, {})).items[0]!;
     expect(processed.status).toBe(mode === 'INSERT_ONLY' ? 'EXISTING_SKIPPED' : mode === 'CONFIRM' ? 'AWAITING_CONFIRMATION' : 'UPDATED');
@@ -484,7 +484,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     expect(watermark[0]).toEqual({ version: updated.version, observed: updated.sourceObservedAt });
     await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-02-01T00:00:00Z' }]); await worker.processDue(10);
     expect((await prisma.processDefect.findUniqueOrThrow({ where: { id: original.id } })).version).toBe(updated.version);
-    await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-01-15T00:00:00Z' }]); await worker.processDue(10);
+    await machine(item, [{ id: 'observed', description: '原始事实', updated: '2026-01-15 8:00:00' }]); await worker.processDue(10);
     const oldJob = (await service.listJobs(item.actor, {})).items[0]!;
     const oldItem = (await service.listItems(item.actor, oldJob.id, {})).items[0]!;
     expect(oldItem.status).toBe('AWAITING_CONFIRMATION');
@@ -1748,7 +1748,7 @@ describe('durable API ingestion on real PostgreSQL and Worker', () => {
     const item = await fixture(), initial = await rule(item, 'MATERIAL', 'CONFIRM');
     await service.saveRule(item.actor, { ...initial, expectedVersion: 1, sourceUpdatedAtField: 'sourceTime' }, trace(), key(), initial.id);
     await machine(item, [{ code: 'duplicate-time', name: 'A', sourceTime: '2026-01-01T00:00:00Z' }]); await worker.processDue(10);
-    await machine(item, [{ code: 'duplicate-time', name: 'B', sourceTime: '2026-02-01T00:00:00Z' }]); await worker.processDue(10);
+    await machine(item, [{ code: 'duplicate-time', name: 'B', sourceTime: '2026-02-01T8:00:00+08:00' }]); await worker.processDue(10);
     const originalJob = (await service.listJobs(item.actor, {})).items.find(job => job.awaitingConfirmation === 1)!;
     await machine(item, [{ code: 'duplicate-time', name: 'B', sourceTime: '2026-03-01T00:00:00Z' }]); await worker.processDue(10);
     const pending = (await service.listItems(item.actor, originalJob.id, {})).items[0]!;
