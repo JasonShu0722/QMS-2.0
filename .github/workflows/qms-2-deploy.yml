@@ -46,6 +46,8 @@ jobs:
           DEPLOY_SSH_KEY: ${{ secrets.QMS_DEPLOY_SSH_KEY }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.QMS_DEPLOY_KNOWN_HOSTS }}
           DEPLOY_SHA: ${{ github.event.workflow_run.head_sha }}
+          CLEANUP_APPLY: ${{ vars.QMS_DEPLOY_CLEANUP_APPLY }}
+          DEDICATED_BUILDER: ${{ vars.QMS_DEDICATED_BUILDER }}
         run: |
           set -euo pipefail
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -56,7 +58,11 @@ jobs:
           trap 'rm -f "$key" "$known_hosts"' EXIT
           printf '%s\n' "$DEPLOY_SSH_KEY" > "$key"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$known_hosts"
+          cleanup_dry_run=1
+          dedicated_builder=0
+          if [[ "$CLEANUP_APPLY" == 1 ]]; then cleanup_dry_run=0; fi
+          if [[ "$DEDICATED_BUILDER" == 1 ]]; then dedicated_builder=1; fi
           ssh -p 22 -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$known_hosts" \
-            "root@$DEPLOY_HOST" "bash -s -- $DEPLOY_SHA" \
+            "root@$DEPLOY_HOST" "DRY_RUN=$cleanup_dry_run QMS_DEDICATED_BUILDER=$dedicated_builder bash -s -- $DEPLOY_SHA" \
             < qms-2.0/deployment/deploy.sh

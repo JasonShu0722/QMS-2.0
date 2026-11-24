@@ -246,7 +246,7 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "900c1dacfd454a852a5fa4edd75a37c175139c757157d7eaa9058786bfbbb132"
+            "sha256": "c3da67cdc45deb58838c5bc76bccf521213d23752a08218b1fb91061de2a8597"
           },
           {
             "path": "docs/OPERABILITY-READINESS.md",
@@ -1036,7 +1036,7 @@
         "sources": [
           {
             "path": "governance/maintenance-items.json",
-            "sha256": "c22d41e1b7e4391127dd0936e28582464d5db2b454b87eec9f88b398bb1e946e"
+            "sha256": "bec1921b3120b042301e1eecd84e1ddd79e42f62a9cf46662aa339b87805f98b"
           },
           {
             "path": "governance/operability-alerts.json",
@@ -1180,7 +1180,7 @@
         "sources": [
           {
             "path": "docs/OPERATIONS-RUNBOOK.md",
-            "sha256": "900c1dacfd454a852a5fa4edd75a37c175139c757157d7eaa9058786bfbbb132"
+            "sha256": "c3da67cdc45deb58838c5bc76bccf521213d23752a08218b1fb91061de2a8597"
           },
           {
             "path": "docs/DATA-PROTECTION.md",
