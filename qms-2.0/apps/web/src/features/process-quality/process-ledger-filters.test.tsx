@@ -100,22 +100,25 @@ it('upgrades a saved order, keeps an explicitly hidden factory after reload, and
   const order = ['select', 'project', 'shift', 'occurredAt', 'productSubcategory', 'description', 'actions'];
   localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { order, visible: order.filter(key => key !== 'occurredAt'), widths: { description: 390 } } }));
   const mounted = mount();
-  expect(screen.getByRole('columnheader', { name: '工厂' }).nextElementSibling).toBe(screen.getByRole('columnheader', { name: '班次' }));
-  expect(screen.getByRole('columnheader', { name: '产品类型' }).nextElementSibling).toBe(screen.getByRole('columnheader', { name: '细分类型' }));
-  expect(screen.queryByRole('columnheader', { name: '发生时间' })).not.toBeInTheDocument();
-  expect(within(screen.getByRole('columnheader', { name: '不良描述' })).getByRole('separator')).toHaveAttribute('aria-valuenow', '390');
+  const savedHeaders = within(mounted.container.querySelector('thead')!);
+  const headerOptions = { selector: 'th' };
+  expect(savedHeaders.getByLabelText('工厂', headerOptions).nextElementSibling).toBe(savedHeaders.getByLabelText('班次', headerOptions));
+  expect(savedHeaders.getByLabelText('产品类型', headerOptions).nextElementSibling).toBe(savedHeaders.getByLabelText('细分类型', headerOptions));
+  expect(savedHeaders.queryByLabelText('发生时间', headerOptions)).not.toBeInTheDocument();
+  expect(within(savedHeaders.getByLabelText('不良描述', headerOptions)).getByRole('separator')).toHaveAttribute('aria-valuenow', '390');
   fireEvent.click(screen.getByRole('button', { name: '列设置' }));
   const restore = await screen.findByText('恢复录单默认列', { selector: 'button span' });
   const settings = within(restore.closest<HTMLElement>('.qms-ledger__settings')!);
   fireEvent.click(settings.getByLabelText('显示 工厂'));
   mounted.unmount();
-  mount();
-  expect(screen.queryByRole('columnheader', { name: '工厂' })).not.toBeInTheDocument();
+  const { container } = mount();
+  const restoredHeaders = within(container.querySelector('thead')!);
+  expect(restoredHeaders.queryByLabelText('工厂', headerOptions)).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '列设置' }));
   fireEvent.click(await screen.findByText('恢复录单默认列', { selector: 'button span' }));
-  const factory = screen.getByRole('columnheader', { name: '工厂' });
-  expect(factory.previousElementSibling).toBe(screen.getByRole('columnheader', { name: '发生时间' }));
-  expect(factory.nextElementSibling).toBe(screen.getByRole('columnheader', { name: '班次' }));
+  const factory = restoredHeaders.getByLabelText('工厂', headerOptions);
+  expect(factory.previousElementSibling).toBe(restoredHeaders.getByLabelText('发生时间', headerOptions));
+  expect(factory.nextElementSibling).toBe(restoredHeaders.getByLabelText('班次', headerOptions));
 }, 30000);
 
 it('displays the mapped product category even without a linked project and shows missing categories as unconfirmed', async () => {
@@ -130,6 +133,69 @@ it('displays the mapped product category even without a linked project and shows
     const selection = await screen.findByLabelText(`选择制程不良 ${record.description}`);
     expect(selection.closest('tr')?.cells[categoryIndex]).toHaveTextContent(label);
     expect(selection.closest('tr')?.cells[categoryIndex + 1]).toHaveTextContent(record.productSubcategory ?? /^\/$/);
+  }
+});
+
+it('applies the product category text filter from the header and resets pagination', async () => {
+  localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { visible: ['productCategory'] } }));
+  const read = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation((path, init) => path.includes('/defects?')
+    ? Promise.resolve({ items: [defect], total: 32, page: 1, pageSize: 20 })
+    : read(path, init));
+  const { container } = mount();
+  await screen.findByText('共 32 条');
+  fireEvent.click(within(container.querySelector<HTMLElement>('.ant-table-pagination')!).getByText('2'));
+  expect(latestQuery().get('page')).toBe('2');
+
+  const { trigger, queries } = await openPanel('按产品类型筛选');
+  expect(queries.getByLabelText('筛选字段 1')).toHaveValue('productCategory');
+  expect(queries.getByLabelText('筛选运算符 1')).toHaveValue('CONTAINS');
+  fireEvent.change(queries.getByLabelText('筛选值 1'), { target: { value: ' PCBA ' } });
+  fireEvent.click(queries.getByText('应用筛选'));
+  expect(latestQuery().get('page')).toBe('1');
+  expect(JSON.parse(latestQuery().get('filters')!)).toEqual({ logic: 'ALL', items: [{ field: 'productCategory', operator: 'CONTAINS', value: 'PCBA' }] });
+  expect(trigger).toHaveAttribute('aria-pressed', 'true');
+  expect(JSON.parse(localStorage.getItem(filtersKey)!).value.filters.items).toEqual([{ field: 'productCategory', operator: 'CONTAINS', value: ' PCBA ' }]);
+});
+
+it('loads and clears the shared product category filter from the toolbar', async () => {
+  localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { visible: ['productCategory'] } }));
+  localStorage.setItem(filtersKey, JSON.stringify({ schema: 1, value: { search: '', filters: { currentMonth: true, logic: 'ALL', items: [{ field: 'productCategory', operator: 'CONTAINS', value: ' PCBA ' }] } } }));
+  const { container } = mount();
+  const trigger = within(container.querySelector('thead')!).getByLabelText('按产品类型筛选', { selector: 'button' });
+  expect(trigger).toHaveAttribute('aria-pressed', 'true');
+
+  const toolbar = (await openPanel()).queries;
+  const field = toolbar.getByLabelText('筛选字段 1');
+  expect(within(field).getByRole('option', { name: '产品类型' })).toHaveProperty('selected', true);
+  expect(toolbar.getByLabelText('筛选值 1')).toHaveValue(' PCBA ');
+  fireEvent.change(toolbar.getByLabelText('筛选运算符 1'), { target: { value: 'EMPTY' } });
+  expect(toolbar.queryByLabelText('筛选值 1')).not.toBeInTheDocument();
+  fireEvent.click(toolbar.getByLabelText('清空', { selector: 'button' }));
+  fireEvent.click(toolbar.getByText('应用筛选'));
+  expect(latestQuery().has('filters')).toBe(false);
+  expect(trigger).toHaveAttribute('aria-pressed', 'false');
+});
+
+it.each([
+  ['类型', 'defectTypeCode'], ['成品编码', 'productCode'], ['工单号', 'workOrderCode'],
+  ['生产线编码', 'lineCode'], ['工序编码', 'operationCode'],
+])('opens the matching text filter from the optional %s column', async (label, field) => {
+  localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { visible: [field] } }));
+  const { container } = mount();
+  const header = within(container.querySelector('thead')!).getByRole('columnheader', { name: label });
+  fireEvent.click(within(header).getByRole('button', { name: `按${label}筛选` }));
+  const panel = within(await screen.findByRole('dialog', { name: '筛选面板' }));
+  expect(panel.getByLabelText('筛选字段 1')).toHaveValue(field);
+  expect(panel.getByLabelText('筛选运算符 1')).toHaveValue('CONTAINS');
+});
+
+it('omits single-field filter triggers from composite columns', () => {
+  localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { visible: ['completion', 'material', 'mapping', 'source'] } }));
+  mount();
+  for (const label of ['完善情况', '首条物料 / 供应商', '人工项目 / 映射', '批次 / 工单']) {
+    const header = screen.getByRole('columnheader', { name: label });
+    expect(within(header).queryByRole('button', { name: /筛选$/ })).not.toBeInTheDocument();
   }
 });
 
@@ -163,10 +229,15 @@ it('shows the local date with the complete local timestamp on hover and keeps th
   expect(container.querySelector('.qms-ledger__horizontal-scroll')).toBeInTheDocument();
 });
 
-it('uses the compact quantity title without changing its filter controls', async () => {
-  mount();
+it('uses the same header layout for the compact quantity and description filters', async () => {
+  items = [defect];
+  const { container } = mount();
+  const headers = within(container.querySelector('thead')!);
+  const description = headers.getByRole<HTMLTableCellElement>('columnheader', { name: '不良描述' });
+  const selection = await screen.findByLabelText(`选择制程不良 ${defect.description}`);
+  expect(selection.closest('tr')?.cells[description.cellIndex]).toHaveStyle({ textAlign: 'left' });
   const { trigger, queries } = await openPanel('按不良数量筛选');
-  expect(trigger.parentElement).toHaveClass('process-quality-filter-title--compact');
+  expect(trigger.parentElement?.className).toBe(within(description).getByRole('button', { name: '按不良描述筛选' }).parentElement?.className);
   expect(queries.getByLabelText('筛选字段 1')).toHaveValue('defectQuantity');
   expect(queries.getByLabelText('筛选值 1')).toHaveAttribute('type', 'number');
 });

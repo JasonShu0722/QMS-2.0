@@ -73,6 +73,83 @@ async function worker() {
   expect(result.stderr).not.toContain('QMS_WORKER_FAILED');
 }
 
+test('centers filter labels and filters product type on the server', async ({ page }) => {
+  await login(page);
+  const organization = await prisma.organization.findUniqueOrThrow({ where: { code: 'LOCAL-INTERNAL' } });
+  const user = await prisma.user.findUniqueOrThrow({ where: { organizationId_username: { organizationId: organization.id, username: 'local.internal' } } });
+  const fixture = `FILTER165-${randomUUID().slice(0, 8)}`;
+  await prisma.processDefect.createMany({ data: ['MCU', 'BMS'].map(productCategory => ({
+    organizationId: organization.id, occurredAt: new Date(), description: `${fixture} ${productCategory}`,
+    productCode: fixture, productCategory, defectQuantity: 1, createdById: user.id, updatedById: user.id,
+  })) });
+  await page.goto('/app/process-quality');
+  const ledger = page.locator('.process-quality-ledger');
+  const search = page.getByLabel('搜索制程不良');
+  const rows = ledger.locator('tbody tr[data-row-key]');
+  await search.fill(fixture);
+  await search.press('Enter');
+  await expect(rows).toHaveCount(2);
+
+  const quantity = ledger.getByRole('columnheader', { name: '不良数量', exact: true });
+  const measure = () => ledger.locator('th:has(.process-quality-filter-title)').evaluateAll(headers => headers.map(header => {
+    const label = header.querySelector('.process-quality-filter-title > span')!;
+    const filter = header.querySelector('.process-quality-filter-title > button')!;
+    const cell = header.getBoundingClientRect();
+    const text = label.getBoundingClientRect();
+    const button = filter.getBoundingClientRect();
+    return { label: label.textContent, offset: Math.abs((cell.left + cell.right - text.left - text.right) / 2),
+      labelRight: text.right, buttonLeft: button.left, buttonRight: button.right, cellRight: cell.right };
+  }));
+  const assertAligned = async () => {
+    await expect.poll(async () => (await measure()).filter(({ offset, labelRight, buttonLeft, buttonRight, cellRight }) =>
+      offset > 1.5 || labelRight > buttonLeft + 0.5 || buttonRight > cellRight + 0.5).map(({ label, offset }) => ({ label, offset }))).toEqual([]);
+  };
+  await assertAligned();
+  await expect.poll(async () => (await quantity.boundingBox())?.width ?? Infinity).toBeLessThan(96);
+  const slider = page.getByRole('slider', { name: '横向滚动台账' });
+  await expect(slider).toBeInViewport();
+  await slider.press('End');
+  const quantityFilter = quantity.getByRole('button', { name: '按不良数量筛选' });
+  await quantityFilter.focus();
+  await quantityFilter.press('Enter');
+  const dialog = page.getByRole('dialog', { name: '筛选面板' });
+  await expect(dialog.getByLabel('筛选字段 1')).toHaveValue('defectQuantity');
+  await dialog.getByLabel('筛选字段 1').press('Escape');
+  await expect(quantityFilter).toBeFocused();
+  const grip = quantity.getByRole('separator');
+  const original = await grip.getAttribute('aria-valuenow');
+  await grip.press('ArrowRight');
+  await expect(grip).not.toHaveAttribute('aria-valuenow', original!);
+  await assertAligned();
+  await slider.press('Home');
+
+  const product = ledger.getByRole('button', { name: '按产品类型筛选' });
+  await product.click();
+  await expect(dialog.getByLabel('筛选字段 1')).toHaveValue('productCategory');
+  await dialog.getByLabel('筛选运算符 1').selectOption('EQ');
+  await dialog.getByLabel('筛选值 1').fill('MCU');
+  await dialog.getByRole('button', { name: '应用筛选' }).click();
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText(`${fixture} MCU`);
+  await expect(product).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: '筛选条件', exact: true }).click();
+  await expect(dialog.getByLabel('筛选值 1')).toHaveValue('MCU');
+  await dialog.getByRole('button', { name: '删除筛选条件 1' }).click();
+  await dialog.getByRole('button', { name: '应用筛选' }).click();
+  await expect(rows).toHaveCount(2);
+
+  const chromium = await page.context().newCDPSession(page);
+  await chromium.send('Emulation.setTouchEmulationEnabled', { enabled: true });
+  await page.setViewportSize({ width: 390, height: 780 });
+  await expect.poll(() => page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+  await assertAligned();
+  await expect(slider).toBeInViewport();
+  await product.scrollIntoViewIfNeeded();
+  await expect(product).toHaveCSS('opacity', '1');
+  await product.click();
+  await expect(dialog.getByLabel('筛选字段 1')).toHaveValue('productCategory');
+});
+
 test('administrator imports incomplete IMS rows and real Worker fills only missing mappings while preserving stage', async ({ page }) => {
   await login(page);
   await page.goto('/console/api-ingestion');

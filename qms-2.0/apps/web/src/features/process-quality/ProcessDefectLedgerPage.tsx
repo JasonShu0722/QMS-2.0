@@ -40,7 +40,7 @@ type FilterItem = { field: FilterField; operator: string; value?: string };
 type FilterState = { currentMonth: boolean; logic: FilterLogic; items: FilterItem[] };
 type FilterPreference = { search: string; filters: FilterState };
 const filterFields = [
-  ['occurredAt', '发生时间', 'Occurred at'], ['factoryCode', ...factoryFieldLabel], ['shift', '班次', 'Shift'], ['projectCode', '项目号', 'Project number'], ['projectStage', '项目状态', 'Project stage'], ['productSubcategory', '细分类型', 'Product subcategory'],
+  ['occurredAt', '发生时间', 'Occurred at'], ['factoryCode', ...factoryFieldLabel], ['shift', '班次', 'Shift'], ['projectCode', '项目号', 'Project number'], ['projectStage', '项目状态', 'Project stage'], ['productCategory', '产品类型', 'Product category'], ['productSubcategory', '细分类型', 'Product subcategory'],
   ['description', '不良描述', 'Defect description'], ['traceCode', '追溯码', 'Trace code'], ['lineName', '生产线名称', 'Line name'], ['operationName', '工序名称', 'Operation name'],
   ['operationSector', '板块', 'Sector'], ['defectQuantity', '不良数量', 'Defect quantity'], ['ledgerStatus', '台账状态', 'Ledger status'], ['responsibilityCategory', '责任类别', 'Responsibility category'],
   ['pendingCompletion', '完善情况', 'Completion pending'], ['pendingConfiguration', '配置情况', 'Configuration pending'],
@@ -363,8 +363,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
   }
   function filterTitle(field: FilterField, label: string) {
     const triggerLabel = english && field === 'factoryCode' ? 'Filter by factory' : `按${label}筛选`;
-    const titleClass = field === 'defectQuantity' ? 'process-quality-filter-title process-quality-filter-title--compact' : 'process-quality-filter-title';
-    return <span aria-label={label} className={titleClass}><span>{label}</span><button type="button" aria-label={triggerLabel} aria-haspopup="dialog" aria-expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === triggerLabel} aria-pressed={appliedFilters.items.some(item => item.field === field) || field === 'occurredAt' && appliedFilters.currentMonth} disabled={locked || !!deletionTargets} onClick={event => { event.stopPropagation(); openFilters(event.currentTarget, field); }}><Filter size={13} aria-hidden="true" /></button></span>;
+    return <span aria-label={label} className="process-quality-filter-title"><span>{label}</span><button type="button" aria-label={triggerLabel} aria-haspopup="dialog" aria-expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === triggerLabel} aria-pressed={appliedFilters.items.some(item => item.field === field) || field === 'occurredAt' && appliedFilters.currentMonth} disabled={locked || !!deletionTargets} onClick={event => { event.stopPropagation(); openFilters(event.currentTarget, field); }}><Filter size={13} aria-hidden="true" /></button></span>;
   }
   function updateFilterItem(index: number, next: FilterItem) {
     setDraftFilters(current => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? next : item) }));
@@ -406,7 +405,7 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     { title: filterTitle('factoryCode', factoryTitle), key: 'factoryCode', dataIndex: 'factoryCode', width: 100, className: 'process-quality-compact-column', align: 'center', render: (_, record) => factoryLabel(record.factoryCode, english) },
     { title: filterTitle('shift', '班次'), key: 'shift', dataIndex: 'shift', width: 88, className: 'process-quality-compact-column', align: 'center', render: value => value === 'DAY' ? '白班' : value === 'NIGHT' ? '夜班' : '未知' },
     { title: filterTitle('projectCode', '项目号'), key: 'project', width: 108, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
-    { title: '产品类型', key: 'productCategory', width: 84, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (_, record) => record.productCategory ?? '未确认' },
+    { title: filterTitle('productCategory', '产品类型'), key: 'productCategory', width: 84, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (_, record) => record.productCategory ?? '未确认' },
     { title: filterTitle('productSubcategory', '细分类型'), key: 'productSubcategory', dataIndex: 'productSubcategory', width: 112, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: value => value ?? '/' },
     { title: filterTitle('projectStage', '项目状态'), key: 'projectStage', dataIndex: 'projectStage', width: 100, className: 'process-quality-compact-column', align: 'center', render: value => value === 'NEW_PRODUCT' ? '新品' : value === 'MASS_PRODUCTION' ? '量产' : '未确认' },
     { title: filterTitle('description', '不良描述'), key: 'description', dataIndex: 'description', width: 260, align: 'left', ellipsis: true, render: (value: string, record) => <div className="process-quality-description-heading"><button type="button" title={value || '查看待完善记录'} className="process-quality-detail-link" onClick={() => void openDetail(record.id)}>{value || '查看待完善记录'}</button><MappingHint record={record} /></div> },
@@ -414,12 +413,12 @@ function ProcessLedgerContent({ organizationId, initialDefectId }: { organizatio
     { title: filterTitle('lineName', '生产线名称'), key: 'lineName', dataIndex: 'lineName', width: 144, align: 'center', ellipsis: true },
     { title: filterTitle('operationName', '工序名称'), key: 'operationName', dataIndex: 'operationName', width: 144, align: 'center', ellipsis: true },
     { title: filterTitle('operationSector', '板块'), key: 'operationSector', dataIndex: 'operationSector', width: 76, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: value => value ?? '未确认' },
-    { title: '类型', key: 'defectTypeCode', dataIndex: 'defectTypeCode', width: 115, align: 'center' },
+    { title: filterTitle('defectTypeCode', '类型'), key: 'defectTypeCode', dataIndex: 'defectTypeCode', width: 115, align: 'center' },
     { title: filterTitle('defectQuantity', '不良数量'), key: 'defectQuantity', dataIndex: 'defectQuantity', width: 80, className: 'process-quality-compact-column', align: 'center' },
-    { title: '成品编码', key: 'productCode', dataIndex: 'productCode', width: 150 },
-    { title: '工单号', key: 'workOrderCode', dataIndex: 'workOrderCode', width: 150 },
-    { title: '生产线编码', key: 'lineCode', dataIndex: 'lineCode', width: 130 },
-    { title: '工序编码', key: 'operationCode', dataIndex: 'operationCode', width: 130 },
+    { title: filterTitle('productCode', '成品编码'), key: 'productCode', dataIndex: 'productCode', width: 150 },
+    { title: filterTitle('workOrderCode', '工单号'), key: 'workOrderCode', dataIndex: 'workOrderCode', width: 150 },
+    { title: filterTitle('lineCode', '生产线编码'), key: 'lineCode', dataIndex: 'lineCode', width: 130 },
+    { title: filterTitle('operationCode', '工序编码'), key: 'operationCode', dataIndex: 'operationCode', width: 130 },
     { title: '登记人', key: 'registeredByName', width: 120, render: (_, record) => record.sourceKind === 'IMS' ? '自动' : record.registeredByName ?? '—' },
     { title: '完善情况', key: 'completion', width: 170, render: (_, record) => <CompletionStatus record={record} /> },
     { title: filterTitle('responsibilityCategory', '责任类别'), key: 'responsibilityCategory', dataIndex: 'responsibilityCategory', width: 105, render: responsibility },

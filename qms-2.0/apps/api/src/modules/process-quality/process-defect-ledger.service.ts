@@ -154,7 +154,7 @@ export interface ProcessDefectQuery {
 export const PROCESS_FILTER_FIELDS = {
   description: 'text', defectTypeCode: 'text', batchCode: 'text', workOrderCode: 'text', operationCode: 'text', lineCode: 'text',
   projectCode: 'text', productCode: 'text', materialCode: 'text', traceCode: 'text', lineName: 'text', operationName: 'text',
-  operationSector: 'text', productSubcategory: 'text', occurredAt: 'date', defectQuantity: 'number', shift: 'enum', projectStage: 'enum',
+  operationSector: 'text', productCategory: 'text', productSubcategory: 'text', occurredAt: 'date', defectQuantity: 'number', shift: 'enum', projectStage: 'enum',
   ledgerStatus: 'enum', responsibilityCategory: 'enum', pendingCompletion: 'boolean', pendingConfiguration: 'boolean', factoryCode: 'enum',
 } as const;
 type ProcessFilterField = keyof typeof PROCESS_FILTER_FIELDS;
