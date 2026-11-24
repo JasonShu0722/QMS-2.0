@@ -9,7 +9,7 @@ import { ProcessDefectLedgerService, processLedgerBoardPermission } from './proc
 import { ProcessIssueService } from './process-issue.service.js';
 import { ProcessProductionService } from './process-production.service.js';
 import { ProcessShipmentReportService } from './process-shipment-report.service.js';
-import { DeleteProcessDefectsDto, DeleteLegacyProcessDefectDto, PreviewProcessDefectDeletionDto, ProcessDefectDeletionPreviewDto, ProcessDefectDeletionResultDto } from './process-quality.dto.js';
+import { DeleteProcessDefectsDto, DeleteLegacyProcessDefectDto, PreviewProcessDefectDeletionDto, ProcessDefectDeletionPreviewDto, ProcessDefectDeletionResultDto, ProcessDefectDetailDto } from './process-quality.dto.js';
 import { BulkMaintainProcessDefectsDto, BulkMaintainProcessDefectsResultDto, ClassifyProcessDefectDto, ClassifyProcessDefectsDto, CloseProcessDefectDto, ReopenProcessDefectDto, VerifyProcessDefectMaterialDto, ProcessDefectClassificationResultDto, ProcessMaterialSqePageDto, ProcessMaterialSqeQueryDto } from './process-quality.dto.js';
 import { ArchiveProcessShipmentReportDto, AssociateProcessShipmentReportCustomerDto, CorrectProcessProductionDto, CreateProcessDefectDto, CreateProcessDefectTypeDto, CreateProcessProductionDto, CreateProcessShipmentReportDto, IssueProcessDefectsDto, LinkProcessShipmentReportIssueDto, ProcessDefectDto, ProcessDefectFiltersDto, ProcessDefectFilterDto, ProcessDefectPageDto, ProcessDefectQueryDto, ProcessDefectTypeDto, ProcessIssueProblemDto, ProcessIssueResultDto, ProcessProductionDetailDto, ProcessProductionDto, ProcessProductionPageDto, ProcessProductionPeriodQueryDto, ProcessProductionQueryDto, ProcessProductionSummaryDto, ProcessScopeDto, ProcessShipmentReportDto, ProcessShipmentReportPageDto, ProcessShipmentReportQueryDto, UpdateProcessDefectDto, UpdateProcessDefectTypeDto, UpdateProcessShipmentReportEvidenceDto } from './process-quality.dto.js';
 
@@ -191,7 +191,7 @@ export class ProcessQualityController {
     return this.service.verifyMaterial(actor(request), id, materialId, body, requestTraceId(request), key);
   }
 
-  @Get('defects/:id') @ApiOkResponse({ type: ProcessDefectDto })
+  @Get('defects/:id') @ApiOkResponse({ type: ProcessDefectDetailDto })
   @RequireAccess({ featurePermission: 'process-quality:defects:read', organizationScope: queryScope })
   detail(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() _query: ProcessScopeDto) { return this.service.detail(actor(request), id); }
 

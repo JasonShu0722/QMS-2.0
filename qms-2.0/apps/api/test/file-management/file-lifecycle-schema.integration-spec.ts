@@ -26,6 +26,7 @@ import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
+import { ProcessDefectLedgerService } from '../../src/modules/process-quality/process-defect-ledger.service.js';
 
 for (const name of ['DATABASE_URL', 'QMS_OBJECT_STORAGE_ENDPOINT', 'QMS_OBJECT_STORAGE_BUCKET', 'QMS_FILE_SCANNER_HOST', 'QMS_FILE_SCANNER_PORT', 'QMS_FILE_TEST_ENCRYPTED_PATH']) {
   if (!process.env[name]) throw new Error(`Real attachment integration requires ${name}`);
@@ -531,6 +532,54 @@ describe('attachment lifecycle on real PostgreSQL and object storage', () => {
     expect(await admin.list(context.actor, {})).toEqual({ total: 0, items: [] });
     await expect(admin.retry(context.actor, event.id, context.organization.id, randomUUID())).rejects.toMatchObject({ status: 404 });
   });
+
+  it('records committed process-ledger attachment additions and removals once under the logged-in name', async () => {
+    const application = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PrismaService).useValue(prisma).compile();
+    const app = application.createNestApplication();
+    await app.init();
+    try {
+      const { actor, organization } = context;
+      await prisma.user.update({ where: { id: actor.id }, data: { fullName: '附件测试员' } });
+      const role = await prisma.role.create({ data: { organizationId: organization.id, code: randomUUID(), name: 'Process attachment operations' } });
+      for (const code of ['process-quality:defects:read', 'process-quality:defects:write']) {
+        const permission = await prisma.permission.findUniqueOrThrow({ where: { code } });
+        await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: permission.id } });
+      }
+      await prisma.userRole.create({ data: { organizationId: organization.id, userId: actor.id, roleId: role.id } });
+      const defect = await prisma.processDefect.create({ data: { organizationId: organization.id, description: 'Process attachment fixture', createdById: actor.id, updatedById: actor.id } });
+      const processFiles = app.get(FileLifecycleService);
+      const ledger = app.get(ProcessDefectLedgerService);
+      const upload = await processFiles.initializeUpload(actor, { ...input(), resourceType: 'process-defect', resourceId: defect.id }, randomUUID(), randomUUID());
+      expect(await ledger.detail(actor, defect.id)).toMatchObject({ updateRecords: [], attachmentIds: [] });
+      expect((await fetch(upload.uploadUrl, { method: 'PUT', headers: upload.headers, body: bytes })).status).toBe(200);
+      const key = randomUUID();
+      const file = await processFiles.complete(actor, upload.file.id, 1, key, randomUUID());
+      await processFiles.complete(actor, upload.file.id, 1, key, randomUUID());
+      expect(await ledger.detail(actor, defect.id)).toMatchObject({ attachmentIds: [file.id], evidence: [] });
+      const held = await holdLock(Prisma.sql`SELECT id FROM users WHERE id = ${actor.id}::uuid FOR NO KEY UPDATE`,
+        (tx) => tx.$queryRaw`SELECT id FROM process_defects WHERE id = ${defect.id}::uuid FOR UPDATE`);
+      const pendingRead = processFiles.get(actor, file.id).then(value => ({ value }), (error: unknown) => ({ error }));
+      try { await waitForBlocked(held.pid); } finally { await held.release(); }
+      expect(await pendingRead).toMatchObject({ value: { id: file.id, isCurrentUserUploader: true } });
+      await prisma.fileObject.update({ where: { id: file.id }, data: { scanStatus: 'ERROR', scanReason: 'FILE_SCANNER_UNAVAILABLE' } });
+      const reader = await prisma.user.create({ data: { organizationId: organization.id, username: randomUUID(), passwordHash: 'fixture', accountType: 'INTERNAL' } });
+      await prisma.userRole.create({ data: { organizationId: organization.id, userId: reader.id, roleId: role.id } });
+      const sessions = app.get(SessionService);
+      const uploaderToken = await sessions.create(actor.id, prisma, { mfaVerified: true });
+      const readerToken = await sessions.create(reader.id, prisma, { mfaVerified: true });
+      const readFile = (token: string) => request(app.getHttpServer()).get(`/api/v1/files/${file.id}`).set('Cookie', `qms_session=${token}`).expect(200);
+      expect((await readFile(uploaderToken)).body).toMatchObject({ isCurrentUserUploader: true, scanStatus: 'ERROR' });
+      expect((await readFile(readerToken)).body).toMatchObject({ isCurrentUserUploader: false, scanStatus: 'ERROR' });
+      expect(await ledger.detail(actor, defect.id)).toMatchObject({ attachmentIds: [file.id], evidence: [] });
+      await expect(processFiles.download(actor, file.id, randomUUID())).rejects.toMatchObject({ response: { code: 'FILE_NOT_AVAILABLE' } });
+      await processFiles.deleteLogically(actor, file.id, file.version, randomUUID());
+      const detail = await ledger.detail(actor, defect.id);
+      expect(detail.attachmentIds).toEqual([]);
+      expect(detail.updateRecords.map(({ content, actorName }) => ({ content, actorName }))).toEqual([
+        { content: '删除附件', actorName: '附件测试员' }, { content: '新增附件', actorName: '附件测试员' },
+      ]);
+    } finally { await app.close(); }
+  }, 20000);
 
   it('enforces real HTTP cookies, CSRF and strict server-owned fields through the complete lifecycle', async () => {
     const application = await Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PrismaService).useValue(prisma)

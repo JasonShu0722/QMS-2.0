@@ -51,7 +51,7 @@ export function createUploadAttempt(resource: FileResource, selected: File) {
 export const readAttachment = (id: string, signal?: AbortSignal) => apiRequest<Attachment>(`/api/v1/files/${id}`, { signal });
 export const deleteAttachment = (file: Attachment) => write<Attachment>(`/api/v1/files/${file.id}/delete`, { expectedVersion: file.version });
 export const retryScanAttachment = (file: Attachment) => write<Attachment>(`/api/v1/files/${file.id}/retry-scan`, { expectedVersion: file.version }, crypto.randomUUID());
-export async function attachmentDownload(id: string) {
-  const result = await write<components['schemas']['FileDownloadDto']>(`/api/v1/files/${id}/download`);
+export async function attachmentDownload(id: string, signal?: AbortSignal) {
+  const result = await write<components['schemas']['FileDownloadDto']>(`/api/v1/files/${id}/download`, undefined, undefined, signal);
   return fileUrl(result.url);
 }

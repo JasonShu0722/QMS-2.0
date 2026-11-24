@@ -22,6 +22,7 @@ import { categoryLabels, categoryOptions, CompletionStatus, denied, MappingHint,
 import { factoryChoices, factoryFieldLabel, factoryLabel } from './process-factory';
 
 type Defect = components['schemas']['ProcessDefectDto'];
+type DefectDetail = components['schemas']['ProcessDefectDetailDto'];
 type DefectPage = components['schemas']['ProcessDefectPageDto'];
 type IssueResult = components['schemas']['ProcessIssueResultDto'];
 type LinkedProblem = components['schemas']['ProcessIssueProblemDto'];
@@ -31,12 +32,15 @@ const deletionLimit = 1000;
 const formalIssueLimit = 100;
 const pageSizeOptions = [10, 20, 50, 100, 500, deletionLimit];
 const occurrenceDateOptions = { year: 'numeric', month: '2-digit', day: '2-digit' } as const;
-const occurrenceDate = new Intl.DateTimeFormat('zh-CN', occurrenceDateOptions);
-const occurrenceTimestamp = new Intl.DateTimeFormat('zh-CN', { ...occurrenceDateOptions, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+const occurrenceTimestampOptions = { ...occurrenceDateOptions, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false } as const;
+const occurrenceDate = new Intl.DateTimeFormat('zh-CN', { ...occurrenceDateOptions, timeZone: 'Asia/Shanghai' });
+const occurrenceTimestamp = new Intl.DateTimeFormat('zh-CN', occurrenceTimestampOptions);
+const listTimestamp = new Intl.DateTimeFormat('zh-CN', { ...occurrenceTimestampOptions, timeZone: 'Asia/Shanghai' });
+const maintenanceColumnKeys = ['analysisProgress', 'dispositionPlan', 'dispositionProgress', 'dispositionCompletedAt'] as const;
 const responsibility = (value: Defect['responsibilityCategory']) => value ? categoryLabels[value] : '待分析';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type FilterLogic = 'ALL' | 'ANY';
-type FilterField = string;
+type FilterField = components['schemas']['ProcessDefectFilterDto']['field'];
 type FilterItem = { field: FilterField; operator: string; value?: string };
 type FilterState = { currentMonth: boolean; logic: FilterLogic; items: FilterItem[] };
 type FilterPreference = { search: string; filters: FilterState };
@@ -47,7 +51,9 @@ const filterFields = [
   ['pendingCompletion', '完善情况', 'Completion pending'], ['pendingConfiguration', '配置情况', 'Configuration pending'],
   ['defectTypeCode', '不良类型', 'Defect type'], ['productCode', '成品编码', 'Product code'], ['batchCode', '批次', 'Batch code'], ['workOrderCode', '工单号', 'Work order'],
   ['lineCode', '生产线编码', 'Line code'], ['operationCode', '工序编码', 'Operation code'], ['materialCode', '物料编码', 'Material code'],
-] as const;
+  ['registeredByName', '登记人', 'Registrant'], ['firstMaterialCode', '首条物料 / 供应商', 'First material / supplier'], ['manualProjectCode', '人工项目', 'Manual project'], ['batchOrWorkOrder', '批次 / 工单', 'Batch / work order'],
+  ['analysisProgress', '分析进度', 'Analysis progress'], ['dispositionPlan', '处置方案', 'Disposition plan'], ['dispositionProgress', '处置进度', 'Disposition progress'], ['dispositionCompletedAt', '处置完成时间', 'Disposition completion date'],
+] as const satisfies ReadonlyArray<readonly [FilterField, string, string]>;
 const equals = [['EQ', '等于', 'Equals'], ['NE', '不等于', 'Does not equal']];
 const empty = [['EMPTY', '为空', 'Is empty'], ['NOT_EMPTY', '不为空', 'Is not empty']];
 const textOperators = [['CONTAINS', '包含', 'Contains'], ['NOT_CONTAINS', '不包含', 'Does not contain'], ...equals, ...empty];
@@ -60,15 +66,17 @@ const filterChoices: Partial<Record<FilterField, string[][]>> = {
   projectStage: [['NEW_PRODUCT', '新品', 'New product'], ['MASS_PRODUCTION', '量产', 'Mass production']],
   ledgerStatus: [['FOLLOWING', '跟进中', 'Following'], ['CLOSED', '已关闭', 'Closed']],
   responsibilityCategory: categoryOptions.map(({ value, label }) => [value, label, value]),
+  dispositionPlan: Object.entries(dispositionLabels).map(([value, label]) => [value, label, value]),
   pendingCompletion: [['true', '待完善', 'Pending'], ['false', '已完善', 'Complete']],
   pendingConfiguration: [['true', '待补配', 'Pending'], ['false', '已配置', 'Configured']],
 };
 const allowedFields = new Set<string>(filterFields.map(([field]) => field));
 const booleanField = (field: FilterField) => field === 'pendingCompletion' || field === 'pendingConfiguration';
+const dateField = (field: FilterField) => field === 'occurredAt' || field === 'dispositionCompletedAt';
 const emptyOperator = (operator: string) => operator === 'EMPTY' || operator === 'NOT_EMPTY';
 const defaultFilters: FilterState = { currentMonth: true, logic: 'ALL', items: [] };
 function operatorsFor(field: FilterField) {
-  return field === 'occurredAt' ? dateOperators : field === 'defectQuantity' ? numberOperators : booleanField(field) ? equals.slice(0, 1) : filterChoices[field] ? enumOperators : textOperators;
+  return dateField(field) ? dateOperators : field === 'defectQuantity' ? numberOperators : booleanField(field) ? equals.slice(0, 1) : filterChoices[field] ? enumOperators : textOperators;
 }
 function filterItem(field: FilterField): FilterItem { return { field, operator: operatorsFor(field)[0][0], value: '' }; }
 function filterValue(item: FilterItem): string | number | boolean | undefined {
@@ -80,7 +88,7 @@ function filterValue(item: FilterItem): string | number | boolean | undefined {
     const number = Number(value);
     return Number.isInteger(number) && number >= -2147483648 && number <= 2147483647 ? number : undefined;
   }
-  if (item.field === 'occurredAt') {
+  if (dateField(item.field)) {
     const date = new Date(`${value}T00:00:00Z`);
     return /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? value : undefined;
   }
@@ -150,7 +158,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   const [listError, setListError] = useState<unknown>();
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState<Record<string, Defect>>({});
-  const [detail, setDetail] = useState<Defect>();
+  const [detail, setDetail] = useState<DefectDetail>();
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<unknown>();
@@ -176,6 +184,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   const filterControl = useRef<HTMLSelectElement>(null);
   const [filterRow, setFilterRow] = useState<number>();
   const detailRequest = useRef(0);
+  const detailTarget = useRef<string>(undefined);
   const detailController = useRef<AbortController>(undefined);
   const listController = useRef<AbortController>(undefined);
   const requestedMonthStart = useRef<string>(undefined);
@@ -252,7 +261,10 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
     return item.supplierProfileId || item.supplierOrganizationId ? '供应商名称不可用' : '—';
   }
   function saved(record: Defect) {
-    setDetail(current => current?.id === record.id ? { ...record, evidence: record.evidence ?? current.evidence } : current);
+    if (detail?.id === record.id) {
+      setDetail({ ...detail, ...record, evidence: record.evidence ?? detail.evidence });
+      void openDetail(record.id, true);
+    }
     setRevision(value => value + 1);
   }
   useEffect(() => {
@@ -287,21 +299,27 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
     return () => controller.abort();
   }, [page, pageSize, search, revision, serializedFilters, appliedFilters.currentMonth, accessLost, organizationId]);
 
-  async function openDetail(id: string) {
+  async function openDetail(id: string, refresh = false) {
     detailController.current?.abort();
     const controller = new AbortController(); detailController.current = controller;
     const request = ++detailRequest.current;
-    setDetailOpen(true);
-    setDetail(undefined);
-    setLinked([]);
+    detailTarget.current = id;
     setDetailError(undefined);
-    setDetailLoading(true);
+    if (!refresh) {
+      setDetailOpen(true);
+      setDetail(undefined);
+      setLinked([]);
+      setDetailLoading(true);
+    }
     try {
       const [record, problems] = await Promise.all([
-        apiRequest<Defect>(scoped(`/api/v1/process-quality/defects/${id}`), { signal: controller.signal }),
+        apiRequest<DefectDetail>(scoped(`/api/v1/process-quality/defects/${id}`), { signal: controller.signal }),
         apiRequest<LinkedProblem[]>(scoped(`/api/v1/process-quality/defects/${id}/issues`), { signal: controller.signal }),
       ]);
-      if (!controller.signal.aborted && alive.current && request === detailRequest.current) { setDetail(record); setLinked(problems); }
+      if (!controller.signal.aborted && alive.current && request === detailRequest.current) {
+        setDetail(current => refresh && current?.id === record.id && current.version > record.version ? current : record);
+        setLinked(problems);
+      }
     } catch (cause) { if (!controller.signal.aborted && alive.current && request === detailRequest.current) { setDetailError(cause); if (denied(cause)) revoke(cause); } }
     finally { if (!controller.signal.aborted && alive.current && request === detailRequest.current) setDetailLoading(false); }
   }
@@ -348,8 +366,9 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
     setDetail(current => {
       if (!current) return current;
       const next = updated.get(current.id);
-      return next ? { ...next, evidence: next.evidence ?? current.evidence } : current;
+      return next ? { ...current, ...next, evidence: next.evidence ?? current.evidence } : current;
     });
+    if (detail && updated.has(detail.id)) void openDetail(detail.id, true);
     setBoardTarget(undefined);
     setRevision(value => value + 1);
   }
@@ -359,7 +378,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
       setEditor(undefined);
       setBoardDenied(true);
       setRevision(value => value + 1);
-      if (detailOpen && detail) void openDetail(detail.id);
+      if (detailOpen && detail) void openDetail(detail.id, true);
     } else revoke(cause);
   }
   function openDeletion(records: Defect[]) { requestLeave(() => { setDeletionTargets(records); setDeletionOpen(true); }); }
@@ -433,9 +452,9 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
     </div>
     <div className="process-quality-filter-rows">
       {draftFilters.items.map((item, index) => <div className="process-quality-filter-row" key={index}>
-        <select ref={filterRow === index ? filterControl : undefined} aria-label={`筛选字段 ${index + 1}`} value={item.field} onChange={event => updateFilterItem(index, filterItem(event.target.value))}>{filterFields.map(([field, label]) => <option key={field} value={field}>{field === 'factoryCode' ? factoryTitle : label}</option>)}</select>
+        <select ref={filterRow === index ? filterControl : undefined} aria-label={`筛选字段 ${index + 1}`} value={item.field} onChange={event => updateFilterItem(index, filterItem(event.target.value as FilterField))}>{filterFields.map(([field, label]) => <option key={field} value={field}>{field === 'factoryCode' ? factoryTitle : label}</option>)}</select>
         <select aria-label={`筛选运算符 ${index + 1}`} value={item.operator} onChange={event => updateFilterItem(index, { ...item, operator: event.target.value })}>{operatorsFor(item.field).map(([operator, zh, en]) => <option key={operator} value={operator}>{english && item.field === 'factoryCode' ? en : zh}</option>)}</select>
-        {emptyOperator(item.operator) ? <span /> : filterChoices[item.field] ? <select aria-label={`筛选值 ${index + 1}`} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })}><option value="">{english && item.field === 'factoryCode' ? 'Select' : '请选择'}</option>{filterChoices[item.field]!.map(([value, zh, en]) => <option key={value} value={value}>{english && item.field === 'factoryCode' ? en : zh}</option>)}</select> : <input aria-label={`筛选值 ${index + 1}`} type={item.field === 'occurredAt' ? 'date' : item.field === 'defectQuantity' ? 'number' : 'text'} maxLength={200} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })} />}
+        {emptyOperator(item.operator) ? <span /> : filterChoices[item.field] ? <select aria-label={`筛选值 ${index + 1}`} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })}><option value="">{english && item.field === 'factoryCode' ? 'Select' : '请选择'}</option>{filterChoices[item.field]!.map(([value, zh, en]) => <option key={value} value={value}>{english && item.field === 'factoryCode' ? en : zh}</option>)}</select> : <input aria-label={`筛选值 ${index + 1}`} type={dateField(item.field) ? 'date' : item.field === 'defectQuantity' ? 'number' : 'text'} maxLength={200} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })} />}
         <Button type="text" aria-label={`删除筛选条件 ${index + 1}`} icon={<X size={13} />} onClick={() => { setFilterRow(undefined); setDraftFilters(current => ({ ...current, items: current.items.filter((_, entryIndex) => entryIndex !== index) })); }} />
       </div>)}
     </div>
@@ -450,8 +469,8 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   if (accessLost) return <main className="process-quality-page"><Alert type="warning" showIcon title="暂无制程不良访问权限" description="当前会话或权限已变化，已清除来源、选择与草稿；请重新进入。" /></main>;
 
   const columns: TableColumnsType<Defect> = ([
-    { title: <span aria-label="选择"><Checkbox aria-label="选择当前页制程不良" checked={!!selectablePage.length && selectedOnPage.length === selectablePage.length} indeterminate={!!selectedOnPage.length && selectedOnPage.length < selectablePage.length} disabled={locked || loading || !selectablePage.length || (!selectedOnPage.length && selectedCount >= selectionLimit)} onChange={event => togglePage(event.target.checked && selectedCount < selectionLimit)} /></span>, onHeaderCell: () => ({ 'aria-label': '选择' }), key: 'select', width: 40, align: 'center', render: (_, record) => <label className="process-quality-row-checkbox"><input type="checkbox" aria-label={`选择制程不良 ${record.description}`} disabled={locked || loading || (!selected[record.id] && selectedCount >= selectionLimit) || !!record.archivedAt} checked={Boolean(selected[record.id])} onChange={event => toggle(record, event.target.checked)} /></label> },
-    { title: filterTitle('occurredAt', '发生时间'), key: 'occurredAt', dataIndex: 'occurredAt', width: 104, className: 'process-quality-compact-column', align: 'center', ellipsis: { showTitle: false }, onCell: record => ({ title: record.occurredAt ? occurrenceTimestamp.format(new Date(record.occurredAt)) : undefined }), render: (value: string | null) => value ? occurrenceDate.format(new Date(value)) : '—' },
+    { title: <span aria-label="选择"><Checkbox aria-label="选择当前页制程不良" checked={!!selectablePage.length && selectedOnPage.length === selectablePage.length} indeterminate={!!selectedOnPage.length && selectedOnPage.length < selectablePage.length} disabled={locked || loading || !selectablePage.length || (!selectedOnPage.length && selectedCount >= selectionLimit)} onChange={event => togglePage(event.target.checked && selectedCount < selectionLimit)} /></span>, onHeaderCell: () => ({ 'aria-label': '选择' }), key: 'select', width: 40, align: 'center', fixed: 'left', render: (_, record) => <label className="process-quality-row-checkbox"><input type="checkbox" aria-label={`选择制程不良 ${record.description}`} disabled={locked || loading || (!selected[record.id] && selectedCount >= selectionLimit) || !!record.archivedAt} checked={Boolean(selected[record.id])} onChange={event => toggle(record, event.target.checked)} /></label> },
+    { title: filterTitle('occurredAt', '发生时间'), key: 'occurredAt', dataIndex: 'occurredAt', width: 104, className: 'process-quality-compact-column', align: 'center', ellipsis: { showTitle: false }, onCell: record => ({ title: record.occurredAt ? listTimestamp.format(new Date(record.occurredAt)) : undefined }), render: (value: string | null) => value ? occurrenceDate.format(new Date(value)) : '—' },
     { title: filterTitle('factoryCode', factoryTitle), key: 'factoryCode', dataIndex: 'factoryCode', width: 100, className: 'process-quality-compact-column', align: 'center', render: (_, record) => factoryLabel(record.factoryCode, english) },
     { title: filterTitle('shift', '班次'), key: 'shift', dataIndex: 'shift', width: 88, className: 'process-quality-compact-column', align: 'center', render: value => value === 'DAY' ? '白班' : value === 'NIGHT' ? '夜班' : '未知' },
     { title: filterTitle('projectCode', '项目号'), key: 'project', width: 108, className: 'process-quality-compact-column', align: 'center', ellipsis: true, render: (_, record) => record.componentProject?.project?.code ?? '未确认' },
@@ -469,17 +488,17 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
     { title: filterTitle('workOrderCode', '工单号'), key: 'workOrderCode', dataIndex: 'workOrderCode', width: 150 },
     { title: filterTitle('lineCode', '生产线编码'), key: 'lineCode', dataIndex: 'lineCode', width: 130 },
     { title: filterTitle('operationCode', '工序编码'), key: 'operationCode', dataIndex: 'operationCode', width: 130 },
-    { title: '登记人', key: 'registeredByName', width: 120, render: (_, record) => record.sourceKind === 'IMS' ? '自动' : record.registeredByName ?? '—' },
-    { title: '完善情况', key: 'completion', width: 170, render: (_, record) => <CompletionStatus record={record} /> },
+    { title: filterTitle('registeredByName', '登记人'), key: 'registeredByName', width: 120, render: (_, record) => record.sourceKind === 'IMS' ? '自动' : record.registeredByName ?? '—' },
+    { title: filterTitle('pendingCompletion', '完善情况'), key: 'completion', width: 170, render: (_, record) => <><span>{record.pendingCompletion ? '待完善' : '已完善'}</span><CompletionStatus record={record} /></> },
     { title: filterTitle('responsibilityCategory', '责任类别'), key: 'responsibilityCategory', dataIndex: 'responsibilityCategory', width: 105, render: responsibility },
-    { title: '分析进度', key: 'analysisProgress', dataIndex: 'analysisProgress', width: 150, ellipsis: true, render: value => value ?? '—' },
-    { title: '处置方案', key: 'dispositionPlan', width: 100, render: (_, record) => record.dispositionPlan ? dispositionLabels[record.dispositionPlan] : '—' },
-    { title: '处置进度', key: 'dispositionProgress', dataIndex: 'dispositionProgress', width: 150, ellipsis: true, render: value => value ?? '—' },
-    { title: '处置完成时间', key: 'dispositionCompletedAt', width: 170, render: (_, record) => record.dispositionCompletedAt ? occurrenceTimestamp.format(new Date(record.dispositionCompletedAt)) : '—' },
     { title: filterTitle('ledgerStatus', '状态'), key: 'ledgerStatus', dataIndex: 'ledgerStatus', width: 100, render: value => <Tag>{value === 'CLOSED' ? '已关闭' : '跟进中'}</Tag> },
-    { title: '首条物料 / 供应商', key: 'material', width: 190, render: (_, record) => record.materials?.length ? <span>{record.materials[0].materialCode ?? '—'} / {supplierName(record.materials[0])}{record.materials.length > 1 ? `（共${record.materials.length}项）` : ''}</span> : '—' },
-    { title: '人工项目 / 映射', key: 'mapping', width: 150, render: (_, record) => record.projectCode ?? '—' },
-    { title: '批次 / 工单', key: 'source', width: 175, render: (_, record) => `${record.batchCode ?? '—'} / ${record.workOrderCode ?? '—'}` },
+    { title: filterTitle('firstMaterialCode', '首条物料 / 供应商'), key: 'material', width: 190, render: (_, record) => record.materials?.length ? <span>{record.materials[0].materialCode ?? '—'} / {supplierName(record.materials[0])}{record.materials.length > 1 ? `（共${record.materials.length}项）` : ''}</span> : '—' },
+    { title: filterTitle('manualProjectCode', '人工项目 / 映射'), key: 'mapping', width: 150, render: (_, record) => record.projectCode ?? '—' },
+    { title: filterTitle('batchOrWorkOrder', '批次 / 工单'), key: 'source', width: 175, render: (_, record) => `${record.batchCode ?? '—'} / ${record.workOrderCode ?? '—'}` },
+    { title: filterTitle('analysisProgress', '分析进度'), key: 'analysisProgress', dataIndex: 'analysisProgress', width: 150, ellipsis: true, render: value => value ?? '—' },
+    { title: filterTitle('dispositionPlan', '处置方案'), key: 'dispositionPlan', width: 100, render: (_, record) => record.dispositionPlan ? dispositionLabels[record.dispositionPlan] : '—' },
+    { title: filterTitle('dispositionProgress', '处置进度'), key: 'dispositionProgress', dataIndex: 'dispositionProgress', width: 150, ellipsis: true, render: value => value ?? '—' },
+    { title: filterTitle('dispositionCompletedAt', '处置完成时间'), key: 'dispositionCompletedAt', width: 130, ellipsis: { showTitle: false }, onCell: record => ({ title: record.dispositionCompletedAt ? listTimestamp.format(new Date(record.dispositionCompletedAt)) : undefined }), render: (_, record) => record.dispositionCompletedAt ? occurrenceDate.format(new Date(record.dispositionCompletedAt)) : '—' },
     { title: '操作', key: 'actions', width: canDelete ? 112 : 64, align: 'center', render: (_, record) => <div className="process-quality-row-actions">
       <button type="button" aria-label="查看详情" title="查看详情" onClick={() => void openDetail(record.id)}><Eye size={16} aria-hidden="true" /></button>
       {canDelete && !record.archivedAt ? <button type="button" className="process-quality-delete-action" aria-label="删除台账" title="删除台账" disabled={locked || !!deletionTargets} onClick={() => openDeletion([record])}><Trash2 size={16} aria-hidden="true" /></button> : null}
@@ -512,21 +531,24 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
       <ProcessError cause={supplierError} fallback="供应商名称加载失败，请刷新重试。" />
       {boardDenied && !detailOpen ? <Alert showIcon type="warning" title="当前板块操作已被拒绝，正在刷新台账与操作权限。" /> : null}
       <ProcessError cause={capabilityError} fallback="维护权限加载失败，请刷新重试。" />
-      <LedgerTable<Defect> pinnedHorizontalScroll actionBar={toolbar} bodyFallback={listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : undefined} compactHeaders compactLayout ledgerId="process-defects" organizationId={targetOrganizationId} viewId={viewId} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'factoryCode', 'shift', 'project', 'productCategory', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} insertNewColumnsBefore={[["factoryCode", "shift", true], ['productCategory', 'productSubcategory']]} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} expandable={{ rowExpandable: record => (record.materials?.length ?? 0) > 0, expandedRowRender: record => <MaterialDetails record={record} supplierName={supplierName} /> }} locale={{ emptyText: <Empty description={search || appliedFilters.currentMonth || appliedFilters.items.length ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions, onChange: (next, size) => { if (!locked) requestLeave(() => { if (filterOpen && !saveAppliedFilters(completeDraft, undefined, false, false)) return; setPage(size === pageSize && !changesSelection ? next : 1); setPageSize(size); }); } }} />
+      <LedgerTable<Defect> pinnedHorizontalScroll actionBar={toolbar} bodyFallback={listError ? <Alert type={isDenied(listError) ? 'warning' : 'error'} showIcon title={isDenied(listError) ? '暂无制程不良访问权限' : errorText(listError, '台账加载失败，请重试。')} action={!isDenied(listError) ? <Button onClick={() => setRevision((value) => value + 1)}>重试</Button> : undefined} /> : undefined} compactHeaders compactLayout ledgerId="process-defects" organizationId={targetOrganizationId} viewId={viewId} className="process-quality-ledger" requiredColumnKeys={['select', 'description', 'actions']} defaultVisibleColumnKeys={['select', 'occurredAt', 'factoryCode', 'shift', 'project', 'productCategory', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectQuantity', 'actions']} insertNewColumnsBefore={[['factoryCode', 'shift', true], ['productCategory', 'productSubcategory'], ...maintenanceColumnKeys.map(key => [key, 'actions', false, true] as const)]} resetColumnsLabel="恢复录单默认列" rowKey="id" columns={columns} dataSource={result?.items ?? []} loading={loading} locale={{ emptyText: <Empty description={search || appliedFilters.currentMonth || appliedFilters.items.length ? '没有匹配的不良记录' : '暂无不良记录'} /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions, onChange: (next, size) => { if (!locked) requestLeave(() => { if (filterOpen && !saveAppliedFilters(completeDraft, undefined, false, false)) return; setPage(size === pageSize && !changesSelection ? next : 1); setPageSize(size); }); } }} />
     </section>
     <Drawer title="不良品详情" open={detailOpen} onClose={() => { detailController.current?.abort(); detailRequest.current += 1; setDetailOpen(false); setDetail(undefined); setLinked([]); }} size="min(760px, 100vw)" destroyOnHidden
       classNames={{ header: 'process-quality-drawer-header' }}
-      extra={!detailLoading && !detailError && detail && !detail.archivedAt ? <Space wrap>
+      extra={!detailLoading && detail && !detail.archivedAt ? <Space wrap>
         {canRegister ? <Button disabled={locked} onClick={() => requestLeave(() => setEditor(detail))}>维护登记信息</Button> : null}
         {canDelete ? <Button danger disabled={locked || !!deletionTargets} onClick={() => openDeletion([detail])}>删除台账</Button> : null}
         {canIssue ? <Button disabled={locked || (!selected[detail.id] && selectedCount >= formalIssueLimit)} onClick={() => requestLeave(() => { toggle(detail, true); setDetailOpen(false); })}>选择此条并返回台账</Button> : null}
       </Space> : null}>
       {boardDenied ? <Alert showIcon type="warning" title="当前板块操作已被拒绝，正在刷新台账与操作权限。" /> : null}
-      {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')} /> : detail ? <>
-        <Space orientation="vertical" size="large" style={{ width: '100%' }}>
-        <Descriptions title="表单登记" bordered size="small" column={1} items={[
-          { key: 'type', label: '失效类型', children: detail.defectTypeCode },
-          { key: 'description', label: '不良描述', children: <span className="process-quality-description">{detail.description || '待完善'}</span> },
+      {detailError ? <Alert type={isDenied(detailError) ? 'warning' : 'error'} showIcon title={isDenied(detailError) ? '暂无该来源访问权限' : errorText(detailError, '详情加载失败，请重试。')}
+        action={!isDenied(detailError) ? <Button size="small" aria-label="重试" onClick={() => { if (detailTarget.current) void openDetail(detailTarget.current, !!detail); }}>重试</Button> : undefined} /> : null}
+      {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detail ? <>
+        <div className="process-quality-detail-sections">
+        <section className="process-quality-detail-section">
+        <Descriptions title="表单登记" bordered size="small" column={{ xs: 1, sm: 2, lg: 3 }} items={[
+          { key: 'description', label: '不良描述', span: 'filled', children: <span className="process-quality-description">{detail.description || '待完善'}</span> },
+          { key: 'type', label: '失效类型', children: detail.defectTypeCode ?? '—' },
           { key: 'quantity', label: '数量', children: detail.defectQuantity },
           { key: 'occurredAt', label: '发生时间', children: detail.occurredAt ? new Date(detail.occurredAt).toLocaleString('zh-CN') : '未知' },
           { key: 'factoryCode', label: factoryTitle, children: factoryLabel(detail.factoryCode, english) },
@@ -547,32 +569,56 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
           { key: 'source', label: '来源', children: <Space><Tag>{detail.sourceKind === 'IMS' ? '自动' : '人工录入'}</Tag>{detail.externalSourceSystem ? <Tag>{detail.externalSourceSystem}</Tag> : null}</Space> },
         ]} />
         <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} canRegister={canRegister} onSaved={saved} onDenied={revoke} onAdoptDenied={denyBoard} />
+        </section>
+        <section className="process-quality-detail-section">
         <Descriptions title="分析" bordered size="small" column={1}
-          extra={!detail.archivedAt && boards.includes('ANALYSIS') ? <Button disabled={locked || !!deletionTargets} onClick={() => openBoard('ANALYSIS', [detail])}>{boardLabels.ANALYSIS}</Button> : null}
+          extra={!detail.archivedAt && boards.includes('ANALYSIS') ? <Button size="small" disabled={locked || !!deletionTargets} onClick={() => openBoard('ANALYSIS', [detail])}>{boardLabels.ANALYSIS}</Button> : null}
           items={[{ key: 'progress', label: '分析进展', children: detail.analysisProgress ?? '—' }]} />
-        <div>
+        </section>
+        <section className="process-quality-detail-section">
           <Descriptions title="责任" bordered size="small" column={1}
-            extra={!detail.archivedAt && boards.includes('RESPONSIBILITY') ? <Button disabled={locked || !!deletionTargets} onClick={() => openBoard('RESPONSIBILITY', [detail])}>{boardLabels.RESPONSIBILITY}</Button> : null}
+            extra={!detail.archivedAt && boards.includes('RESPONSIBILITY') ? <Button size="small" disabled={locked || !!deletionTargets} onClick={() => openBoard('RESPONSIBILITY', [detail])}>{boardLabels.RESPONSIBILITY}</Button> : null}
             items={[{ key: 'responsibility', label: '责任类别', children: responsibility(detail.responsibilityCategory) }]} />
-          <Typography.Title level={4}>物料与复核事实</Typography.Title>
-          <MaterialDetails record={detail} supplierName={supplierName} canReview={boards.includes('MATERIAL_REVIEW') && !detail.archivedAt ? canReviewMaterial : undefined}
-            onReview={materialId => openBoard('MATERIAL_REVIEW', [detail], materialId)} reviewDisabled={locked || !!deletionTargets} />
-        </div>
-        <Descriptions title="处置" bordered size="small" column={1}
-          extra={!detail.archivedAt && boards.includes('DISPOSITION') ? <Button disabled={locked || !!deletionTargets} onClick={() => openBoard('DISPOSITION', [detail])}>{boardLabels.DISPOSITION}</Button> : null}
+          {detail.responsibilityCategory === 'MATERIAL' || detail.materials?.length ? <>
+            <Typography.Title level={5}>异常物料信息登记</Typography.Title>
+            <MaterialDetails record={detail} supplierName={supplierName}
+              canEdit={!detail.archivedAt && boards.includes('RESPONSIBILITY')}
+              canReview={!detail.archivedAt && boards.includes('MATERIAL_REVIEW') ? canReviewMaterial : undefined}
+              onEdit={(board, materialId) => openBoard(board, [detail], materialId)} disabled={locked || !!deletionTargets} />
+          </> : null}
+        </section>
+        <section className="process-quality-detail-section">
+        <Descriptions title="处置" bordered size="small" column={{ xs: 1, sm: 2 }}
+          extra={!detail.archivedAt && boards.includes('DISPOSITION') ? <Button size="small" disabled={locked || !!deletionTargets} onClick={() => openBoard('DISPOSITION', [detail])}>{boardLabels.DISPOSITION}</Button> : null}
           items={[
             { key: 'dispositionPlan', label: '处置方案', children: detail.dispositionPlan ? dispositionLabels[detail.dispositionPlan] : '—' },
-            { key: 'dispositionProgress', label: '处置进度', children: detail.dispositionProgress ?? '—' },
             { key: 'dispositionCompletedAt', label: '处置完成时间', children: detail.dispositionCompletedAt ? occurrenceTimestamp.format(new Date(detail.dispositionCompletedAt)) : '—' },
+            { key: 'dispositionProgress', label: '处置进度', span: 'filled', children: detail.dispositionProgress ?? '—' },
           ]} />
+        </section>
+        <section className="process-quality-detail-section">
         <Descriptions title="台账关闭判定" bordered size="small" column={1}
-          extra={!detail.archivedAt && boards.includes('CLOSURE') ? <Button disabled={locked || !!deletionTargets} onClick={() => openBoard('CLOSURE', [detail])}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}
+          extra={!detail.archivedAt && boards.includes('CLOSURE') ? <Button size="small" disabled={locked || !!deletionTargets} onClick={() => openBoard('CLOSURE', [detail])}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}
           items={[{ key: 'ledgerStatus', label: '台账状态', children: detail.ledgerStatus === 'CLOSED' ? '已关闭' : '跟进中' }]} />
-        </Space>
-        <Typography.Title level={4}>已关联问题</Typography.Title>
-        <RecordList items={linked} itemKey={problem => problem.id} renderItem={problem => <Link to={`/app/problem-workspace/${problem.id}`}>{problem.reportNumber}</Link>} empty={<Empty description="尚未关联正式问题" />} />
-        <Typography.Title level={4}>可用证据</Typography.Title>
-        <AttachmentPanel resource={{ resourceType: 'process-defect', resourceId: detail.id }} fileIds={(detail.evidence ?? []).map(evidence => evidence.id)} readOnly={!canWrite} />
+        </section>
+        <AttachmentPanel variant="standard" resource={{ resourceType: 'process-defect', resourceId: detail.id }} fileIds={detail.attachmentIds ?? (detail.evidence ?? []).map(evidence => evidence.id)} readOnly={!canWrite || !!detail.archivedAt}
+          onUploadCompleted={() => { void openDetail(detail.id, true); }} onRemoved={() => { void openDetail(detail.id, true); }} onAccessDenied={revoke} onWriteAccessDenied={denyBoard} />
+        <section className="process-quality-detail-section">
+          <Typography.Title level={5}>已关联问题</Typography.Title>
+          <RecordList items={linked} itemKey={problem => problem.id} renderItem={problem => <Link to={`/app/problem-workspace/${problem.id}`}>{problem.reportNumber}</Link>} empty={<Typography.Text type="secondary">尚未关联正式问题</Typography.Text>} />
+        </section>
+        <section className="process-quality-detail-section">
+          <Typography.Title level={5}>更新记录</Typography.Title>
+          {detail.updateRecords?.length === 100 ? <Typography.Text type="secondary">显示最近 100 条</Typography.Text> : null}
+          <table className="process-quality-update-records" aria-label="更新记录">
+            <thead><tr><th scope="col">时间</th><th scope="col">更新内容</th><th scope="col">更新人</th></tr></thead>
+            <tbody>{detail.updateRecords?.length ? detail.updateRecords.map(entry => <tr key={entry.id}>
+              <td><time dateTime={entry.occurredAt}>{occurrenceTimestamp.format(new Date(entry.occurredAt))}</time></td>
+              <td>{entry.content}</td><td>{entry.actorName}</td>
+            </tr>) : <tr><td colSpan={3}>暂无更新记录</td></tr>}</tbody>
+          </table>
+        </section>
+        </div>
         {canIssue && !selected[detail.id] && selectedCount >= formalIssueLimit ? <Alert type="warning" showIcon title={`已选满${formalIssueLimit}条来源，请先取消一条已选来源，再选择此条。`} /> : null}
       </> : null}
     </Drawer>
@@ -584,12 +630,38 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   </main>;
 }
 
-function MaterialDetails({ record, supplierName, canReview, onReview, reviewDisabled }: { record: Defect; supplierName: (item: Defect['materials'][number]) => string; canReview?: (item: Defect['materials'][number]) => boolean; onReview?: (id: string) => void; reviewDisabled?: boolean }) {
-  return <Table<Defect['materials'][number]> rowKey={item => item.id ?? String(item.position)} dataSource={record.materials ?? []} size="small" pagination={false} scroll={{ x: 850 }} locale={{ emptyText: '暂无物料明细' }} columns={[
-    { title: '物料编码', dataIndex: 'materialCode', render: value => value ?? '—' }, { title: '物料名称', dataIndex: 'materialName', render: value => value ?? '—' },
+type Material = Defect['materials'][number];
+
+function MaterialDetails({ record, supplierName, canEdit, canReview, onEdit, disabled }: {
+  record: Defect; supplierName: (item: Material) => string; canEdit: boolean; canReview?: (item: Material) => boolean;
+  onEdit: (board: 'RESPONSIBILITY' | 'MATERIAL_REVIEW', id: string) => void; disabled: boolean;
+}) {
+  function editBoard(item: Material) {
+    if (canEdit) return 'RESPONSIBILITY';
+    if (canReview?.(item)) return 'MATERIAL_REVIEW';
+    return undefined;
+  }
+  return <Table<Material> rowKey={item => item.id ?? String(item.position)} dataSource={record.materials ?? []} size="small" pagination={false} scroll={{ x: 540 }} locale={{ emptyText: '暂无物料明细' }}
+    onRow={item => {
+      const board = editBoard(item);
+      const id = item.id;
+      return id && board && !disabled ? { className: 'process-quality-editable-material', onClick: () => onEdit(board, id) } : {};
+    }} columns={[
+    { title: '物料编码', render: (_, item) => {
+      const board = editBoard(item);
+      const id = item.id;
+      const code = item.materialCode ?? '—';
+      return id && board ? <button type="button" className="process-quality-material-link" aria-label={`编辑异常物料 ${code}`} disabled={disabled}
+        onClick={event => { event.stopPropagation(); onEdit(board, id); }}>{code}</button> : code;
+    } },
+    { title: '物料名称', render: (_, item) => item.materialName || (item.materialCode ? '未匹配' : '—') },
     { title: '供应商', render: (_, item) => supplierName(item) }, { title: '物料批次', dataIndex: 'materialBatch', render: value => value ?? '—' },
-    { title: 'SQE', dataIndex: 'sqeUserId', render: value => value ? '已人工分配' : '未分配' }, { title: '复核状态', dataIndex: 'verification', render: (value: keyof typeof verificationLabels) => verificationLabels[value] ?? '未复核' },
-    { title: '复核说明', dataIndex: 'verificationNotes', render: value => value ?? '—' },
-    ...(canReview && onReview ? [{ title: '操作', render: (_: unknown, item: Defect['materials'][number]) => item.id && canReview(item) ? <Button disabled={reviewDisabled} onClick={() => onReview(item.id!)}>复核此物料</Button> : null }] : []),
+    { title: 'SQE', dataIndex: 'sqeUserId', render: value => value ? '已人工分配' : '未分配' },
+    { title: '复核状态', render: (_, item) => {
+      const label = verificationLabels[item.verification] ?? '未复核';
+      const id = item.id;
+      return id && canEdit && canReview?.(item) ? <button type="button" className="process-quality-material-link" aria-label={`复核异常物料 ${item.materialCode ?? '—'}`} disabled={disabled}
+        onClick={event => { event.stopPropagation(); onEdit('MATERIAL_REVIEW', id); }}>{label}</button> : label;
+    } },
   ]} />;
 }

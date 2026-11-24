@@ -16,6 +16,7 @@ import { IngestionTargetsService } from '../../src/modules/api-integration/inges
 import type { IngestionRuleDto, SaveIngestionRuleDto } from '../../src/modules/api-integration/ingestion.dto.js';
 import { normalizeIngestionRule, selectedDescriptionInput } from '../../src/modules/api-integration/ingestion.policy.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
+import { PROCESS_DEFECT_MANUAL_UPDATE } from '../../src/modules/audit-log/audit-log.service.js';
 import { processIngestionFixture, type ProcessIngestionFixture } from '../process-quality/process-defect-ingestion.fixture.js';
 
 describe('AI description durable queue with PostgreSQL and actual controlled HTTP', () => {
@@ -450,6 +451,10 @@ describe('AI description durable queue with PostgreSQL and actual controlled HTT
       const adopted = await adopt();
       expect(adopted.status).toBe('APPLIED');
       expect(await adopt()).toEqual(adopted);
+      const manualUpdates = await prisma.auditEvent.findMany({ where: {
+        organizationId, action: PROCESS_DEFECT_MANUAL_UPDATE, resourceId: { in: [value.defect.id, failed.defect.id, automatic.defect.id] },
+      } });
+      expect(manualUpdates).toMatchObject([{ actorUserId: actor.id, resourceId: value.defect.id, metadata: { changedFields: 'description' } }]);
       await prisma.userPosition.delete({ where: { id: appointment.id } });
       await expect(adopt()).rejects.toMatchObject(denied);
     } finally {

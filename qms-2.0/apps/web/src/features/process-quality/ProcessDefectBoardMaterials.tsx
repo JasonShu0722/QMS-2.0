@@ -13,15 +13,96 @@ type MaterialView = Defect['materials'][number];
 type SqePage = components['schemas']['ProcessMaterialSqePageDto'];
 export type Supplier = components['schemas']['SupplierProfileDto'];
 export type MaterialDrafts = Record<string, Pick<Fields, 'materials' | 'reviews' | 'removedMaterialIds'>>;
+const comparedFields = {
+  materialCode: '物料编码', materialName: '物料名称', supplierProfileId: '供应商名称', materialBatch: '物料批次', sqeUserId: '责任 SQE', notes: '物料说明',
+} as const satisfies Partial<Record<keyof Material, string>>;
+type ComparedField = keyof typeof comparedFields;
+type MaterialDifference = { field: ComparedField; label: string; before: string; after: string };
+export type MaterialConflict = {
+  defectId: string;
+  label: string;
+  candidates: { id: string; label: string; patch: Material; differences: MaterialDifference[] }[];
+};
+export type SharedMaterialDraft = { values: Material; sqes: SqePage['items'] };
 type Line = { key: string; defectId: string; original?: MaterialView; material?: Material; review?: Partial<Review> };
+const sharedKey = 'shared-material';
+const requiredMaterialFields = ['materialCode', 'supplierProfileId', 'supplierOrganizationId'] as const;
 const reviewOptions = Object.entries(verificationLabels).filter(([value]) => value !== 'UNREVIEWED').map(([value, label]) => ({ value, label }));
 
-function changedMaterial(line: Line): Material | undefined {
-  const patch: Material = Object.fromEntries(Object.entries(line.material ?? {}).flatMap(([field, raw]) => {
+function changedMaterial(material?: Material, original?: MaterialView): Material | undefined {
+  const patch: Material = Object.fromEntries(Object.entries(material ?? {}).flatMap(([field, raw]) => {
     const value = raw?.trim() || null;
-    return value === (line.original?.[field as keyof Material] ?? null) ? [] : [[field, value]];
+    return value === (original?.[field as keyof Material] ?? null) ? [] : [[field, value]];
   }));
-  return Object.keys(patch).length ? { ...patch, id: line.original?.id } : undefined;
+  return Object.keys(patch).length ? { ...patch, id: original?.id } : undefined;
+}
+
+function incompleteMaterial(value?: Material) {
+  return !value?.materialCode?.trim() || !value?.supplierProfileId;
+}
+
+function recordLabel(record: Defect) {
+  return record.description || record.traceCode || '待完善记录';
+}
+
+function materialLabel(material: MaterialView, index?: number) {
+  return [material.materialCode, material.materialName, material.materialBatch].filter(Boolean).join(' / ') || (index === undefined ? '物料明细' : `物料明细 ${index + 1}`);
+}
+
+export function planSharedMaterials(records: Defect[], { values: material, sqes }: SharedMaterialDraft, suppliers: Supplier[]) {
+  const drafts: MaterialDrafts = {};
+  const conflicts: MaterialConflict[] = [];
+  const supplierProfileId = (item: Material | MaterialView) => item.supplierProfileId ?? (item.supplierOrganizationId
+    ? suppliers.find(supplier => supplier.supplierOrganizationId === item.supplierOrganizationId)?.id
+    : undefined);
+  const format = (field: ComparedField, item: Material | MaterialView) => {
+    if (field === 'supplierProfileId') {
+      const id = supplierProfileId(item);
+      if (!id) return item.supplierOrganizationId ? '供应商名称不可用' : '—';
+      const supplier = suppliers.find(candidate => candidate.id === id);
+      return supplier ? `${supplier.displayName}（${supplier.businessCode}）` : `档案 ${id}`;
+    }
+    const value = item[field];
+    if (!value) return '—';
+    if (field === 'sqeUserId') {
+      const person = sqes.find(item => item.id === value);
+      return person ? personLabel(person) : `用户 ${value}`;
+    }
+    return value;
+  };
+  const code = material.materialCode?.trim();
+  const batch = material.materialBatch?.trim() || null;
+  const matchesSupplier = (item: MaterialView) => !!material.supplierProfileId && supplierProfileId(item) === material.supplierProfileId;
+  for (const record of records) {
+    const items = (record.materials ?? []).filter(item => !!item.id);
+    if (!items.length) {
+      const patch = changedMaterial(material);
+      if (patch) drafts[record.id] = { materials: [patch] };
+      continue;
+    }
+
+    const sameCode = items.filter(item => item.materialCode === code);
+    const sameSupplier = sameCode.filter(matchesSupplier);
+    const sameIdentity = sameSupplier.filter(item => (item.materialBatch ?? null) === batch);
+    const targets = [sameIdentity, sameSupplier, sameCode, items].find(rows => rows.length)!;
+    const candidates: MaterialConflict['candidates'] = [];
+    for (const original of targets) {
+      const next = { ...material, materialBatch: batch };
+      if (matchesSupplier(original)) {
+        delete next.supplierProfileId;
+        delete next.supplierOrganizationId;
+      }
+      if (original.materialCode === code && !next.materialName) delete next.materialName;
+      const patch = changedMaterial(next, original);
+      if (!patch) break;
+      const differences = (Object.keys(comparedFields) as ComparedField[]).flatMap(field => patch[field] === undefined ? [] : [{
+        field, label: comparedFields[field], before: format(field, original), after: format(field, patch),
+      }]);
+      candidates.push({ id: original.id!, label: materialLabel(original), patch, differences });
+    }
+    if (candidates.length === targets.length) conflicts.push({ defectId: record.id, label: recordLabel(record), candidates });
+  }
+  return { drafts, conflicts };
 }
 
 function revision(line: Line) {
@@ -34,26 +115,29 @@ function revision(line: Line) {
   return { review, incomplete: changed && !verification };
 }
 
-export function ProcessDefectBoardMaterials({ board, records, materialId, organizationId, userId, suppliers, canReadSuppliers, disabled, onChange, onPendingChange, onIncompleteReview }: {
+export function ProcessDefectBoardMaterials({ board, records, materialId, organizationId, userId, suppliers, canReadSuppliers, disabled, showMaterials, onChange, onPendingChange, onIncompleteChange, onSharedChange }: {
   board: 'RESPONSIBILITY' | 'MATERIAL_REVIEW'; records: Defect[]; materialId?: string; organizationId: string; userId?: string;
-  suppliers: Supplier[]; canReadSuppliers: boolean; disabled: boolean; onChange: (drafts: MaterialDrafts) => void;
-  onPendingChange: (pending: boolean) => void; onIncompleteReview: (incomplete: boolean) => void;
+  suppliers: Supplier[]; canReadSuppliers: boolean; disabled: boolean; showMaterials: boolean; onChange: (drafts: MaterialDrafts) => void;
+  onPendingChange: (pending: boolean) => void; onIncompleteChange: (incomplete: boolean) => void; onSharedChange: (draft?: SharedMaterialDraft) => void;
 }) {
   const formId = useId();
   const reviewOnly = board === 'MATERIAL_REVIEW';
-  const canRemove = !reviewOnly && records.length === 1;
+  const shared = !reviewOnly && records.length > 1;
+  const direct = !!materialId;
+  const canRemove = !reviewOnly && !shared && !direct;
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [lines, setLines] = useState<Line[]>(() => {
-    if (!reviewOnly || !materialId || !userId) return [];
+    if (shared) return [{ key: sharedKey, defectId: sharedKey }];
+    if (!materialId) return [];
     const record = records[0];
-    const original = record?.materials?.find(item => item.id === materialId && item.sqeUserId === userId);
+    const original = record?.materials?.find(item => item.id === materialId && (!reviewOnly || userId && item.sqeUserId === userId));
     return original ? [{ key: materialId, defectId: record.id, original }] : [];
   });
   const pending = useRef(new Set<string>());
   const [sqes, setSqes] = useState<SqePage['items']>();
   const [sqeFailed, setSqeFailed] = useState(false);
   const [sqeRevision, setSqeRevision] = useState(0);
-  const showSqes = !reviewOnly && lines.length > 0;
+  const showSqes = showMaterials && !reviewOnly && lines.length > 0;
 
   useEffect(() => {
     if (!showSqes) return;
@@ -77,6 +161,18 @@ export function ProcessDefectBoardMaterials({ board, records, materialId, organi
   }, [showSqes, organizationId, sqeRevision]);
 
   useEffect(() => {
+    if (!showMaterials) {
+      onChange({});
+      onSharedChange(undefined);
+      onIncompleteChange(false);
+      return;
+    }
+    if (shared) {
+      const material = lines[0]?.material;
+      onSharedChange(material && !incompleteMaterial(material) ? { values: material, sqes: sqes ?? [] } : undefined);
+      onIncompleteChange(incompleteMaterial(material));
+      return;
+    }
     const drafts: MaterialDrafts = {};
     let incomplete = false;
     for (const line of lines) {
@@ -85,14 +181,17 @@ export function ProcessDefectBoardMaterials({ board, records, materialId, organi
         incomplete ||= missing;
         if (review) (drafts[line.defectId] ??= { reviews: [] }).reviews!.push(review);
       } else {
-        const patch = changedMaterial(line);
-        if (patch && !removedIds.includes(line.key)) (drafts[line.defectId] ??= { materials: [] }).materials!.push(patch);
+        if (removedIds.includes(line.key)) continue;
+        const patch = changedMaterial(line.material, line.original);
+        const requiresCompleteIdentity = !line.original || requiredMaterialFields.some(field => patch?.[field] !== undefined);
+        if (requiresCompleteIdentity && incompleteMaterial({ ...line.original, ...line.material })) incomplete = true;
+        if (patch) (drafts[line.defectId] ??= { materials: [] }).materials!.push(patch);
       }
     }
     if (canRemove && removedIds.length) (drafts[records[0].id] ??= {}).removedMaterialIds = removedIds;
     onChange(drafts);
-    onIncompleteReview(incomplete);
-  }, [lines, reviewOnly, canRemove, removedIds, records, onChange, onIncompleteReview]);
+    onIncompleteChange(incomplete);
+  }, [lines, reviewOnly, shared, showMaterials, canRemove, removedIds, records, sqes, onChange, onIncompleteChange, onSharedChange]);
 
   function update(key: string, update: (line: Line) => Line) {
     setLines(current => current.map(line => line.key === key ? update(line) : line));
@@ -129,6 +228,7 @@ export function ProcessDefectBoardMaterials({ board, records, materialId, organi
     return <>
       <ProcessMaterialEntry number={number} value={value} suppliers={suppliers} canReadSuppliers={canReadSuppliers} organizationId={organizationId} disabled={disabled} onChange={change}
         onLookupPendingChange={active => { if (active) pending.current.add(line.key); else pending.current.delete(line.key); onPendingChange(pending.current.size > 0); }} />
+      <div className="process-material-entry-grid">
       <Form.Item label={`责任 SQE ${number}`} htmlFor={sqeId}>
         <Select id={sqeId} value={value.sqeUserId ?? undefined} options={options} loading={!sqes && !sqeFailed} disabled={disabled || !sqes} allowClear
           showSearch={{ optionFilterProp: 'label' }} onChange={sqeUserId => change({ sqeUserId: sqeUserId ?? null })} />
@@ -136,23 +236,28 @@ export function ProcessDefectBoardMaterials({ board, records, materialId, organi
       <Form.Item label={`物料说明 ${number}`} htmlFor={`${formId}-material-notes-${line.key}`}>
         <Input.TextArea id={`${formId}-material-notes-${line.key}`} value={value.notes ?? ''} rows={2} maxLength={2000} onChange={event => change({ notes: event.target.value })} />
       </Form.Item>
+      </div>
     </>;
   }
 
+  if (!showMaterials) return null;
+  const warning = sqeFailed && showSqes ? <Alert showIcon type="warning" title="责任 SQE 候选加载失败" action={<Button disabled={disabled} onClick={() => setSqeRevision(current => current + 1)}>重试</Button>} /> : null;
+  if (shared) return <>{warning}{renderMaterial(lines[0], 1)}</>;
+  if (direct) return <>{warning}{lines[0] ? reviewOnly ? renderReview(lines[0], 0) : renderMaterial(lines[0], 1) : null}</>;
   return <>
-    {sqeFailed && showSqes ? <Alert showIcon type="warning" title="责任 SQE 候选加载失败" action={<Button disabled={disabled} onClick={() => setSqeRevision(current => current + 1)}>重试</Button>} /> : null}
+    {warning}
     {records.map(record => {
       const items = (record.materials ?? []).filter(item => item.id && (!reviewOnly || !!userId && item.sqeUserId === userId));
       const added = lines.filter(line => line.defectId === record.id && !line.original);
       if (reviewOnly && !items.length) return null;
       return <Form.Item key={record.id}>
         <fieldset>
-          <legend>{record.description || record.traceCode || '待完善记录'}</legend>
+          <legend>{recordLabel(record)}</legend>
           {items.map((item, index) => {
             const line = lines.find(candidate => candidate.key === item.id);
             const id = item.id!;
             const removed = removedIds.includes(id);
-            const label = [item.materialCode, item.materialName, item.materialBatch].filter(Boolean).join(' / ') || `物料明细 ${index + 1}`;
+            const label = materialLabel(item, index);
             return <div key={item.id}>
               <Space wrap>
                 <Checkbox name="material-edit" checked={!!line} disabled={disabled || removed} onChange={event => {

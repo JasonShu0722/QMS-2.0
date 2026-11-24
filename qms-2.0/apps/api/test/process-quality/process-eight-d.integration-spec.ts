@@ -11,7 +11,7 @@ import { Prisma } from '../../src/generated/prisma/client.js';
 import { assertActiveAuthentication } from '../../src/common/security/session-security.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { AdminMutationService } from '../../src/common/security/admin-mutation.service.js';
-import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
+import { AuditLogService, PROCESS_DEFECT_MANUAL_UPDATE } from '../../src/modules/audit-log/audit-log.service.js';
 import { FileResourceAccess } from '../../src/modules/file-management/file-resource-access.js';
 import { FileLifecycleService } from '../../src/modules/file-management/file-lifecycle.service.js';
 import { FilePolicyService } from '../../src/modules/file-management/file-policy.service.js';
@@ -165,6 +165,37 @@ describe('process 8D real domain transactions', () => {
     const id = String(result.problem.id), model = await f.read(id);
     expect(model).toMatchObject({ professionalUserId: f.issuer.user.id, ownerUserId: f.owner.user.id, version: 1, contentVersion: 1 });
     await expect(service.save(f.issuer.actor, id, { expectedVersion: 1, document: f.draft() }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+  }, 120_000);
+
+  it('shows real 8D link and unlink actions in the capped defect update timeline', async () => {
+    const f = await fixture(), primary = await f.source(), source = await f.source();
+    const actor = f.issuer.actor;
+    await prisma.user.update({ where: { id: actor.id }, data: { fullName: '实际关联人' } });
+    const read = () => ledger.detail(actor, source.id);
+    expect((await read()).updateRecords).toEqual([]);
+
+    const issued = await service.issue(actor, f.input([primary]), randomUUID(), randomUUID());
+    const problemId = String(issued.problem.id);
+    const input = { expectedVersion: 1, add: f.input([source]).sources, removeDefectIds: [], primaryDefectId: source.id };
+    const key = randomUUID();
+    const linked = await service.sources(actor, problemId, input, randomUUID(), key);
+    await service.sources(actor, problemId, input, randomUUID(), key);
+    expect((await read()).updateRecords).toEqual([
+      expect.objectContaining({ content: '关联问题', actorName: '实际关联人' }),
+    ]);
+
+    await ledger.update(actor, source.id, { expectedVersion: (await read()).version, description: '更新后的台账描述' }, randomUUID(), randomUUID());
+    await service.sources(actor, problemId, { expectedVersion: linked.version, add: [], removeDefectIds: [source.id], primaryDefectId: primary.id }, randomUUID(), randomUUID());
+    await prisma.auditEvent.createMany({ data: Array.from({ length: 100 }, (_, index) => ({
+      organizationId: actor.organizationId, actorUserId: actor.id, action: PROCESS_DEFECT_MANUAL_UPDATE, resourceType: 'ProcessDefect',
+      resourceId: source.id, outcome: 'SUCCESS', traceId: randomUUID(), metadata: { changedFields: 'description' }, createdAt: new Date(index),
+    })) });
+
+    const { updateRecords } = await read();
+    expect(updateRecords).toHaveLength(100);
+    expect(updateRecords.slice(0, 3).map(({ content, actorName }) => [content, actorName])).toEqual([
+      ['取消关联问题', '实际关联人'], ['更新不良描述', '实际关联人'], ['关联问题', '实际关联人'],
+    ]);
   }, 120_000);
 
   it('reads authorized followup names without management grants or full reports, falls back to username and denies revoked readers', async () => {

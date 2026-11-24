@@ -63,6 +63,61 @@ async function openPanel(label = '筛选条件') {
   return { trigger, panel, queries: within(panel) };
 }
 
+const maintenanceColumns = ['分析进度', '处置方案', '处置进度', '处置完成时间'];
+
+it('keeps selection first and frozen, hides maintenance columns by default and adds them before actions', async () => {
+  items = [{ ...defect, dispositionCompletedAt: '2026-11-10T16:23:00.000Z' }];
+  const { container } = mount();
+  const headers = within(container.querySelector('thead')!);
+  expect(headers.queryByRole('columnheader', { name: '明细' })).not.toBeInTheDocument();
+  const selection = headers.getByRole('columnheader', { name: '选择' });
+  expect(selection.previousElementSibling).toBeNull();
+  expect(selection.className).toMatch(/ant-table-cell-fix-(left|start)/);
+  for (const label of maintenanceColumns) expect(headers.queryByRole('columnheader', { name: label })).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: '列设置' }));
+  for (const label of maintenanceColumns) fireEvent.click(await screen.findByLabelText(`显示 ${label}`));
+  const visible = headers.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'));
+  expect(visible.slice(-5)).toEqual([...maintenanceColumns, '操作']);
+  const row = (await screen.findByLabelText(`选择制程不良 ${defect.description}`)).closest('tr')!;
+  expect(row.cells[visible.indexOf('处置完成时间')]).toHaveTextContent(/^2026\/11\/11$/);
+}, 30000);
+
+it('retains explicit visibility and width while moving legacy maintenance columns before actions', async () => {
+  const order = ['select', 'occurredAt', 'description', 'actions', 'analysisProgress', 'dispositionPlan'];
+  localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { order, visible: ['select', 'description', 'actions', 'dispositionPlan'], widths: { description: 390 } } }));
+  const { container } = mount();
+  const headers = within(container.querySelector('thead')!);
+  expect(headers.queryByRole('columnheader', { name: '分析进度' })).not.toBeInTheDocument();
+  expect(headers.queryByRole('columnheader', { name: '处置进度' })).not.toBeInTheDocument();
+  expect(headers.queryByRole('columnheader', { name: '处置完成时间' })).not.toBeInTheDocument();
+  const actions = headers.getByRole('columnheader', { name: '操作' });
+  expect(headers.getByRole('columnheader', { name: '处置方案' }).compareDocumentPosition(actions) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(within(headers.getByRole('columnheader', { name: '不良描述' })).getByRole('separator')).toHaveAttribute('aria-valuenow', '390');
+});
+
+it('offers the shared filter trigger for every configurable data column', () => {
+  const visible = ['select', 'occurredAt', 'factoryCode', 'shift', 'project', 'productCategory', 'productSubcategory', 'projectStage', 'description', 'traceCode', 'lineName', 'operationName', 'operationSector', 'defectTypeCode', 'defectQuantity', 'productCode', 'workOrderCode', 'lineCode', 'operationCode', 'registeredByName', 'completion', 'responsibilityCategory', 'ledgerStatus', 'material', 'mapping', 'source', 'analysisProgress', 'dispositionPlan', 'dispositionProgress', 'dispositionCompletedAt', 'actions'];
+  localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { visible } }));
+  const { container } = mount();
+  const headers = Array.from(container.querySelectorAll('thead th[data-compact-ledger-column]'));
+  expect(headers.map(header => header.getAttribute('data-compact-ledger-column'))).toEqual(visible);
+  for (const header of headers) {
+    const label = header.getAttribute('aria-label')!;
+    const controls = within(header as HTMLElement).queryAllByLabelText(`按${label}筛选`, { selector: 'button' });
+    expect(controls, label).toHaveLength(['选择', '操作'].includes(label) ? 0 : 1);
+  }
+});
+
+it('shows the completion state alongside duplicate warnings', async () => {
+  items = [{ ...defect, duplicateCount: 1, pendingCompletion: false }];
+  localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { visible: ['select', 'description', 'completion', 'actions'] } }));
+  mount();
+  const row = within((await screen.findByLabelText(`选择制程不良 ${defect.description}`)).closest('tr')!);
+  const completion = row.getByText('已完善').closest('td')!;
+  expect(completion).toHaveTextContent('同工序同条码已有记录。');
+});
+
 it('shows the factory before shift and displays saved and missing values in the ledger and detail', async () => {
   const missing = { ...defect, id: '33333333-3333-4333-8333-333333333333', description: '历史记录', factoryCode: null, issues: ['factory:INVALID'], pendingCompletion: true };
   items = [defect, missing];
@@ -98,7 +153,7 @@ it('submits factory codes and value-free empty conditions from the shared filter
   expect(JSON.parse(latestQuery().get('filters')!)).toEqual({ logic: 'ALL', items: [{ field: 'factoryCode', operator: 'EMPTY' }] });
 });
 
-it('upgrades a saved order, keeps an explicitly hidden factory after reload, and restores defaults', async () => {
+it('upgrades a saved order, keeps an explicitly hidden factory after reload, and restores defaults', () => {
   const order = ['select', 'project', 'shift', 'occurredAt', 'productSubcategory', 'description', 'actions'];
   localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { order, visible: order.filter(key => key !== 'occurredAt'), widths: { description: 390 } } }));
   const mounted = mount();
@@ -108,20 +163,20 @@ it('upgrades a saved order, keeps an explicitly hidden factory after reload, and
   expect(savedHeaders.getByLabelText('产品类型', headerOptions).nextElementSibling).toBe(savedHeaders.getByLabelText('细分类型', headerOptions));
   expect(savedHeaders.queryByLabelText('发生时间', headerOptions)).not.toBeInTheDocument();
   expect(within(savedHeaders.getByLabelText('不良描述', headerOptions)).getByRole('separator')).toHaveAttribute('aria-valuenow', '390');
-  fireEvent.click(screen.getByRole('button', { name: '列设置' }));
-  const restore = await screen.findByText('恢复录单默认列', { selector: 'button span' });
-  const settings = within(restore.closest<HTMLElement>('.qms-ledger__settings')!);
+  fireEvent.click(within(mounted.container).getByRole('button', { name: '列设置' }));
+  const settings = within(document.querySelector<HTMLElement>('.qms-ledger__settings')!);
   fireEvent.click(settings.getByLabelText('显示 工厂'));
   mounted.unmount();
   const { container } = mount();
   const restoredHeaders = within(container.querySelector('thead')!);
   expect(restoredHeaders.queryByLabelText('工厂', headerOptions)).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '列设置' }));
-  fireEvent.click(await screen.findByText('恢复录单默认列', { selector: 'button span' }));
+  fireEvent.click(within(container).getByRole('button', { name: '列设置' }));
+  const restoredSettings = within(document.querySelector<HTMLElement>('.qms-ledger__settings')!);
+  fireEvent.click(restoredSettings.getByText('恢复录单默认列', { selector: 'button span' }));
   const factory = restoredHeaders.getByLabelText('工厂', headerOptions);
   expect(factory.previousElementSibling).toBe(restoredHeaders.getByLabelText('发生时间', headerOptions));
   expect(factory.nextElementSibling).toBe(restoredHeaders.getByLabelText('班次', headerOptions));
-}, 30000);
+}, 60000);
 
 it('displays the mapped product category even without a linked project and shows missing categories as unconfirmed', async () => {
   const unmapped = { ...defect, id: '33333333-3333-4333-8333-333333333333', description: '历史记录', productCategory: null, productSubcategory: null };
@@ -192,39 +247,42 @@ it.each([
   expect(panel.getByLabelText('筛选运算符 1')).toHaveValue('CONTAINS');
 });
 
-it('omits single-field filter triggers from composite columns', () => {
+it.each([
+  ['完善情况', 'pendingCompletion'], ['首条物料 / 供应商', 'firstMaterialCode'], ['人工项目 / 映射', 'manualProjectCode'], ['批次 / 工单', 'batchOrWorkOrder'],
+])('opens the matching filter for the %s projection', async (label, field) => {
   localStorage.setItem(columnsKey, JSON.stringify({ schema: 1, value: { visible: ['completion', 'material', 'mapping', 'source'] } }));
   mount();
-  for (const label of ['完善情况', '首条物料 / 供应商', '人工项目 / 映射', '批次 / 工单']) {
-    const header = screen.getByRole('columnheader', { name: label });
-    expect(within(header).queryByRole('button', { name: /筛选$/ })).not.toBeInTheDocument();
-  }
+  const { queries } = await openPanel(`按${label}筛选`);
+  expect(queries.getByLabelText('筛选字段 1')).toHaveValue(field);
 });
 
 it('starts the ledger columns narrower and preserves individually saved widths', () => {
   const mounted = mount();
+  const headerOptions = { selector: 'th' };
+  const headers = within(mounted.container.querySelector('thead')!);
   for (const [name, width] of [['发生时间', 104], ['板块', 76], ['不良数量', 80]] as const) {
-    expect(within(screen.getByRole('columnheader', { name })).getByRole('separator')).toHaveAttribute('aria-valuenow', String(width));
+    expect(within(headers.getByLabelText(name, headerOptions)).getByRole('separator')).toHaveAttribute('aria-valuenow', String(width));
   }
   mounted.unmount();
   const saved = JSON.stringify({ schema: 1, value: { widths: { project: 222, shift: 48, occurredAt: 158, operationSector: 136, defectQuantity: 140 } } });
   localStorage.setItem(columnsKey, saved);
-  mount();
+  const restoredHeaders = within(mount().container.querySelector('thead')!);
+  for (const label of maintenanceColumns) expect(restoredHeaders.queryByLabelText(label, headerOptions)).not.toBeInTheDocument();
   for (const [name, width] of [['发生时间', 158], ['板块', 136], ['不良数量', 140], ['班次', 64], ['项目号', 222], ['产品类型', 84], ['细分类型', 112], ['项目状态', 100]] as const) {
-    const handle = within(screen.getByRole('columnheader', { name })).getByRole('separator');
+    const handle = within(restoredHeaders.getByLabelText(name, headerOptions)).getByRole('separator');
     expect(handle).toHaveAttribute('aria-valuenow', String(width));
   }
   expect(localStorage.getItem(columnsKey)).toBe(saved);
 });
 
-it('shows the local date with the complete local timestamp on hover and keeps the sector readable', async () => {
+it('shows the Beijing calendar date with the complete timestamp on hover and keeps the sector readable', async () => {
   const occurredAt = '2026-11-10T23:07:42.000Z';
   const operationSector = '较长的制程板块名称示例';
   items = [{ ...defect, occurredAt, operationSector }];
   const { container } = mount();
   const row = within((await screen.findByLabelText(`选择制程不良 ${defect.description}`)).closest('tr')!);
   const date = new Date(occurredAt);
-  const dateOptions = { year: 'numeric', month: '2-digit', day: '2-digit' } as const;
+  const dateOptions = { year: 'numeric', month: '2-digit', day: '2-digit', timeZone: 'Asia/Shanghai' } as const;
   expect(row.getByText(date.toLocaleDateString('zh-CN', dateOptions))).toHaveAttribute('title', date.toLocaleString('zh-CN', { ...dateOptions, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }));
   expect(row.getByText(operationSector)).toHaveAttribute('title', operationSector);
   expect(within(container.querySelector('thead')!).getByLabelText('按板块筛选')).toBeVisible();

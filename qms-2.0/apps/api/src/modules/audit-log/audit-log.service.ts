@@ -16,6 +16,8 @@ type AuditOutcome = 'SUCCESS' | 'FAILURE' | 'DENIED';
 
 type AuditMetadata = Record<string, Prisma.InputJsonValue | null | undefined>;
 
+export const PROCESS_DEFECT_MANUAL_UPDATE = 'PROCESS_DEFECT_MANUAL_UPDATE_RECORDED';
+
 export interface RecordAuditEventInput {
   organizationId?: string | null;
   actorUserId?: string | null;
@@ -101,6 +103,15 @@ export class AuditLogService {
     return event?.metadata;
   }
 
+  recentSuccessfulResourceEvents(transaction: Prisma.TransactionClient, scope: { organizationId: string; action: string; resourceType: string; resourceId: string }) {
+    return transaction.auditEvent.findMany({
+      where: { ...scope, outcome: 'SUCCESS' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: 100,
+      select: { id: true, createdAt: true, metadata: true, actor: { select: { fullName: true, username: true } } },
+    });
+  }
+
   async record(input: RecordAuditEventInput, transaction?: AuditEventWriter): Promise<unknown> {
     const writer = transaction ?? this.prisma;
     return writer.auditEvent.create({ data: this.eventData(input) });
@@ -129,6 +140,7 @@ export class AuditLogService {
     const workbenchStatusChange = event?.action === 'WORKBENCH_GRAPH_STATUS_UPDATED' && event.resourceType === 'WorkbenchGraphNode' && event.outcome === 'SUCCESS';
     const processDefectWrite = event?.resourceType === 'ProcessDefect' && event.outcome === 'SUCCESS'
       && ['PROCESS_DEFECT_CREATED', 'PROCESS_DEFECT_UPDATED', 'PROCESS_DEFECT_INGESTION_CREATED', 'PROCESS_DEFECT_INGESTION_UPDATED'].includes(event.action);
+    const manualProcessDefectUpdate = event?.action === PROCESS_DEFECT_MANUAL_UPDATE && event.resourceType === 'ProcessDefect' && event.outcome === 'SUCCESS';
     return Object.fromEntries(
       Object.entries(metadata)
         .filter(([key, value]) => {
@@ -140,7 +152,8 @@ export class AuditLogService {
           && (!['structureCode', 'structurePreviousCode'].includes(key) || (typeof value === 'string' && value.length <= 64 && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value)))
           && (!['structureName', 'structurePreviousName'].includes(key) || (typeof value === 'string' && value.length <= 200 && /\S/.test(value)))
           && (key !== 'structureGovernorRoleId' || (typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)))
-          && (key !== 'changedFields' || (typeof value === 'string' && (/^(fullName|phone|email)(,(fullName|phone|email))*$/.test(value) || processDefectWrite && value === 'factoryCode')));
+          && (key !== 'changedFields' || (typeof value === 'string' && (/^(fullName|phone|email)(,(fullName|phone|email))*$/.test(value)
+            || processDefectWrite && value === 'factoryCode' || manualProcessDefectUpdate && value.length <= 512 && /^[a-zA-Z]+(,[a-zA-Z]+)*$/.test(value))));
         })
         .map(([key, value]) => [key, value]).concat(trialFields),
     ) as Prisma.InputJsonObject;

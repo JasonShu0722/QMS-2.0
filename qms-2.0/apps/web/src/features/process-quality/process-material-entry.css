@@ -1,0 +1,36 @@
+.process-material-entry-tools {
+  margin-block: 8px;
+}
+
+.process-material-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 215px), 1fr));
+  column-gap: 12px;
+}
+
+.process-material-entry-grid > .ant-form-item {
+  min-width: 0;
+  margin-bottom: 8px;
+}
+
+.process-material-conflicts fieldset {
+  min-inline-size: 0;
+  margin-block: 12px;
+}
+
+.process-material-conflicts td {
+  overflow-wrap: anywhere;
+}
+
+.process-material-conflicts table {
+  width: 100%;
+  margin-block: 4px 8px;
+  text-align: start;
+  table-layout: fixed;
+}
+
+.process-material-conflicts :is(th, td) {
+  padding: 4px 8px;
+  border-block-end: 1px solid var(--qms-border);
+  text-align: start;
+}

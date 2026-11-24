@@ -29,22 +29,27 @@ export function boundedWidth(value: unknown, fallback = DEFAULT_WIDTH, minimum =
   return Math.max(minimum, Math.min(MAX_WIDTH, Math.round(width)));
 }
 const objectValue = (input: unknown): Record<string, unknown> => input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {};
-export type ColumnInsertion = readonly [column: string, anchor: string, defaultVisible?: boolean];
+export type ColumnInsertion = readonly [column: string, anchor: string, defaultVisible?: boolean, moveIfAfterAnchor?: boolean];
 export function normalizePreferences(input: unknown, keys: string[], resizableSelection = false, insertNewColumnsBefore: readonly ColumnInsertion[] = []): Preferences {
   const allowed = [...new Set(keys.filter(validKey))].slice(0, 200);
   const value = objectValue(input);
   const list = (candidate: unknown) => Array.isArray(candidate) ? [...new Set(candidate.slice(0, 200).filter((key): key is string => typeof key === 'string' && allowed.includes(key)))] : [];
   const priorOrder = list(value.order);
   const priorVisible = list(value.visible);
-  for (const [column, anchor, defaultVisible] of insertNewColumnsBefore) {
+  const initiallyHidden = new Set<string>();
+  for (const [column, anchor, defaultVisible, moveIfAfterAnchor] of insertNewColumnsBefore) {
+    if (!allowed.includes(column)) continue;
     const anchorIndex = priorOrder.indexOf(anchor);
-    if (anchorIndex >= 0 && allowed.includes(column) && !priorOrder.includes(column)) {
+    const columnIndex = priorOrder.indexOf(column);
+    if (defaultVisible === false) initiallyHidden.add(column);
+    if (anchorIndex >= 0 && (columnIndex < 0 || moveIfAfterAnchor && columnIndex > anchorIndex)) {
+      if (columnIndex >= 0) priorOrder.splice(columnIndex, 1);
       priorOrder.splice(anchorIndex, 0, column);
-      if ((defaultVisible ?? priorVisible.includes(anchor)) && !priorVisible.includes(column)) priorVisible.push(column);
+      if (columnIndex < 0 && (defaultVisible ?? priorVisible.includes(anchor)) && !priorVisible.includes(column)) priorVisible.push(column);
     }
   }
   const order = [...priorOrder, ...allowed.filter(key => !priorOrder.includes(key))];
-  const visible = Array.isArray(value.visible) ? [...priorVisible, ...allowed.filter(key => !priorOrder.includes(key) && !priorVisible.includes(key))] : allowed;
+  const visible = Array.isArray(value.visible) ? [...priorVisible, ...allowed.filter(key => !priorOrder.includes(key) && !priorVisible.includes(key) && !initiallyHidden.has(key))] : allowed.filter(key => !initiallyHidden.has(key));
   const widths = objectValue(value.widths);
   const fixed = objectValue(value.fixed);
   return {

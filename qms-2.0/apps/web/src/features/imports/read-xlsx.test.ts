@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { expect, it } from 'vitest';
-import { readXlsxFile } from './read-xlsx';
+import { readXlsxFile, readXlsxPreview } from './read-xlsx';
 import { parseSupplierMasterRows } from '../supplier-quality/SupplierMasterImport';
 import { parseCustomerMasterRows } from '../customer-quality/CustomerMasterImport';
 import { parseMaterialMasterRows } from '../material-master/MaterialMasterImport';
@@ -47,7 +47,7 @@ it('retains extension, file size and sparse row/column safety in master mode', a
   }
 });
 
-it('rejects forged ZIP expansion sizes based on actual decompressed bytes in master mode', async () => {
+it('rejects incorrect ZIP size declarations based on actual decompressed bytes in import and preview', async () => {
   const book = new ExcelJS.Workbook();
   book.addWorksheet('master').addRow(['x'.repeat(4 * 1024 * 1024 + 1)]);
   const original = await workbookFile(book);
@@ -64,4 +64,45 @@ it('rejects forged ZIP expansion sizes based on actual decompressed bytes in mas
   const forged = new File([bytes], 'forged.xlsx');
   Object.defineProperty(forged, 'arrayBuffer', { value: async () => buffer });
   await expect(readXlsxFile(forged, { mode: 'master-data' })).rejects.toThrow('Excel 解压后内容过大');
+  await expect(readXlsxPreview(buffer)).rejects.toThrow('Excel 解压后内容过大');
+});
+
+it('previews a real workbook above the import size and sheet-count limits', async () => {
+  const book = new ExcelJS.Workbook();
+  book.addWorksheet('first').addRow(['first sheet']);
+  const extra = book.addWorksheet('extra');
+  for (let index = 0; index < 100; index++) extra.addRow([`${index}-${'x'.repeat(30_000)}`]);
+  for (let index = 0; index < 9; index++) book.addWorksheet(`other-${index}`);
+  const buffer = new Uint8Array(await book.xlsx.writeBuffer({ zip: { compression: 'STORE' } })).buffer;
+  expect(buffer.byteLength).toBeGreaterThan(2 * 1024 * 1024);
+  await expect(readXlsxFile(new File([buffer], 'large.xlsx'), { mode: 'master-data' })).rejects.toThrow('2 MB');
+  await expect(readXlsxPreview(buffer)).resolves.toEqual({ rows: [['first sheet']], truncated: false });
+});
+
+it('caps first-sheet coordinates and text while preserving displayed row positions and cached values', async () => {
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet('first');
+  sheet.getCell('A2').value = { richText: [{ text: 'rich ' }, { text: 'text' }] };
+  sheet.getCell('B2').value = { formula: '1+1', result: 2 };
+  sheet.getCell('A3').value = 'x'.repeat(1_001);
+  sheet.getCell('AD200').value = false;
+  sheet.getCell('XFD200').value = 'outside column cap';
+  sheet.getCell('A10001').value = 'outside row cap';
+  const { rows, truncated } = await readXlsxPreview(await (await workbookFile(book)).arrayBuffer());
+  expect(rows).toHaveLength(200);
+  expect(rows[0]).toEqual([]);
+  expect(rows[1]).toEqual(['rich text', '2']);
+  expect(rows[2]).toEqual(['x'.repeat(1_000)]);
+  expect(rows[199]).toHaveLength(30);
+  expect(rows[199]?.[29]).toBe('false');
+  expect(truncated).toBe(true);
+});
+
+it('rejects an oversized expanded XLSX part even when the workbook compresses below the attachment limit', async () => {
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet('first');
+  for (let index = 0; index < 300; index++) sheet.addRow([`${index}-${'x'.repeat(30_000)}`]);
+  const buffer = await (await workbookFile(book)).arrayBuffer();
+  expect(buffer.byteLength).toBeLessThan(2 * 1024 * 1024);
+  await expect(readXlsxPreview(buffer)).rejects.toThrow('Excel 解压后内容过大');
 });

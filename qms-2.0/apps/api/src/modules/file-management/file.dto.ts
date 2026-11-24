@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsInt, IsMimeType, IsString, IsUUID, Length, Matches, Max, Min } from 'class-validator';
 
 export class FileResourceDto {
@@ -32,6 +32,7 @@ export class FileDto extends FileResourceDto {
   @ApiProperty() sha256!: string;
   @ApiProperty({ enum: ['QUARANTINED', 'AVAILABLE', 'DELETED'] }) status!: string;
   @ApiProperty({ enum: ['WAITING_UPLOAD', 'PENDING', 'CLEAN', 'REJECTED', 'ERROR', 'EXPIRED'] }) scanStatus!: string;
+  @ApiPropertyOptional() isCurrentUserUploader?: boolean;
   @ApiProperty({ type: String, nullable: true }) scanReason!: string | null;
   @ApiProperty() version!: number;
   @ApiProperty({ format: 'date-time' }) uploadExpiresAt!: string;

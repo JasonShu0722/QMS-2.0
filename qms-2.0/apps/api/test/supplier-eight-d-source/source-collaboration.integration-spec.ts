@@ -141,10 +141,11 @@ describe('source SQE collaboration public ports', () => {
       await core.bind(f.professional.actor, { expectedVersion: 0, workflowDefinitionId: template.id, workflowVersionId: published.id }, randomUUID(), randomUUID());
       await core.activate(f.professional.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
     }
+    const supplier = await db.supplierBusinessProfile.create({ data: { ownerOrganizationId: f.org.id, businessCode: randomUUID(), displayName: 'Race material supplier' } });
     const rows = [];
     for (let i = 0; i < 2; i++) {
       const row = await f.process.create(f.manager.actor, { description: 'Two actor collaboration race', productCode: f.productCode, traceCode: randomUUID(), factoryCode: 'FACTORY_1', occurredAt: new Date('2026-11-16T00:30:00Z'),
-        materials: [{ materialCode: 'RACE-MATERIAL', sqeUserId: f.owner.user.id }] }, randomUUID(), randomUUID());
+        materials: [{ materialCode: 'RACE-MATERIAL', supplierProfileId: supplier.id, sqeUserId: f.owner.user.id }] }, randomUUID(), randomUUID());
       let sourceId = row.id;
       let problemId: string;
       if (domain === 'new-product-quality') {

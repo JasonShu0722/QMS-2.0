@@ -66,6 +66,29 @@
 .process-quality-toolbar .ant-select { min-width: 140px; }
 .process-quality-ledger .ant-table-cell.process-quality-compact-column { padding-inline: 4px; }
 .process-quality-drawer-header { flex-wrap: wrap; gap: 8px; }
+.process-quality-detail-sections { display: grid; gap: 8px; }
+.process-quality-detail-section {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--qms-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--qms-accent) 3%, var(--qms-surface));
+}
+.process-quality-detail-section:nth-child(even) { background: color-mix(in srgb, var(--qms-accent) 6%, var(--qms-surface)); }
+.process-quality-detail-section .ant-descriptions-header { margin-bottom: 6px; }
+.process-quality-detail-section .ant-descriptions-item-label { width: 1%; white-space: nowrap; }
+.process-quality-detail-section .ant-descriptions-item-content { overflow-wrap: anywhere; }
+.process-quality-detail-section .ant-descriptions-title { font-size: inherit; }
+.process-quality-detail-section .ant-typography:is(h5) { margin: 0 0 6px; }
+.process-quality-detail-section .ant-descriptions + h5 { margin-top: 8px; }
+.process-quality-editable-material { cursor: pointer; }
+.process-quality-material-link { border: 0; padding: 0; background: transparent; color: var(--qms-accent); font: inherit; cursor: pointer; }
+.process-quality-material-link:hover:not(:disabled) { text-decoration: underline; }
+.process-quality-material-link:disabled { color: var(--qms-muted); cursor: not-allowed; }
+.process-quality-update-records { width: 100%; border-collapse: collapse; text-align: start; }
+.process-quality-update-records :is(th, td) { padding: 4px 8px; border-bottom: 1px solid var(--qms-border); text-align: start; overflow-wrap: anywhere; }
+.process-quality-update-records th { background: var(--qms-surface-tint); }
+.process-quality-update-records tbody tr:last-child td { border-bottom: 0; }
 @media (max-width: 600px) { .process-quality-drawer-header .ant-drawer-extra { flex-basis: 100%; } }
 .process-quality-ledger th[data-compact-ledger-column] > .qms-ledger__heading { text-align: center; }
 .process-quality-filter-title { --filter-width: 14px; --filter-height: 18px; display: inline-grid; grid-template-columns: var(--filter-width) max-content var(--filter-width); align-items: center; white-space: nowrap; }

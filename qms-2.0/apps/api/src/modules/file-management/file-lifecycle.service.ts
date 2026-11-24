@@ -93,6 +93,7 @@ export class FileLifecycleService {
       await tx.outboxEvent.create({ data: { eventKey: `file-scan:${id}:${file.version}`, aggregateType: 'FileObject', aggregateId: id, eventType: 'FILE_SCAN_REQUESTED',
         payload: { schemaVersion: 1, organizationId: file.organizationId, fileId: id, fileVersion: file.version } } });
       await this.record(tx, actor, file, 'ATTACHMENT_UPLOAD_COMPLETED', traceId);
+      await this.recordResourceChange(tx, actor, file, 'added', traceId);
       return fileDto(file);
     }, { isolationLevel: 'ReadCommitted' });
   }
@@ -123,7 +124,10 @@ export class FileLifecycleService {
   }
 
   async get(actor: FileActor, id: string): Promise<FileDto> {
-    return this.prisma.$transaction(async (tx) => fileDto((await this.authorizedFile(tx, actor, id, 'read')).file), { isolationLevel: 'ReadCommitted' });
+    return this.prisma.$transaction(async (tx) => {
+      const { file } = await this.authorizedFile(tx, actor, id, 'read');
+      return { ...fileDto(file), isCurrentUserUploader: file.uploadedById === actor.id };
+    }, { isolationLevel: 'ReadCommitted' });
   }
 
   async listResource(actor: FileActor, resource: FileResourceRef): Promise<FileDto[]> {
@@ -259,6 +263,7 @@ export class FileLifecycleService {
       if (file.status === 'DELETED') workflowError('FILE_NOT_AVAILABLE', 409);
       const deleted = await tx.fileObject.update({ where: { id }, data: { status: 'DELETED', deletedAt: new Date(), deletedById: actor.id, version: { increment: 1 } } });
       await this.record(tx, actor, deleted, 'ATTACHMENT_DELETED', traceId);
+      if (file.uploadCompletedAt) await this.recordResourceChange(tx, actor, deleted, 'removed', traceId);
       return fileDto(deleted);
     }, { isolationLevel: 'ReadCommitted' });
   }
@@ -350,5 +355,10 @@ export class FileLifecycleService {
   private record(tx: Prisma.TransactionClient, actor: FileActor, file: FileObject, action: string, traceId: string) {
     return this.audit.record({ organizationId: file.organizationId, actorUserId: actor.id, action, resourceType: 'FileObject', resourceId: file.id, outcome: 'SUCCESS', traceId,
       metadata: { fileId: file.id, contentType: file.contentType, sizeBytes: Number(file.sizeBytes), resourceVersion: file.version, status: file.status } }, tx);
+  }
+
+  private recordResourceChange(tx: Prisma.TransactionClient, actor: FileActor, file: FileObject, action: 'added' | 'removed', traceId: string) {
+    return this.resources.recordChange(tx, { resource: { resourceType: file.resourceType!, resourceId: file.resourceId! }, organizationId: file.organizationId,
+      actorUserId: actor.id, action, traceId });
   }
 }

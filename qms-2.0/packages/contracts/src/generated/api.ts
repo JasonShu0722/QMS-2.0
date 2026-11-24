@@ -9456,6 +9456,7 @@ export interface components {
             status: "QUARANTINED" | "AVAILABLE" | "DELETED";
             /** @enum {string} */
             scanStatus: "WAITING_UPLOAD" | "PENDING" | "CLEAN" | "REJECTED" | "ERROR" | "EXPIRED";
+            isCurrentUserUploader?: boolean;
             scanReason: string | null;
             version: number;
             /** Format: date-time */
@@ -12515,6 +12516,7 @@ export interface components {
             status: "QUARANTINED" | "AVAILABLE" | "DELETED";
             /** @enum {string} */
             scanStatus: "WAITING_UPLOAD" | "PENDING" | "CLEAN" | "REJECTED" | "ERROR" | "EXPIRED";
+            isCurrentUserUploader?: boolean;
             scanReason: string | null;
             version: number;
             /** Format: date-time */
@@ -14551,7 +14553,7 @@ export interface components {
         };
         ProcessDefectFilterDto: {
             /** @enum {string} */
-            field: "description" | "defectTypeCode" | "batchCode" | "workOrderCode" | "operationCode" | "lineCode" | "projectCode" | "productCode" | "materialCode" | "traceCode" | "lineName" | "operationName" | "operationSector" | "productCategory" | "productSubcategory" | "occurredAt" | "defectQuantity" | "shift" | "projectStage" | "ledgerStatus" | "responsibilityCategory" | "pendingCompletion" | "pendingConfiguration" | "factoryCode";
+            field: "description" | "defectTypeCode" | "batchCode" | "workOrderCode" | "operationCode" | "lineCode" | "projectCode" | "productCode" | "materialCode" | "traceCode" | "lineName" | "operationName" | "operationSector" | "productCategory" | "productSubcategory" | "occurredAt" | "defectQuantity" | "shift" | "projectStage" | "ledgerStatus" | "responsibilityCategory" | "pendingCompletion" | "pendingConfiguration" | "factoryCode" | "registeredByName" | "firstMaterialCode" | "manualProjectCode" | "batchOrWorkOrder" | "analysisProgress" | "dispositionPlan" | "dispositionProgress" | "dispositionCompletedAt";
             /** @enum {string} */
             operator: "CONTAINS" | "NOT_CONTAINS" | "EQ" | "NE" | "EMPTY" | "NOT_EMPTY" | "BEFORE" | "AFTER" | "GT" | "GTE" | "LT" | "LTE";
             value?: string | number | boolean;
@@ -15128,6 +15130,8 @@ export interface components {
             /** Format: uuid */
             defectId: string;
             expectedVersion: number;
+            /** @description RESPONSIBILITY only. Check the expected version without writing. Fields must be empty. */
+            compareOnly?: boolean;
             /** @description Supply fields from the selected board only. Omitted fields retain their current value. */
             fields: components["schemas"]["ProcessDefectMaintenanceFieldsDto"];
         };
@@ -15177,6 +15181,96 @@ export interface components {
             /** @enum {string} */
             verification: "CONFIRMED_DEFECT" | "NOT_MATERIAL" | "NEGOTIATED" | "RETURN_ANALYSIS";
             verificationNotes?: string | null;
+        };
+        ProcessDefectUpdateRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurredAt: string;
+            content: string;
+            actorName: string;
+        };
+        ProcessDefectDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organizationId: string;
+            defectTypeCode: string | null;
+            description: string;
+            descriptionDirect?: string | null;
+            descriptionInput?: components["schemas"]["AiDescriptionInputSnapshotDto"][] | null;
+            descriptionAi?: string | null;
+            /** @enum {string} */
+            descriptionAiStatus?: "DISABLED" | "PENDING" | "PROCESSING" | "RETRY" | "FAILED" | "APPLIED" | "SUGGESTED" | "STALE";
+            /** @enum {string} */
+            descriptionSource?: "DIRECT" | "AI" | "MANUAL";
+            /** Format: uuid */
+            descriptionTaskId?: string | null;
+            defectQuantity: number | null;
+            /** Format: date-time */
+            occurredAt: string | null;
+            batchCode?: string | null;
+            workOrderCode?: string | null;
+            operationCode?: string | null;
+            lineCode?: string | null;
+            lineName: string | null;
+            operationName: string | null;
+            /** @enum {string|null} */
+            factoryCode: "FACTORY_1" | "FACTORY_2" | null;
+            /** @enum {string|null} */
+            shift: "DAY" | "NIGHT" | null;
+            operationSector: string | null;
+            productCategory: string | null;
+            productSubcategory: string | null;
+            projectName: string | null;
+            /** @enum {string|null} */
+            projectStage: "NEW_PRODUCT" | "MASS_PRODUCTION" | null;
+            pendingCompletion: boolean;
+            pendingConfiguration: boolean;
+            registrationIssues: string[];
+            registeredByName: string | null;
+            projectCode?: string | null;
+            productCode?: string | null;
+            traceCode: string | null;
+            analysisProgress: string | null;
+            /** @enum {string|null} */
+            dispositionPlan: "REWORK" | "SCRAP" | "CONCESSION" | null;
+            dispositionProgress: string | null;
+            /** Format: date-time */
+            dispositionCompletedAt: string | null;
+            dispositionHistory: components["schemas"]["ProcessDefectDispositionHistoryDto"][];
+            /** @enum {string} */
+            ledgerStatus: "FOLLOWING" | "CLOSED";
+            /** Format: uuid */
+            closedById: string | null;
+            /** Format: date-time */
+            closedAt: string | null;
+            materialCode?: string | null;
+            /** Format: uuid */
+            supplierOrganizationId?: string | null;
+            /** @enum {string|null} */
+            responsibilityCategory: "MATERIAL" | "OPERATION" | "EQUIPMENT" | "PROCESS" | "DESIGN" | "FALSE_POSITIVE" | null;
+            /** @enum {string} */
+            sourceKind: "MANUAL" | "IMS";
+            externalSourceSystem?: string | null;
+            externalRecordKey?: string | null;
+            /** Format: date-time */
+            sourceObservedAt?: string | null;
+            /** @enum {string|null} */
+            ingestionStatus?: "PENDING_VERIFICATION" | null;
+            version: number;
+            /** Format: date-time */
+            archivedAt?: string | null;
+            evidence?: components["schemas"]["ProcessDefectEvidenceDto"][];
+            materials: components["schemas"]["ProcessDefectMaterialDto"][];
+            materialVerificationHistory: components["schemas"]["ProcessDefectMaterialVerificationDto"][];
+            ledgerHistory: components["schemas"]["ProcessDefectLedgerHistoryDto"][];
+            classificationHistory: components["schemas"]["ProcessDefectClassificationHistoryDto"][];
+            componentProject: components["schemas"]["ProcessDefectProjectResolutionDto"] | null;
+            duplicateCount: number;
+            issues: string[];
+            attachmentIds: string[];
+            updateRecords: components["schemas"]["ProcessDefectUpdateRecordDto"][];
         };
         UpdateProcessDefectDto: {
             /** Format: uuid */
@@ -31854,7 +31948,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProcessDefectDto"];
+                    "application/json": components["schemas"]["ProcessDefectDetailDto"];
                 };
             };
             default: {
