@@ -545,7 +545,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
         action={!isDenied(detailError) ? <Button size="small" aria-label="重试" onClick={() => { if (detailTarget.current) void openDetail(detailTarget.current, !!detail); }}>重试</Button> : undefined} /> : null}
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detail ? <>
         <div className="process-quality-detail-sections">
-        <section className="process-quality-detail-section">
+        <section className="process-quality-detail-section process-quality-registration">
         <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} canRegister={canRegister} onSaved={saved} onDenied={revoke} onAdoptDenied={denyBoard}
           renderRegistration={refreshAction => <>
             <header className="process-quality-registration-header">
@@ -554,9 +554,9 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
             </header>
             <dl className="process-quality-registration-fields">
               {[
-                { key: 'description', label: '不良描述', size: 'full', value: <span className="process-quality-description">{detail.description || '待完善'}</span> },
+                { key: 'description', label: '不良描述', value: <span className="process-quality-description">{detail.description || '待完善'}</span> },
                 { key: 'quantity', label: '数量', value: detail.defectQuantity },
-                { key: 'occurredAt', label: '发生时间', size: 'wide', value: detail.occurredAt ? <time dateTime={detail.occurredAt}>{new Date(detail.occurredAt).toLocaleString('zh-CN')}</time> : '未知' },
+                { key: 'occurredAt', label: '发生时间', value: detail.occurredAt ? <time dateTime={detail.occurredAt}>{new Date(detail.occurredAt).toLocaleString('zh-CN')}</time> : '未知' },
                 { key: 'factoryCode', label: factoryTitle, value: factoryLabel(detail.factoryCode, english) },
                 { key: 'shift', label: '班次', value: detail.shift === 'DAY' ? '白班' : detail.shift === 'NIGHT' ? '夜班' : '未知' },
                 { key: 'project', label: '项目号', value: detail.componentProject?.project?.code ?? '未确认' },
@@ -566,12 +566,12 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
                 { key: 'lineName', label: '生产线名称', value: detail.lineName ?? '—' },
                 { key: 'operationName', label: '工序名称', value: detail.operationName ?? '—' },
                 { key: 'registrant', label: '登记人', value: detail.sourceKind === 'IMS' ? '自动' : detail.registeredByName ?? '—' },
-                { key: 'trace', label: '条码', size: 'wide', value: detail.traceCode ?? '—' },
-                { key: 'workOrder', label: '工单号', size: 'wide', value: detail.workOrderCode ?? '—' },
+                { key: 'trace', label: '条码', value: detail.traceCode ?? '—' },
                 { key: 'operation', label: '工序 / 产线', value: `${detail.operationCode ?? '—'} / ${detail.lineCode ?? '—'}` },
-                { key: 'product', label: '成品编码', value: detail.productCode ?? '—' },
+                { key: 'workOrder', label: '工单号', value: detail.workOrderCode ?? '—' },
                 { key: 'source', label: '来源', value: <Space wrap><Tag>{detail.sourceKind === 'IMS' ? '自动' : '人工录入'}</Tag>{detail.externalSourceSystem ? <Tag>{detail.externalSourceSystem}</Tag> : null}</Space> },
-              ].map(({ key, label, size, value }) => <div key={key} data-size={size}><dt>{label}</dt><dd>{value}</dd></div>)}
+                { key: 'product', label: '成品编码', value: detail.productCode ?? '—' },
+              ].map(({ key, label, value }) => <div key={key}><dt>{label}</dt><dd>{value}</dd></div>)}
             </dl>
           </>} />
         </section>
