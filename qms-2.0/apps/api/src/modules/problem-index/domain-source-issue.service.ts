@@ -61,6 +61,7 @@ export interface DomainSourceIssueWorkflowBinding {
 export interface DomainSourceIssueAdapters {
   authorize(transaction: Prisma.TransactionClient, command: DomainSourceIssueCommand, replay: boolean): Promise<void>;
   lockAndResolve(transaction: Prisma.TransactionClient, source: DomainSourceReference): Promise<DomainSourceRecord | null>;
+  processEightDBoard?(sources: readonly DomainSourceRecord[]): '0' | '1';
   bindWorkflow(transaction: Prisma.TransactionClient, binding: DomainSourceIssueWorkflowBinding): Promise<{ instanceId: string }>;
 }
 
@@ -179,6 +180,8 @@ export class DomainSourceIssueService {
         dueAt: command.dueAt,
         createdById: command.actor.id,
         traceId: command.traceId,
+        ...(command.source.sourceDomain === 'process-quality' && command.responseForm === 'EIGHT_D' && adapters.processEightDBoard
+          ? { processEightDBoard: adapters.processEightDBoard(sources) } : {}),
       };
       const problem = await this.problems.createForDomainSourceIssue(tx as never, input);
       for (const reference of references) {

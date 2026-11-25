@@ -29,11 +29,11 @@ export class AdministrativeIdentityReadModel {
     tx: Prisma.TransactionClient,
     organizationId: string,
     userIds?: string[],
-  ): Promise<Pick<User, 'id' | 'securityVersion' | 'status' | 'configurationRequired'>[]> {
+  ): Promise<Pick<User, 'id' | 'securityVersion' | 'status' | 'configurationRequired' | 'username' | 'fullName'>[]> {
     if (userIds?.length === 0) return [];
     return tx.user.findMany({
       where: { organizationId, deletedAt: null, ...(userIds ? { id: { in: userIds } } : {}) },
-      select: { id: true, securityVersion: true, status: true, configurationRequired: true },
+      select: { id: true, securityVersion: true, status: true, configurationRequired: true, username: true, fullName: true },
       orderBy: { id: 'asc' },
     });
   }

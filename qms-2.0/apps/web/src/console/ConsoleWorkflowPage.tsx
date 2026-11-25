@@ -13,29 +13,70 @@ import '../features/workflows/workflows.css';
 
 const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const uuidPattern = new RegExp(`^${uuid}$`, 'i');
-const endpoint = '/api/v1/process-quality/ledger-workflow-configuration';
-type Configuration = components['schemas']['ProcessLedgerWorkflowConfigurationDto'];
-type Update = components['schemas']['UpdateProcessLedgerWorkflowConfigurationDto'];
-const boardLabels = [
-  ['REGISTRATION', '表单登记', 'Registration'],
-  ['ANALYSIS', '分析进度维护', 'Analysis progress'],
-  ['RESPONSIBILITY', '责任判定', 'Responsibility assessment'],
-  ['DISPOSITION', '处置维护', 'Disposition'],
-  ['CLOSURE', '台账关闭判定', 'Ledger closure'],
-] as const;
+const ledgerEndpoint = '/api/v1/process-quality/ledger-workflow-configuration';
+const eightDEndpoint = '/api/v1/process-quality/eight-d-workflow-configuration';
+type LedgerConfiguration = components['schemas']['ProcessLedgerWorkflowConfigurationDto'];
+type LedgerUpdate = components['schemas']['UpdateProcessLedgerWorkflowConfigurationDto'];
+type EightDConfiguration = components['schemas']['ProcessEightDWorkflowConfigurationDto'];
+type EightDUpdate = components['schemas']['UpdateProcessEightDWorkflowConfigurationDto'];
+type PositionSelection<Key extends string> = { key: Key; positionIds: string[] };
+type EditorConfiguration<Key extends string> = Pick<LedgerConfiguration, 'version' | 'positions'> & {
+  selections: PositionSelection<Key>[];
+  missing?: readonly Key[];
+};
+type WorkflowEditor<Key extends string> = {
+  endpoint: string;
+  labels: readonly (readonly [Key, string, string])[];
+  read: (init: RequestInit) => Promise<EditorConfiguration<Key>>;
+  body: (expectedVersion: number, selections: PositionSelection<Key>[]) => LedgerUpdate | EightDUpdate;
+};
+
+const ledgerEditor: WorkflowEditor<LedgerUpdate['boards'][number]['board']> = {
+  endpoint: ledgerEndpoint,
+  labels: [
+    ['REGISTRATION', '表单登记', 'Registration'],
+    ['ANALYSIS', '分析进度维护', 'Analysis progress'],
+    ['RESPONSIBILITY', '责任判定', 'Responsibility assessment'],
+    ['DISPOSITION', '处置维护', 'Disposition'],
+    ['CLOSURE', '台账关闭判定', 'Ledger closure'],
+  ],
+  async read(init) {
+    const { version, positions, boards } = await apiRequest<LedgerConfiguration>(ledgerEndpoint, init, init.method === 'PUT' ? { replayAfterReauthentication: false } : undefined);
+    return { version, positions, selections: boards.map(({ board, positionIds }) => ({ key: board, positionIds })) };
+  },
+  body: (expectedVersion, selections) => ({ expectedVersion, boards: selections.map(({ key, positionIds }) => ({ board: key, positionIds })) }),
+};
+
+const eightDEditor: WorkflowEditor<EightDUpdate['stages'][number]['stage']> = {
+  endpoint: eightDEndpoint,
+  labels: [
+    ['ISSUE', '发单', 'Issue'],
+    ['ANALYSIS', '分析与对策', 'Analysis and countermeasures'],
+    ['IMPLEMENTATION', '实施与验证', 'Implementation and verification'],
+    ['CLOSURE', '关闭审核', 'Closure review'],
+  ],
+  async read(init) {
+    const { version, positions, stages, missingStages } = await apiRequest<EightDConfiguration>(eightDEndpoint, init, init.method === 'PUT' ? { replayAfterReauthentication: false } : undefined);
+    return { version, positions, selections: stages.map(({ stage, positionIds }) => ({ key: stage, positionIds })), missing: missingStages };
+  },
+  body: (expectedVersion, selections) => ({ expectedVersion, stages: selections.map(({ key, positionIds }) => ({ stage: key, positionIds })) }),
+};
 
 export function ConsoleWorkflowPage() {
   const { locale } = useLanguage();
   return <WorkflowScope path="/console/workflows">{session => <Collapse items={[{
     key: 'process-ledger', label: locale === 'en-US' ? 'Process defect ledger' : '制程不合格台账',
-    children: <ProcessLedgerWorkflowConfiguration session={session} />,
+    children: <WorkflowPositionConfiguration session={session} editor={ledgerEditor} />,
+  }, {
+    key: 'process-eight-d', label: locale === 'en-US' ? 'Internal Process 8D' : '制程内部 8D',
+    children: <WorkflowPositionConfiguration session={session} editor={eightDEditor} />,
   }]} />}</WorkflowScope>;
 }
 
 export function ConsoleEightDBindingsPage() {
-  const [domain, setDomain] = useState<EightDBindingDomain>('process-quality');
+  const [domain, setDomain] = useState<EightDBindingDomain>('customer-quality');
   return <WorkflowScope path="/console/eight-d-bindings">{() => <section className="workflow-bindings">
-    <ProcessEightDBinding domain={domain} onDomainChange={setDomain} />
+    <ProcessEightDBinding domain={domain} onDomainChange={setDomain} allowedDomains={['customer-quality', 'new-product-quality']} />
     <SupplierEightDBinding />
   </section>}</WorkflowScope>;
 }
@@ -61,13 +102,13 @@ function WorkflowScope({ path, children }: { path: string; children: (session: s
   return <Fragment key={session}>{children(session)}</Fragment>;
 }
 
-function ProcessLedgerWorkflowConfiguration({ session }: { session: string }) {
+function WorkflowPositionConfiguration<Key extends string>({ session, editor }: { session: string; editor: WorkflowEditor<Key> }) {
   const { context, invalidate } = useConsoleContext();
   const { locale, t } = useLanguage();
   const text = (zh: string, en: string) => locale === 'en-US' ? en : zh;
   const fieldId = useId();
-  const [configuration, setConfiguration] = useState<Configuration>();
-  const [changes, setChanges] = useState<Partial<Record<Update['boards'][number]['board'], string[]>>>({});
+  const [configuration, setConfiguration] = useState<EditorConfiguration<Key>>();
+  const [changes, setChanges] = useState<Partial<Record<Key, string[]>>>({});
   const [revision, setRevision] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -80,8 +121,10 @@ function ProcessLedgerWorkflowConfiguration({ session }: { session: string }) {
   const dirty = Object.keys(changes).length > 0;
   const positions = configuration?.positions.map(position => ({ value: position.id, label: position.name })) ?? [];
   const available = new Set(positions.map(position => position.value));
-  const boards = boardLabels.map(([board]) => ({ board, positionIds: changes[board] ?? configuration?.boards.find(item => item.board === board)?.positionIds ?? [] }));
-  const hasInactivePositions = boards.some(({ positionIds }) => positionIds.some(id => !available.has(id)));
+  const ledger = editor.endpoint === ledgerEndpoint;
+  const selections = editor.labels.map(([key]) => ({ key, positionIds: changes[key] ?? configuration?.selections.find(item => item.key === key)?.positionIds ?? [] }));
+  const missing = editor.labels.filter(([key]) => configuration?.missing?.includes(key)).map(([, zh, en]) => text(zh, en));
+  const hasInactivePositions = selections.some(({ positionIds }) => positionIds.some(id => !available.has(id)));
   const canSave = !hasInactivePositions && (configuration?.version === 0 || dirty);
   useUnsavedChanges(dirty);
   useNavigationBusy(busy);
@@ -105,7 +148,7 @@ function ProcessLedgerWorkflowConfiguration({ session }: { session: string }) {
     });
     setLoading(true);
     setError(undefined);
-    void apiRequest<Configuration>(endpoint, { signal: controller.signal }).then(result => {
+    void editor.read({ signal: controller.signal }).then(result => {
       if (controller.signal.aborted) return;
       setConfiguration(result);
       setChanges({});
@@ -116,21 +159,21 @@ function ProcessLedgerWorkflowConfiguration({ session }: { session: string }) {
       if (!controller.signal.aborted) setLoading(false);
     });
     return () => { controller.abort(); unsubscribe(); };
-  }, [revision, session]);
+  }, [editor, revision, session]);
 
   async function save() {
     const signal = lifetime.current?.signal;
     if (!signal || signal.aborted || writeLock.current || loading || reloadRequired || !configuration || !canSave) return;
-    const body: Update = { expectedVersion: configuration.version, boards };
+    const body = editor.body(configuration.version, selections);
     writeLock.current = true;
     setBusy(true);
     setError(undefined);
     try {
       const token = await csrfToken(signal);
       signal.throwIfAborted();
-      const saved = await apiRequest<Configuration>(endpoint, {
+      const saved = await editor.read({
         method: 'PUT', signal, headers: { 'x-csrf-token': token, 'Idempotency-Key': crypto.randomUUID() }, body: JSON.stringify(body),
-      }, { replayAfterReauthentication: false });
+      });
       if (signal.aborted) return;
       setConfiguration(saved);
       setChanges({});
@@ -160,17 +203,19 @@ function ProcessLedgerWorkflowConfiguration({ session }: { session: string }) {
       action={(reloadRequired || !configuration) && <Button disabled={loading} onClick={() => leave(() => setRevision(value => value + 1))}>{text('重新读取配置', 'Reload configuration')}</Button>} />}
     {loading && <Spin aria-label={text('正在读取配置', 'Loading configuration')} />}
     {configuration && <>
-      <Typography.Paragraph>
+      {ledger && <Typography.Paragraph>
         {configuration.version === 0 && text('首次保存前，台账沿用现有业务权限。', 'Until the first save, existing ledger permissions apply. ')}
         {text('可为每个板块选择多个岗位。保存后，未选择岗位的板块无法维护。', 'Select multiple positions per board. After saving, boards with no positions cannot be maintained.')}
-      </Typography.Paragraph>
+      </Typography.Paragraph>}
+      {missing.length > 0 && <Alert type="warning" showIcon style={{ marginBottom: 16 }}
+        title={text(`缺少有效岗位，无法发单：${missing.join('、')}`, `Issue is unavailable until active positions are configured for: ${missing.join(', ')}`)} />}
       {hasInactivePositions && <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={text('请移除已失效的岗位后再保存。', 'Remove inactive positions before saving.')} />}
-      {boardLabels.map(([board, zh, en]) => {
+      {editor.labels.map(([board, zh, en]) => {
         const label = text(zh, en);
         const id = `${fieldId}-${board}`;
-        const saved = configuration.boards.find(item => item.board === board)?.positionIds ?? [];
+        const saved = configuration.selections.find(item => item.key === board)?.positionIds ?? [];
         return <Form.Item key={board} label={label} htmlFor={id}
-          extra={board === 'RESPONSIBILITY' && text('同时适用于物料登记和 SQE 指派。', 'Also applies to material registration and SQE assignment.')}>
+          extra={ledger && board === 'RESPONSIBILITY' && text('同时适用于物料登记和 SQE 指派。', 'Also applies to material registration and SQE assignment.')}>
           <Select id={id} aria-label={label} mode="multiple" allowClear disabled={locked} style={{ maxWidth: '100%' }}
             placeholder={text('选择岗位', 'Select positions')}
             value={changes[board] ?? saved}

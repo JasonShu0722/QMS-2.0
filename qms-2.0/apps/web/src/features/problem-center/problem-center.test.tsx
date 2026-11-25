@@ -87,6 +87,24 @@ function openColumnSettings() {
   fireEvent.click(button);
 }
 
+it('ignores process-only columns and filters when applying a view in the general center', async () => {
+  const processConfiguration = {
+    ...savedView.configuration,
+    filters: { status: 'OPEN' as const, stage: 'ANALYSIS' as const, responsibleSectionDepartmentId: 'section-a', ownerName: '负责人甲', responsibleSectionName: '焊接质量' },
+    visibleColumns: ['reportNumber', 'processStage', 'status'] as const,
+    columnOrder: ['reportNumber', 'processStage', 'status'] as const,
+  };
+  vi.mocked(api.getProblemViews).mockResolvedValue({ items: [{ ...savedView, configuration: {
+    ...processConfiguration, visibleColumns: [...processConfiguration.visibleColumns], columnOrder: [...processConfiguration.columnOrder],
+  } }], total: 1 });
+  renderPage();
+  fireEvent.change(await screen.findByLabelText('保存视图'), { target: { value: savedView.id } });
+  fireEvent.click(screen.getByText('应用视图', { selector: 'button span' }));
+  await waitFor(() => expect(api.getProblemIndex).toHaveBeenLastCalledWith({ organizationId: 'organization-a', page: 1, pageSize: 20,
+    status: 'OPEN', sortBy: 'dueAt', sortDirection: 'desc' }, expect.any(AbortSignal)));
+  expect(screen.queryByRole('columnheader', { name: /当前阶段|当前环节/ })).not.toBeInTheDocument();
+});
+
 it('keeps exactly one problem pager and the real total above the table with column settings', async () => {
   vi.mocked(api.getProblemIndex).mockResolvedValue({ ...emptyPage, total: 51 });
   const view = renderPage();

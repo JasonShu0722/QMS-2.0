@@ -6,6 +6,9 @@ export type ProblemView = components['schemas']['ProblemSavedViewDto'];
 export type ProblemViewPage = components['schemas']['ProblemSavedViewPageDto'];
 export type ProblemViewConfiguration = components['schemas']['ProblemSavedViewConfigurationDto'];
 export type ProblemQuery = NonNullable<paths['/api/v1/problem-index']['get']['parameters']['query']>;
+type ProcessFollowupOperation = paths['/api/v1/problem-index/process-followup']['get'];
+export type ProcessFollowupQuery = NonNullable<ProcessFollowupOperation['parameters']['query']>;
+export type ProcessFollowupPage = ProcessFollowupOperation['responses'][200]['content']['application/json'];
 export type ProblemViewQuery = NonNullable<paths['/api/v1/problem-views']['get']['parameters']['query']>;
 
 type CreateViewBody = components['schemas']['CreateProblemSavedViewDto'];
@@ -32,6 +35,8 @@ async function write<Result>(path: string, method: 'POST' | 'PATCH' | 'DELETE', 
 export const getProblemOrganizationId = async () => (await getSession()).organizationId;
 export const getProblemIndex = (query: ProblemQuery, signal?: AbortSignal) =>
   apiRequest<ProblemPage>(`/api/v1/problem-index?${queryString(query)}`, { signal });
+export const getProcessFollowup = (query: ProcessFollowupQuery, signal?: AbortSignal) =>
+  apiRequest<ProcessFollowupPage>(`/api/v1/problem-index/process-followup?${queryString(query)}`, { signal });
 export const getProblemViews = (query: ProblemViewQuery, signal?: AbortSignal) =>
   apiRequest<ProblemViewPage>(`/api/v1/problem-views?${queryString(query)}`, { signal });
 export const createProblemView = (organizationId: string, body: CreateViewBody) =>

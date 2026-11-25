@@ -11,16 +11,20 @@ import { assertRecentAuthentication, isSecurityConcurrencyConflict } from '../..
 import { adminMutationDigests } from '../../common/security/security-keyring.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { AdministrativeIdentityReadModel } from '../identity/administrative-identity-read-model.js';
-import type { OrganizationForceDeleteDto, OrganizationForceDeletePreviewDto, OrganizationForceDeleteResultDto } from './organization-force-delete.dto.js';
+import type { OrganizationForceDeleteDto, OrganizationForceDeletePreviewDto, OrganizationForceDeleteResultDto, PositionDeletionImpactDto, PositionDeletionReferenceDto } from './organization-force-delete.dto.js';
+import { lockPositionDeletionConfiguration, positionWorkflowReferences } from './organization-lifecycle.read-model.js';
 
-type Kind = 'ORGANIZATION' | 'DEPARTMENT';
-type Target = { id: string; name: string; code: string; version: number; parentId: string | null; deletedAt: Date | null; configurationRequired: boolean };
-type Impact = { target: Target; impact: AdministrativeLifecycleImpact; assignmentIds: string[]; bindingIds: string[]; ministerIds: string[]; private: object };
-const permission = (kind: Kind) => kind === 'ORGANIZATION' ? 'organization:force-delete' : 'organization:departments:force-delete';
+type Kind = OrganizationForceDeletePreviewDto['kind'];
+type Target = { id: string; name: string; code: string; version: number; parentId?: string | null; departmentId?: string | null; deletedAt: Date | null; configurationRequired: boolean };
+type Impact = { target: Target; impact: AdministrativeLifecycleImpact; assignmentIds: string[]; bindingIds: string[]; ministerIds: string[]; private: object; positionImpact?: PositionDeletionImpactDto };
+const permissions: Record<Kind, string> = { ORGANIZATION: 'organization:force-delete', DEPARTMENT: 'organization:departments:force-delete', POSITION: 'organization:positions:force-delete' };
 const action = (kind: Kind) => `${kind}_FORCE_DELETED`;
 const retainedHistory = ['保留原组织归属、历史身份 UUID、业务记录、审批签章、审计日志及既有回执。', '下级组织、子部门、岗位和用户不会级联删除；失效的当前关联需重新配置。'];
 const ids = (rows: { id: string }[]) => rows.map(row => row.id);
 const uuidList = (values: string[]) => Prisma.join(values.map(value => Prisma.sql`${value}::uuid`));
+const referenceCounts = (references: { source: string }[]): PositionDeletionReferenceDto[] =>
+  [...references.reduce((counts, { source }) => counts.set(source, (counts.get(source) ?? 0) + 1), new Map<string, number>())]
+    .map(([source, count]) => ({ source, count }));
 
 @Injectable()
 export class OrganizationForceDeleteService {
@@ -42,12 +46,20 @@ export class OrganizationForceDeleteService {
     return this.preview(actor, organizationId, 'DEPARTMENT', departmentId);
   }
 
+  previewPosition(actor: AdminActor, organizationId: string, positionId: string) {
+    return this.preview(actor, organizationId, 'POSITION', positionId);
+  }
+
   forceDeleteOrganization(actor: AdminActor, organizationId: string, dto: OrganizationForceDeleteDto, traceId: string, key?: string) {
     return this.remove(actor, organizationId, 'ORGANIZATION', organizationId, dto, traceId, key);
   }
 
   forceDeleteDepartment(actor: AdminActor, organizationId: string, departmentId: string, dto: OrganizationForceDeleteDto, traceId: string, key?: string) {
     return this.remove(actor, organizationId, 'DEPARTMENT', departmentId, dto, traceId, key);
+  }
+
+  forceDeletePosition(actor: AdminActor, organizationId: string, positionId: string, dto: OrganizationForceDeleteDto, traceId: string, key?: string) {
+    return this.remove(actor, organizationId, 'POSITION', positionId, dto, traceId, key);
   }
 
   private async preview(actor: AdminActor, organizationId: string, kind: Kind, entityId: string): Promise<OrganizationForceDeletePreviewDto> {
@@ -68,7 +80,7 @@ export class OrganizationForceDeleteService {
   private async remove(actor: AdminActor, organizationId: string, kind: Kind, entityId: string,
     dto: OrganizationForceDeleteDto, traceId: string, key?: string): Promise<OrganizationForceDeleteResultDto> {
     let selection: Impact;
-    return this.mutations.run({ actor, organizationId: actor.organizationId, permission: permission(kind), key,
+    return this.mutations.run({ actor, organizationId: actor.organizationId, permission: permissions[kind], key,
       action: action(kind), payload: { kind, organizationId, entityId, scopeOrganizationId: actor.scopeOrganizationId ?? actor.organizationId,
         expectedVersion: dto.expectedVersion, confirmed: dto.confirmed, previewToken: dto.previewToken }, traceId, isolationLevel: 'ReadCommitted' }, async tx => {
       if (!Number.isInteger(dto.expectedVersion) || dto.expectedVersion < 1 || dto.confirmed !== true
@@ -84,20 +96,22 @@ export class OrganizationForceDeleteService {
       const data = { code, status: 'DISABLED' as const, deletedAt: now, configurationRequired: false, version: { increment: 1 } };
       const changed = kind === 'ORGANIZATION'
         ? await tx.organization.updateMany({ where: { id: entityId, version: dto.expectedVersion, deletedAt: null }, data })
-        : await tx.department.updateMany({ where: { organizationId, id: entityId, version: dto.expectedVersion, deletedAt: null }, data });
+        : kind === 'DEPARTMENT' ? await tx.department.updateMany({ where: { organizationId, id: entityId, version: dto.expectedVersion, deletedAt: null }, data })
+        : await tx.position.updateMany({ where: { organizationId, id: entityId, version: dto.expectedVersion, deletedAt: null }, data });
       if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
       // The actor must retain a real platform marker after detaching any marker source.
       // With the shared lifecycle lock this also prevents deleting the last usable administrator.
       if (!await hasPlatformAdministrator(tx, actor.id)) adminError('ADMIN_SELF_LOCK_FORBIDDEN', 409);
-      await assertAdminAccess(tx, actor, actor.organizationId, permission(kind));
+      await assertAdminAccess(tx, actor, actor.organizationId, permissions[kind]);
       const result = { ...before, version: dto.expectedVersion + 1, deletedAt: now.toISOString(), effects };
-      const identity = { code: selection.target.code, name: selection.target.name, parentId: selection.target.parentId,
+      const identity = { code: selection.target.code, name: selection.target.name,
+        ...(kind === 'POSITION' ? { departmentId: selection.target.departmentId } : { parentId: selection.target.parentId }),
         ...(kind === 'ORGANIZATION' ? { type: 'INTERNAL' } : { organizationId }) };
       await tx.$executeRaw`INSERT INTO administrative_deletions
         (id, scope_organization_id, entity_kind, entity_id, original_organization_id, actor_user_id, original_identity, impact)
         VALUES (${randomUUID()}::uuid, ${actor.organizationId}::uuid, ${kind}, ${entityId}::uuid, ${organizationId}::uuid,
         ${actor.id}::uuid, ${JSON.stringify(identity)}::jsonb, ${JSON.stringify({ ...selection.impact, counts: result.counts, effects })}::jsonb)`;
-      await this.audit.record({ actorUserId: actor.id, organizationId: actor.organizationId, action: action(kind), resourceType: kind === 'ORGANIZATION' ? 'Organization' : 'Department',
+      await this.audit.record({ actorUserId: actor.id, organizationId: actor.organizationId, action: action(kind), resourceType: kind === 'ORGANIZATION' ? 'Organization' : kind === 'DEPARTMENT' ? 'Department' : 'Position',
         resourceId: entityId, outcome: 'SUCCESS', traceId, metadata: { organizationId, structureCode: before.code, structureName: before.name, resourceVersion: result.version } }, tx);
       return result;
     }, async tx => {
@@ -128,7 +142,7 @@ export class OrganizationForceDeleteService {
     const home = await tx.organization.findUnique({ where: { id: actor.organizationId } });
     if (actor.accountType !== 'INTERNAL' || home?.type !== 'INTERNAL' || home.deletedAt || home.configurationRequired
       || !await hasPlatformAdministrator(tx, actor.id)) adminError('FEATURE_PERMISSION_DENIED', 403);
-    await assertAdminAccess(tx, actor, actor.organizationId, permission(kind));
+    await assertAdminAccess(tx, actor, actor.organizationId, permissions[kind]);
     const organization = await tx.organization.findUnique({ where: { id: organizationId } });
     // Surviving departments keep their deleted INTERNAL scope for lifecycle management only.
     if (!organization || (organization.deletedAt && kind === 'ORGANIZATION' && !replay)) adminError('ORGANIZATION_NOT_FOUND', 404);
@@ -145,39 +159,50 @@ export class OrganizationForceDeleteService {
 
   private async lockImpact(tx: AdminTransaction, organizationId: string, kind: Kind, entityId: string) {
     // Scope/structure UPDATE locks fence writers and FK insertions before collecting the server impact.
+    if (kind === 'POSITION') await lockPositionDeletionConfiguration(tx, organizationId);
     await tx.$queryRaw`SELECT id FROM organizations WHERE id = ${organizationId}::uuid ORDER BY id FOR UPDATE`;
-    if (kind === 'ORGANIZATION') await tx.$queryRaw`SELECT id FROM organizations WHERE parent_id = ${organizationId}::uuid ORDER BY id FOR UPDATE`;
-    await tx.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid
-      AND (${kind} = 'ORGANIZATION' OR id = ${entityId}::uuid OR parent_id = ${entityId}::uuid) ORDER BY id FOR UPDATE`;
-    await tx.$queryRaw`SELECT p.id FROM positions p WHERE p.organization_id = ${organizationId}::uuid
-      AND (${kind} = 'ORGANIZATION' OR p.department_id IN (
-        SELECT d.id FROM departments d WHERE d.organization_id = ${organizationId}::uuid AND d.deleted_at IS NULL
-        AND (d.id = ${entityId}::uuid OR d.parent_id = ${entityId}::uuid))) ORDER BY p.id FOR UPDATE OF p`;
-    const selection = await this.collect(tx, { organizationId }, organizationId, kind, entityId);
+    if (kind === 'POSITION') {
+      await tx.$queryRaw`SELECT id FROM positions WHERE organization_id = ${organizationId}::uuid AND id = ${entityId}::uuid FOR UPDATE`;
+    } else {
+      if (kind === 'ORGANIZATION') await tx.$queryRaw`SELECT id FROM organizations WHERE parent_id = ${organizationId}::uuid ORDER BY id FOR UPDATE`;
+      await tx.$queryRaw`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid
+        AND (${kind} = 'ORGANIZATION' OR id = ${entityId}::uuid OR parent_id = ${entityId}::uuid) ORDER BY id FOR UPDATE`;
+      await tx.$queryRaw`SELECT p.id FROM positions p WHERE p.organization_id = ${organizationId}::uuid
+        AND (${kind} = 'ORGANIZATION' OR p.department_id IN (
+          SELECT d.id FROM departments d WHERE d.organization_id = ${organizationId}::uuid AND d.deleted_at IS NULL
+          AND (d.id = ${entityId}::uuid OR d.parent_id = ${entityId}::uuid))) ORDER BY p.id FOR UPDATE OF p`;
+    }
+    const selection = await this.collect(tx, { organizationId }, organizationId, kind, entityId, false);
     await this.identity.lockLifecycleUsers(tx, selection.impact.userIds);
     if (selection.assignmentIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM user_positions WHERE id IN (${uuidList(selection.assignmentIds)}) ORDER BY id FOR UPDATE`);
     if (selection.bindingIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM department_management_bindings WHERE id IN (${uuidList(selection.bindingIds)}) ORDER BY id FOR UPDATE`);
     if (selection.ministerIds.length) await tx.$queryRaw(Prisma.sql`SELECT id FROM department_minister_scopes WHERE id IN (${uuidList(selection.ministerIds)}) ORDER BY id FOR UPDATE`);
   }
 
-  private async collect(tx: AdminTransaction, actor: Pick<AdminActor, 'organizationId'>, organizationId: string, kind: Kind, entityId: string): Promise<Impact> {
+  private async collect(tx: AdminTransaction, actor: Pick<AdminActor, 'organizationId'>, organizationId: string, kind: Kind, entityId: string, includePositionWorkflow = true): Promise<Impact> {
     const target = kind === 'ORGANIZATION' ? await tx.organization.findUnique({ where: { id: entityId } })
-      : await tx.department.findFirst({ where: { id: entityId, organizationId } });
+      : kind === 'DEPARTMENT' ? await tx.department.findFirst({ where: { id: entityId, organizationId } })
+      : await tx.position.findFirst({ where: { id: entityId, organizationId } });
     if (!target) adminError(kind === 'ORGANIZATION' ? 'ORGANIZATION_NOT_FOUND' : 'STRUCTURE_NOT_FOUND', 404);
-    const departments = await tx.department.findMany({ where: { organizationId, deletedAt: null,
+    const now = new Date();
+    const departments = kind === 'POSITION' ? [] : await tx.department.findMany({ where: { organizationId, deletedAt: null,
       ...(kind === 'DEPARTMENT' ? { OR: [{ id: entityId }, { parentId: entityId }] } : {}) }, select: { id: true, version: true, parentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } });
     const positions = await tx.position.findMany({ where: { organizationId, deletedAt: null,
-      ...(kind === 'DEPARTMENT' ? { departmentId: { in: ids(departments) } } : {}) }, select: { id: true, version: true, roleVersion: true, departmentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } });
+      ...(kind === 'DEPARTMENT' ? { departmentId: { in: ids(departments) } } : kind === 'POSITION' ? { id: entityId } : {}) }, select: { id: true, version: true, roleVersion: true, departmentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } });
     const organizations = kind === 'ORGANIZATION' ? await tx.organization.findMany({ where: { parentId: entityId, deletedAt: null }, select: { id: true, version: true, parentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } }) : [];
-    const assignments = await tx.userPosition.findMany({ where: { organizationId, ...(kind === 'DEPARTMENT' ? { positionId: { in: ids(positions) } } : {}),
-      OR: [{ endedAt: null }, { endedAt: { gt: new Date() } }] }, select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' } });
-    const users = await this.identity.lifecycleUsers(tx, organizationId, kind === 'DEPARTMENT' ? assignments.map(row => row.userId) : undefined);
-    const survivingAssignments = kind === 'DEPARTMENT' && users.length ? await tx.userPosition.findMany({
-      where: { userId: { in: ids(users) }, ...effectivePositionAssignmentWhere(), positionId: { notIn: ids(positions) } },
+    const assignments = await tx.userPosition.findMany({ where: { organizationId, ...(kind !== 'ORGANIZATION' ? { positionId: { in: ids(positions) } } : {}),
+      OR: [{ endedAt: null }, { endedAt: { gt: now } }] }, select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' } });
+    const users = await this.identity.lifecycleUsers(tx, organizationId, kind !== 'ORGANIZATION' ? assignments.map(row => row.userId) : undefined);
+    const survivingAssignments = kind !== 'ORGANIZATION' && users.length ? await tx.userPosition.findMany({
+      where: { organizationId, userId: { in: ids(users) }, ...effectivePositionAssignmentWhere(now), positionId: { notIn: ids(positions) } },
       select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' },
     }) : [];
     const survivingUsers = new Set(survivingAssignments.map(row => row.userId));
-    const unavailableUserIds = kind === 'DEPARTMENT' ? ids(users).filter(id => !survivingUsers.has(id)) : [];
+    const effectiveTargetUsers = kind === 'POSITION' && users.length ? new Set((await tx.userPosition.findMany({
+      where: { organizationId, positionId: entityId, userId: { in: users.filter(user => user.status === 'ACTIVE' && !user.configurationRequired).map(user => user.id) },
+        ...effectivePositionAssignmentWhere(now) }, select: { userId: true },
+    })).map(row => row.userId)) : null;
+    const unavailableUserIds = kind === 'ORGANIZATION' ? [] : ids(users).filter(id => !survivingUsers.has(id) && (kind !== 'POSITION' || effectiveTargetUsers?.has(id)));
     const positionCondition = positions.length ? Prisma.sql`OR position_id IN (${uuidList(ids(positions))})` : Prisma.empty;
     const departmentCondition = departments.length ? Prisma.sql`department_id IN (${uuidList(ids(departments))})` : Prisma.sql`FALSE`;
     const sectionCondition = departments.length ? Prisma.sql`section_department_id IN (${uuidList(ids(departments))})` : Prisma.sql`FALSE`;
@@ -201,8 +226,13 @@ export class OrganizationForceDeleteService {
     const ministerIds = await tx.$queryRaw<{ id: string; version: number; department_id: string; section_department_id: string; minister_assignment_id: string; valid_from: Date; valid_to: Date | null }[]>(Prisma.sql`SELECT id, version, department_id, section_department_id, minister_assignment_id, valid_from, valid_to FROM department_minister_scopes
       WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE'
       AND (${kind} = 'ORGANIZATION' OR ${departmentCondition} OR ${sectionCondition} ${assignmentCondition} ${ancestryCondition}) ORDER BY id`);
-    return { target, assignmentIds: ids(assignments), bindingIds: ids(bindingIds), ministerIds: ids(ministerIds),
-      private: { departments, positions, organizations, assignments, users, survivingAssignments, unavailableUserIds, bindings: bindingIds, ministerScopes: ministerIds }, impact: {
+    const workflow = includePositionWorkflow && kind === 'POSITION' && !target.deletedAt
+      ? await positionWorkflowReferences(tx, organizationId, entityId, unavailableUserIds, ids(ministerIds)) : undefined;
+    const positionImpact = workflow && { users: users.map(user => ({ id: user.id, name: user.fullName ?? user.username, pendingConfiguration: unavailableUserIds.includes(user.id) })),
+      assignments: assignments.map(assignment => ({ id: assignment.id, userId: assignment.userId, startedAt: assignment.startedAt.toISOString(), endedAt: assignment.endedAt?.toISOString() ?? null })),
+      responsibilities: referenceCounts(workflow.responsibilities), configurations: referenceCounts(workflow.configurations) };
+    return { target, assignmentIds: ids(assignments), bindingIds: ids(bindingIds), ministerIds: ids(ministerIds), positionImpact,
+      private: { departments, positions, organizations, assignments, users, survivingAssignments, unavailableUserIds, bindings: bindingIds, ministerScopes: ministerIds, workflow }, impact: {
       kind, entityId, organizationId, receiptOrganizationId: actor.organizationId, userIds: ids(users), departmentIds: ids(departments),
       unavailableUserIds,
       positionIds: ids(positions), ministerScopeIds: ids(ministerIds), organizationIds: kind === 'ORGANIZATION' ? [entityId, ...ids(organizations)] : [],
@@ -219,7 +249,8 @@ export class OrganizationForceDeleteService {
       previewToken,
       counts: { users: impact.userIds.length, departments: impact.departmentIds.length, positions: impact.positionIds.length,
         organizations: impact.organizationIds.length, assignments: selection.assignmentIds.length, managementBindings: selection.bindingIds.length, ministerScopes: selection.ministerIds.length },
-      retainedHistory: [...retainedHistory] };
+      retainedHistory: selection.positionImpact ? [retainedHistory[0]!, '保留原岗位、任职历史和流程配置；不会自动改派。'] : [...retainedHistory],
+      ...(selection.positionImpact ? { positionImpact: selection.positionImpact } : {}) };
   }
 
   private async invalidateStructure(tx: AdminTransaction, actor: AdminActor, selection: Impact, now: Date) {
@@ -230,7 +261,7 @@ export class OrganizationForceDeleteService {
     }
     await tx.department.updateMany({ where: { id: { in: impact.departmentIds.filter(id => impact.kind === 'ORGANIZATION' || id !== impact.entityId) }, organizationId: impact.organizationId, deletedAt: null },
       data: { ...pending, ...(impact.kind === 'DEPARTMENT' ? { parentId: null } : {}) } });
-    await tx.position.updateMany({ where: { id: { in: impact.positionIds }, organizationId: impact.organizationId, deletedAt: null }, data: pending });
+    if (impact.kind !== 'POSITION') await tx.position.updateMany({ where: { id: { in: impact.positionIds }, organizationId: impact.organizationId, deletedAt: null }, data: pending });
     await tx.userPosition.updateMany({ where: { id: { in: selection.assignmentIds }, organizationId: impact.organizationId,
       OR: [{ endedAt: null }, { endedAt: { gt: now } }] }, data: { endedAt: now } });
     if (selection.bindingIds.length) await tx.$executeRaw(Prisma.sql`UPDATE department_management_bindings SET status = 'DISABLED', version = version + 1,

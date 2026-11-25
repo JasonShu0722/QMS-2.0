@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { Alert, Button, Space, Spin, Tabs, Tag } from 'antd';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../../i18n/Language';
 import { mutateInbox } from '../tasks/task-inbox';
 import { problemScope, readWorkspace } from './problem-workspace-api';
@@ -29,6 +29,7 @@ export function ProblemWorkspacePage({ problemId }: { problemId?: string }) {
 function Workspace({ problemId, organizationId, instanceId }: { problemId: string; organizationId?: string; instanceId?: string }) {
   const { t, locale } = useLanguage();
   const [params, setParams] = useSearchParams();
+  const location = useLocation();
   const read = useCallback((signal: AbortSignal) => readWorkspace(problemId, organizationId, instanceId, signal), [problemId, organizationId, instanceId]);
   const state = useProblemRead(read, `${problemId}:${organizationId}:${instanceId}`);
   const [tab, setTab] = useState(params.get('view') === 'report' ? 'report' : 'overview');
@@ -41,6 +42,9 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
   const requestLeave = useNavigationGuard();
   useNavigationBusy(pending);
   const workspace = denied ? undefined : state.data;
+  const returnScope = location.state?.processFollowupReturnScope;
+  const returnToProcessFollowup = workspace?.problem.domainCode === 'process-quality' && (returnScope === 'primary' || returnScope === 'explicit');
+  const followupState = returnToProcessFollowup ? { processFollowupReturnScope: returnScope } : undefined;
   const revokeRead = state.revoke;
   const revoke = useCallback(() => {
     revokeRead(); setDenied(true); setError(undefined); setUpgrading(false); setPending(false); setFocused(false);
@@ -60,13 +64,13 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
     catch (cause) { setError(cause); }
     finally { writing.current = false; setPending(false); state.refresh(); }
   }
-  const choose = (value?: string) => setParams(problemScope(workspace?.problem.organizationId ?? organizationId, value));
+  const choose = (value?: string) => setParams(problemScope(workspace?.problem.organizationId ?? organizationId, value), { state: followupState });
   return <main className={`problem-workspace${focused ? ' is-focused' : ''}`}><h1 className="sr-only">{t('问题处理工作空间')}</h1><div className="problem-workspace__heading"><Button disabled={denied} aria-pressed={focused} onClick={() => setFocused((value) => !value)}>{t(focused ? '退出专注' : '专注处理')}</Button></div><ProblemError cause={state.error ?? error} />
     {denied && <Alert role="alert" type="error" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} />}
     <Button disabled={denied || state.loading || pending} onClick={() => { setError(undefined); requestLeave(() => { setUpgrading(false); state.refresh(); }); }}>{t('刷新工作空间')}</Button>
     {state.loading && !workspace ? <Spin aria-label={t('正在加载')} /> : workspace ? <>
       <header className="problem-header"><div><Tag>{workspace.problem.reportNumber}</Tag>{tab === 'overview' ? <h2>{current ? workspace.problem.summary.title : workspace.domain?.summary.title ?? t('历史数据不可用')}</h2> : null}</div>
-        <Link to={`/app/problem-center?${problemScope(workspace.problem.organizationId)}`}>{t('返回问题中心')}</Link></header>
+        <Link to={returnToProcessFollowup ? { pathname: '/app/process-quality/problems', search: returnScope === 'explicit' ? problemScope(workspace.problem.organizationId).toString() : '' } : `/app/problem-center?${problemScope(workspace.problem.organizationId)}`}>{t(returnToProcessFollowup ? '返回制程问题跟进' : '返回问题中心')}</Link></header>
       <label>{t('流程实例')} <select aria-label={t('流程实例')} value={selected?.id ?? ''} onChange={(event) => { const id = event.target.value; requestLeave(() => choose(id)); }}>
         {!workspace.instances.length ? <option value={selected?.id ?? ''}>{selected?.id ?? t('暂无流程实例')}</option> : workspace.instances.map((instance) => <option key={instance.id} value={instance.id}>{instance.current ? t('当前实例') : t('历史实例')} · {new Date(instance.createdAt).toLocaleString(locale)} · {instance.id}</option>)}
       </select></label>
@@ -90,7 +94,7 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
           </div>
           <aside className="problem-workspace__context">
             <ProblemEvidence evidence={workspace.evidence} onDenied={revoke} />
-            <section className="problem-section"><h3>{t('升级记录')}</h3><ul>{workspace.upgrades.map((entry) => <li key={entry.id}>{entry.reason} · {new Date(entry.createdAt).toLocaleString(locale)} <Link to={`?${problemScope(workspace.problem.organizationId, entry.beforeInstanceId)}`}>{t('查看升级前实例')}</Link> · <Link to={`?${problemScope(workspace.problem.organizationId, entry.afterInstanceId)}`}>{t('查看升级后实例')}</Link></li>)}</ul></section>
+            <section className="problem-section"><h3>{t('升级记录')}</h3><ul>{workspace.upgrades.map((entry) => <li key={entry.id}>{entry.reason} · {new Date(entry.createdAt).toLocaleString(locale)} <Link to={`?${problemScope(workspace.problem.organizationId, entry.beforeInstanceId)}`} state={followupState}>{t('查看升级前实例')}</Link> · <Link to={`?${problemScope(workspace.problem.organizationId, entry.afterInstanceId)}`} state={followupState}>{t('查看升级后实例')}</Link></li>)}</ul></section>
           </aside>
         </div>
         </> : null },

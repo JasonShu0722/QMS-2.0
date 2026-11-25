@@ -69,9 +69,9 @@ export class WorkflowDefinitionService {
     return (await this.publishDefinition(input)).version;
   }
 
-  async publishDefinition(input: PublishInput): Promise<WorkflowDefinitionResponseDto> {
+  async publishDefinition(input: PublishInput, transaction?: Prisma.TransactionClient): Promise<WorkflowDefinitionResponseDto> {
     this.checkOptionalText(input.changeNote, 500);
-    return this.transaction(async (tx) => {
+    const publish = async (tx: Prisma.TransactionClient) => {
       const definition = await this.lockDefinition(tx, input);
       const draft = await this.lockDraft(tx, input);
       await this.access(tx, input);
@@ -92,7 +92,8 @@ export class WorkflowDefinitionService {
       const updated = await this.advanceDefinition(tx, definition, input);
       await this.record(tx, input, 'WORKFLOW_VERSION_PUBLISHED', 'WorkflowVersion', draft.id, 'PUBLISHED', draft.version);
       return this.response(tx, updated, draft.id);
-    });
+    };
+    return transaction ? publish(transaction) : this.transaction(publish);
   }
 
   async copyPublishedVersion(input: CopyInput): Promise<WorkflowDefinitionResponseDto> {

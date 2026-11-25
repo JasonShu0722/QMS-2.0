@@ -39,6 +39,16 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+it.each([
+  { label: 'a direct process detail', domainCode: 'process-quality', state: undefined, name: '返回问题中心', href: '/app/problem-center?organizationId=organization' },
+  { label: 'a different domain with a process marker', domainCode: 'neutral', state: { processFollowupReturnScope: 'primary' }, name: '返回问题中心', href: '/app/problem-center?organizationId=organization' },
+  { label: 'the primary process list', domainCode: 'process-quality', state: { processFollowupReturnScope: 'primary' }, name: '返回制程问题跟进', href: '/app/process-quality/problems' },
+])('uses the scoped return destination for $label', async ({ domainCode, state, name, href }) => {
+  vi.mocked(api.readWorkspace).mockResolvedValue({ ...workspace, problem: { ...workspace.problem, domainCode } });
+  render(<MemoryRouter initialEntries={[{ pathname: '/app/problem-workspace/problem', search: '?organizationId=organization', state }]}><LanguageProvider><ProblemWorkspacePage problemId="problem" /></LanguageProvider></MemoryRouter>);
+  expect(await screen.findByRole('link', { name })).toHaveAttribute('href', href);
+}, 30_000);
+
 it('reports a denied read as an error with trace rather than empty placeholder actions', async () => {
   vi.mocked(api.readWorkspace).mockRejectedValue(new ApiError({ code: 'FEATURE_PERMISSION_DENIED', message: 'unsafe secret', traceId: 'workspace-trace' }));
   mount();

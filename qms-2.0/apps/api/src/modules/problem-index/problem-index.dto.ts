@@ -1,10 +1,12 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PickType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { PROBLEM_STATUSES, type ProblemStatus } from './problem.types.js';
 import { DOMAIN_SOURCE_RESPONSE_FORMS, type DomainSourceResponseForm } from './domain-source-issue.service.js';
 
 export const PROBLEM_SORT_FIELDS = ['createdAt', 'updatedAt', 'dueAt', 'reportNumber', 'status', 'severity'] as const;
+export const PROCESS_FOLLOWUP_STAGES = ['ANALYSIS', 'SUBMISSION', 'CLOSURE', 'CLOSURE_REVIEW', 'CLOSED', 'ARCHIVED', 'CANCELLED', 'SUSPENDED', 'FAILED', 'COMPLETED'] as const;
+export type ProcessFollowupStage = typeof PROCESS_FOLLOWUP_STAGES[number];
 
 export class ProblemScopeQueryDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
@@ -26,6 +28,15 @@ export class ProblemIndexQueryDto extends ProblemScopeQueryDto {
   @ApiPropertyOptional({ format: 'date-time' }) @IsOptional() @IsDateString({ strict: true }) @Matches(/T.*(?:Z|[+-]\d{2}:\d{2})$/) overdueAt?: string;
   @ApiPropertyOptional({ enum: PROBLEM_SORT_FIELDS, default: 'createdAt' }) @IsOptional() @IsIn(PROBLEM_SORT_FIELDS) sortBy?: typeof PROBLEM_SORT_FIELDS[number];
   @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' }) @IsOptional() @IsIn(['asc', 'desc']) sortDirection?: 'asc' | 'desc';
+}
+
+export class ProcessFollowupQueryDto extends PickType(ProblemIndexQueryDto, [
+  'organizationId', 'page', 'pageSize', 'status', 'severity', 'ownerId', 'search', 'dueFrom', 'dueTo', 'overdueAt', 'sortBy', 'sortDirection',
+] as const) {
+  @ApiPropertyOptional({ enum: PROCESS_FOLLOWUP_STAGES }) @IsOptional() @IsIn(PROCESS_FOLLOWUP_STAGES) stage?: ProcessFollowupStage;
+  @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() responsibleSectionDepartmentId?: string;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) responsibleSectionName?: string;
+  @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) ownerName?: string;
 }
 
 export class ProblemFieldDto {
@@ -71,5 +82,15 @@ export class ProblemIndexPageResponseDto {
   @ApiProperty() page!: number;
   @ApiProperty() pageSize!: number;
   @ApiProperty({ type: [ProblemStatusCountDto] }) statusCounts!: ProblemStatusCountDto[];
+}
+
+export class ProcessFollowupItemDto extends ProblemIndexResponseDto {
+  @ApiProperty({ enum: PROCESS_FOLLOWUP_STAGES }) stage!: ProcessFollowupStage;
+  @ApiProperty({ format: 'uuid' }) responsibleSectionDepartmentId!: string;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Effective deadline of the current stage, including approved extensions.' }) declare dueAt: string | null;
+}
+
+export class ProcessFollowupPageResponseDto extends ProblemIndexPageResponseDto {
+  @ApiProperty({ type: [ProcessFollowupItemDto] }) declare items: ProcessFollowupItemDto[];
 }
 

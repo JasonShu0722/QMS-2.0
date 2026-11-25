@@ -3,6 +3,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import type { WorkflowActor } from '../workflow/workflow-access-policy.js';
 import { assertWorkflowFeature } from '../workflow/workflow-access-policy.js';
 import { WorkflowClosureRegistry } from '../workflow/workflow-closure-registry.js';
+import type { WorkflowClosurePlan } from '../workflow/workflow-closure-policy.js';
 import type { WorkflowClosureAdapter, WorkflowClosureContext, WorkflowClosureOperation } from '../workflow/workflow-closure-round.types.js';
 import type { WorkflowDeadlineOperation, WorkflowDeadlineStage } from '../workflow/workflow-deadline-extension.types.js';
 import { workflowError } from '../workflow/workflow-runtime-policy.js';
@@ -16,6 +17,15 @@ export class ProcessEightDClosureAdapter implements WorkflowClosureAdapter, OnMo
   onModuleInit(): void { this.registry.register(this); }
   lockAndRead(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string, operation: WorkflowClosureOperation) {
     return this.service.closureContext(tx, actor, problemId, operation);
+  }
+  assertStartParticipants(tx: Prisma.TransactionClient, context: WorkflowClosureContext, plan: WorkflowClosurePlan) {
+    return this.service.assertClosureParticipants(tx, context, plan);
+  }
+  lockParticipantStageConfiguration(tx: Prisma.TransactionClient, context: WorkflowClosureContext) {
+    return this.service.lockClosureStageConfiguration(tx, context);
+  }
+  isParticipantStageEligible(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string) {
+    return this.service.isClosureParticipantStageEligible(tx, context, userId);
   }
   complete(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor?: WorkflowActor) { return this.service.complete(tx, context, actor); }
   returnForChanges(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor?: WorkflowActor) { return this.service.returnForChanges(tx, context, actor); }

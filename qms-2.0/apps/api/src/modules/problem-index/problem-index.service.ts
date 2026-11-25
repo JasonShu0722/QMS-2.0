@@ -28,6 +28,7 @@ export interface CreateProblemIndexInput {
   dueAt?: Date;
   createdById?: string;
   traceId?: string;
+  processEightDBoard?: '0' | '1';
 }
 
 export interface UpdateDomainSummaryInput {
@@ -169,7 +170,12 @@ export class ProblemIndexService {
   }
 
   private async insertDomainProblem(transaction: ProblemIndexClient, input: CreateProblemIndexInput): Promise<Record<string, unknown>> {
-    const allocated = await this.numbering.allocateReportNumber(transaction as never, {
+    const issuedAt = input.processEightDBoard === undefined ? undefined : new Date();
+    const allocated = input.processEightDBoard !== undefined && issuedAt
+      ? await this.numbering.allocateProcessEightDReportNumber(transaction as never, {
+        organizationId: input.organizationId, boardCode: input.processEightDBoard, at: issuedAt, createdById: input.createdById,
+      })
+      : await this.numbering.allocateReportNumber(transaction as never, {
       organizationId: input.organizationId,
       ruleCode: 'PROBLEM',
       classificationCode: codeForNumbering(input.domainCode),
@@ -178,6 +184,7 @@ export class ProblemIndexService {
     const created = await transaction.problemIndex.create({
       data: {
         id: randomUUID(), organizationId: input.organizationId, reportNumber: allocated.reportNumber,
+        ...(issuedAt ? { createdAt: issuedAt } : {}),
         domainCode: input.domainCode.trim(), problemType: input.problemType.trim(),
         sourceType: input.sourceType.trim(), sourceId: input.sourceId ?? null,
         severity: input.severity.trim(), responsibleParty: input.responsibleParty?.trim() ?? null,

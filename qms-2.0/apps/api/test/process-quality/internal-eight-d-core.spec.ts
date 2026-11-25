@@ -196,7 +196,7 @@ describe('bounded shared internal 8D core (unit only)', () => {
     const { service, tx, queries } = fixture(domain);
     const defectId = randomUUID(), ownerUserId = randomUUID(), responsibleSectionDepartmentId = randomUUID();
     const source = { sourceDomain: domain.sourceDomain, sourceType: domain.sourceType, sourceId: defectId,
-      sourceVersion: 1, sourceSnapshot: { realSource: true }, createdBy: randomUUID() };
+      sourceVersion: 1, sourceSnapshot: { realSource: true, operationSector: 'PCBA', description: '真实来源描述' }, createdBy: randomUUID() };
     const binding = { workflowDefinitionId: randomUUID(), workflowVersionId: randomUUID(), enabled: true };
     const events: string[] = [], permissions: string[] = [], audit: Record<string, unknown>[] = [];
     const resolver = jest.fn(async () => { events.push('resolve'); return { ...source, organizationId: actor.organizationId }; });
@@ -204,7 +204,12 @@ describe('bounded shared internal 8D core (unit only)', () => {
     service.transaction = async (work: (tx: unknown) => unknown) => work(tx);
     service.ledger = { sourceReference: async () => source, lockAndResolve: resolver };
     service.authorize = async (_tx: unknown, _actor: unknown, permission: string) => { permissions.push(permission); };
-    service.readBinding = async () => binding;
+    if (domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS) {
+      service.workflowConfiguration = { assertCanIssue: async () => binding };
+      service.stagePositions = async () => ({});
+      service.assertQualifiedStages = async () => undefined;
+    }
+    else service.readBinding = async () => binding;
     service.validateFlow = async () => undefined;
     service.assertOwnerAssignment = async () => { events.push('owner-assignment'); };
     service.eligibleWorker = async () => { events.push('owner-work'); return true; };
@@ -220,11 +225,14 @@ describe('bounded shared internal 8D core (unit only)', () => {
     service.domainIssues = { issue: async (command: DomainSourceIssueCommand, adapters: DomainSourceIssueAdapters) => {
       expect(command).toMatchObject({ actor, source, problemType: domain.problemType, responsibleScope: domain.domainCode, responseForm: 'EIGHT_D' });
       await adapters.authorize(tx as never, command, false);
-      await adapters.lockAndResolve(tx as never, source);
+      const locked = await adapters.lockAndResolve(tx as never, source);
+      if (domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS) expect(adapters.processEightDBoard?.([locked!])).toBe('0');
+      else expect(adapters.processEightDBoard).toBeUndefined();
       await adapters.bindWorkflow(tx as never, { organizationId: actor.organizationId, problemIndexId: problemId, expectedProblemVersion: 7 } as never);
       return { problem: { id: problemId }, replayed: false };
     } };
-    await expect(service.issue(actor, { sources: [{ defectId, expectedVersion: 1 }], ownerUserId, responsibleSectionDepartmentId, severity: 'LOW' }, 'trace', 'test-key'))
+    await expect(service.issue(actor, { sources: [{ defectId, expectedVersion: 1 }], ownerUserId, responsibleSectionDepartmentId, severity: 'LOW',
+      sourceConfirmations: [{ defectId, relatedProblemIds: [], recurrence: 'NOT_RECURRENCE' }] }, 'trace', 'test-key'))
       .resolves.toEqual({ problem: { id: problemId }, replayed: false });
     expect(events).toEqual(['owner-assignment', 'owner-work', 'resolve', 'owner-lock', 'owner-assignment', 'owner-work', 'trusted-runtime']);
     expect(resolver.mock.calls[0]).toEqual(domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS ? [tx, source] : [tx, source, actor]);

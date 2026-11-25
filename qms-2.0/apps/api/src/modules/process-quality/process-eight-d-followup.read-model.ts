@@ -1,6 +1,6 @@
 import { Prisma } from '../../generated/prisma/client.js';
 import { INTERNAL_EIGHT_D_DOMAINS, internalEightDSql, type InternalEightDDomainDescriptor } from '../../common/eight-d/internal-eight-d-domain.js';
-import type { ProblemDomainSummary } from '../problem-index/problem-domain-registry.js';
+import type { ProblemDomainSummary, ProblemFollowupSql } from '../problem-index/problem-domain-registry.js';
 import { isClosureReviewNode } from '../workflow/workflow-runtime-policy.js';
 import { eightDError } from './process-eight-d-policy.js';
 import type { ProcessEightDRecord } from './process-eight-d.types.js';
@@ -12,6 +12,57 @@ type FollowupFacts = {
 };
 type NameRow = { kind: 'owner' | 'section'; id: string; name: string };
 const iso = (date: Date | null) => date?.toISOString() ?? null;
+
+export function processEightDFollowupSql(): Omit<ProblemFollowupSql, 'authorize'> {
+  const tables = internalEightDSql(INTERNAL_EIGHT_D_DOMAINS.PROCESS);
+  const sectionId = Prisma.sql`facts.section_id`;
+  const stage = Prisma.sql`current_stage.code`;
+  const sectionName = Prisma.sql`section.name`;
+  const ownerName = Prisma.sql`COALESCE(NULLIF(BTRIM(owner.full_name), ''), owner.username)`;
+  return {
+    joins: Prisma.sql`
+      JOIN ${tables.reports} report ON report.organization_id = p.organization_id AND report.problem_id = p.id
+      JOIN workflow_instances instance ON instance.organization_id = p.organization_id AND instance.id = p.workflow_instance_id AND instance.problem_index_id = p.id
+      JOIN workflow_nodes node ON node.organization_id = p.organization_id AND node.id = instance.current_node_id AND node.workflow_version_id = instance.workflow_version_id
+      LEFT JOIN ${tables.revisions} revision ON revision.organization_id = p.organization_id AND revision.problem_id = p.id AND revision.id = report.closed_revision_id
+      CROSS JOIN LATERAL (SELECT
+        CASE WHEN revision.id IS NOT NULL THEN revision.snapshot -> 'document' ELSE report.document END AS document,
+        CASE WHEN revision.id IS NOT NULL THEN (revision.snapshot ->> 'ownerUserId')::uuid ELSE p.owner_id END AS owner_id,
+        COALESCE((revision.snapshot ->> 'responsibleSectionDepartmentId')::uuid, report.responsible_section_department_id) AS section_id
+      ) facts
+      CROSS JOIN LATERAL (SELECT
+        COALESCE(facts.document ->> 'description', '') AS description,
+        COALESCE(NULLIF(BTRIM(report.issue_title), ''), NULLIF(BTRIM(facts.document ->> 'title'), ''),
+          NULLIF(BTRIM(facts.document ->> 'description'), ''), p.report_number) AS title
+      ) display
+      CROSS JOIN LATERAL (SELECT CASE
+        WHEN p.status = 'ARCHIVED' OR p.archived_at IS NOT NULL THEN 'ARCHIVED'
+        WHEN report.closed_revision_id IS NOT NULL OR p.closed_at IS NOT NULL OR p.status = 'CLOSED' THEN 'CLOSED'
+        WHEN instance.status <> 'RUNNING' THEN instance.status::text
+        WHEN jsonb_typeof(node.config) = 'object' AND node.config ? 'closureReview' THEN 'CLOSURE_REVIEW'
+        WHEN report.submitted_at IS NOT NULL THEN 'CLOSURE'
+        WHEN report.analysis_completed_at IS NOT NULL THEN 'SUBMISSION'
+        ELSE 'ANALYSIS' END AS code
+      ) current_stage
+      LEFT JOIN departments section ON section.organization_id = p.organization_id AND section.id = ${sectionId}
+      LEFT JOIN users owner ON owner.organization_id = p.organization_id AND owner.id = facts.owner_id`,
+    stage,
+    sectionId,
+    sectionName,
+    ownerName,
+    dueAt: Prisma.sql`CASE ${stage}
+      WHEN 'ANALYSIS' THEN report.analysis_due_at
+      WHEN 'SUBMISSION' THEN report.submission_due_at
+      WHEN 'CLOSURE' THEN report.closure_due_at
+      WHEN 'CLOSURE_REVIEW' THEN report.closure_due_at END`,
+    projection: Prisma.sql`LEFT(display.title, 200) AS title, display.description, ${sectionName} AS "sectionName", ${ownerName} AS "ownerName"`,
+    search: (pattern) => Prisma.sql`display.title ILIKE ${pattern} OR display.description ILIKE ${pattern}`,
+    summarize: ({ title, description, sectionName, ownerName }) => ({ title: title.slice(0, 200), description, domainUiKey: 'process-eight-d', fields: [
+      { key: 'responsibleSectionName', label: '责任科室', value: sectionName },
+      { key: 'ownerName', label: '负责人', value: ownerName },
+    ] }),
+  };
+}
 
 function stage(record: ProcessEightDRecord, facts: FollowupFacts): string {
   if (record.problem.status === 'ARCHIVED' || record.problem.archivedAt) return '已归档';

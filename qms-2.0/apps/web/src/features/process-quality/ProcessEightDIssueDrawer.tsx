@@ -19,8 +19,9 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
   const [form] = Form.useForm<Body>();
   const scope = useWorkTabsStore(state => state.sessionScope);
   const [previews, setPreviews] = useState<Preview[]>();
-  const [confirmations, setConfirmations] = useState<Record<string, 'RECURRENCE' | 'NOT_RECURRENCE'>>({});
-  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const [recurrence, setRecurrence] = useState<'RECURRENCE' | 'NOT_RECURRENCE'>();
+  const [reason, setReason] = useState('');
+  const [board, setBoard] = useState<Body['processBoardCode']>();
   const [error, setError] = useState<unknown>();
   const [previewLoading, setPreviewLoading] = useState(true);
   const [optionsLoading, setOptionsLoading] = useState(true);
@@ -46,6 +47,10 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
   const alive = useRef(true);
   const submitting = useRef(false);
   const sourceRefs = sources.map(record => ({ defectId: record.id, expectedVersion: record.version }));
+  const firstSector = sources[0]?.operationSector;
+  const inferredBoard = (firstSector === 'PCBA' || firstSector === '装配') && sources.every(source => source.operationSector === firstSector) ? firstSector : undefined;
+  const firstDescription = sources[0]?.description?.trim();
+  const commonTitle = firstDescription && sources.every(source => source.description?.trim() === firstDescription) ? Array.from(firstDescription).slice(0, 200).join('') : undefined;
   const ownerChoices = selectedOwner && !users.some(user => user.id === selectedOwner.id) ? [selectedOwner, ...users] : users;
   const current = () => alive.current && !retired.current && useWorkTabsStore.getState().sessionScope === initialScope.current;
   useUnsavedChanges(dirty || writer.uncertain);
@@ -74,7 +79,7 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
   }
   async function loadPreviews() {
     setPreviewLoading(true); setError(undefined);
-    try { const next = await readPreviews(writer.signal()); if (current()) { setPreviews(next); setConfirmations({}); } }
+    try { const next = await readPreviews(writer.signal()); if (current()) { setPreviews(next); setRecurrence(undefined); } }
     catch (cause) { if (current()) { setPreviews(undefined); setError(cause); if (denied(cause)) onDenied(cause); } }
     finally { if (current()) setPreviewLoading(false); }
   }
@@ -105,7 +110,8 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
   async function submit(values: Body) {
     if (submitting.current || !previews || !current()) return;
     const required = previews;
-    if (required.some(item => !confirmations[item.defectId])) { setError(new Error('请逐来源明确选择复发或非复发。')); return; }
+    if (!recurrence) { setError(new Error('请选择本次发单是否复发。')); return; }
+    if (!inferredBoard && !board) { setError(new Error('所选来源板块不一致或未确认，请选择本次 8D 的板块。')); return; }
     submitting.current = true; setError(undefined);
     try {
       if (!writer.uncertain) {
@@ -113,12 +119,14 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
         const fresh = await readPreviews(writer.signal());
         const fingerprint = (items: Preview[]) => JSON.stringify(items.map(item => [item.defectId, item.relatedSetToken, item.hasHiddenRelations, item.relatedProblems]).sort((a, b) => String(a[0]).localeCompare(String(b[0]))));
         if (fingerprint(fresh) !== fingerprint(previews)) {
-          setPreviews(fresh); setConfirmations({}); setChangedRelations(true); return;
+          setPreviews(fresh); setRecurrence(undefined); setChangedRelations(true); return;
         }
         if (!ownerChoices.some(user => user.id === values.ownerUserId) || values.responsibleSectionDepartmentId !== section) throw new Error('请重新选择当前科室有效负责人。');
       }
-      const sourceConfirmations: Body['sourceConfirmations'] = required.map(item => ({ defectId: item.defectId, relatedProblemIds: item.relatedProblems.map(problem => problem.problemId), relatedSetToken: item.relatedSetToken, recurrence: confirmations[item.defectId], ...(reasons[item.defectId]?.trim() ? { reason: reasons[item.defectId].trim() } : {}) }));
+      const sourceConfirmations: Body['sourceConfirmations'] = required.map(item => ({ defectId: item.defectId, relatedProblemIds: item.relatedProblems.map(problem => problem.problemId), relatedSetToken: item.relatedSetToken, recurrence, ...(reason.trim() ? { reason: reason.trim() } : {}) }));
       const body: Body = { sources: sourceRefs, severity: values.severity, responsibleSectionDepartmentId: values.responsibleSectionDepartmentId, ownerUserId: values.ownerUserId,
+        ...(!inferredBoard && board ? { processBoardCode: board } : {}),
+        ...(values.issueTitle?.trim() !== commonTitle ? { issueTitle: values.issueTitle?.trim() } : {}),
         ...(values.analysisDueAt ? { analysisDueAt: new Date(`${values.analysisDueAt}T23:59:59`).toISOString() } : {}),
         ...(values.closureDueAt ? { closureDueAt: new Date(`${values.closureDueAt}T23:59:59`).toISOString() } : {}), sourceConfirmations };
       const result = await writer.write<Result>(base, body, 'POST');
@@ -131,16 +139,24 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
     {invalidated ? <Alert type="warning" title="会话已变化，请重新打开抽屉。" /> : null}
     <ProcessError cause={error} fallback={error instanceof Error ? error.message : '发单失败，请重试。'} />
     {writer.uncertain ? <Alert type="warning" title="发单结果未知；请勿更改请求，重试将使用原请求及同一幂等键。" /> : null}
-    {changedRelations ? <Alert type="warning" title="关联集合已变化，请按最新预览重新逐条确认；已保留发单草稿。" /> : null}
+    {changedRelations ? <Alert type="warning" title="关联集合已变化，请查看最新预览并重新判定是否复发；已保留发单草稿。" /> : null}
     {previewLoading ? <Spin aria-label="加载来源预览" /> : !previews ? <Button onClick={() => void loadPreviews()}>重试来源预览</Button> : <section aria-label="发单来源预览" className="process-quality-source-preview">{previews.map(item => <section key={item.defectId} className="process-quality-card">
       <Typography.Text strong>{sources.find(record => record.id === item.defectId)?.description}</Typography.Text>
       {item.relatedProblems.map(problem => <div key={problem.problemId}><Link to={`/app/problem-workspace/${problem.problemId}`}>{problem.reportNumber}</Link> · <span>{problem.title}</span> <span>{problem.status}</span></div>)}
       {item.hasHiddenRelations ? <Alert type="warning" title="部分关联问题无权查看。" /> : null}
       {!item.relatedProblems.length && !item.hasHiddenRelations ? <Typography.Paragraph type="secondary">尚无已关联问题</Typography.Paragraph> : null}
-      <Radio.Group aria-label={`来源复发判定 ${item.defectId}`} disabled={writer.busy || writer.uncertain || previewLoading} value={confirmations[item.defectId]} onChange={event => { setDirty(true); setConfirmations(current => ({ ...current, [item.defectId]: event.target.value })); }}><Radio value="RECURRENCE">复发</Radio><Radio value="NOT_RECURRENCE">非复发</Radio></Radio.Group><Input aria-label={`判定说明 ${item.defectId}`} placeholder="判定说明（可空）" maxLength={2000} disabled={writer.busy || writer.uncertain || previewLoading} value={reasons[item.defectId] ?? ''} onChange={event => { setDirty(true); setReasons(current => ({ ...current, [item.defectId]: event.target.value })); }} />
     </section>)}</section>}
+    {previews ? <Space direction="vertical" className="process-quality-card">
+      <Radio.Group aria-label="整单复发判定" disabled={invalidated || writer.busy || writer.uncertain || previewLoading} value={recurrence} onChange={event => { setDirty(true); setRecurrence(event.target.value); }}><Radio value="RECURRENCE">复发</Radio><Radio value="NOT_RECURRENCE">非复发</Radio></Radio.Group>
+      <Input aria-label="判定说明" placeholder="判定说明（可空）" maxLength={2000} disabled={invalidated || writer.busy || writer.uncertain || previewLoading} value={reason} onChange={event => { setDirty(true); setReason(event.target.value); }} />
+      {inferredBoard ? <Typography.Text>8D 板块：{inferredBoard}</Typography.Text> : <>
+        <Typography.Text>所选来源板块不一致或未确认，请选择本次 8D 的板块。</Typography.Text>
+        <Radio.Group aria-label="8D 板块" disabled={invalidated || writer.busy || writer.uncertain || previewLoading} value={board} onChange={event => { setDirty(true); setBoard(event.target.value); }}><Radio value="0">PCBA</Radio><Radio value="1">装配</Radio></Radio.Group>
+      </>}
+    </Space> : null}
     <ProcessError cause={optionsError} fallback="责任候选加载失败，请重试。" />
-    <Form form={form} layout="vertical" disabled={invalidated || writer.busy || writer.uncertain || previewLoading} onValuesChange={() => setDirty(true)} onFinish={values => void submit(values)}>
+    <Form form={form} layout="vertical" initialValues={{ issueTitle: commonTitle }} disabled={invalidated || writer.busy || writer.uncertain || previewLoading} onValuesChange={() => setDirty(true)} onFinish={values => void submit(values)}>
+      <Form.Item name="issueTitle" label="问题标题" rules={[{ required: true, whitespace: true, message: '请输入问题标题' }]}><Input maxLength={200} /></Form.Item>
       <Form.Item name="severity" label="风险等级" rules={[{ required: true, message: '请选择风险等级' }]}><Select options={[{ value: 'LOW', label: '低' }, { value: 'MEDIUM', label: '中' }, { value: 'HIGH', label: '高' }, { value: 'CRITICAL', label: '重大' }]} /></Form.Item>
       <Form.Item name="responsibleSectionDepartmentId" label="责任科室" rules={[{ required: true, message: '请选择责任科室' }]}><Select loading={optionsLoading} showSearch filterOption={false} onSearch={value => { setDepartmentSearch(value); setDepartmentPage(1); }} options={optionsLoading ? [] : departments.map(department => ({ value: department.id, label: department.name }))} onChange={value => { setSection(value); setUsers([]); setSelectedOwner(undefined); setUserSearch(''); setUserPage(1); form.setFieldValue('ownerUserId', undefined); }} notFoundContent={optionsLoading ? <Spin size="small" /> : <Empty description="无有效责任科室" />} /></Form.Item>
       {departmentTotal > 100 ? <Pagination aria-label="责任科室候选分页" disabled={writer.busy || writer.uncertain || previewLoading} current={departmentPage} pageSize={100} total={departmentTotal} showSizeChanger={false} onChange={setDepartmentPage} /> : null}

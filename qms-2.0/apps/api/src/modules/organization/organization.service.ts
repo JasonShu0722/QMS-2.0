@@ -12,7 +12,7 @@ import { assertRecentAuthentication } from '../../common/security/session-securi
 import { ACTIVE_PERMISSION_CODES } from '../authorization/permission-catalog.js';
 import { organizationInitialization, organizationGovernancePermissions, recordOrganizationInitialization, rejectDeletedOrganizationCreation } from './organization-initialization.js';
 import { archiveOrganizationHistory, archivedOrganizationDelete } from './organization-history-archive.js';
-import { ministerAssignmentReferences, positionManagementReferences, structureBusinessReferences } from './organization-lifecycle.read-model.js';
+import { lockPositionDeletionConfiguration, ministerAssignmentReferences, positionManagementReferences, positionWorkflowReferences, structureBusinessReferences } from './organization-lifecycle.read-model.js';
 import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, UpdatePositionPermissionsDto, ReplacePositionRolesDto, ReplaceUserPositionsDto, DeleteStructureDto, OrganizationLifecycleDto } from './organization.dto.js';
 
 const governancePermissions = organizationGovernancePermissions;
@@ -311,6 +311,34 @@ export class OrganizationService {
     });
   }
 
+  deletePosition(actor: AdminActor, organizationId: string, positionId: string, dto: DeleteStructureDto, traceId: string, key?: string) {
+    const permission = 'organization:structure:manage';
+    return this.mutations.run({ actor, organizationId, key, action: 'POSITION_DELETED', payload: { organizationId, positionId, ...dto },
+      permission, traceId, authentication: 'recent', isolationLevel: 'ReadCommitted' }, async transaction => {
+      const current = await transaction.position.findFirst({ where: { id: positionId, organizationId, deletedAt: null } });
+      if (!current) adminError('STRUCTURE_NOT_FOUND', 404);
+      if (current.version !== dto.expectedVersion) adminError('CONCURRENCY_CONFLICT', 409);
+      const workflow = await positionWorkflowReferences(transaction, organizationId, positionId);
+      if (workflow.responsibilities.length || workflow.configurations.length
+        || (await structureBusinessReferences(transaction, positionId, 'position')).referenced) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      const changed = await transaction.position.updateMany({ where: { id: positionId, organizationId, deletedAt: null, version: dto.expectedVersion },
+        data: { code: `DELETED.${positionId.replaceAll('-', '')}`, status: 'DISABLED', configurationRequired: false, deletedAt: new Date(), version: { increment: 1 } } });
+      if (changed.count !== 1) adminError('CONCURRENCY_CONFLICT', 409);
+      await this.record(transaction, actor, organizationId, 'POSITION_DELETED', 'Position', positionId, traceId, current.version + 1,
+        { structureCode: current.code, structureName: current.name, status: current.status });
+      return { id: positionId, deleted: true };
+    }, async transaction => {
+      await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('administrative-lifecycle', 0))::text`;
+      await lockPositionDeletionConfiguration(transaction, organizationId);
+      await this.lockOrganization(transaction, organizationId);
+      const scope = await this.activeOrganization(transaction, organizationId);
+      if (actor.accountType !== 'INTERNAL' || scope.type !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
+      await this.lockPositions(transaction, organizationId, [positionId]);
+      await assertRecentAuthentication(transaction, actor);
+      await assertAdminAccess(transaction, actor, organizationId, permission);
+    });
+  }
+
   private receiptValue(response: unknown): { id: string; deleted?: boolean } | undefined {
     const value = (response as { value?: { id?: unknown; deleted?: unknown } } | undefined)?.value;
     return typeof value?.id === 'string' ? { id: value.id, deleted: value.deleted === true } : undefined;
@@ -409,7 +437,7 @@ export class OrganizationService {
       const organization = await this.activeOrganization(transaction, organizationId);
       if (organization.type !== 'INTERNAL') adminError('FEATURE_PERMISSION_DENIED', 403);
       await this.lockPositions(transaction, organizationId, [positionId]);
-      const current = await transaction.position.findFirst({ where: { organizationId, id: positionId }, select: { id: true, name: true, roleVersion: true, roles: { select: { roleId: true, isCanonical: true } } } });
+      const current = await transaction.position.findFirst({ where: { organizationId, id: positionId, deletedAt: null }, select: { id: true, name: true, roleVersion: true, roles: { select: { roleId: true, isCanonical: true } } } });
       if (!current) adminError('STRUCTURE_NOT_FOUND', 404);
       const roles = await positionRoleDefinitions(transaction, organizationId, current.roles.map(({ roleId }) => roleId), true);
       await this.lockPositionAssignees(transaction, organizationId, [positionId]);
@@ -494,7 +522,7 @@ export class OrganizationService {
       await this.lockOrganization(transaction, organizationId);
       await this.activeOrganization(transaction, organizationId);
       const beforeLock = await transaction.position.findFirst({ where: { organizationId, id: positionId }, include: { department: { select: { status: true, deletedAt: true, configurationRequired: true } } } });
-      if (!beforeLock) adminError('STRUCTURE_NOT_FOUND', 404);
+      if (!beforeLock || beforeLock.deletedAt) adminError('STRUCTURE_NOT_FOUND', 404);
       const departmentIds = [...new Set([beforeLock.departmentId, dto.departmentId].filter((id): id is string => typeof id === 'string'))].sort();
       if (departmentIds.length) await transaction.$queryRaw(Prisma.sql`SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(departmentIds.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id FOR SHARE`);
       await this.lockPositions(transaction, organizationId, [positionId]);
@@ -587,7 +615,7 @@ export class OrganizationService {
   }
 
   private async positionRoleResult(transaction: AdminTransaction, organizationId: string, positionId: string, selfSessionRevoked = false) {
-    const position = await transaction.position.findFirst({ where: { organizationId, id: positionId }, select: { roleVersion: true, roles: { select: { roleId: true } } } });
+    const position = await transaction.position.findFirst({ where: { organizationId, id: positionId, deletedAt: null }, select: { roleVersion: true, roles: { select: { roleId: true } } } });
     if (!position) adminError('STRUCTURE_NOT_FOUND', 404);
     const roles = await positionRoleDefinitions(transaction, organizationId, position.roles.map(({ roleId }) => roleId));
     const users = await this.effectivePositionUsers(transaction, organizationId, [positionId]);
@@ -601,7 +629,7 @@ export class OrganizationService {
   }
 
   private async positionPermissionResult(transaction: AdminTransaction, organizationId: string, positionId: string, selfSessionRevoked = false) {
-    const position = await transaction.position.findFirst({ where: { organizationId, id: positionId }, select: { roleVersion: true, roles: { select: { roleId: true, isCanonical: true } } } });
+    const position = await transaction.position.findFirst({ where: { organizationId, id: positionId, deletedAt: null }, select: { roleVersion: true, roles: { select: { roleId: true, isCanonical: true } } } });
     if (!position) adminError('STRUCTURE_NOT_FOUND', 404);
     const roles = await positionRoleDefinitions(transaction, organizationId, position.roles.map(({ roleId }) => roleId));
     const canonicalId = position.roles.find(({ isCanonical }) => isCanonical)?.roleId;

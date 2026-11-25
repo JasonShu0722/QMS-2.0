@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { isUUID } from 'class-validator';
 import type { Prisma, WorkflowNode, WorkflowTransition } from '../../generated/prisma/client.js';
+import { ADMINISTRATIVE_ENTITY_KINDS } from '../../common/security/administrative-lifecycle.types.js';
 import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import type { AuditLogService } from '../audit-log/audit-log.service.js';
 import type { ProblemIndexService } from '../problem-index/problem-index.service.js';
@@ -33,7 +34,7 @@ export async function administrativeReturn(tx: Prisma.TransactionClient, input: 
   problems: ProblemIndexService, audit: AuditLogService): Promise<number> {
   if (!input || [input.orgId, input.problemId, input.actorUserId, input.expectedInstanceId].some(id => typeof id !== 'string' || !isUUID(id))
     || !Number.isSafeInteger(input.expectedInstanceVersion) || input.expectedInstanceVersion < 1 || input.expectedInstanceVersion >= 2147483647
-    || !/^ADMINISTRATIVE_(USER|DEPARTMENT|ORGANIZATION)_DELETED$/.test(input.reason)) throw new BadRequestException();
+    || !ADMINISTRATIVE_ENTITY_KINDS.some(kind => input.reason === `ADMINISTRATIVE_${kind}_DELETED`)) throw new BadRequestException();
   if (!await hasPlatformAdministrator(tx, input.actorUserId)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
   const problem = await problems.lockForWorkflow(tx, input.orgId, input.problemId);
   await tx.$queryRaw`SELECT id FROM workflow_instances WHERE organization_id = ${input.orgId}::uuid

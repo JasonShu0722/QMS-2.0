@@ -150,6 +150,7 @@ export function safeAccountError(cause: unknown): string {
   if (!(cause instanceof ApiError)) return '请求失败，请重试';
   const messages: Record<string, string> = {
     PROCESS_EIGHT_D_CONFIGURATION_REQUIRED: '尚未绑定并启用制程8D流程，请联系流程管理员',
+    PROCESS_EIGHT_D_WORKFLOW_NOT_READY: '制程内部 8D 流程未就绪，请联系管理员在流程管理中补齐岗位配置',
     PROCESS_EIGHT_D_CONFIGURATION_INVALID: '制程8D绑定版本不符合受控规则，请检查流程配置',
     PROCESS_EIGHT_D_APPROVAL_LOCKED: '报告正在审批，当前版本已锁定',
     PROCESS_EIGHT_D_ANALYSIS_INCOMPLETE: '请完善发生因、流出因总结及对应对策计划',
@@ -157,6 +158,8 @@ export function safeAccountError(cause: unknown): string {
     PROCESS_EIGHT_D_DOCUMENT_INVALID: '报告字段或明细行格式不符合要求，请检查后保存',
     PROCESS_EIGHT_D_SOURCE_CONFIRMATION_REQUIRED: '关联来源已有单据或关联已变化，请重新预览并确认是否复发',
     PROCESS_EIGHT_D_SOURCE_CONFIRMATION_INVALID: '来源确认不完整，请重新选择并确认',
+    PROCESS_EIGHT_D_BOARD_REQUIRED: '请根据当前来源确认这张制程 8D 的板块',
+    PROCESS_EIGHT_D_TITLE_REQUIRED: '请输入 1 至 200 字的制程 8D 问题标题',
     PROCESS_EIGHT_D_CANCEL_APPROVAL_CONFIRMATION_REQUIRED: '调整将取消本轮审批，确认后须重新提交',
     PROCESS_EIGHT_D_CLOSED_SOURCES_APPEND_ONLY: '问题已关闭，只能补充来源，原批准版保持不变',
     PROCESS_EIGHT_D_OWNER_ASSIGNMENT_INVALID: '负责人在所选科室没有有效任职，请重新选择',

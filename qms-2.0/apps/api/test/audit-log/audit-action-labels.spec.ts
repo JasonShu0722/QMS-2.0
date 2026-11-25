@@ -9,6 +9,14 @@ describe('audit action label coverage (source contract, not PostgreSQL evidence)
   });
 
   it.each([
+    ['POSITION_DELETED', '删除岗位'],
+    ['POSITION_FORCE_DELETED', '强制删除岗位'],
+    ['PROCESS_EIGHT_D_WORKFLOW_CONFIGURATION_UPDATED', '更新制程内部 8D 流程配置'],
+  ])('explains V0.0.75 audit action %s', (action, label) => {
+    expect(auditActionLabel(action)).toBe(label);
+  });
+
+  it.each([
     ['LEGACY_AUTHORIZATION_MIGRATED', '迁移兼容授权'],
     ['LEGACY_AUTHORIZATION_REMOVED', '清理兼容授权'],
   ])('explains legacy authorization action %s', (action, label) => {

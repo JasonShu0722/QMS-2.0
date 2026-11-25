@@ -97,13 +97,17 @@ export class WorkflowClosureRoundService {
   }
 
   async readSnapshot(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string): Promise<WorkflowClosureSnapshot> {
+    return (await this.snapshotWithAdapter(tx, actor, problemId)).snapshot;
+  }
+
+  private async snapshotWithAdapter(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string) {
     this.uuid(problemId);
     await this.authorize(tx, actor);
-    const { context, active } = await this.context(tx, actor, problemId, 'READ');
+    const { context, active, adapter } = await this.context(tx, actor, problemId, 'READ');
     const plan = await this.plan(tx, context);
     const current = await this.readProjection(tx, context.organizationId, problemId);
     await this.authorize(tx, actor);
-    return { context, plan, current, sourcesCurrent: active && !!current && this.sameSources(current, context, plan) };
+    return { adapter, snapshot: { context, plan, current, sourcesCurrent: active && !!current && this.sameSources(current, context, plan) } };
   }
 
   // Server-side facts only: callers must authorize their own reader and recheck eligibility before delivery.
@@ -124,9 +128,10 @@ export class WorkflowClosureRoundService {
 
   async eligible(tx: Prisma.TransactionClient, actor: WorkflowActor, snapshot: WorkflowClosureSnapshot, duty: WorkflowClosureDuty): Promise<boolean> {
     try {
-      const fresh = await this.readSnapshot(tx, actor, snapshot.context.problemId);
+      const { snapshot: fresh, adapter } = await this.snapshotWithAdapter(tx, actor, snapshot.context.problemId);
       if (!fresh.sourcesCurrent || fresh.current?.id !== snapshot.current?.id || fresh.current?.version !== snapshot.current?.version) return false;
-      return this.pendingFor(fresh.current!, actor, duty);
+      return this.pendingFor(fresh.current!, actor, duty)
+        && (!adapter.isParticipantStageEligible || await adapter.isParticipantStageEligible(tx, fresh.context, actor.id));
     } catch (error) {
       if (error instanceof HttpException && [401, 403, 404, 409].includes(error.getStatus())) return false;
       throw error;
@@ -142,8 +147,9 @@ export class WorkflowClosureRoundService {
       const results: WorkflowClosureDutyProjection[] = [];
       for (const candidate of candidates) {
         try {
-          const snapshot = await this.readSnapshot(tx, actor, candidate.problemId);
+          const { snapshot, adapter } = await this.snapshotWithAdapter(tx, actor, candidate.problemId);
           if (!snapshot.sourcesCurrent || !snapshot.current) continue;
+          if (adapter.isParticipantStageEligible && !await adapter.isParticipantStageEligible(tx, snapshot.context, actor.id)) continue;
           const r = snapshot.current;
           for (const duty of r.duties.filter(d => this.pendingFor(r, actor, d.duty))) {
             results.push({ organizationId: r.organizationId, problemId: r.problemId, roundId: r.id, roundVersion: r.version, roundNumber: r.roundNumber,
@@ -183,12 +189,14 @@ export class WorkflowClosureRoundService {
     const gate = jsonObject(config.closureReview);
     if (instance.currentNode.type !== 'APPROVAL' || config.isStart === true || config.isEnd === true || 'assignment' in config
       || gate.schemaVersion !== 1 || gate.policy !== c.policy || gate.domainCode !== adapter.domainCode) return [];
+    await adapter.lockParticipantStageConfiguration?.(tx, c);
     const plan = await this.plan(tx, c);
     if (!this.sameSources(current, c, plan)) return [];
     const recipients: string[] = [];
     for (const userId of new Set(current.duties.filter(d => d.status === 'PENDING').map(d => d.userId))) {
       const user = await tx.user.findFirst({ where: { id: userId, organizationId, accountType: 'INTERNAL', status: 'ACTIVE', organization: { status: 'ACTIVE', type: 'INTERNAL' } }, select: { id: true } });
       if (!user || !await canProcessWorkflowNode(tx, userId, organizationId, { assigneeUserId: userId })) continue;
+      if (adapter.isParticipantStageEligible && !await adapter.isParticipantStageEligible(tx, c, userId)) continue;
       const [features] = await tx.$queryRaw<{ allowed: boolean }[]>`SELECT
         (${featurePredicate(Prisma.sql`${userId}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'task:read'`)}
           AND ${featurePredicate(Prisma.sql`${userId}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'notification:read'`)}) AS allowed`;
@@ -233,6 +241,7 @@ export class WorkflowClosureRoundService {
           if (this.sameSources(current, context, plan)) workflowError('CONCURRENCY_CONFLICT', 409);
           result = await this.endRound(tx, actor, current, context, adapter, 'CANCELLED', 'SOURCE_CHANGED');
         } else {
+          await adapter.assertStartParticipants?.(tx, context, plan);
           if (plan.duties.some(d => !d.participant)) workflowError('STRUCTURE_REFERENCE_INVALID', 409);
           result = await this.createRound(tx, actor, context, plan, (current?.roundNumber ?? 0) + 1);
         }
@@ -300,7 +309,7 @@ export class WorkflowClosureRoundService {
     return { context, adapter, active };
   }
 
-  private async plan(tx: Prisma.TransactionClient, c: WorkflowClosureContext): Promise<WorkflowClosurePlan> {
+  async plan(tx: Prisma.TransactionClient, c: Pick<WorkflowClosureContext, 'organizationId' | 'responsibleSectionDepartmentId' | 'professionalUserId' | 'ownerUserId' | 'policy' | 'severity'>): Promise<WorkflowClosurePlan> {
     const management = await this.responsibilities.resolveManagementResponsibilities(tx, c.organizationId, c.responsibleSectionDepartmentId);
     // Resolver time precedes lock waits. Revalidate only its locked identities, never resolve new users after structure locks.
     const now = new Date();

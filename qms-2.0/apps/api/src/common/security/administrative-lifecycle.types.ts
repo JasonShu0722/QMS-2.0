@@ -1,7 +1,8 @@
 import type { Prisma } from '../../generated/prisma/client.js';
 import type { AdminActor } from './admin-mutation.service.js';
 
-export type AdministrativeEntityKind = 'ORGANIZATION' | 'DEPARTMENT' | 'USER';
+export const ADMINISTRATIVE_ENTITY_KINDS = ['ORGANIZATION', 'DEPARTMENT', 'POSITION', 'USER'] as const;
+export type AdministrativeEntityKind = (typeof ADMINISTRATIVE_ENTITY_KINDS)[number];
 export type AdministrativeLifecycleImpact = {
   kind: AdministrativeEntityKind;
   entityId: string;

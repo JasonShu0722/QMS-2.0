@@ -58,6 +58,8 @@ export interface IssueProcessEightDInput {
   analysisDueAt?: Date;
   closureDueAt?: Date;
   sourceConfirmations?: ProcessEightDSourceConfirmation[];
+  processBoardCode?: '0' | '1';
+  issueTitle?: string;
 }
 export interface ProcessEightDVersionInput { organizationId?: string; expectedVersion: number }
 export interface SaveProcessEightDInput extends ProcessEightDVersionInput { document: ProcessEightDDocument }
