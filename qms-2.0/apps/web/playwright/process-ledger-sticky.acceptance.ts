@@ -148,17 +148,19 @@ test('visible cells and selections preserve position in the process ledger and c
   }
 });
 
-test('process defect detail keeps registration fields readable and refresh actions in their headings', async ({ page }) => {
+test('process defect detail keeps registration fields readable and refresh actions in their headings', async ({ page }, testInfo) => {
   const sample = `DETAIL174-${randomUUID().slice(0, 8)}`;
+  const defectDescription = `${sample} 在线检测出现断续失效，需复查连接器和焊点。检测记录 ${'4030234000AB912C22611200485'.repeat(4)}`;
   const traceCode = `${sample}4030234000AB912C22611200485`;
   const workOrderCode = `4000030234-DIP-${sample}`;
+  const productCode = `PCB-4030234000-${sample}`;
   const occurredAt = new Date().toISOString();
   const aiDirect = '工序名称：在线检测；不良名称：测试后断续失效，需复查连接器和焊点。'.repeat(3);
-  await page.setViewportSize({ width: 1440, height: 850 });
+  await page.setViewportSize({ width: 1920, height: 872 });
   await login(page, 'local.internal', adminPassword!);
   const record = await positionWrite<Schema['ProcessDefectDto']>(page.request, defects, 'POST', {
-    description: sample, defectQuantity: 1, productCode: `${sample}-PRODUCT`, traceCode, workOrderCode,
-    batchCode: `${sample}-BATCH`, occurredAt, factoryCode: 'FACTORY_1',
+    description: defectDescription, defectQuantity: 1, productCode, traceCode, workOrderCode,
+    batchCode: `${sample}-BATCH`, occurredAt, factoryCode: 'FACTORY_1', lineName: '组装线 03', operationName: '在线检测',
   } satisfies Schema['CreateProcessDefectDto'], 201);
   const requireApi = createRequire(resolve(process.cwd(), '../api/package.json'));
   const { Client } = requireApi('pg') as typeof import('pg');
@@ -174,7 +176,7 @@ test('process defect detail keeps registration fields readable and refresh actio
   }
 
   await page.goto(route);
-  await page.getByRole('button', { name: sample, exact: true }).click();
+  await page.getByRole('button', { name: defectDescription, exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '不良品详情' });
   const registration = dialog.locator('section').filter({ has: page.getByText('表单登记', { exact: true }) }).first();
   const source = dialog.getByRole('region', { name: '描述来源' });
@@ -198,15 +200,62 @@ test('process defect detail keeps registration fields readable and refresh actio
     range.selectNodeContents(element);
     return Array.from(range.getClientRects(), rect => ({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }));
   });
-  const dateTime = registration.getByText(/\d{4}[/-]\d{1,2}[/-]\d{1,2}\s+\d{1,2}:\d{2}:\d{2}/);
-  for (const field of [dateTime, ...[traceCode, workOrderCode].map(value => registration.getByText(value, { exact: true }))]) {
-    const lines = await textRects(field);
-    expect(new Set(lines.map(line => Math.round(line.top))).size).toBe(1);
-  }
+  const fields = registration.locator('dl').filter({ has: page.getByText('不良描述', { exact: true }) });
+  const descriptionValue = fields.getByText(defectDescription, { exact: true });
+  const dateTime = fields.getByText(/\d{4}[/-]\d{1,2}[/-]\d{1,2}\s+\d{1,2}:\d{2}:\d{2}/);
+  const traceValue = fields.getByText(traceCode, { exact: true });
+  const longValues = [dateTime, traceValue, ...[workOrderCode, productCode].map(value => fields.getByText(value, { exact: true }))];
+  const lineCount = (lines: Awaited<ReturnType<typeof textRects>>) => new Set(lines.map(line => Math.round(line.top))).size;
 
-  for (const width of [1440, 390, 320]) {
-    await page.setViewportSize({ width, height: 850 });
+  for (const width of [1920, 650, 390, 320]) {
+    await page.setViewportSize({ width, height: 872 });
+    await expect.poll(async () => Math.round((await getBox(dialog)).width)).toBe(Math.min(width, 760));
     await expect.poll(() => registration.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    const pairs = await fields.locator('dt').evaluateAll(labels => labels.map(label => {
+      const cell = label.parentElement!.getBoundingClientRect();
+      const labelBox = label.getBoundingClientRect();
+      const value = label.nextElementSibling!;
+      const valueBox = value.getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(value);
+      return {
+        label: label.textContent, left: cell.left, right: cell.right, top: cell.top, bottom: cell.bottom,
+        labelLeft: labelBox.left, labelRight: labelBox.right, labelTop: labelBox.top, valueLeft: valueBox.left, valueTop: valueBox.top,
+        overflow: Math.max(0, ...Array.from(range.getClientRects(), rect => rect.right - cell.right)),
+      };
+    }));
+    const [descriptionPair, ...shortPairs] = pairs;
+    expect(pairs).toHaveLength(17);
+    for (const pair of pairs) {
+      expect(Math.abs(pair.labelTop - pair.valueTop), `${width}px ${pair.label} label and value share a row`).toBeLessThanOrEqual(1);
+      expect(pair.valueLeft, `${width}px ${pair.label} value starts after its label`).toBeGreaterThan(pair.labelRight);
+      expect(pair.overflow, `${width}px ${pair.label} text stays inside its cell`).toBeLessThanOrEqual(1);
+    }
+
+    if (width === 1920) {
+      const [leftColumn, rightColumn] = shortPairs;
+      expect(rightColumn.left).toBeGreaterThanOrEqual(leftColumn.right);
+      expect(descriptionPair.left).toBeCloseTo(leftColumn.left, 0);
+      expect(descriptionPair.right).toBeCloseTo(rightColumn.right, 0);
+      for (const [index, pair] of shortPairs.entries()) {
+        const column = index % 2 === 0 ? leftColumn : rightColumn;
+        expect(pair.labelLeft, `${pair.label} aligns with its column label`).toBeCloseTo(column.labelLeft, 0);
+        expect(pair.valueLeft, `${pair.label} aligns with its column value`).toBeCloseTo(column.valueLeft, 0);
+        expect(pair.top, `${pair.label} aligns with its row`).toBeCloseTo(shortPairs[index - index % 2].top, 0);
+      }
+      for (const field of longValues) {
+        expect(lineCount(await textRects(field)), `${await field.textContent()} fits on one desktop line`).toBe(1);
+      }
+    } else {
+      for (const [index, pair] of shortPairs.entries()) {
+        expect(pair.left, `${width}px ${pair.label} aligns with the description`).toBeCloseTo(descriptionPair.left, 0);
+        expect(pair.right, `${width}px ${pair.label} spans the full row`).toBeCloseTo(descriptionPair.right, 0);
+        expect(pair.top, `${width}px ${pair.label} starts on its own row`).toBeGreaterThanOrEqual(pairs[index].bottom - 1);
+      }
+      expect(lineCount(await textRects(descriptionValue))).toBeGreaterThan(1);
+      if (width <= 390) expect(lineCount(await textRects(traceValue))).toBeGreaterThan(1);
+      for (const field of longValues) await expect(field).toBeVisible();
+    }
     for (const [label, value] of [['直接组合', aiDirect], ['原始选定字段', '检测工序：在线检测'], ['AI结果', '已整理的不良说明']]) {
       const markers = await textRects(source.getByText(label, { exact: true }));
       const lines = await textRects(source.getByText(value, { exact: true }));
@@ -215,6 +264,10 @@ test('process defect detail keeps registration fields readable and refresh actio
       const overlaps = markers.some(marker => lines.some(line => line.top < marker.bottom - 1 && line.bottom > marker.top + 1
         && line.left < marker.right - 1 && line.right > marker.left + 1));
       expect(overlaps, `${width}px ${label}`).toBe(false);
+    }
+    if (width === 1920 || width === 390) {
+      await dialog.locator('.ant-drawer-body').evaluate(element => { element.scrollTop = 0; });
+      await page.screenshot({ path: testInfo.outputPath(`registration-${width}.png`), animations: 'disabled' });
     }
   }
 });

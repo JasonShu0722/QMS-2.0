@@ -81,14 +81,32 @@
 .process-quality-detail-section .ant-descriptions-title { font-size: inherit; }
 .process-quality-detail-section .ant-typography:is(h5) { margin: 0 0 6px; }
 .process-quality-detail-section .ant-descriptions + h5 { margin-top: 8px; }
+.process-quality-registration { container: process-quality-registration / inline-size; }
 .process-quality-registration-header { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-block-end: 6px; }
 .process-quality-registration-header > h5.ant-typography { margin: 0; }
 .process-quality-registration-header > button { margin-inline-start: auto; }
-.process-quality-registration-fields { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; }
-.process-quality-registration-fields > div { flex: 1 1 max-content; min-inline-size: min(100%, 10rem); max-inline-size: 100%; }
-.process-quality-registration-fields > [data-size='wide'] { min-inline-size: min(100%, 16rem); }
-.process-quality-registration-fields > [data-size='full'] { flex-basis: 100%; }
+.process-quality-registration-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  margin: 0;
+  border: 1px solid var(--qms-border);
+  border-radius: 6px;
+}
+.process-quality-registration-fields > div {
+  display: grid;
+  grid-template-columns: 5.5em minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding: 4px 8px;
+  border-block-start: 1px solid var(--qms-border);
+}
+.process-quality-registration-fields > :first-child { grid-column: 1 / -1; border-block-start: 0; }
+.process-quality-registration-fields .ant-space-item { min-inline-size: 0; }
 .process-quality-registration-fields .ant-tag { white-space: normal; }
+@container process-quality-registration (min-width: 640px) {
+  .process-quality-registration-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+  .process-quality-registration-fields > :nth-child(2n + 3) { border-inline-start: 1px solid var(--qms-border); }
+}
 .process-ai-description { margin-block-start: 8px; padding-block-start: 8px; border-block-start: 1px solid var(--qms-border); }
 .process-ai-description-fields {
   display: grid;
