@@ -929,7 +929,7 @@ export class ProcessEightDService {
           await this.authorizeEdit(tx, actor, record);
           actions.push('save');
           if (actor.id === record.problem.ownerId) {
-            actions.push('collaborators', 'reassign');
+            actions.push('collaborators');
             if (!await this.managedVersion(tx, record)) actions.push('analysis-complete', 'submit');
             else if (record.report.analysisCompletedAt) {
               if (await this.feature(tx, actor.organizationId, actor.id, 'workflow:act')) {
@@ -947,15 +947,13 @@ export class ProcessEightDService {
           }
         }
         catch (error) { if (!(error instanceof HttpException) || ![403, 409].includes(error.getStatus())) throw error; }
-        if (actor.id !== record.problem.ownerId && await this.feature(tx, actor.organizationId, actor.id, `${this.domain.permissionPrefix}:work`)) {
-          const management = await this.responsibilities.resolveManagementResponsibilities(tx, actor.organizationId, record.report.responsibleSectionDepartmentId);
-          const valid = await this.responsibilities.revalidateLockedManagementResponsibilities(tx, management, new Date());
-          if (management.responsibilities.some(r => r.userId === actor.id && valid.has(r.bindingId))) actions.push('reassign');
+        try {
+          await this.authorizeReassignment(tx, actor, record, record.report.responsibleSectionDepartmentId);
+          actions.push('reassign');
         }
+        catch (error) { if (!(error instanceof HttpException) || ![403, 409].includes(error.getStatus())) throw error; }
       }
-      for (const action of ['risk', 'sources', 'deadlines', 'reassign']) if (await this.feature(tx, actor.organizationId, actor.id, `${this.domain.permissionPrefix}:${action}`)) {
-        if (action !== 'reassign' || !isClosureReviewNode(record.node)) actions.push(action);
-      }
+      for (const action of ['risk', 'sources', 'deadlines']) if (await this.feature(tx, actor.organizationId, actor.id, `${this.domain.permissionPrefix}:${action}`)) actions.push(action);
     } else if (record.report.closedRevisionId && await this.feature(tx, actor.organizationId, actor.id, `${this.domain.permissionPrefix}:sources`)) actions.push('sources');
     return [...new Set(actions)];
   }

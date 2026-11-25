@@ -193,6 +193,21 @@ describe('process 8D real domain transactions with managed workflow configuratio
     expect(await f.read(id)).toMatchObject({ ownerUserId: f.manager.user.id, analysisCompletedAt: current.analysisCompletedAt });
   }, 120_000);
 
+  it('keeps same-section reassignment available when the owner loses the current edit stage', async () => {
+    const f = await fixture(), id = await f.issue();
+    await f.configureManaged(1, true, { ANALYSIS: [f.manager.position.id] });
+    await prisma.rolePermission.deleteMany({ where: { roleId: f.role.id, permission: { code: 'process-quality:issues:reassign' } } });
+
+    const current = await f.read(id);
+    expect(current.allowedActions).toContain('reassign');
+    expect(current.allowedActions).not.toContain('save');
+    const transfer = { expectedVersion: current.version, ownerUserId: f.manager.user.id, responsibleSectionDepartmentId: f.section.id };
+    expect((await service.read(f.collaborator.actor, id)).allowedActions).not.toContain('reassign');
+    await expect(service.reassign(f.collaborator.actor, id, transfer, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await service.reassign(f.owner.actor, id, transfer, randomUUID(), randomUUID());
+    expect(await f.read(id)).toMatchObject({ ownerUserId: f.manager.user.id });
+  }, 120_000);
+
   it.each([['LOW', 'SECTION_MANAGER'], ['HIGH', 'MINISTER']] as const)('requires the actual issuer and risk-selected %s closure duties before opening a round', async (severity, duty) => {
     const f = await fixture(), id = await f.issue();
     if (severity === 'HIGH') await service.risk(f.issuer.actor, id, { expectedVersion: 1, severity }, randomUUID(), randomUUID());
