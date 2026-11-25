@@ -116,8 +116,8 @@ describe('REQ0030 explicit platform administrator on PostgreSQL', () => {
 
   it('allows governance/audit and explicit lifecycle operations on a disabled internal target, never business or supplier access', async () => {
     await prisma.organization.update({ where: { id: f.target.id }, data: { status: 'DISABLED' } });
-    expect(await ormCodes()).toEqual(['account:users:delete', 'audit:export', 'audit:read', 'organization:departments:force-delete', 'organization:force-delete', 'organization:manage', 'organization:read', 'organization:reconfigure']);
-    for (const code of ['organization:read', 'organization:manage', 'account:users:delete', 'organization:departments:force-delete', 'organization:force-delete', 'organization:reconfigure']) expect(await feature(code)).toBe(true);
+    expect(await ormCodes()).toEqual(['account:users:delete', 'audit:export', 'audit:read', 'organization:departments:force-delete', 'organization:force-delete', 'organization:manage', 'organization:positions:force-delete', 'organization:read', 'organization:reconfigure']);
+    for (const code of ['organization:read', 'organization:manage', 'account:users:delete', 'organization:departments:force-delete', 'organization:force-delete', 'organization:positions:force-delete', 'organization:reconfigure']) expect(await feature(code)).toBe(true);
     expect(await feature('workflow:act')).toBe(false);
     expect(await canProcessWorkflowNode(prisma, f.user.id, f.target.id, { assigneeUserId: f.user.id })).toBe(false);
     expect(await ormCodes(f.supplier.id)).toEqual([]);

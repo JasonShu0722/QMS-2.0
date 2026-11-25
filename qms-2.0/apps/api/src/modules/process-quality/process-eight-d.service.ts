@@ -697,6 +697,7 @@ export class ProcessEightDService {
     const positions = await this.managedClosureStagePositions(tx, context);
     if (!positions) return;
     for (const duty of plan.duties) {
+      if (duty.status === 'SKIPPED_SAME_PERSON') continue;
       if (!duty.participant) workflowError('PROCESS_EIGHT_D_STAGE_UNAVAILABLE', 409);
       await this.assertQualifiedStages(tx, context.organizationId, duty.participant.userId, positions, ['CLOSURE']);
     }
@@ -930,7 +931,10 @@ export class ProcessEightDService {
           actions.push('save');
           if (actor.id === record.problem.ownerId) {
             actions.push('collaborators');
-            if (!await this.managedVersion(tx, record)) actions.push('analysis-complete', 'submit');
+            if (!await this.managedVersion(tx, record)) {
+              actions.push('analysis-complete', 'submit');
+              if (this.domain !== INTERNAL_EIGHT_D_DOMAINS.PROCESS) actions.push('reassign');
+            }
             else if (record.report.analysisCompletedAt) {
               if (await this.feature(tx, actor.organizationId, actor.id, 'workflow:act')) {
                 const organizationId = record.problem.organizationId;
@@ -947,13 +951,21 @@ export class ProcessEightDService {
           }
         }
         catch (error) { if (!(error instanceof HttpException) || ![403, 409].includes(error.getStatus())) throw error; }
-        try {
-          await this.authorizeReassignment(tx, actor, record, record.report.responsibleSectionDepartmentId);
-          actions.push('reassign');
+        if (this.domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS) {
+          try {
+            await this.authorizeReassignment(tx, actor, record, record.report.responsibleSectionDepartmentId);
+            actions.push('reassign');
+          }
+          catch (error) { if (!(error instanceof HttpException) || ![403, 409].includes(error.getStatus())) throw error; }
+        } else if (actor.id !== record.problem.ownerId && await this.feature(tx, actor.organizationId, actor.id, `${this.domain.permissionPrefix}:work`)) {
+          const management = await this.responsibilities.resolveManagementResponsibilities(tx, actor.organizationId, record.report.responsibleSectionDepartmentId);
+          const valid = await this.responsibilities.revalidateLockedManagementResponsibilities(tx, management, new Date());
+          if (management.responsibilities.some(responsibility => responsibility.userId === actor.id && valid.has(responsibility.bindingId))) actions.push('reassign');
         }
-        catch (error) { if (!(error instanceof HttpException) || ![403, 409].includes(error.getStatus())) throw error; }
       }
       for (const action of ['risk', 'sources', 'deadlines']) if (await this.feature(tx, actor.organizationId, actor.id, `${this.domain.permissionPrefix}:${action}`)) actions.push(action);
+      if (this.domain !== INTERNAL_EIGHT_D_DOMAINS.PROCESS && !isClosureReviewNode(record.node)
+        && await this.feature(tx, actor.organizationId, actor.id, `${this.domain.permissionPrefix}:reassign`)) actions.push('reassign');
     } else if (record.report.closedRevisionId && await this.feature(tx, actor.organizationId, actor.id, `${this.domain.permissionPrefix}:sources`)) actions.push('sources');
     return [...new Set(actions)];
   }

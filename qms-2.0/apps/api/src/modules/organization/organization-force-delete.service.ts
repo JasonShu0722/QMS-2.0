@@ -192,7 +192,10 @@ export class OrganizationForceDeleteService {
     const organizations = kind === 'ORGANIZATION' ? await tx.organization.findMany({ where: { parentId: entityId, deletedAt: null }, select: { id: true, version: true, parentId: true, status: true, configurationRequired: true }, orderBy: { id: 'asc' } }) : [];
     const assignments = await tx.userPosition.findMany({ where: { organizationId, ...(kind !== 'ORGANIZATION' ? { positionId: { in: ids(positions) } } : {}),
       OR: [{ endedAt: null }, { endedAt: { gt: now } }] }, select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' } });
-    const users = await this.identity.lifecycleUsers(tx, organizationId, kind !== 'ORGANIZATION' ? assignments.map(row => row.userId) : undefined);
+    const assignmentUserIds = assignments.map(row => row.userId);
+    const positionUsers = includePositionWorkflow && kind === 'POSITION' && !target.deletedAt
+      ? await this.identity.positionDeletionUsers(tx, organizationId, assignmentUserIds) : undefined;
+    const users = positionUsers ?? await this.identity.lifecycleUsers(tx, organizationId, kind !== 'ORGANIZATION' ? assignmentUserIds : undefined);
     const survivingAssignments = kind !== 'ORGANIZATION' && users.length ? await tx.userPosition.findMany({
       where: { organizationId, userId: { in: ids(users) }, ...effectivePositionAssignmentWhere(now), positionId: { notIn: ids(positions) } },
       select: { id: true, userId: true, positionId: true, startedAt: true, endedAt: true }, orderBy: { id: 'asc' },
@@ -226,9 +229,9 @@ export class OrganizationForceDeleteService {
     const ministerIds = await tx.$queryRaw<{ id: string; version: number; department_id: string; section_department_id: string; minister_assignment_id: string; valid_from: Date; valid_to: Date | null }[]>(Prisma.sql`SELECT id, version, department_id, section_department_id, minister_assignment_id, valid_from, valid_to FROM department_minister_scopes
       WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE'
       AND (${kind} = 'ORGANIZATION' OR ${departmentCondition} OR ${sectionCondition} ${assignmentCondition} ${ancestryCondition}) ORDER BY id`);
-    const workflow = includePositionWorkflow && kind === 'POSITION' && !target.deletedAt
+    const workflow = positionUsers
       ? await positionWorkflowReferences(tx, organizationId, entityId, unavailableUserIds, ids(ministerIds)) : undefined;
-    const positionImpact = workflow && { users: users.map(user => ({ id: user.id, name: user.fullName ?? user.username, pendingConfiguration: unavailableUserIds.includes(user.id) })),
+    const positionImpact = workflow && positionUsers && { users: positionUsers.map(user => ({ id: user.id, name: user.name, pendingConfiguration: unavailableUserIds.includes(user.id) })),
       assignments: assignments.map(assignment => ({ id: assignment.id, userId: assignment.userId, startedAt: assignment.startedAt.toISOString(), endedAt: assignment.endedAt?.toISOString() ?? null })),
       responsibilities: referenceCounts(workflow.responsibilities), configurations: referenceCounts(workflow.configurations) };
     return { target, assignmentIds: ids(assignments), bindingIds: ids(bindingIds), ministerIds: ids(ministerIds), positionImpact,

@@ -5,11 +5,10 @@ import type { INestApplication } from '@nestjs/common';
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { ProcessEightDService } from '../../src/modules/process-quality/process-eight-d.service.js';
+import { ProcessEightDWorkflowConfigurationService } from '../../src/modules/process-quality/process-eight-d-workflow-configuration.service.js';
 import { AdminUserLifecycleService } from '../../src/modules/identity/admin-user-lifecycle.service.js';
 import { OrganizationForceDeleteService } from '../../src/modules/organization/organization-force-delete.service.js';
 import { WorkflowClosureRoundService } from '../../src/modules/workflow/workflow-closure-round.service.js';
-import { WorkflowClosureTemplateService } from '../../src/modules/workflow/workflow-closure-template.service.js';
-import { WorkflowDefinitionService } from '../../src/modules/workflow/workflow-definition.service.js';
 import { INTERNAL_EIGHT_D_DOMAINS, internalEightDSql } from '../../src/common/eight-d/internal-eight-d-domain.js';
 import { createWorkflowClosureFixture } from '../workflow/workflow-closure-round.fixture.js';
 import { completeDocument, domainFixture } from './internal-eight-d-domains.fixture.js';
@@ -37,24 +36,26 @@ describe('internal three-domain administrative recovery / actual App and Postgre
 
   async function fixture(domain: typeof INTERNAL_EIGHT_D_DOMAINS[keyof typeof INTERNAL_EIGHT_D_DOMAINS]) {
     const f = await domainFixture(app, domain === INTERNAL_EIGHT_D_DOMAINS.CUSTOMER ? 'customer-quality' : 'new-product-quality');
+    const newProfessional = await f.person(f.dept.id), newOwner = await f.person(f.section.id);
     let core = f.runtime.core;
     let id: string;
     if (domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS) {
       const codes = ['read', 'work', 'issue'].map(action => `${domain.permissionPrefix}:${action}`);
       await db.rolePermission.createMany({ data: (await db.permission.findMany({ where: { code: { in: codes } } })).map(p => ({ roleId: f.role.id, permissionId: p.id })) });
       core = app.get(ProcessEightDService);
-      const template = await app.get(WorkflowClosureTemplateService).initialize(f.professional.actor,
-        { policy: 'INTERNAL', domainCode: domain.domainCode, code: randomUUID(), name: 'Recovery process chain' }, randomUUID(), randomUUID());
-      const published = await app.get(WorkflowDefinitionService).publishVersion({ organizationId: f.org.id, userId: f.professional.user.id,
-        actor: f.professional.actor, definitionId: template.id, expectedRevision: template.revision, draftVersionId: template.version.id });
-      await core.bind(f.professional.actor, { expectedVersion: 0, workflowDefinitionId: template.id, workflowVersionId: published.id }, randomUUID(), randomUUID());
-      await core.activate(f.professional.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
+      const workPositions = [f.owner.position.id, newOwner.position.id];
+      await expect(app.get(ProcessEightDWorkflowConfigurationService).update(f.professional.actor, { expectedVersion: 0, stages: [
+        { stage: 'ISSUE', positionIds: [f.professional.position.id] },
+        { stage: 'ANALYSIS', positionIds: workPositions },
+        { stage: 'IMPLEMENTATION', positionIds: workPositions },
+        { stage: 'CLOSURE', positionIds: [f.professional.position.id, newProfessional.position.id, f.manager.position.id] },
+      ] }, randomUUID(), randomUUID())).resolves.toMatchObject({ version: 1, missingStages: [] });
       const source = await f.process.create(f.manager.actor, { description: 'Original actual process fact', productCode: f.productCode, traceCode: randomUUID(), factoryCode: 'FACTORY_1', occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
       id = String((await core.issue(f.professional.actor, { sources: [{ defectId: source.id, expectedVersion: source.version }], severity: 'LOW',
+        processBoardCode: '0', sourceConfirmations: [{ defectId: source.id, recurrence: 'NOT_RECURRENCE', relatedProblemIds: [] }],
         ownerUserId: f.owner.user.id, responsibleSectionDepartmentId: f.section.id }, randomUUID(), randomUUID())).problem.id);
     } else id = await f.issue([f.chainSource]);
     const recovery = core, tables = internalEightDSql(domain);
-    const newProfessional = await f.person(f.dept.id), newOwner = await f.person(f.section.id);
     await db.session.update({ where: { id: newOwner.actor.sessionId }, data: { reauthenticatedAt: new Date() } });
     const pending = (actor = admin.owner.actor) => db.$transaction(async tx => {
       const items = [];

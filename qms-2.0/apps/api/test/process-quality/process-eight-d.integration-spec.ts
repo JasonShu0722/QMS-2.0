@@ -229,6 +229,26 @@ describe('process 8D real domain transactions with managed workflow configuratio
     ]));
   }, 120_000);
 
+  it('requires closure positions only for active review duties when the owner is also section manager', async () => {
+    const f = await fixture(), id = await f.issue();
+    const ready = await f.ready(id);
+    await service.reassign(f.owner.actor, id, { expectedVersion: ready.version, ownerUserId: f.manager.user.id,
+      responsibleSectionDepartmentId: f.section.id }, randomUUID(), randomUUID());
+    await f.configureManaged(1, true, { CLOSURE: [f.minister.position.id] });
+    const current = await service.read(f.manager.actor, id), submit = { expectedVersion: current.version };
+    expect(current.allowedActions).not.toContain('submit');
+    await expect(service.submit(f.manager.actor, id, submit, randomUUID(), randomUUID())).rejects.toThrow('PROCESS_EIGHT_D_STAGE_UNAVAILABLE');
+    await f.configureManaged(2, true, { CLOSURE: [f.issuer.position.id] });
+    expect((await service.read(f.manager.actor, id)).allowedActions).toContain('submit');
+    await service.submit(f.manager.actor, id, submit, randomUUID(), randomUUID());
+    expect((await rounds.readProjection(prisma, f.organization.id, id))?.duties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ duty: 'SECTION_MANAGER', userId: f.manager.user.id, status: 'SKIPPED_SAME_PERSON' }),
+      expect.objectContaining({ duty: 'PROFESSIONAL', userId: f.issuer.user.id, status: 'PENDING' }),
+    ]));
+    expect(await rounds.eligibleDuties(f.manager.actor)).toEqual([]);
+    expect(await rounds.eligibleDuties(f.issuer.actor)).toEqual([expect.objectContaining({ problemId: id, duty: 'PROFESSIONAL' })]);
+  }, 120_000);
+
   it('rechecks the original managed stage of report replays without returning private facts', async () => {
     const f = await fixture(), id = await f.issue(), key = randomUUID();
     const input = { expectedVersion: 1, document: f.draft() };
