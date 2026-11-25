@@ -72,6 +72,153 @@ async function canClickWithoutScrolling(locator: Locator) {
   });
 }
 
+test('visible cells and selections preserve position in the process ledger and console mappings', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 740 });
+  await login(page, 'local.internal', adminPassword!);
+  const sample = `CLICK174-${randomUUID().slice(0, 8)}`;
+  const mappingPath = '/api/v1/admin/configuration/component-project-mappings';
+  const importResult = await positionWrite<Schema['ComponentProjectImportResultDto']>(page.request, `${mappingPath}/import`, 'POST', {
+    rows: Array.from({ length: 18 }, (_, index) => ({ rowNumber: index + 1, componentCode: `${sample}-${index}`, componentName: `${sample} 组件 ${index}` })),
+  }, 201);
+  expect(importResult.created).toBe(18);
+  for (let index = 0; index < 10; index++) {
+    await positionWrite(page.request, defects, 'POST', {
+      description: `${sample}-${index}`, productCode: sample, traceCode: `${sample}-${index}`, occurredAt: new Date().toISOString(),
+      factoryCode: 'FACTORY_1', lineName: sample, operationName: sample,
+    } satisfies Schema['CreateProcessDefectDto'], 201);
+  }
+
+  for (const target of [
+    { path: route, cell: '班次', action: `${sample}-7`, dialog: '不良品详情', selection: '台账批量操作', selectRow: page.getByRole('row').filter({ has: page.getByRole('button', { name: `${sample}-7`, exact: true }) }) },
+    { path: '/console/master-data/component-projects', cell: '组件名称', action: `编辑组件 ${sample}-3`, dialog: '组件映射', selection: '已选组件项目映射', selectRow: page.getByRole('row').filter({ has: page.getByRole('cell', { name: `${sample}-3`, exact: true }) }) },
+  ]) {
+    await test.step(target.path, async () => {
+      await page.goto(target.path);
+      await expect(target.selectRow).toHaveCount(1);
+      const ledger = page.locator('.qms-ledger--sticky').filter({ has: target.selectRow });
+      const body = ledger.locator('.ant-table-body');
+      await expect(body).toHaveAttribute('tabindex', '0');
+      const headings = await ledger.getByRole('columnheader').allTextContents();
+      const cellIndex = headings.findIndex(text => text.trim() === target.cell);
+      expect(cellIndex).toBeGreaterThanOrEqual(0);
+      const cell = target.selectRow.getByRole('cell').nth(cellIndex);
+      const checkbox = target.selectRow.getByRole('checkbox');
+      await cell.evaluate(element => window.scrollBy(0, element.getBoundingClientRect().top - 320));
+
+      async function clickAtCurrentPosition(control: Locator) {
+        const before = await body.evaluate(element => [window.scrollY, element.scrollLeft, element.scrollTop]);
+        await expect.poll(() => canClickWithoutScrolling(control)).toBe(true);
+        const bounds = await getBox(control);
+        await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        expect(await body.evaluate(element => [window.scrollY, element.scrollLeft, element.scrollTop])).toEqual(before);
+      }
+      await clickAtCurrentPosition(cell);
+      await clickAtCurrentPosition(checkbox);
+      await expect(checkbox).toBeChecked();
+      await clickAtCurrentPosition(checkbox);
+      await expect(checkbox).not.toBeChecked();
+
+      const action = target.selectRow.getByRole('button', { name: target.action, exact: true });
+      await action.evaluate(element => element.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+      await clickAtCurrentPosition(action);
+      const dialog = page.getByRole('dialog', { name: target.dialog });
+      await expect(dialog).toBeVisible();
+      await dialog.press('Escape');
+      await expect(dialog).toBeHidden();
+      await body.evaluate(element => { element.scrollLeft = 0; });
+
+      const lastRow = ledger.locator('tbody tr[data-row-key]').last();
+      const lastCheckbox = lastRow.getByRole('checkbox');
+      const selectionBar = page.getByRole('toolbar', { name: target.selection, exact: true });
+      const scrollToBottom = () => page.evaluate(() => window.scrollTo(0, document.scrollingElement!.scrollHeight));
+      const maxScroll = () => page.evaluate(() => document.scrollingElement!.scrollHeight - document.scrollingElement!.clientHeight);
+      await scrollToBottom();
+      const bottom = await maxScroll();
+      await clickAtCurrentPosition(lastCheckbox);
+      await expect(lastCheckbox).toBeChecked();
+      expect(await maxScroll()).toBe(bottom);
+      await expect(selectionBar).toBeVisible();
+      const lastBounds = await getBox(lastRow);
+      expect(lastBounds.y + lastBounds.height).toBeLessThanOrEqual((await getBox(selectionBar)).y + 1);
+      await clickAtCurrentPosition(lastCheckbox);
+      await expect(lastCheckbox).not.toBeChecked();
+      expect(await maxScroll()).toBe(bottom);
+    });
+  }
+});
+
+test('process defect detail keeps registration fields readable and refresh actions in their headings', async ({ page }) => {
+  const sample = `DETAIL174-${randomUUID().slice(0, 8)}`;
+  const traceCode = `${sample}4030234000AB912C22611200485`;
+  const workOrderCode = `4000030234-DIP-${sample}`;
+  const occurredAt = new Date().toISOString();
+  const aiDirect = '工序名称：在线检测；不良名称：测试后断续失效，需复查连接器和焊点。'.repeat(3);
+  await page.setViewportSize({ width: 1440, height: 850 });
+  await login(page, 'local.internal', adminPassword!);
+  const record = await positionWrite<Schema['ProcessDefectDto']>(page.request, defects, 'POST', {
+    description: sample, defectQuantity: 1, productCode: `${sample}-PRODUCT`, traceCode, workOrderCode,
+    batchCode: `${sample}-BATCH`, occurredAt, factoryCode: 'FACTORY_1',
+  } satisfies Schema['CreateProcessDefectDto'], 201);
+  const requireApi = createRequire(resolve(process.cwd(), '../api/package.json'));
+  const { Client } = requireApi('pg') as typeof import('pg');
+  const client = new Client({ connectionString: database });
+  await client.connect();
+  try {
+    const seeded = await client.query(`UPDATE process_defects SET description_direct = $1, description_ai = $2,
+      description_input = $3, description_ai_status = 'APPLIED', description_source = 'AI' WHERE id = $4`,
+    [aiDirect, '已整理的不良说明', JSON.stringify([{ path: 'sample', label: '检测工序', value: '在线检测' }]), record.id]);
+    expect(seeded.rowCount).toBe(1);
+  } finally {
+    await client.end();
+  }
+
+  await page.goto(route);
+  await page.getByRole('button', { name: sample, exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '不良品详情' });
+  const registration = dialog.locator('section').filter({ has: page.getByText('表单登记', { exact: true }) }).first();
+  const source = dialog.getByRole('region', { name: '描述来源' });
+  await expect(registration.getByText('工单号', { exact: true })).toBeVisible();
+  await expect(registration.getByText('成品编码', { exact: true })).toBeVisible();
+  await expect(registration.getByText(/^(失效类型|完善情况|人工项目 \/ 映射建议|批次 \/ 工单|产品 \/ 物料)$/)).toHaveCount(0);
+  await expect(registration.getByText(`${sample}-BATCH`, { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText('不良跟进状态', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '问题关闭', exact: true })).toBeVisible();
+  const refreshAi = registration.locator('header').filter({ hasText: '表单登记' }).getByRole('button', { name: '刷新整理状态' });
+  await expect(source.getByRole('button', { name: '刷新整理状态' })).toHaveCount(0);
+  const refreshAttachment = dialog.locator('.attachment-panel > .ant-card-head').getByRole('button', { name: '刷新附件' });
+  await expect(refreshAttachment).toBeEnabled();
+  await refreshAttachment.click();
+  const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === `${defects}/${record.id}` && response.request().method() === 'GET');
+  await refreshAi.click();
+  expect((await refreshed).status()).toBe(200);
+
+  const textRects = (locator: Locator) => locator.evaluate(element => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return Array.from(range.getClientRects(), rect => ({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }));
+  });
+  const dateTime = registration.getByText(/\d{4}[/-]\d{1,2}[/-]\d{1,2}\s+\d{1,2}:\d{2}:\d{2}/);
+  for (const field of [dateTime, ...[traceCode, workOrderCode].map(value => registration.getByText(value, { exact: true }))]) {
+    const lines = await textRects(field);
+    expect(new Set(lines.map(line => Math.round(line.top))).size).toBe(1);
+  }
+
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 850 });
+    await expect.poll(() => registration.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    for (const [label, value] of [['直接组合', aiDirect], ['原始选定字段', '检测工序：在线检测'], ['AI结果', '已整理的不良说明']]) {
+      const markers = await textRects(source.getByText(label, { exact: true }));
+      const lines = await textRects(source.getByText(value, { exact: true }));
+      expect(markers.length).toBeGreaterThan(0);
+      expect(lines.length).toBeGreaterThan(0);
+      const overlaps = markers.some(marker => lines.some(line => line.top < marker.bottom - 1 && line.bottom > marker.top + 1
+        && line.left < marker.right - 1 && line.right > marker.left + 1));
+      expect(overlaps, `${width}px ${label}`).toBe(false);
+    }
+  }
+});
+
 test('deletes a whole 1000-row page with a short confirmation and returns to a valid page', async ({ page: adminPage, browser }, testInfo) => {
   const admin = await login(adminPage, 'local.internal', adminPassword!);
   const label = `BULK163-${randomUUID().slice(0, 8)}`;

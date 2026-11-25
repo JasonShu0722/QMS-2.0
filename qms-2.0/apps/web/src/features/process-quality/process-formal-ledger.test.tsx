@@ -334,7 +334,8 @@ it('refreshes the detail and close capability after a close 403 while keeping re
   });
   mount();
   fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
-  fireEvent.click(await screen.findByText('关闭台账'));
+  const followup = (await screen.findByText('不良跟进状态')).closest('section')!;
+  fireEvent.click(within(followup).getByRole('button', { name: '问题关闭' }));
   const title = await screen.findByText('关闭判定', { selector: '.ant-modal-title' });
   await waitFor(() => expect(title).toBeVisible());
   fireEvent.click(within(title.closest('[role="dialog"]') as HTMLElement).getByRole('button', { name: '保存维护' }));
@@ -342,7 +343,7 @@ it('refreshes the detail and close capability after a close 403 while keeping re
   await waitFor(() => expect(screen.queryByText('关闭判定', { selector: '.ant-modal-title' })).not.toBeInTheDocument());
   const details = within(await screen.findByRole('dialog', { name: '不良品详情' }));
   expect(await details.findByText('表面划伤')).toBeVisible();
-  expect(details.queryByRole('button', { name: '关闭台账' })).not.toBeInTheDocument();
+  expect(details.queryByRole('button', { name: '问题关闭' })).not.toBeInTheDocument();
   expect(vi.mocked(apiRequest).mock.calls.filter(([path]) => path.endsWith(`/defects/${defect.id}`))).toHaveLength(2);
 });
 
@@ -641,7 +642,8 @@ it('never shows PQC close or material review merely because the account can main
   mount();
   fireEvent.click(await screen.findByLabelText('查看详情', { selector: 'button' }));
   await screen.findByText('维护登记信息');
-  expect(screen.queryByText('关闭台账')).not.toBeInTheDocument();
+  const drawer = screen.getByRole('dialog', { name: '不良品详情' });
+  expect(within(drawer).queryByRole('button', { name: '问题关闭' })).not.toBeInTheDocument();
   expect(screen.queryByText('恢复跟进')).not.toBeInTheDocument();
   expect(screen.queryByText('复核此物料')).not.toBeInTheDocument();
 });

@@ -76,11 +76,13 @@ function ToolbarFixture() {
 const stickyRows = Array.from({ length: 100 }, (_, index) => ({
   id: index + 1, title: `模拟问题 ${index + 1}`, status: '处理中', notes: '模拟核对记录',
 }));
-function StickyFixture() {
+function StickyFixture({ short = false, pinned = false }: { short?: boolean; pinned?: boolean }) {
   return <section aria-label="共享台账吸顶验证">
     <LedgerTable ledgerId="browser-sticky" rowKey="id" requiredColumnKeys={['number']} dataSource={stickyRows}
       actionBar={<label>查询说明 <input aria-label="查询说明" /></label>}
-      scroll={{ x: 1660 }} pagination={{ pageSize: 50, showSizeChanger: false, showQuickJumper: false }}
+      pinnedHorizontalScroll={pinned} rowSelection={short ? { fixed: true } : undefined}
+      onRow={short ? () => ({ style: { height: 60 } }) : undefined}
+      scroll={{ x: 1660 }} pagination={{ pageSize: short ? 10 : 50, showSizeChanger: false, showQuickJumper: false }}
       columns={[
         { title: '编号', key: 'number', dataIndex: 'id', width: 120, fixed: 'left', sorter: (left, right) => left.id - right.id, render: id => <button type="button">查看 {id}</button> },
         { title: '问题说明', key: 'title', dataIndex: 'title', width: 500 },
@@ -97,8 +99,8 @@ function CardListFixture() {
 }
 function Fixture() {
   const [organization, setOrganization] = useState('fixture-target-a');
-  const [consoleHost, setConsoleHost] = useState(false);
   const params = new URLSearchParams(window.location.search);
+  const [consoleHost, setConsoleHost] = useState(params.has('console'));
   const content = <main className={consoleHost ? 'qms-console-content' : 'qms-content'} style={{ padding: 8, color: 'var(--qms-text)', background: 'var(--qms-background)' }}>
     <Space wrap style={{ marginBottom: 8 }}><strong>正式组件验证 · 仅模拟数据</strong><span>{organization}</span>
       <Button onClick={() => setOrganization(current => current === 'fixture-target-a' ? 'fixture-target-b' : 'fixture-target-a')}>切换演示目标组织</Button>
@@ -107,7 +109,7 @@ function Fixture() {
       {consoleHost ? <ConsoleAppearanceControls /> : <AppearanceButton />}
     </Space>
     <p>宿主切换会重建模拟页，不验证业务草稿保持。</p>
-    <LedgerScopeProvider organizationId={organization} portal={consoleHost ? 'console' : 'business'}>{params.has('cards') ? <CardListFixture /> : params.has('sticky') ? <StickyFixture /> : params.has('toolbar') ? <ToolbarFixture /> : params.has('boundaries') ? <BoundaryFixture /> : <FixtureTable />}</LedgerScopeProvider>
+    <LedgerScopeProvider organizationId={organization} portal={consoleHost ? 'console' : 'business'}>{params.has('cards') ? <CardListFixture /> : params.has('sticky') ? <StickyFixture short={params.has('short')} pinned={params.has('pinned')} /> : params.has('toolbar') ? <ToolbarFixture /> : params.has('boundaries') ? <BoundaryFixture /> : <FixtureTable />}</LedgerScopeProvider>
   </main>;
   return <LanguageProvider><ThemeProvider>{consoleHost ? <ConsoleTheme>{content}</ConsoleTheme> : content}</ThemeProvider></LanguageProvider>;
 }

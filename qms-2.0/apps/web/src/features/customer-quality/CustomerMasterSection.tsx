@@ -195,7 +195,7 @@ function CustomerMasterContent({ organizationId, organizationPermissions, embedd
     {canRead ? <Space wrap><Select aria-label="选择客户" placeholder="选择客户" style={{ minWidth: 220 }} value={selected} options={customers.map((customer) => ({ value: customer.id, label: `${customer.code} · ${customer.name}` }))} disabled={busy && !relationSubmitting.current} onChange={changeCustomer} /><Button disabled={busy} onClick={refreshFromUser}>刷新客户</Button>{canRead ? <Button onClick={() => void exportCustomers()} loading={exporting} disabled={!customersLoaded || !customers.length || exporting}>{t('导出当前客户清单')}</Button> : null}{selected && canWrite ? <Button onClick={() => requestLeave(() => { const customer = customers.find((item) => item.id === selected); if (customer) { setEditDirty(false); setEdit({ kind: 'customer', id: customer.id, version: customer.version, name: customer.name }); } })} disabled={busy}>编辑客户</Button> : null}</Space> : null}
     {canWrite ? <Space wrap><Button disabled={busy} onClick={() => setCreating(true)}>{t('新增客户')}</Button><Form component={false} disabled={busy}><CustomerMasterImport organizationId={organizationId} onImported={canRead ? () => refreshCustomers(true) : () => undefined} /></Form></Space> : null}
   </>;
-  return <section className={`customer-quality-card ${deletion.selectedClass ?? ''}`} aria-label="客户主数据">
+  return <section className={`customer-quality-card ${deletion.selectionClass ?? ''}`} aria-label="客户主数据">
     <Typography.Title level={3} className={embedded ? 'sr-only' : undefined}>客户主数据</Typography.Title>
     {deletion.feedback}{deletion.controls}
     {exportError ? <Alert showIcon type="error" title={t('客户清单导出失败，请重试')} /> : null}

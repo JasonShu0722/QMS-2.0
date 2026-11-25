@@ -513,7 +513,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
     <Button aria-label="刷新" disabled={locked} onClick={() => requestLeave(() => { if (!filterOpen || saveAppliedFilters(completeDraft, undefined, false, false)) setRevision(value => value + 1); })} loading={loading}>刷新</Button>
   </div>;
 
-  return <main className={`process-quality-page${selectedCount ? ' process-quality-page--selected' : ''}`}>
+  return <main className="process-quality-page">
     <h1 className="sr-only">不良品台账</h1>
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${issued.problem.id}`}>查看问题</Link>} /> : null}
     <section className="process-quality-card process-quality-compact-ledger">
@@ -546,29 +546,34 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
       {detailLoading ? <div className="process-quality-loading"><Spin /></div> : detail ? <>
         <div className="process-quality-detail-sections">
         <section className="process-quality-detail-section">
-        <Descriptions title="表单登记" bordered size="small" column={{ xs: 1, sm: 2, lg: 3 }} items={[
-          { key: 'description', label: '不良描述', span: 'filled', children: <span className="process-quality-description">{detail.description || '待完善'}</span> },
-          { key: 'type', label: '失效类型', children: detail.defectTypeCode ?? '—' },
-          { key: 'quantity', label: '数量', children: detail.defectQuantity },
-          { key: 'occurredAt', label: '发生时间', children: detail.occurredAt ? new Date(detail.occurredAt).toLocaleString('zh-CN') : '未知' },
-          { key: 'factoryCode', label: factoryTitle, children: factoryLabel(detail.factoryCode, english) },
-          { key: 'shift', label: '班次', children: detail.shift === 'DAY' ? '白班' : detail.shift === 'NIGHT' ? '夜班' : '未知' },
-          { key: 'project', label: '项目号', children: detail.componentProject?.project?.code ?? '未确认' },
-          { key: 'stage', label: '项目状态', children: detail.projectStage === 'NEW_PRODUCT' ? '新品' : detail.projectStage === 'MASS_PRODUCTION' ? '量产' : '未确认' },
-          { key: 'subcategory', label: '细分类型', children: detail.productSubcategory ?? '未确认' },
-          { key: 'sector', label: '板块', children: detail.operationSector ?? '未确认' },
-          { key: 'lineName', label: '生产线名称', children: detail.lineName ?? '—' },
-          { key: 'operationName', label: '工序名称', children: detail.operationName ?? '—' },
-          { key: 'registrant', label: '登记人', children: detail.sourceKind === 'IMS' ? '自动' : detail.registeredByName ?? '—' },
-          { key: 'completion', label: '完善情况', children: <CompletionStatus record={detail} detail /> },
-          { key: 'trace', label: '条码', children: detail.traceCode ?? '—' },
-          { key: 'mapping', label: '人工项目 / 映射建议', children: `${detail.projectCode ?? '—'} / ${detail.componentProject?.project?.code ?? '—'}` },
-          { key: 'batch', label: '批次 / 工单', children: `${detail.batchCode ?? '—'} / ${detail.workOrderCode ?? '—'}` },
-          { key: 'operation', label: '工序 / 产线', children: `${detail.operationCode ?? '—'} / ${detail.lineCode ?? '—'}` },
-          { key: 'product', label: '产品 / 物料', children: `${detail.productCode ?? '—'} / ${detail.materialCode ?? '—'}` },
-          { key: 'source', label: '来源', children: <Space><Tag>{detail.sourceKind === 'IMS' ? '自动' : '人工录入'}</Tag>{detail.externalSourceSystem ? <Tag>{detail.externalSourceSystem}</Tag> : null}</Space> },
-        ]} />
-        <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} canRegister={canRegister} onSaved={saved} onDenied={revoke} onAdoptDenied={denyBoard} />
+        <ProcessAiDescription key={detail.id} record={detail} permissions={permissions} canRegister={canRegister} onSaved={saved} onDenied={revoke} onAdoptDenied={denyBoard}
+          renderRegistration={refreshAction => <>
+            <header className="process-quality-registration-header">
+              <Typography.Title level={5}>表单登记</Typography.Title>
+              {refreshAction}
+            </header>
+            <dl className="process-quality-registration-fields">
+              {[
+                { key: 'description', label: '不良描述', size: 'full', value: <span className="process-quality-description">{detail.description || '待完善'}</span> },
+                { key: 'quantity', label: '数量', value: detail.defectQuantity },
+                { key: 'occurredAt', label: '发生时间', size: 'wide', value: detail.occurredAt ? <time dateTime={detail.occurredAt}>{new Date(detail.occurredAt).toLocaleString('zh-CN')}</time> : '未知' },
+                { key: 'factoryCode', label: factoryTitle, value: factoryLabel(detail.factoryCode, english) },
+                { key: 'shift', label: '班次', value: detail.shift === 'DAY' ? '白班' : detail.shift === 'NIGHT' ? '夜班' : '未知' },
+                { key: 'project', label: '项目号', value: detail.componentProject?.project?.code ?? '未确认' },
+                { key: 'stage', label: '项目状态', value: detail.projectStage === 'NEW_PRODUCT' ? '新品' : detail.projectStage === 'MASS_PRODUCTION' ? '量产' : '未确认' },
+                { key: 'subcategory', label: '细分类型', value: detail.productSubcategory ?? '未确认' },
+                { key: 'sector', label: '板块', value: detail.operationSector ?? '未确认' },
+                { key: 'lineName', label: '生产线名称', value: detail.lineName ?? '—' },
+                { key: 'operationName', label: '工序名称', value: detail.operationName ?? '—' },
+                { key: 'registrant', label: '登记人', value: detail.sourceKind === 'IMS' ? '自动' : detail.registeredByName ?? '—' },
+                { key: 'trace', label: '条码', size: 'wide', value: detail.traceCode ?? '—' },
+                { key: 'workOrder', label: '工单号', size: 'wide', value: detail.workOrderCode ?? '—' },
+                { key: 'operation', label: '工序 / 产线', value: `${detail.operationCode ?? '—'} / ${detail.lineCode ?? '—'}` },
+                { key: 'product', label: '成品编码', value: detail.productCode ?? '—' },
+                { key: 'source', label: '来源', value: <Space wrap><Tag>{detail.sourceKind === 'IMS' ? '自动' : '人工录入'}</Tag>{detail.externalSourceSystem ? <Tag>{detail.externalSourceSystem}</Tag> : null}</Space> },
+              ].map(({ key, label, size, value }) => <div key={key} data-size={size}><dt>{label}</dt><dd>{value}</dd></div>)}
+            </dl>
+          </>} />
         </section>
         <section className="process-quality-detail-section">
         <Descriptions title="分析" bordered size="small" column={1}
@@ -597,8 +602,8 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
           ]} />
         </section>
         <section className="process-quality-detail-section">
-        <Descriptions title="台账关闭判定" bordered size="small" column={1}
-          extra={!detail.archivedAt && boards.includes('CLOSURE') ? <Button size="small" disabled={locked || !!deletionTargets} onClick={() => openBoard('CLOSURE', [detail])}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '关闭台账'}</Button> : null}
+        <Descriptions title="不良跟进状态" bordered size="small" column={1}
+          extra={!detail.archivedAt && boards.includes('CLOSURE') ? <Button size="small" disabled={locked || !!deletionTargets} onClick={() => openBoard('CLOSURE', [detail])}>{detail.ledgerStatus === 'CLOSED' ? '恢复跟进' : '问题关闭'}</Button> : null}
           items={[{ key: 'ledgerStatus', label: '台账状态', children: detail.ledgerStatus === 'CLOSED' ? '已关闭' : '跟进中' }]} />
         </section>
         <AttachmentPanel variant="standard" resource={{ resourceType: 'process-defect', resourceId: detail.id }} fileIds={detail.attachmentIds ?? (detail.evidence ?? []).map(evidence => evidence.id)} readOnly={!canWrite || !!detail.archivedAt}

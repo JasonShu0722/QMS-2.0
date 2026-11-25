@@ -414,7 +414,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "a569a5dc225590340babc8c2a41c1c2dba76639d6b40e1de56bc6141cd994e8f"
+            "sha256": "a2eb8e9082855f51cef29ab0dde7a9e75d5250fa5ad14296f55b7acde8af0b72"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -558,7 +558,7 @@
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.tsx",
-            "sha256": "b9be381658fc1bd42e962bac4db6de423de5f179ecffe4eb1650d39cff21eda1"
+            "sha256": "6a83724f8a5c03978f074eec4fbe5e2beddc1fa55c668e6f6e085f088032a5dc"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.test.tsx",

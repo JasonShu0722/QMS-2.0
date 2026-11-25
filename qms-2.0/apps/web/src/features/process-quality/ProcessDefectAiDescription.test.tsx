@@ -34,6 +34,7 @@ it('AI description keeps manual text as the ledger body and exposes late AI only
   const sources = within(await screen.findByLabelText('描述来源'));
   expect(sources.getByText('现象：松脱 位置：0')).toBeVisible();
   expect(sources.getByText('<b>AI建议</b>')).toBeVisible();
+  expect(sources.getByText('原始选定字段', { selector: 'dt' }).nextElementSibling).toHaveTextContent('现象：松脱');
   expect(await sources.findByRole('button', { name: '采用AI建议' })).toBeEnabled();
   expect(screen.getAllByText('人工保留的描述').length).toBeGreaterThan(0);
   expect(document.querySelector('.process-ai-description b')).not.toBeInTheDocument();
@@ -48,6 +49,16 @@ it('AI description source inspection has no retry or adoption for an unauthorize
   expect(sources.queryByRole('button', { name: '采用AI建议' })).not.toBeInTheDocument();
   expect(sources.queryByRole('button', { name: '重试AI整理' })).not.toBeInTheDocument();
   expect(sources.queryByRole('button', { name: '重新生成AI描述' })).not.toBeInTheDocument();
+});
+it('omits the registration refresh without ingestion read permission', async () => {
+  const original = vi.mocked(apiRequest).getMockImplementation()!;
+  vi.mocked(apiRequest).mockImplementation(async (path, ...args) => path.includes('/my-permissions') ? { permissions: ['process-quality:defects:read'] } as never : original(path, ...args));
+  mount(); await screen.findByText('人工保留的描述');
+  fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
+  await screen.findByLabelText('描述来源');
+  const registrationHeader = within(screen.getByText('表单登记', { selector: 'h5' }).closest('header')!);
+  expect(registrationHeader.queryByRole('button', { name: '刷新整理状态' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/ai-tasks?'))).toBe(false);
 });
 it('requires registration board access to adopt a suggestion while retaining AI task actions', async () => {
   const original = vi.mocked(apiRequest).getMockImplementation()!;
@@ -156,7 +167,9 @@ it('AI description refresh reads the worker result into the existing ledger desc
   fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   const sources = within(await screen.findByLabelText('描述来源'));
   await sources.findByRole('button', { name: '采用AI建议' });
-  const refresh = sources.getByRole('button', { name: '刷新整理状态' });
+  const registrationHeader = within(screen.getByRole('heading', { name: '表单登记' }).closest('header')!);
+  const refresh = registrationHeader.getByRole('button', { name: '刷新整理状态' });
+  expect(sources.queryByRole('button', { name: '刷新整理状态' })).not.toBeInTheDocument();
   await waitFor(() => expect(refresh).not.toHaveClass('ant-btn-loading')); completed = true; await user.click(refresh);
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith(`/api/v1/process-quality/defects/${defect.id}?organizationId=${defect.organizationId}`, { signal: expect.any(AbortSignal) }));
   const drawer = within(screen.getByText('不良品详情', { selector: '.ant-drawer-title' }).closest('.ant-drawer-header') as HTMLElement);
@@ -174,7 +187,8 @@ it('AI description ignores an earlier task when the current source has returned 
   mount(); await screen.findByText('当前直接组合');
   fireEvent.click(screen.getByLabelText('查看详情', { selector: 'button' }));
   const sources = within(await screen.findByLabelText('描述来源'));
-  expect(sources.queryByRole('button', { name: '刷新整理状态' })).not.toBeInTheDocument();
+  const registrationHeader = within(screen.getByText('表单登记', { selector: 'h5' }).closest('header')!);
+  expect(registrationHeader.queryByRole('button', { name: '刷新整理状态' })).not.toBeInTheDocument();
   expect(sources.queryByText('AI结果')).not.toBeInTheDocument();
   expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/ai-tasks?'))).toBe(false);
 });

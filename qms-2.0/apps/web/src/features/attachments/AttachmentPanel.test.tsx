@@ -57,6 +57,32 @@ function wordDocument(text: string) {
   return new Uint8Array(Buffer.concat([local, name, compressed, central, name, end]));
 }
 
+it.each([
+  { variant: 'standard', placement: '.ant-card-extra' },
+  { variant: undefined, placement: '.ant-card-body' },
+] as const)('refreshes read-only attachments from $placement', async ({ variant, placement }) => {
+  const available = { ...file, status: 'AVAILABLE', scanStatus: 'CLEAN' };
+  let completeRefresh!: (response: Response) => void;
+  const refreshResponse = new Promise<Response>(resolve => { completeRefresh = resolve; });
+  const fetchMock = vi.fn<(path: string) => Promise<Response>>()
+    .mockResolvedValueOnce(json(available))
+    .mockReturnValueOnce(refreshResponse);
+  vi.stubGlobal('fetch', fetchMock);
+
+  render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} variant={variant} readOnly /></LanguageProvider>);
+  const refresh = screen.getByRole('button', { name: '刷新附件' });
+  await screen.findByText(file.originalName);
+  expect(refresh.closest(placement)).toBeInTheDocument();
+  expect(refresh).toBeEnabled();
+
+  await userEvent.click(refresh);
+  expect(refresh).toBeDisabled();
+  expect(fetchMock.mock.calls).toEqual([[`/api/v1/files/${file.id}`, expect.any(Object)], [`/api/v1/files/${file.id}`, expect.any(Object)]]);
+  completeRefresh(json({ ...available, version: file.version + 1, originalName: 'updated-evidence.txt' }));
+  expect(await screen.findByText('updated-evidence.txt')).toBeInTheDocument();
+  expect(refresh).toBeEnabled();
+});
+
 it('drops attachments into the existing upload lifecycle and reports completion', async () => {
   vi.stubGlobal('crypto', webcrypto);
   const completed = vi.fn();

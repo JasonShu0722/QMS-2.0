@@ -38,7 +38,7 @@
 .process-quality-row-checkbox > input { width: 16px; height: 16px; margin: 0; accent-color: var(--qms-accent); cursor: inherit; }
 .process-quality-completion { display: grid; gap: 2px; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
 .process-quality-completion > span { color: var(--qms-muted); }
-.process-quality-page--selected { padding-block-end: calc(100px + env(safe-area-inset-bottom, 0px)); }
+.process-quality-page:has(.process-quality-row-checkbox, .process-quality-selection-bar) { padding-block-end: calc(100px + env(safe-area-inset-bottom, 0px)); }
 .process-quality-selection-bar { position: fixed; z-index: 30; inset-inline-start: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 32px); padding: 8px 12px; border: 1px solid var(--qms-border); border-radius: 8px; background: var(--qms-surface); color: var(--qms-text); box-shadow: 0 3px 12px rgb(0 0 0 / 12%); }
 .process-quality-compact-ledger:has(.qms-ledger[data-ledger-horizontal-overflow]) .process-quality-selection-bar { bottom: calc(16px + var(--qms-ledger-dock-height, 20px) + env(safe-area-inset-bottom, 0px)); }
 .process-quality-selection-bar > span { white-space: nowrap; }
@@ -81,6 +81,24 @@
 .process-quality-detail-section .ant-descriptions-title { font-size: inherit; }
 .process-quality-detail-section .ant-typography:is(h5) { margin: 0 0 6px; }
 .process-quality-detail-section .ant-descriptions + h5 { margin-top: 8px; }
+.process-quality-registration-header { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; margin-block-end: 6px; }
+.process-quality-registration-header > h5.ant-typography { margin: 0; }
+.process-quality-registration-header > button { margin-inline-start: auto; }
+.process-quality-registration-fields { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; }
+.process-quality-registration-fields > div { flex: 1 1 max-content; min-inline-size: min(100%, 10rem); max-inline-size: 100%; }
+.process-quality-registration-fields > [data-size='wide'] { min-inline-size: min(100%, 16rem); }
+.process-quality-registration-fields > [data-size='full'] { flex-basis: 100%; }
+.process-quality-registration-fields .ant-tag { white-space: normal; }
+.process-ai-description { margin-block-start: 8px; padding-block-start: 8px; border-block-start: 1px solid var(--qms-border); }
+.process-ai-description-fields {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: start;
+  gap: 6px 12px;
+  margin: 6px 0;
+}
+:is(.process-quality-registration-fields, .process-ai-description-fields) dt { color: var(--qms-muted); }
+:is(.process-quality-registration-fields, .process-ai-description-fields) dd { margin: 0; overflow-wrap: anywhere; }
 .process-quality-editable-material { cursor: pointer; }
 .process-quality-material-link { border: 0; padding: 0; background: transparent; color: var(--qms-accent); font: inherit; cursor: pointer; }
 .process-quality-material-link:hover:not(:disabled) { text-decoration: underline; }
@@ -111,4 +129,4 @@
 @media (max-width: 720px) { .process-quality-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } .process-quality-filter-row input { grid-column: 1 / 2; } }
 @media (max-width: 600px) { .process-quality-warning { width: 44px; height: 44px; } }
 @media (max-width: 720px) { .process-quality-page { padding: 0; min-width: 0; } .process-quality-heading { flex-direction: column; } .process-quality-heading > div:first-child { flex: 1 1 auto; } .process-quality-card { padding: var(--qms-card-padding); } .process-quality-toolbar-main { flex-basis: 100%; } .process-quality-toolbar-main > .ant-input-search { flex-basis: 100%; max-width: 100%; } }
-@media (max-width: 720px) { .process-quality-page--selected { padding-block-end: calc(140px + env(safe-area-inset-bottom, 0px)); } }
+@media (max-width: 720px) { .process-quality-page:has(.process-quality-row-checkbox, .process-quality-selection-bar) { padding-block-end: calc(140px + env(safe-area-inset-bottom, 0px)); } }

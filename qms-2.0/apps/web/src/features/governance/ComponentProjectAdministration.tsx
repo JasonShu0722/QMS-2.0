@@ -601,7 +601,7 @@ function ComponentProjectScope({ organization, projectsOnly }: { organization: A
   const frozen = busy || !!uncertain;
   const searchLabel = t(projectsOnly ? '搜索项目' : '搜索组件');
   const tableProps = { ledgerId, organizationId: organization.id, rowKey: 'id', loading, pagination, locale: { emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={empty} /> } };
-  return <section className={`governance-panel ${deletion.selectedClass ?? ''}`} aria-label={t(projectsOnly ? '项目清单' : '组件项目映射')} style={{ minWidth: 0 }}>
+  return <section className={`governance-panel ${deletion.selectionClass ?? ''}`} aria-label={t(projectsOnly ? '项目清单' : '组件项目映射')} style={{ minWidth: 0 }}>
     {deletion.feedback}{deletion.controls}
     {notice && <Typography.Paragraph role="status">{t('已更新 {mappings} 条组件资料、{projects} 个项目；影响 {affected} 条组件。').replace('{mappings}', String(notice.updatedMappingCount)).replace('{projects}', String(notice.updatedProjectCount)).replace('{affected}', String(notice.affectedComponentCount))}</Typography.Paragraph>}
     {!editor && <GovernanceFeedback error={error} retry={loading || busy ? undefined : refresh} />}

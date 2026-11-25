@@ -1,12 +1,62 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 
-test('reverse Tab reveals a card action that starts behind the sticky toolbar', async ({ page }) => {
+for (const [host, query] of [['business', '&pinned'], ['console', '&console']]) {
+  test(`pointer interactions keep the ${host} ledger at its current scroll position`, async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: host === 'console' ? 640 : 720 });
+    await page.goto(`/playwright/ledger-fixture.html?sticky&short${query}`);
+    const ledger = page.getByRole('region', { name: '共享台账吸顶验证' });
+    const cell = ledger.getByRole('cell', { name: '模拟问题 3', exact: true });
+    const body = ledger.locator('.ant-table-body');
+    await page.evaluate(offset => window.scrollTo(0, offset), host === 'console' ? 135 : 0);
+    const scrollPosition = () => body.evaluate(element => [window.scrollY, element.scrollLeft, element.scrollTop]);
+    async function clickWithoutScrolling(target: Locator, y?: number) {
+      const bounds = (await target.boundingBox())!;
+      const point = { x: bounds.x + bounds.width / 2, y: y ?? bounds.y + bounds.height / 2 };
+      expect(await target.evaluate((element, { x, y }) => element.contains(document.elementFromPoint(x, y)), point)).toBe(true);
+      const before = await scrollPosition();
+      await page.mouse.click(point.x, point.y);
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      expect(await scrollPosition()).toEqual(before);
+    }
+    await clickWithoutScrolling(cell);
+    await expect(body).toBeFocused();
+
+    await body.evaluate(element => { element.scrollLeft = 240; });
+    await expect.poll(async () => (await scrollPosition())[1]).toBe(240);
+    const checkbox = ledger.locator('tr[data-row-key="3"]').getByRole('checkbox');
+    await clickWithoutScrolling(checkbox);
+    await expect(checkbox).toBeChecked();
+    await clickWithoutScrolling(checkbox);
+    await expect(checkbox).not.toBeChecked();
+
+    const action = ledger.getByRole('button', { name: '查看 3', exact: true });
+    const header = ledger.locator('.ant-table-header');
+    await ledger.evaluate(element => { element.parentElement!.style.paddingBottom = '360px'; });
+    const stickyHeight = await ledger.locator('.qms-ledger').evaluate(element => parseFloat(getComputedStyle(element).getPropertyValue('--qms-ledger-stack-height')));
+    await action.evaluate((element, height) => window.scrollBy(0, element.getBoundingClientRect().top - height + 5), stickyHeight);
+    const clippedAction = (await action.boundingBox())!;
+    const stickyHeader = (await header.boundingBox())!;
+    expect(clippedAction.y).toBeLessThan(stickyHeader.y + stickyHeader.height);
+    await clickWithoutScrolling(action, clippedAction.y + clippedAction.height - 3);
+    await expect(action).toBeFocused();
+  });
+}
+
+test('card actions keep their position on click and reveal covered keyboard focus', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 720 });
   await page.goto('/playwright/ledger-fixture.html?cards');
   const list = page.getByRole('region', { name: '卡片清单吸顶验证' });
   const toolbar = list.locator('.qms-list-toolbar');
   const covered = list.getByRole('button', { name: '查看版本 5', exact: true });
   const next = list.getByRole('button', { name: '查看版本 6', exact: true });
+  await covered.evaluate((button, height) => window.scrollBy(0, button.getBoundingClientRect().top - height + 5), (await toolbar.boundingBox())!.height);
+  const partial = (await covered.boundingBox())!;
+  const point = { x: partial.x + partial.width / 2, y: partial.y + partial.height - 3 };
+  expect(await covered.evaluate((button, { x, y }) => button.contains(document.elementFromPoint(x, y)), point)).toBe(true);
+  const before = await page.evaluate(() => window.scrollY);
+  await page.mouse.click(point.x, point.y);
+  await expect(covered).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(before);
   await covered.evaluate(button => window.scrollBy(0, button.getBoundingClientRect().top - 8));
   await expect.poll(async () => (await covered.boundingBox())!.y + (await covered.boundingBox())!.height).toBeLessThan((await toolbar.boundingBox())!.height);
   await next.evaluate(button => button.focus({ preventScroll: true }));
