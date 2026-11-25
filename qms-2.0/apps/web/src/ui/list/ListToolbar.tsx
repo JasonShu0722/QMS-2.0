@@ -11,7 +11,7 @@ export function ListToolbar({ children }: { children: ReactNode }) {
 
     function revealFocus(event: FocusEvent) {
       const target = event.target;
-      if (!(target instanceof HTMLElement) || !toolbar || !view || toolbar.contains(target)
+      if (!(target instanceof HTMLElement) || !target.matches(':focus-visible') || !toolbar || !view || toolbar.contains(target)
         || view.getComputedStyle(toolbar).position !== 'sticky'
         || !(toolbar.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
       const bar = toolbar.getBoundingClientRect();

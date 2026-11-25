@@ -72,6 +72,82 @@ async function canClickWithoutScrolling(locator: Locator) {
   });
 }
 
+test('visible cells and selections preserve position in the process ledger and console mappings', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 740 });
+  await login(page, 'local.internal', adminPassword!);
+  const sample = `CLICK174-${randomUUID().slice(0, 8)}`;
+  const mappingPath = '/api/v1/admin/configuration/component-project-mappings';
+  const importResult = await positionWrite<Schema['ComponentProjectImportResultDto']>(page.request, `${mappingPath}/import`, 'POST', {
+    rows: Array.from({ length: 18 }, (_, index) => ({ rowNumber: index + 1, componentCode: `${sample}-${index}`, componentName: `${sample} 组件 ${index}` })),
+  }, 201);
+  expect(importResult.created).toBe(18);
+  for (let index = 0; index < 10; index++) {
+    await positionWrite(page.request, defects, 'POST', {
+      description: `${sample}-${index}`, productCode: sample, traceCode: `${sample}-${index}`, occurredAt: new Date().toISOString(),
+      factoryCode: 'FACTORY_1', lineName: sample, operationName: sample,
+    } satisfies Schema['CreateProcessDefectDto'], 201);
+  }
+
+  for (const target of [
+    { path: route, cell: '班次', action: `${sample}-7`, dialog: '不良品详情', selection: '台账批量操作', selectRow: page.getByRole('row').filter({ has: page.getByRole('button', { name: `${sample}-7`, exact: true }) }) },
+    { path: '/console/master-data/component-projects', cell: '组件名称', action: `编辑组件 ${sample}-3`, dialog: '组件映射', selection: '已选组件项目映射', selectRow: page.getByRole('row').filter({ has: page.getByRole('cell', { name: `${sample}-3`, exact: true }) }) },
+  ]) {
+    await test.step(target.path, async () => {
+      await page.goto(target.path);
+      await expect(target.selectRow).toHaveCount(1);
+      const ledger = page.locator('.qms-ledger--sticky').filter({ has: target.selectRow });
+      const body = ledger.locator('.ant-table-body');
+      await expect(body).toHaveAttribute('tabindex', '0');
+      const headings = await ledger.getByRole('columnheader').allTextContents();
+      const cellIndex = headings.findIndex(text => text.trim() === target.cell);
+      expect(cellIndex).toBeGreaterThanOrEqual(0);
+      const cell = target.selectRow.getByRole('cell').nth(cellIndex);
+      const checkbox = target.selectRow.getByRole('checkbox');
+      await cell.evaluate(element => window.scrollBy(0, element.getBoundingClientRect().top - 320));
+
+      async function clickAtCurrentPosition(control: Locator) {
+        const before = await body.evaluate(element => [window.scrollY, element.scrollLeft, element.scrollTop]);
+        await expect.poll(() => canClickWithoutScrolling(control)).toBe(true);
+        const bounds = await getBox(control);
+        await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        expect(await body.evaluate(element => [window.scrollY, element.scrollLeft, element.scrollTop])).toEqual(before);
+      }
+      await clickAtCurrentPosition(cell);
+      await clickAtCurrentPosition(checkbox);
+      await expect(checkbox).toBeChecked();
+      await clickAtCurrentPosition(checkbox);
+      await expect(checkbox).not.toBeChecked();
+
+      const action = target.selectRow.getByRole('button', { name: target.action, exact: true });
+      await action.evaluate(element => element.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
+      await clickAtCurrentPosition(action);
+      const dialog = page.getByRole('dialog', { name: target.dialog });
+      await expect(dialog).toBeVisible();
+      await page.keyboard.press('Escape');
+      await expect(dialog).toBeHidden();
+      await body.evaluate(element => { element.scrollLeft = 0; });
+
+      const lastRow = ledger.locator('tbody tr[data-row-key]').last();
+      const lastCheckbox = lastRow.getByRole('checkbox');
+      const selectionBar = page.getByRole('toolbar', { name: target.selection, exact: true });
+      const scrollToBottom = () => page.evaluate(() => window.scrollTo(0, document.scrollingElement!.scrollHeight));
+      const maxScroll = () => page.evaluate(() => document.scrollingElement!.scrollHeight - document.scrollingElement!.clientHeight);
+      await scrollToBottom();
+      const bottom = await maxScroll();
+      await clickAtCurrentPosition(lastCheckbox);
+      await expect(lastCheckbox).toBeChecked();
+      expect(await maxScroll()).toBe(bottom);
+      await expect(selectionBar).toBeVisible();
+      const lastBounds = await getBox(lastRow);
+      expect(lastBounds.y + lastBounds.height).toBeLessThanOrEqual((await getBox(selectionBar)).y + 1);
+      await clickAtCurrentPosition(lastCheckbox);
+      await expect(lastCheckbox).not.toBeChecked();
+      expect(await maxScroll()).toBe(bottom);
+    });
+  }
+});
+
 test('deletes a whole 1000-row page with a short confirmation and returns to a valid page', async ({ page: adminPage, browser }, testInfo) => {
   const admin = await login(adminPage, 'local.internal', adminPassword!);
   const label = `BULK163-${randomUUID().slice(0, 8)}`;

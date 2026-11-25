@@ -146,6 +146,7 @@ export function useLedgerStickyLayout(rootRef: RefObject<HTMLDivElement | null>,
     function revealFocus(event: FocusEvent) {
       const target = event.target;
       if (!(target instanceof HTMLElement) || typeof target.scrollIntoView !== 'function') return;
+      if (target === body || !target.matches(':focus-visible')) return;
       const heading = header && !root?.hasAttribute('data-ledger-sticky-flow') ? header.getBoundingClientRect() : null;
       const focused = target.getBoundingClientRect();
       const dock = horizontalScroll && !horizontalScroll.hidden ? horizontalScroll.getBoundingClientRect() : null;

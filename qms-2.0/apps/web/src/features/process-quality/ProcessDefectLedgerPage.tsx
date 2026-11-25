@@ -513,7 +513,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
     <Button aria-label="刷新" disabled={locked} onClick={() => requestLeave(() => { if (!filterOpen || saveAppliedFilters(completeDraft, undefined, false, false)) setRevision(value => value + 1); })} loading={loading}>刷新</Button>
   </div>;
 
-  return <main className={`process-quality-page${selectedCount ? ' process-quality-page--selected' : ''}`}>
+  return <main className="process-quality-page">
     <h1 className="sr-only">不良品台账</h1>
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${issued.problem.id}`}>查看问题</Link>} /> : null}
     <section className="process-quality-card process-quality-compact-ledger">

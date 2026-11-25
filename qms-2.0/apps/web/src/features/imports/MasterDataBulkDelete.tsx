@@ -126,5 +126,5 @@ export function useMasterDataBulkDelete(options: Options) {
       {unknown && <Alert type="error" showIcon title={errorText} />}
     </Modal>
   </> : null;
-  return { busy: locked, rowSelection, feedback, controls, selectedClass: count ? 'qms-master-delete--selected' : undefined };
+  return { busy: locked, rowSelection, feedback, controls, selectionClass: options.allowed ? 'qms-master-delete' : undefined };
 }

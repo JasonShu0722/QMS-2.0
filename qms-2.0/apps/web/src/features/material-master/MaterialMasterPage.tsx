@@ -162,7 +162,7 @@ function MaterialMasterContent({ organizationId, organizationPermissions }: Prop
     <Space wrap><Input.Search aria-label={`${t('物料编码')} / ${t('物料名称')}`} placeholder={`${t('物料编码')} / ${t('物料名称')}`} maxLength={200} allowClear value={searchDraft} disabled={busy} onChange={event => setSearchDraft(event.target.value)} onSearch={value => { setSelection({}); setPage(1); setSearch(value.trim()); }} /><Button onClick={() => { setSelection({}); void refresh(true); }} loading={loading} disabled={busy}>{t('刷新物料')}</Button><Button onClick={() => void exportCurrent()} loading={exporting} disabled={loading || busy || !materials.length}>{t('导出当前物料清单')}</Button></Space>
     {actions}
   </>;
-  return <section className={`customer-quality-card ${deletion.selectedClass ?? ''}`} aria-label={t('物料主数据')}>
+  return <section className={`customer-quality-card ${deletion.selectionClass ?? ''}`} aria-label={t('物料主数据')}>
     {contextHolder}<Typography.Title level={3} className="sr-only">{t('物料主数据')}</Typography.Title>
     {deletion.feedback}{deletion.controls}
 

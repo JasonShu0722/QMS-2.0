@@ -80,7 +80,7 @@ function ProfilesContent({ organizationId, organizationPermissions, onDenied }: 
     finally { if (alive.current) setExporting(false); }
   }
   const writeActions = canWrite ? <><Button disabled={deletion.busy} onClick={() => setCreating(true)}>{t('登记供应商资料')}</Button><Form component={false} disabled={deletion.busy}><SupplierMasterImport organizationId={organizationId} onImported={canRead ? () => reload(true) : () => undefined} /></Form></> : null;
-  return <section className={deletion.selectedClass} aria-label={t('供应商档案')}>
+  return <section className={deletion.selectionClass} aria-label={t('供应商档案')}>
     {deletion.feedback}{deletion.controls}
     {notice ? <Alert type="success" title={t('供应商资料已保存')} /> : null}
     {error ? <Alert type="error" title={t(supplierError(error))} action={granted.includes('supplier-quality:profiles:read') ? <Button disabled={deletion.busy} onClick={() => { setSelection({}); void reload(); }}>{t('重新加载')}</Button> : undefined} /> : null}
