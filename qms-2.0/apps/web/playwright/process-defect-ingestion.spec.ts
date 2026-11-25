@@ -471,7 +471,7 @@ test('maintains a closed ledger through the disposition and analysis boards', as
 
   await page.getByRole('button', { name: description, exact: true }).click();
   const detail = page.getByRole('dialog', { name: '不良品详情', exact: true });
-  await detail.getByRole('button', { name: '关闭台账', exact: true }).click();
+  await detail.getByRole('button', { name: '问题关闭', exact: true }).click();
   const closure = page.getByRole('dialog', { name: '关闭判定', exact: true });
   const reason = '现场确认可以关闭';
   await closure.getByLabel('关闭说明', { exact: true }).fill(reason);

@@ -183,7 +183,9 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
     event.target.value = '';
     if (selected) void upload(selected);
   }} />;
-  return <Card className={standard ? 'attachment-panel attachment-panel--standard' : 'attachment-panel'} title={t(standard ? '附件' : '附件证据')}>
+  const refreshButton = <Button aria-label={t('刷新附件')} onClick={refresh} disabled={loading} size={standard ? 'small' : undefined} icon={standard && <RefreshCw size={14} />}>{t('刷新附件')}</Button>;
+  const showRetry = retryAvailable && !readOnly;
+  return <Card className={standard ? 'attachment-panel attachment-panel--standard' : 'attachment-panel'} title={t(standard ? '附件' : '附件证据')} extra={standard ? refreshButton : undefined}>
     <Space orientation="vertical" size={6} style={{ width: '100%' }}>
 
       {error ? <Alert type="error" title={t(errorText)} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} showIcon /> : null}
@@ -205,12 +207,12 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
           <Typography.Text type="secondary">{english ? 'or drop a file here' : '或将文件拖到此处'}</Typography.Text>
         </Space>
       </div>}
-      <Space wrap>
+      {(!standard || showRetry || busy) && <Space wrap>
         {!standard && !readOnly && <label className="attachment-panel__picker">{t('选择附件')} {fileInput}</label>}
-        <Button aria-label={t('刷新附件')} onClick={refresh} disabled={loading} size={standard ? 'small' : undefined} icon={standard && <RefreshCw size={14} />}>{t('刷新附件')}</Button>
-        {retryAvailable && !readOnly && <><Button onClick={() => void upload()} disabled={busy}>{t('重试上传')}</Button><Button onClick={() => { attempt.current = undefined; setRetryAvailable(false); }} disabled={busy}>{t('放弃重试')}</Button></>}
+        {!standard && refreshButton}
+        {showRetry && <><Button onClick={() => void upload()} disabled={busy}>{t('重试上传')}</Button><Button onClick={() => { attempt.current = undefined; setRetryAvailable(false); }} disabled={busy}>{t('放弃重试')}</Button></>}
         {busy && <Spin aria-label={t('正在处理附件')} />}
-      </Space>
+      </Space>}
       {loading && !visible.length ? <Spin aria-label={t('正在加载附件')} /> : !error && !visible.length ? standard ? <Typography.Text type="secondary">{t('暂无附件')}</Typography.Text> : <Empty description={t('暂无附件')} /> : null}
       {visible.map((file) => <Card className="attachment-panel__file" key={file.id} size="small" title={standard && canPreviewAttachment(file) ?
         <Button className="attachment-panel__preview-link" type="link" size="small" disabled={busy} onClick={() => setPreview(file)}>{file.originalName}</Button> : file.originalName}>

@@ -134,8 +134,8 @@ it('shows the factory before shift and displays saved and missing values in the 
   expect(oldRow.cells[factory.cellIndex]).toHaveTextContent(/^\/$/);
   fireEvent.click(within(oldRow).getByLabelText('查看详情'));
   const drawer = screen.getByText('不良品详情', { selector: '.ant-drawer-title' }).closest<HTMLElement>('[role="dialog"]')!;
-  expect((await within(drawer).findByText('工厂')).closest('tr')?.querySelector('td')).toHaveTextContent(/^\/$/);
-  expect(within(drawer).getByText(/工厂来源值无效/)).toBeVisible();
+  expect((await within(drawer).findByText('工厂', { selector: 'dt' })).nextElementSibling).toHaveTextContent(/^\/$/);
+  expect(within(drawer).queryByText(/工厂来源值无效/)).not.toBeInTheDocument();
 });
 
 it('submits factory codes and value-free empty conditions from the shared filter panel', async () => {
@@ -318,8 +318,8 @@ it('places the single controlled paginator before the defect table', async () =>
   expect(latestQuery().get('page')).toBe('2');
 });
 
-it('keeps configuration prompts in detail completion and puts permitted record actions in the header', async () => {
-  const pending = { ...defect, operationSector: null, productSubcategory: null, pendingConfiguration: true, issues: ['PROJECT_MAPPING_PENDING', 'OPERATION_SECTOR_PENDING', 'PRODUCT_SUBCATEGORY_PENDING', 'SOURCE_IDENTITY_INCOMPLETE', 'DEFECT_TYPE_UNKNOWN'] };
+it('shows the compact registration fields and keeps permitted record actions in the drawer header', async () => {
+  const pending = { ...defect, defectTypeCode: 'DEFECT-9', projectCode: 'MANUAL-PROJECT', batchCode: 'BATCH-9', workOrderCode: 'WO-20261125-12345', productCode: 'PRODUCT-9', materialCode: 'MATERIAL-9', operationSector: null, productSubcategory: null, pendingConfiguration: true, issues: ['PROJECT_MAPPING_PENDING', 'OPERATION_SECTOR_PENDING', 'PRODUCT_SUBCATEGORY_PENDING', 'SOURCE_IDENTITY_INCOMPLETE', 'DEFECT_TYPE_UNKNOWN'] };
   items = [pending];
   const read = vi.mocked(apiRequest).getMockImplementation()!;
   vi.mocked(apiRequest).mockImplementation(async (path, init) => {
@@ -333,16 +333,15 @@ it('keeps configuration prompts in detail completion and puts permitted record a
   expect(within(row).queryByLabelText(`映射与来源提示 ${pending.description}`)).not.toBeInTheDocument();
   fireEvent.click(within(row).getByLabelText('查看详情'));
   const dialog = screen.getByText('不良品详情', { selector: '.ant-drawer-title' }).closest<HTMLElement>('[role="dialog"]')!;
-  const completion = (await within(dialog).findByText('完善情况')).closest('tr')!;
-  expect(completion).toHaveTextContent('项目映射待补配。');
-  expect(completion).toHaveTextContent('工序板块待补配。');
-  expect(within(completion).queryByText('待补配', { exact: true })).not.toBeInTheDocument();
-  expect(within(dialog).queryByText(/细分类型待补配|来源明细编号待补充|失效类型未知|记录版本/)).not.toBeInTheDocument();
+  const registration = within((await within(dialog).findByRole('heading', { name: '表单登记' })).closest('section')!);
+  for (const [label, value] of [['工单号', pending.workOrderCode], ['成品编码', pending.productCode]]) {
+    expect(registration.getByText(label, { exact: true }).parentElement).toHaveTextContent(value);
+  }
+  expect(registration.queryByText(/失效类型|完善情况|人工项目|映射建议|批次 \/ 工单|产品 \/ 物料|DEFECT-9|MANUAL-PROJECT|BATCH-9|MATERIAL-9/)).not.toBeInTheDocument();
   const header = within(dialog.querySelector<HTMLElement>('.ant-drawer-header')!);
   for (const name of ['维护登记信息', '删除台账', '选择此条并返回台账']) {
     expect(header.getByText(name, { selector: 'button span' })).toBeInTheDocument();
   }
-  expect(within(dialog).getByRole('button', { name: '关闭台账' })).toBeInTheDocument();
   fireEvent.click(header.getByText('选择此条并返回台账', { selector: 'button span' }));
   expect(within(row).getByLabelText(`选择制程不良 ${pending.description}`)).toBeChecked();
 });

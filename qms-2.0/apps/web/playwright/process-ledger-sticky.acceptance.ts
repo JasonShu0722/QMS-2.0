@@ -124,7 +124,7 @@ test('visible cells and selections preserve position in the process ledger and c
       await clickAtCurrentPosition(action);
       const dialog = page.getByRole('dialog', { name: target.dialog });
       await expect(dialog).toBeVisible();
-      await page.keyboard.press('Escape');
+      await dialog.press('Escape');
       await expect(dialog).toBeHidden();
       await body.evaluate(element => { element.scrollLeft = 0; });
 
@@ -145,6 +145,77 @@ test('visible cells and selections preserve position in the process ledger and c
       await expect(lastCheckbox).not.toBeChecked();
       expect(await maxScroll()).toBe(bottom);
     });
+  }
+});
+
+test('process defect detail keeps registration fields readable and refresh actions in their headings', async ({ page }) => {
+  const sample = `DETAIL174-${randomUUID().slice(0, 8)}`;
+  const traceCode = `${sample}4030234000AB912C22611200485`;
+  const workOrderCode = `4000030234-DIP-${sample}`;
+  const occurredAt = new Date().toISOString();
+  const aiDirect = '工序名称：在线检测；不良名称：测试后断续失效，需复查连接器和焊点。'.repeat(3);
+  await page.setViewportSize({ width: 1440, height: 850 });
+  await login(page, 'local.internal', adminPassword!);
+  const record = await positionWrite<Schema['ProcessDefectDto']>(page.request, defects, 'POST', {
+    description: sample, defectQuantity: 1, productCode: `${sample}-PRODUCT`, traceCode, workOrderCode,
+    batchCode: `${sample}-BATCH`, occurredAt, factoryCode: 'FACTORY_1',
+  } satisfies Schema['CreateProcessDefectDto'], 201);
+  const requireApi = createRequire(resolve(process.cwd(), '../api/package.json'));
+  const { Client } = requireApi('pg') as typeof import('pg');
+  const client = new Client({ connectionString: database });
+  await client.connect();
+  try {
+    const seeded = await client.query(`UPDATE process_defects SET description_direct = $1, description_ai = $2,
+      description_input = $3, description_ai_status = 'APPLIED', description_source = 'AI' WHERE id = $4`,
+    [aiDirect, '已整理的不良说明', JSON.stringify([{ path: 'sample', label: '检测工序', value: '在线检测' }]), record.id]);
+    expect(seeded.rowCount).toBe(1);
+  } finally {
+    await client.end();
+  }
+
+  await page.goto(route);
+  await page.getByRole('button', { name: sample, exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '不良品详情' });
+  const registration = dialog.locator('section').filter({ has: page.getByText('表单登记', { exact: true }) }).first();
+  const source = dialog.getByRole('region', { name: '描述来源' });
+  await expect(registration.getByText('工单号', { exact: true })).toBeVisible();
+  await expect(registration.getByText('成品编码', { exact: true })).toBeVisible();
+  await expect(registration.getByText(/^(失效类型|完善情况|人工项目 \/ 映射建议|批次 \/ 工单|产品 \/ 物料)$/)).toHaveCount(0);
+  await expect(registration.getByText(`${sample}-BATCH`, { exact: true })).toHaveCount(0);
+  await expect(dialog.getByText('不良跟进状态', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '问题关闭', exact: true })).toBeVisible();
+  const refreshAi = registration.locator('header').filter({ hasText: '表单登记' }).getByRole('button', { name: '刷新整理状态' });
+  await expect(source.getByRole('button', { name: '刷新整理状态' })).toHaveCount(0);
+  const refreshAttachment = dialog.locator('.attachment-panel > .ant-card-head').getByRole('button', { name: '刷新附件' });
+  await expect(refreshAttachment).toBeEnabled();
+  await refreshAttachment.click();
+  const refreshed = page.waitForResponse(response => new URL(response.url()).pathname === `${defects}/${record.id}` && response.request().method() === 'GET');
+  await refreshAi.click();
+  expect((await refreshed).status()).toBe(200);
+
+  const textRects = (locator: Locator) => locator.evaluate(element => {
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    return Array.from(range.getClientRects(), rect => ({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }));
+  });
+  const dateTime = registration.getByText(/\d{4}[/-]\d{1,2}[/-]\d{1,2}\s+\d{1,2}:\d{2}:\d{2}/);
+  for (const field of [dateTime, ...[traceCode, workOrderCode].map(value => registration.getByText(value, { exact: true }))]) {
+    const lines = await textRects(field);
+    expect(new Set(lines.map(line => Math.round(line.top))).size).toBe(1);
+  }
+
+  for (const width of [1440, 390, 320]) {
+    await page.setViewportSize({ width, height: 850 });
+    await expect.poll(() => registration.evaluate(element => element.scrollWidth - element.clientWidth)).toBeLessThanOrEqual(1);
+    for (const [label, value] of [['直接组合', aiDirect], ['原始选定字段', '检测工序：在线检测'], ['AI结果', '已整理的不良说明']]) {
+      const markers = await textRects(source.getByText(label, { exact: true }));
+      const lines = await textRects(source.getByText(value, { exact: true }));
+      expect(markers.length).toBeGreaterThan(0);
+      expect(lines.length).toBeGreaterThan(0);
+      const overlaps = markers.some(marker => lines.some(line => line.top < marker.bottom - 1 && line.bottom > marker.top + 1
+        && line.left < marker.right - 1 && line.right > marker.left + 1));
+      expect(overlaps, `${width}px ${label}`).toBe(false);
+    }
   }
 });
 
