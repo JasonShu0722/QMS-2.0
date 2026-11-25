@@ -3,6 +3,7 @@ import {
   createProblemView,
   deleteProblemView,
   getProblemIndex,
+  getProcessFollowup,
   getProblemViews,
   updateProblemView,
   type ProblemViewConfiguration,
@@ -43,6 +44,21 @@ it('serializes bounded problem paging, filters, sorting, and the selected organi
     '/api/v1/problem-index?organizationId=organization-b&page=10001&pageSize=100&search=QMS-2026&dueFrom=2026-09-01T00%3A00%3A00.000Z&overdueAt=2026-09-19T12%3A00%3A00.000Z&sortBy=reportNumber&sortDirection=desc',
     expect.objectContaining({ credentials: 'include' }),
   );
+});
+
+it('sends process follow-up names, stage and effective-deadline filters to the dedicated endpoint', async () => {
+  globalThis.fetch = vi.fn<typeof fetch>().mockResolvedValue(json({ items: [], total: 70, page: 2, pageSize: 20, statusCounts: [] }));
+  const controller = new AbortController();
+  const query = { organizationId: 'organization-b', page: 2, pageSize: 20, stage: 'CLOSURE_REVIEW',
+    ownerName: '负责人甲', responsibleSectionName: '焊接质量科', dueFrom: '2026-09-19T00:00:00.000Z', dueTo: '2026-09-25T00:00:00.000Z',
+    overdueAt: '2026-09-24T10:00:00.000Z', sortBy: 'dueAt', sortDirection: 'asc' } as const;
+  const response = await getProcessFollowup(query, controller.signal);
+  const [request, init] = vi.mocked(fetch).mock.calls[0]!;
+  const url = new URL(String(request), 'http://localhost');
+  expect(url.pathname).toBe('/api/v1/problem-index/process-followup');
+  expect(Object.fromEntries(url.searchParams)).toEqual({ ...query, page: '2', pageSize: '20' });
+  expect(init?.signal).toBe(controller.signal);
+  expect(response.total).toBe(70);
 });
 
 it('lists saved views in the selected organization with offset pagination', async () => {

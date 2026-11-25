@@ -5,7 +5,7 @@ export const INGESTION_PERMISSIONS = ['ingestion:read', 'ingestion:manage', 'ing
 export const AI_CONFIGURATION_PERMISSIONS = ['ai:connections:read', 'ai:connections:manage', 'ai:connections:test', 'ai:credentials:manage', 'ai:applications:read', 'ai:applications:manage', 'ai:applications:publish', 'ai:applications:test'];
 export const PROCESS_CONFIGURATION_PERMISSIONS = ['process-quality:configuration:read', 'process-quality:configuration:manage'];
 export const ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES = [
-  'organization:force-delete', 'organization:departments:force-delete', 'account:users:delete', 'organization:reconfigure',
+  'organization:force-delete', 'organization:departments:force-delete', 'organization:positions:force-delete', 'account:users:delete', 'organization:reconfigure',
 ];
 export const PLATFORM_INACTIVE_MANAGEMENT_PERMISSION_CODES = [
   'organization:read', 'organization:manage', 'audit:read', 'audit:export', ...ADMINISTRATIVE_LIFECYCLE_PERMISSION_CODES,
@@ -169,6 +169,7 @@ export const PERMISSION_CATALOG: Group[] = [
     { key: 'administrative-lifecycle', name: '删除与待配置管理', status: 'active', operations: [
       operation('organization:force-delete', '强制删除组织'),
       operation('organization:departments:force-delete', '强制删除部门或科室'),
+      operation('organization:positions:force-delete', '强制删除岗位'),
       operation('organization:reconfigure', '补配组织部门和用户失效关联'),
     ] },
     { key: 'management-audit', name: '管理审计', status: 'active', operations: [operation('audit:read', '查询管理审计'), operation('audit:export', '导出管理审计')] },

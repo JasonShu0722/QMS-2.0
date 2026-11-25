@@ -204,7 +204,7 @@ it('replays exactly the original unknown command/key without another preview or 
   expect(fetchMock.mock.calls.filter(([url]) => url === path)).toHaveLength(3);
 });
 
-it('refreshes a 409 preview and waits for explicit reconfirmation with the new version and token', async () => {
+it('refreshes a concurrency conflict preview and waits for explicit reconfirmation with the new version and token', async () => {
   let reads = 0; let writes = 0;
   const fresh = { ...preview, version: 8, previewToken: 'new-impact-token', counts: { ...preview.counts, users: 9 } };
   const fetchMock = api((_url, init) => init.method === 'POST' ? ++writes === 1 ? json({ code: 'CONCURRENCY_CONFLICT' }, 409) : json(result(fresh)) : json(++reads === 1 ? preview : fresh));
@@ -218,6 +218,22 @@ it('refreshes a 409 preview and waits for explicit reconfirmation with the new v
   await waitFor(() => expect(changed).toHaveBeenCalledOnce());
   expect(JSON.parse(posts(fetchMock)[1][1]!.body as string)).toEqual({ expectedVersion: 8, confirmed: true, previewToken: fresh.previewToken });
   expect((posts(fetchMock)[0][1]!.headers as Record<string, string>)['Idempotency-Key']).not.toBe((posts(fetchMock)[1][1]!.headers as Record<string, string>)['Idempotency-Key']);
+});
+
+it.each([
+  ['ADMIN_SELF_LOCK_FORBIDDEN', '不能移除自身管理权限或变更自身身份'],
+  ['IDEMPOTENCY_REPLAY', '请求被拒绝，请检查权限和填写内容后重试'],
+])('shows %s without reading another force-delete preview', async (code, message) => {
+  const fetchMock = api((_url, init) => init.method === 'POST' ? json({ code, traceId: 'delete-rejected' }, 409) : json(preview));
+  render(view()); const dialog = await open();
+  await userEvent.click(dialog.getByRole('button', { name: '确认强制删除' }));
+  expect(await dialog.findByText(message)).toBeVisible();
+  expect(dialog.getByText('delete-rejected')).toBeVisible();
+  expect(dialog.queryByText(/影响已变化/)).not.toBeInTheDocument();
+  expect(dialog.getByRole('button', { name: '确认强制删除' })).toBeDisabled();
+  expect(fetchMock.mock.calls.filter(([url, init]) => url === path && init?.method !== 'POST')).toHaveLength(1);
+  expect(posts(fetchMock)).toHaveLength(1);
+  expect(changed).not.toHaveBeenCalled();
 });
 
 it.each((['transport', 503] as const).flatMap(initialFailure => ([400, 422, 429, 'reauth'] as const).map(recoveryFailure => ({ initialFailure, recoveryFailure }))))('preserves an original $initialFailure-unknown command through recovery $recoveryFailure and subsequent explicit retry', async ({ initialFailure, recoveryFailure }) => {

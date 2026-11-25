@@ -1,7 +1,7 @@
 export const problemWorkspaceTranslations: Record<string, string> = {
   '问题处理工作空间': 'Problem workspace', '问题概览': 'Overview', '报告预览': 'Report preview', '追溯': 'Audit trail',
   '请从问题中心选择一个问题。': 'Select a problem from the problem center.', '刷新工作空间': 'Refresh workspace',
-  '返回问题中心': 'Back to problem center', '流程实例': 'Workflow instance', '暂无流程实例': 'No workflow instance',
+  '返回问题中心': 'Back to problem center', '返回制程问题跟进': 'Back to process problem follow-up', '流程实例': 'Workflow instance', '暂无流程实例': 'No workflow instance',
   '当前实例': 'Current instance', '历史实例': 'Historical instance', '历史实例只读': 'Historical instance is read only',
   '问题视图': 'Problem views', '领域数据不可用': 'Domain data unavailable', '固定流程版本': 'Fixed workflow version',
   '实例版本': 'Instance revision', '任务正在同步，请稍后刷新。': 'Task synchronization is pending. Refresh shortly.',

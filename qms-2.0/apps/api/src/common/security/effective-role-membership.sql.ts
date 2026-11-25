@@ -1,11 +1,11 @@
 import { Prisma } from '../../generated/prisma/client.js';
-
 // SQL counterpart of effectiveRoleGrants/effectivePositionAssignmentWhere.
 export function effectiveRoleMembershipSql(
   userId: Prisma.Sql,
   organizationId: Prisma.Sql,
   // Recheck expiry using the new statement's time after transactional lock waits.
   now: Prisma.Sql = Prisma.sql`statement_timestamp()`,
+  excludedPositionId?: Prisma.Sql,
 ): Prisma.Sql {
   return Prisma.sql`
     SELECT effective_direct.role_id FROM user_roles effective_direct
@@ -24,6 +24,7 @@ export function effectiveRoleMembershipSql(
       AND effective_binding.organization_id = effective_position.organization_id
     JOIN roles effective_position_role ON effective_position_role.id = effective_binding.role_id AND effective_position_role.archived_at IS NULL
     WHERE effective_assignment.user_id = ${userId} AND effective_assignment.organization_id = ${organizationId}
+      ${excludedPositionId ? Prisma.sql`AND effective_position.id <> ${excludedPositionId}` : Prisma.empty}
       AND effective_assignment.started_at <= ${now}
       AND (effective_assignment.ended_at IS NULL OR effective_assignment.ended_at > ${now})
       AND effective_actor.status = 'ACTIVE' AND effective_actor.deleted_at IS NULL AND NOT effective_actor.configuration_required

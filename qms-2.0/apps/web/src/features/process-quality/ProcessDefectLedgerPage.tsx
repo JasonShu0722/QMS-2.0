@@ -1,6 +1,6 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Input, Popover, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
-import { Eye, Filter, Trash2, X } from 'lucide-react';
+import { Alert, Button, Checkbox, Descriptions, Drawer, Empty, Input, Space, Spin, Table, Tag, Typography, type TableColumnsType } from 'antd';
+import { Eye, Trash2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, safeAccountError } from '../../api/client';
@@ -9,6 +9,7 @@ import './process-quality.css';
 import { useCompletedSessionNavigation, useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
+import { LedgerFilterHeader, LedgerFilterPanel, LedgerFilterPopover } from '../../ui/ledger/FilterPopover';
 import { RecordList } from '../../ui/list/RecordList';
 import { preferenceKey } from '../../ui/ledger/model';
 import { useLedgerScope, usePreference } from '../../ui/ledger/preferences';
@@ -432,20 +433,13 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   }
   function filterTitle(field: FilterField, label: string) {
     const triggerLabel = english && field === 'factoryCode' ? 'Filter by factory' : `按${label}筛选`;
-    return <span aria-label={label} className="process-quality-filter-title"><span>{label}</span><button type="button" aria-label={triggerLabel} aria-haspopup="dialog" aria-expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === triggerLabel} aria-pressed={appliedFilters.items.some(item => item.field === field) || field === 'occurredAt' && appliedFilters.currentMonth} disabled={locked || !!deletionTargets} onClick={event => { event.stopPropagation(); openFilters(event.currentTarget, field); }}><Filter size={13} aria-hidden="true" /></button></span>;
+    return <LedgerFilterHeader aria-label={label} triggerLabel={triggerLabel} expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === triggerLabel} active={appliedFilters.items.some(item => item.field === field) || field === 'occurredAt' && appliedFilters.currentMonth} disabled={locked || !!deletionTargets} onOpen={anchor => openFilters(anchor, field)} />;
   }
   function updateFilterItem(index: number, next: FilterItem) {
     setDraftFilters(current => ({ ...current, items: current.items.map((item, itemIndex) => itemIndex === index ? next : item) }));
   }
-  const filterPanel = <div role="dialog" className="process-quality-filter-panel" aria-label="筛选面板"
-    onBlur={event => {
-      const next = event.relatedTarget;
-      if (next && next !== filterTrigger.current && next !== filterAnchor.current && !event.currentTarget.contains(next)) {
-        saveAppliedFilters(completeDraft, undefined, false, false);
-      }
-    }}
-    onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); saveAppliedFilters(completeDraft); } }}>
-    <div className="process-quality-filter-heading"><strong>筛选条件</strong><Button type="text" aria-label="关闭筛选" icon={<X size={14} />} onClick={() => saveAppliedFilters(completeDraft)} /></div>
+  const dismissFilters = (restoreFocus: boolean) => saveAppliedFilters(completeDraft, undefined, false, restoreFocus);
+  const filterPanel = <LedgerFilterPanel anchor={filterAnchor} trigger={filterTrigger} label="筛选面板" title="筛选条件" closeLabel="关闭筛选" onDismiss={dismissFilters}>
     <Checkbox checked={draftFilters.currentMonth} onChange={event => setDraftFilters(current => ({ ...current, currentMonth: event.target.checked }))}>仅当前自然月（北京时间）</Checkbox>
     <div className="process-quality-filter-logic"><span>满足条件</span>
       <select ref={filterRow === undefined ? filterControl : undefined} aria-label="筛选逻辑" value={draftFilters.logic} onChange={event => setDraftFilters(current => ({ ...current, logic: event.target.value as FilterLogic }))}><option value="ALL">全部条件</option><option value="ANY">任一条件</option></select>
@@ -465,7 +459,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
       <Button aria-label="清空" onClick={() => setDraftFilters({ currentMonth: false, logic: 'ALL', items: [] })}>清空</Button>
       <Button type="primary" disabled={draftTooLong} onClick={() => saveAppliedFilters(completeDraft)}>应用筛选</Button>
     </Space>
-  </div>;
+  </LedgerFilterPanel>;
   if (accessLost) return <main className="process-quality-page"><Alert type="warning" showIcon title="暂无制程不良访问权限" description="当前会话或权限已变化，已清除来源、选择与草稿；请重新进入。" /></main>;
 
   const columns: TableColumnsType<Defect> = ([
@@ -508,7 +502,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   const toolbar = <div className="process-quality-toolbar-main" role="group" aria-label="台账工具栏">
     <Input.Search aria-label="搜索制程不良" placeholder="搜索追溯码、成品编码、工单、不良描述或批次" value={searchInput} allowClear maxLength={200} disabled={locked || !!deletionTargets} onChange={event => setSearchInput(event.target.value)} onSearch={value => requestLeave(() => saveAppliedFilters(filterOpen ? completeDraft : appliedFilters, value.trim()))} />
     {canRegister ? <Button type="primary" disabled={locked} onClick={() => requestLeave(() => setEditor('new'))}>登记不良</Button> : null}
-    <Popover open={filterOpen} onOpenChange={open => { if (open && filterTrigger.current) openFilters(filterTrigger.current); else if (!open && filterOpen) saveAppliedFilters(completeDraft, undefined, false, false); }} afterOpenChange={open => { if (open) filterControl.current?.focus(); }} content={filterPanel} trigger="click" placement="bottomLeft" align={{ overflow: { shiftX: true } }} destroyOnHidden><Button ref={filterTrigger} aria-label="筛选条件" aria-haspopup="dialog" aria-expanded={filterOpen} disabled={locked || !!deletionTargets} icon={<Filter size={14} />}>筛选条件{appliedFilters.items.length || appliedFilters.currentMonth ? ` ${appliedFilters.items.length + Number(appliedFilters.currentMonth)}` : ''}</Button></Popover>
+    <LedgerFilterPopover open={filterOpen} trigger={filterTrigger} label="筛选条件" count={appliedFilters.items.length + Number(appliedFilters.currentMonth)} disabled={locked || !!deletionTargets} onOpen={openFilters} onDismiss={dismissFilters} onFocus={() => filterControl.current?.focus()}>{filterPanel}</LedgerFilterPopover>
     {canIssue ? <Button aria-label="发起 8D" disabled={locked || filterOpen || !selectedCount || exceedsFormalIssueLimit || !!listError || loading || !!staleSelected.length} onClick={() => requestLeave(() => setFormalOpen(true))}>发起 8D</Button> : null}
     <Button aria-label="刷新" disabled={locked} onClick={() => requestLeave(() => { if (!filterOpen || saveAppliedFilters(completeDraft, undefined, false, false)) setRevision(value => value + 1); })} loading={loading}>刷新</Button>
   </div>;

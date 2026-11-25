@@ -15,9 +15,9 @@ import type { AdminActor, AdminTransaction } from '../../src/common/security/adm
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 import { SupplierSourceCollaborationService } from '../../src/modules/supplier-eight-d-source/supplier-source-collaboration.service.js';
 import { ProcessEightDService } from '../../src/modules/process-quality/process-eight-d.service.js';
+import { ProcessEightDWorkflowConfigurationService } from '../../src/modules/process-quality/process-eight-d-workflow-configuration.service.js';
 import { domainFixture } from '../common/internal-eight-d-domains.fixture.js';
-import { WorkflowDefinitionService } from '../../src/modules/workflow/workflow-definition.service.js';
-import { WorkflowClosureTemplateService } from '../../src/modules/workflow/workflow-closure-template.service.js';
+import type { DomainFixture } from '../common/internal-eight-d-domains.fixture.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 import { SupplierSourceCollaborationReadModel } from '../../src/modules/problem-index/supplier-source-collaboration.read-model.js';
@@ -126,21 +126,31 @@ describe('source SQE collaboration public ports', () => {
     return app.get(SupplierSourceCollaborationService);
   }
 
+  async function configureProcessIssue(fixture: DomainFixture) {
+    const { professional, owner, manager } = fixture;
+    await expect(app.get(ProcessEightDWorkflowConfigurationService).update(professional.actor, { expectedVersion: 0, stages: [
+      { stage: 'ISSUE', positionIds: [professional.position.id] },
+      { stage: 'ANALYSIS', positionIds: [owner.position.id] },
+      { stage: 'IMPLEMENTATION', positionIds: [owner.position.id] },
+      { stage: 'CLOSURE', positionIds: [professional.position.id, manager.position.id] },
+    ] }, randomUUID(), randomUUID())).resolves.toMatchObject({ version: 1, missingStages: [] });
+    const core = app.get(ProcessEightDService);
+    return async (defectId: string, expectedVersion: number, reason?: string) => {
+      const sources = [{ defectId, expectedVersion }];
+      const [preview] = await core.previewSources(professional.actor, { sources });
+      return core.issue(professional.actor, { ...fixture.input([]), sources, processBoardCode: '0',
+        sourceConfirmations: [{ defectId, relatedProblemIds: preview!.relatedProblems.map(problem => problem.problemId),
+          relatedSetToken: preview!.relatedSetToken, recurrence: 'NOT_RECURRENCE', reason }] }, randomUUID(), randomUUID());
+    };
+  }
+
   async function raceFixture(domain: 'process-quality' | 'new-product-quality' = 'process-quality') {
     const f = await domainFixture(app, 'new-product-quality');
     const codes = ['process-quality:materials:review', 'process-quality:issues:issue', 'process-quality:issues:read', 'process-quality:issues:work'];
     const permissions = await db.permission.findMany({ where: { code: { in: codes } } });
     expect(permissions).toHaveLength(codes.length);
     await db.rolePermission.createMany({ data: permissions.map(p => ({ roleId: f.role.id, permissionId: p.id })), skipDuplicates: true });
-    const core = app.get(ProcessEightDService);
-    if (domain === 'process-quality') {
-      const template = await app.get(WorkflowClosureTemplateService).initialize(f.professional.actor,
-        { policy: 'INTERNAL', domainCode: domain, code: randomUUID(), name: 'Collaboration race real process 8D' }, randomUUID(), randomUUID());
-      const published = await app.get(WorkflowDefinitionService).publishVersion({ organizationId: f.org.id, userId: f.professional.user.id,
-        actor: f.professional.actor, definitionId: template.id, expectedRevision: template.revision, draftVersionId: template.version.id });
-      await core.bind(f.professional.actor, { expectedVersion: 0, workflowDefinitionId: template.id, workflowVersionId: published.id }, randomUUID(), randomUUID());
-      await core.activate(f.professional.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
-    }
+    const issueProcess = domain === 'process-quality' ? await configureProcessIssue(f) : undefined;
     const supplier = await db.supplierBusinessProfile.create({ data: { ownerOrganizationId: f.org.id, businessCode: randomUUID(), displayName: 'Race material supplier' } });
     const rows = [];
     for (let i = 0; i < 2; i++) {
@@ -148,13 +158,13 @@ describe('source SQE collaboration public ports', () => {
         materials: [{ materialCode: 'RACE-MATERIAL', supplierProfileId: supplier.id, sqeUserId: f.owner.user.id }] }, randomUUID(), randomUUID());
       let sourceId = row.id;
       let problemId: string;
-      if (domain === 'new-product-quality') {
+      if (!issueProcess) {
         const selection = await f.quality.selectProcessDefect(f.professional.actor, f.project.id,
           { defectId: row.id, expectedVersion: row.version }, randomUUID(), randomUUID());
         sourceId = String(selection.id);
         problemId = await f.issue([{ sourceId, expectedVersion: row.version, factId: row.id }]);
       } else {
-        const issued = await core.issue(f.professional.actor, { ...f.input([]), sources: [{ defectId: row.id, expectedVersion: row.version }] }, randomUUID(), randomUUID());
+        const issued = await issueProcess(row.id, row.version);
         problemId = String(issued.problem.id);
       }
       rows.push({ ...row, sourceId, problemId });
@@ -349,17 +359,8 @@ describe('source SQE collaboration public ports', () => {
       .set('Cookie', `qms_session=${token}`).expect(200);
     expect(http.body.items).toEqual(newProductTask);
 
-    const template = await app.get(WorkflowClosureTemplateService).initialize(f.professional.actor,
-      { policy: 'INTERNAL', domainCode: 'process-quality', code: randomUUID(), name: 'Source collaboration actual process 8D' }, randomUUID(), randomUUID());
-    const published = await app.get(WorkflowDefinitionService).publishVersion({ organizationId: f.org.id, userId: f.professional.user.id,
-      actor: f.professional.actor, definitionId: template.id, expectedRevision: template.revision, draftVersionId: template.version.id });
-    const core = app.get(ProcessEightDService);
-    await core.bind(f.professional.actor, { expectedVersion: 0, workflowDefinitionId: template.id, workflowVersionId: published.id }, randomUUID(), randomUUID());
-    await core.activate(f.professional.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
-    const [preview] = await core.previewSources(f.professional.actor, { sources: [{ defectId: source.factId, expectedVersion: source.expectedVersion }] });
-    const issued = await core.issue(f.professional.actor, { ...f.input([]), sources: [{ defectId: source.factId, expectedVersion: source.expectedVersion }],
-      sourceConfirmations: [{ defectId: source.factId, relatedProblemIds: preview!.relatedProblems.map(p => p.problemId), relatedSetToken: preview!.relatedSetToken,
-        recurrence: 'NOT_RECURRENCE', reason: 'Actual process copy of an independent formal issue' }] }, randomUUID(), randomUUID());
+    const issueProcess = await configureProcessIssue(f);
+    const issued = await issueProcess(source.factId, source.expectedVersion, 'Actual process copy of an independent formal issue');
     expect((await service.tasks(f.owner.actor)).items).toHaveLength(1);
     expect(await db.processDefect.findUniqueOrThrow({ where: { id: source.factId } })).toEqual(before);
     for (const verification of ['CONFIRMED_DEFECT', 'NOT_MATERIAL', 'NEGOTIATED', 'RETURN_ANALYSIS']) {

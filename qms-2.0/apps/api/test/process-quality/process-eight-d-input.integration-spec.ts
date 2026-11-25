@@ -107,6 +107,7 @@ describe('process 8D assignment options (no database)', () => {
     const user = { id: randomUUID(), username: 'worker', fullName: 'Worker' };
     const service = Object.assign(Object.create(ProcessEightDService.prototype), {
       transaction: async (work: (tx: unknown) => unknown) => work({ $queryRaw: async (query: Prisma.Sql) => { queries.push(query); return [{ users: [{ ...user, email: 'not-public', sessionId: 'not-public' }], userTotal: 1 }]; } }),
+      stagePositions: async () => ({ ANALYSIS: [randomUUID()], IMPLEMENTATION: [randomUUID()] }),
       authorize: async (_tx: unknown, _actor: unknown, permission: string) => { permissions.push(permission); },
       responsibilities: { workflowDepartmentOptions: async (...args: unknown[]) => { departmentCalls.push(args); return { items: [{ id: randomUUID(), code: 'SEC', name: 'Section' }], total: 1 }; } },
     }) as ProcessEightDService & { assignmentOptions: (actor: unknown, query: unknown) => Promise<{ users: unknown[]; userTotal: number; page: number; pageSize: number }> };
@@ -241,13 +242,14 @@ describe('process 8D issue owner post-source boundary (no database)', () => {
   it.each(['ASSIGNMENT', 'WORK', 'VALID'] as const)('revalidates the locked owner after source resolution and before runtime binding (%s)', async state => {
     const events: string[] = [], actor = { id: randomUUID(), organizationId: randomUUID(), accountType: 'INTERNAL', sessionId: randomUUID() };
     const ownerUserId = randomUUID(), defectId = randomUUID(), responsibleSectionDepartmentId = randomUUID();
-    const bound = { enabled: true, workflowDefinitionId: randomUUID(), workflowVersionId: randomUUID() };
+    const bound = { workflowDefinitionId: randomUUID(), workflowVersionId: randomUUID() };
     let afterSource = false;
     const tx = { $executeRaw: async () => 1 };
     const service = Object.assign(Object.create(ProcessEightDService.prototype), {
       prisma: { outboxEvent: { findUnique: async () => null } }, transaction: async (work: (tx: unknown) => unknown) => work(tx),
       ledger: { sourceReference: async () => ({ sourceDomain: 'process-quality', sourceType: 'process-defect', sourceId: defectId, sourceVersion: 1 }) },
-      authorize: async () => {}, readBinding: async () => bound, validateFlow: async () => {},
+      authorize: async () => {}, workflowConfiguration: { assertCanIssue: async () => bound }, validateFlow: async () => {},
+      stagePositions: async () => ({}), assertQualifiedStages: async () => {},
       lockUsers: async (_tx: unknown, _org: string, ids: string[]) => { expect(ids).toContain(ownerUserId); events.push('lock owner'); },
       assertOwnerAssignment: async () => { events.push(afterSource ? 'late assignment' : 'early assignment');
         if (afterSource && state === 'ASSIGNMENT') throw Object.assign(new Error('expired'), { status: 403 }); },
@@ -258,7 +260,8 @@ describe('process 8D issue owner post-source boundary (no database)', () => {
       } },
       runtime: { startInstance: async () => { events.push('runtime'); return {}; } }, confirmations: async () => {}, audit: { record: async () => {} },
     }) as ProcessEightDService;
-    const result = service.issue(actor as never, { sources: [{ defectId, expectedVersion: 1 }], ownerUserId, responsibleSectionDepartmentId, severity: 'LOW' }, randomUUID(), randomUUID());
+    const result = service.issue(actor as never, { sources: [{ defectId, expectedVersion: 1 }], ownerUserId, responsibleSectionDepartmentId, severity: 'LOW', processBoardCode: '0', issueTitle: 'Mock boundary',
+      sourceConfirmations: [{ defectId, relatedProblemIds: [], recurrence: 'NOT_RECURRENCE' }] }, randomUUID(), randomUUID());
     if (state === 'VALID') { await result; expect(events.slice(-5)).toEqual(['source resolved', 'lock owner', 'late assignment', 'late work', 'runtime']); }
     else { await expect(result).rejects.toMatchObject({ status: 403 }); expect(events).not.toContain('runtime'); }
   });

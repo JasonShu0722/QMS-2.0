@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { PrismaService } from '../../database/prisma.service.js';
@@ -31,6 +32,19 @@ export class WorkflowClosureTemplateService {
       permission: 'workflow:manage', traceId, isolationLevel: 'ReadCommitted' }, tx => this.definitions.createDraft({
       actor, organizationId: actor.organizationId, userId: actor.id, traceId, code: body.code, name: body.name, draft: this.graph(body),
     }, tx), tx => this.authorize(tx, actor));
+  }
+
+  async publishManagedProcessEightD(tx: Prisma.TransactionClient, actor: WorkflowActor, traceId: string): Promise<string> {
+    const context = { organizationId: actor.organizationId, userId: actor.id, actor, traceId };
+    const template = { policy: 'INTERNAL', domainCode: 'process-quality', code: `managed-process-eight-d-${randomUUID()}`, name: '制程内部 8D' } as const;
+    const draft = await this.definitions.createDraft({ ...context, ...template, draft: this.graph(template) }, tx);
+    const published = await this.definitions.publishDefinition({ ...context, definitionId: draft.id, expectedRevision: draft.revision,
+      draftVersionId: draft.version.id }, tx);
+    return published.version.id;
+  }
+
+  async publishedVersionBinding(tx: Prisma.TransactionClient, organizationId: string, workflowVersionId: string) {
+    return tx.workflowVersion.findFirst({ where: { organizationId, id: workflowVersionId, status: 'PUBLISHED' }, select: { workflowDefinitionId: true } });
   }
 
   private async authorize(tx: Prisma.TransactionClient, actor: WorkflowActor): Promise<void> {

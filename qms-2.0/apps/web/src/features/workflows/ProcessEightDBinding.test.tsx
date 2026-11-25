@@ -17,9 +17,9 @@ vi.mock('../../console/ConsoleLayout', () => ({ useConsoleContext: () => ({ cont
   modules: [{ key: 'workflows', organizationId: 'org', scope: 'SESSION_HOME', coverage: 'ORGANIZATION', permissions: ['workflow:manage'] }],
 } }) }));
 vi.mock('./workflow-api', async original => ({ ...await original<typeof api>(), getWorkflows: vi.fn(), getWorkflow: vi.fn(), getWorkflowVersion: vi.fn() }));
-const binding: components['schemas']['ProcessEightDBindingResultDto'] = { organizationId: 'org', workflowDefinitionId: 'definition', workflowVersionId: 'published', enabled: false, version: 4 };
+const binding: components['schemas']['CustomerEightDBindingResultDto'] = { organizationId: 'org', workflowDefinitionId: 'definition', workflowVersionId: 'published', enabled: false, version: 4 };
 const version = { id: 'draft', workflowDefinitionId: 'definition', version: 2, status: 'DRAFT' as const, publishedAt: null, publishedById: null, changeNote: null };
-const head = { id: 'definition', organizationId: 'org', code: '8D', name: '过程8D流程', description: null, revision: 7 };
+const head = { id: 'definition', organizationId: 'org', code: '8D', name: '内部8D流程', description: null, revision: 7 };
 const publishedWorkflow = (domainCode: string): components['schemas']['WorkflowDefinitionResponseDto'] => ({ ...head, version: { ...version, id: 'published', version: 1, status: 'PUBLISHED', structureSnapshot: { nodes: [
   { id: 'owner', name: '负责人', type: 'ACTION', config: { isStart: true, processEightD: { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null } } },
   { id: 'review', name: '关闭审核', type: 'APPROVAL', config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode } } },
@@ -29,7 +29,7 @@ beforeEach(() => {
   vi.mocked(csrfToken).mockResolvedValue('csrf');
   vi.mocked(api.getWorkflows).mockResolvedValue({ items: [{ ...head, version, draftVersionId: 'draft' }], total: 1 });
   vi.mocked(api.getWorkflow).mockResolvedValue({ ...head, versions: [version, { ...version, id: 'published', version: 1, status: 'PUBLISHED' }] });
-  vi.mocked(api.getWorkflowVersion).mockResolvedValue(publishedWorkflow('process-quality'));
+  vi.mocked(api.getWorkflowVersion).mockResolvedValue(publishedWorkflow('customer-quality'));
   vi.mocked(apiRequest).mockImplementation(async (path, init) => {
     if (path.includes('my-permissions')) return { organizationId: 'org', permissions: ['workflow:manage', 'configuration:read', 'configuration:manage'] };
     if (init?.method === 'PUT') return { ...binding, version: 5 };
@@ -38,16 +38,25 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 const mount = () => render(<MemoryRouter initialEntries={['/console/eight-d-bindings']}><LanguageProvider><UnsavedChangesProvider><ConsoleEightDBindingsPage /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
+it('defaults to customer and excludes process quality from legacy binding', async () => {
+  mount();
+  const selector = screen.getByLabelText<HTMLSelectElement>('8D绑定领域');
+  await waitFor(() => expect(selector).toBeEnabled());
+  expect(selector).toHaveValue('customer-quality');
+  expect(Array.from(selector.options, option => option.value)).toEqual(['customer-quality', 'new-product-quality']);
+  expect(screen.queryByRole('heading', { name: '过程8D流程绑定与启用' })).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.startsWith('/api/v1/process-quality/eight-d/'))).toBe(false);
+});
 it('loads persisted binding and real published history, binding does not activate or publish a draft', async () => {
   mount();
-  expect(await screen.findByRole('heading', { name: '过程8D流程绑定与启用' })).toBeVisible();
+  expect(await screen.findByRole('heading', { name: '客户8D流程绑定与启用' })).toBeVisible();
   await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('published'));
   expect(Array.from((screen.getByLabelText('8D已发布流程版本') as HTMLSelectElement).options).map(item => item.value)).not.toContain('draft');
   fireEvent.click(screen.getByRole('button', { name: '保存8D绑定' }));
-  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/process-quality/eight-d/binding', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ organizationId: 'org', expectedVersion: 4, workflowDefinitionId: 'definition', workflowVersionId: 'published' }) }), { replayAfterReauthentication: false }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/eight-d/binding', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ organizationId: 'org', expectedVersion: 4, workflowDefinitionId: 'definition', workflowVersionId: 'published' }) }), { replayAfterReauthentication: false }));
   expect(vi.mocked(apiRequest).mock.calls.filter(([path, init]) => path.endsWith('/activation') && init?.method === 'PUT')).toHaveLength(0);
-  fireEvent.click(screen.getByRole('button', { name: '启用过程8D' }));
-  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/process-quality/eight-d/activation', expect.objectContaining({ body: JSON.stringify({ organizationId: 'org', expectedVersion: 5, enabled: true }) }), { replayAfterReauthentication: false }));
+  fireEvent.click(screen.getByRole('button', { name: '启用客户8D' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/eight-d/activation', expect.objectContaining({ body: JSON.stringify({ organizationId: 'org', expectedVersion: 5, enabled: true }) }), { replayAfterReauthentication: false }));
 });
 it('shows a configuration load failure without inventing workflow IDs or enabling writes', async () => {
   vi.mocked(apiRequest).mockImplementation(async path => {
@@ -56,7 +65,7 @@ it('shows a configuration load failure without inventing workflow IDs or enablin
   });
   mount(); expect(await screen.findByText('无法加载8D绑定配置，请重试。')).toBeVisible();
   expect(screen.getByRole('button', { name: '保存8D绑定' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: '启用过程8D' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '启用客户8D' })).toBeDisabled();
 });
 it('does not attempt configuration reads without the old session permission', async () => {
   vi.mocked(apiRequest).mockResolvedValue({ organizationId: 'org', permissions: ['workflow:manage'] });
@@ -94,7 +103,7 @@ it('completes binding 401 navigation past its busy guard and a parent dirty draf
     if (init?.method === 'PUT') throw new ApiError({ code: 'AUTH_SESSION_REQUIRED', message: 'unsafe' }, 401);
     return read(path, init);
   });
-  function Page() { useUnsavedChanges(true); return <ProcessEightDBinding />; }
+  function Page() { useUnsavedChanges(true); return <ProcessEightDBinding domain="customer-quality" />; }
   const router = createMemoryRouter([
     { path: '/console/eight-d-bindings', element: <LanguageProvider><UnsavedChangesProvider><Page /></UnsavedChangesProvider></LanguageProvider> },
     { path: '/login', element: <p>8D配置登录目的页</p> },
@@ -111,22 +120,23 @@ it('requires configuration manage in the old session even if workflow manage is 
   vi.mocked(apiRequest).mockImplementation(async path => path.includes('my-permissions') ? { organizationId: 'org', permissions: ['workflow:manage', 'configuration:read'] } : binding);
   mount(); await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('published'));
   expect(screen.getByRole('button', { name: '保存8D绑定' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: '启用过程8D' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '启用客户8D' })).toBeDisabled();
 });
 it('shows an absent binding explicitly and only creates one using a selected real published version', async () => {
   const read = vi.mocked(apiRequest).getMockImplementation()!;
   vi.mocked(apiRequest).mockImplementation(async (path, init) => path.includes('/eight-d/binding') && !init?.method ? null : read(path, init));
   mount(); expect(await screen.findByText('当前组织尚未绑定8D流程，请选择真实已发布版本后保存。')).toBeVisible();
-  expect(screen.getByRole('button', { name: '启用过程8D' })).toBeDisabled();
+  expect(screen.getByRole('button', { name: '启用客户8D' })).toBeDisabled();
   fireEvent.change(screen.getByLabelText('8D已发布流程版本'), { target: { value: 'published' } });
   fireEvent.click(screen.getByRole('button', { name: '保存8D绑定' }));
-  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/process-quality/eight-d/binding', expect.objectContaining({ body: JSON.stringify({ organizationId: 'org', expectedVersion: 0, workflowDefinitionId: 'definition', workflowVersionId: 'published' }) }), { replayAfterReauthentication: false }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/customer-quality/eight-d/binding', expect.objectContaining({ body: JSON.stringify({ organizationId: 'org', expectedVersion: 0, workflowDefinitionId: 'definition', workflowVersionId: 'published' }) }), { replayAfterReauthentication: false }));
 });
 it('aborts an old organization write while obtaining CSRF', async () => {
   let finish!: (value: string) => void;
   vi.mocked(csrfToken).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   mount(); await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('published'));
   fireEvent.click(screen.getByRole('button', { name: '保存8D绑定' }));
+  await waitFor(() => expect(csrfToken).toHaveBeenCalled());
   act(() => useWorkTabsStore.getState().bindSession('INTERNAL:user:other'));
   await act(async () => finish('csrf'));
   expect(vi.mocked(apiRequest).mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
@@ -173,7 +183,7 @@ it.each([{ stage: 'CSRF', status: 429 }, { stage: 'PUT', status: 400 }, { stage:
     }
     return read(path, init);
   });
-  render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><ProcessEightDBinding /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
+  render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><ProcessEightDBinding domain="customer-quality" /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('published'));
   fireEvent.click(screen.getByRole('button', { name: '保存8D绑定' }));
   await screen.findByText('配置写入结果未确认，输入已冻结，只能重试原请求。');
@@ -202,7 +212,7 @@ it.each([400, 422, 429])('keeps binding editable after initial explicit %s rejec
     if (init?.method === 'PUT') throw new ApiError({ code: `HTTP_${status}`, message: 'refused' }, status);
     return read(path, init);
   });
-  render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><ProcessEightDBinding /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
+  render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><ProcessEightDBinding domain="customer-quality" /></UnsavedChangesProvider></LanguageProvider></MemoryRouter>);
   await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('published'));
   await act(async () => { fireEvent.click(screen.getByRole('button', { name: '保存8D绑定' })); });
   expect(screen.getByLabelText('8D已发布流程版本')).toBeEnabled();
@@ -233,7 +243,7 @@ it.each([
   expect(vi.mocked(api.getWorkflowVersion).mock.calls.every(([, id]) => id === 'published')).toBe(true);
 });
 
-it.each(['process-quality', 'customer-quality', 'new-product-quality'] as const)('filters published INTERNAL candidates by %s instead of trusting arbitrary source domains', async domain => {
+it.each(['customer-quality', 'new-product-quality'] as const)('filters published INTERNAL candidates by %s instead of trusting arbitrary source domains', async domain => {
   const variants = ['matching', 'other-domain', 'supplier', 'no-review', 'foreign-org', 'mixed-domains', 'retired'];
   vi.mocked(api.getWorkflow).mockResolvedValue({ ...head, versions: [...variants.map(id => ({ ...version, id, status: 'PUBLISHED' as const })), version] });
   vi.mocked(api.getWorkflowVersion).mockImplementation(async (_, id) => {
@@ -258,17 +268,21 @@ it.each(['process-quality', 'customer-quality', 'new-product-quality'] as const)
 it('protects a dirty domain change and resets the binding scope only after explicit discard', async () => {
   mount(); await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toBeEnabled());
   fireEvent.change(screen.getByLabelText('8D已发布流程版本'), { target: { value: '' } });
-  fireEvent.change(screen.getByLabelText('8D绑定领域'), { target: { value: 'customer-quality' } });
+  fireEvent.change(screen.getByLabelText('8D绑定领域'), { target: { value: 'new-product-quality' } });
   const keep = await screen.findByRole('button', { name: '继续编辑' });
   await waitFor(() => expect(keep).toBeVisible()); fireEvent.click(keep);
-  expect(screen.getByLabelText('8D绑定领域')).toHaveValue('process-quality');
+  expect(screen.getByLabelText('8D绑定领域')).toHaveValue('customer-quality');
   expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('');
-  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.includes('/customer-quality/'))).toBe(false);
-  fireEvent.change(screen.getByLabelText('8D绑定领域'), { target: { value: 'customer-quality' } });
+  const nextBinding = '/api/v1/new-product-quality/eight-d/binding?organizationId=org';
+  expect(apiRequest).not.toHaveBeenCalledWith(nextBinding, expect.anything());
+  vi.mocked(api.getWorkflowVersion).mockResolvedValue(publishedWorkflow('new-product-quality'));
+  fireEvent.change(screen.getByLabelText('8D绑定领域'), { target: { value: 'new-product-quality' } });
   const discard = await screen.findByRole('button', { name: '放弃修改' });
   await waitFor(() => expect(discard).toBeVisible()); fireEvent.click(discard);
-  expect(await screen.findByRole('heading', { name: '客户8D流程绑定与启用' })).toBeVisible();
-  await waitFor(() => expect(screen.getByLabelText('8D绑定领域')).toBeEnabled());
+  expect(await screen.findByRole('heading', { name: '新品8D流程绑定与启用' })).toBeVisible();
+  await waitFor(() => expect(screen.getByLabelText('8D已发布流程版本')).toHaveValue('published'));
+  expect(screen.getByLabelText('8D绑定领域')).toHaveValue('new-product-quality');
+  expect(apiRequest).toHaveBeenCalledWith(nextBinding, expect.objectContaining({ signal: expect.any(AbortSignal) }));
   expect(screen.getAllByRole('heading', { level: 3, name: /^(过程|客户|新品)8D流程绑定与启用$/ })).toHaveLength(1);
   expect(screen.getByRole('heading', { level: 3, name: '供应商8D流程绑定与启用' })).toBeVisible();
 });

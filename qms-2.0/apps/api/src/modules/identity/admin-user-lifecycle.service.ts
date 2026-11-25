@@ -134,11 +134,16 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
           : { organizationId: impact.organizationId, positionId: { in: impact.positionIds } }),
       }, data: { endedAt: now } });
       const missingOrganization = impact.kind === 'ORGANIZATION' && impact.organizationIds.includes(user.organizationId);
-      const missingDepartment = impact.kind === 'DEPARTMENT' && (impact.unavailableUserIds !== undefined
+      const missingAppointment = (impact.kind === 'DEPARTMENT' || impact.kind === 'POSITION') && (impact.unavailableUserIds !== undefined
         ? impact.unavailableUserIds.includes(user.id)
         : ended.count > 0 && !await tx.userPosition.count({ where: { userId: user.id, ...effectivePositionAssignmentWhere(now) } }));
-      const pending = missingOrganization || missingDepartment;
+      const pending = missingOrganization || missingAppointment;
       if (pending) pendingConfiguration++;
+      if (impact.kind === 'POSITION' && !pending) {
+        await tx.user.update({ where: { id: user.id }, data: { securityVersion: { increment: 1 } } });
+        await tx.session.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: now } });
+        continue;
+      }
       await tx.user.update({ where: { id: user.id }, data: {
         securityVersion: { increment: 1 }, credentialVersion: { increment: 1 },
         ...(purpose === 'DELETE' ? { mfaEnabled: false, mfaFailures: 0, mfaBlockedUntil: null } : {}),

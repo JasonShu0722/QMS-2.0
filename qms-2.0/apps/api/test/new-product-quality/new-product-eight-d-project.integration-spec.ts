@@ -92,6 +92,7 @@ describe('new-product internal 8D project gates on PostgreSQL', () => {
 
   it('deduplicates two selections by problemId, keeps legacy item IDs separate and gates an open 8D handover', async () => {
     const f = await fixture(), problemId = await f.issue();
+    expect((await runtime.core.read(f.owner.actor, problemId)).allowedActions).toContain('reassign');
     const list = await quality.issueListForProject(f.actor, f.project.id);
     expect(list).toMatchObject({ items: [], internalEightDIssues: [{ problemId, selectionIds: expect.arrayContaining([f.first.id, f.second.id]) }], stats: { total: 1, in_progress: 1 } });
     expect((await quality.projectDetail(f.actor, f.project.id)).issues).toEqual(list);

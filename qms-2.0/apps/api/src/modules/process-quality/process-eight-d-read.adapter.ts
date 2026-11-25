@@ -1,15 +1,16 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
+import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import { Prisma, type ProblemIndex, type WorkflowInstance } from '../../generated/prisma/client.js';
 import type { DomainSourceResponseForm } from '../problem-index/domain-source-issue.service.js';
 import { DomainProblemReadAdapter } from '../problem-index/domain-problem-read.adapter.js';
 import { ProblemDomainRegistry, type ProblemDomainReadAdapter, type ProblemDomainReadContext, type ProblemDomainSummary } from '../problem-index/problem-domain-registry.js';
 import { internalEightDSections } from '../../common/eight-d/internal-eight-d-sections.js';
 export { internalEightDSections } from '../../common/eight-d/internal-eight-d-sections.js';
-import type { WorkflowActor } from '../workflow/workflow-access-policy.js';
-import { jsonObject } from '../workflow/workflow-runtime-policy.js';
+import { assertWorkflowFeature, type WorkflowActor } from '../workflow/workflow-access-policy.js';
+import { jsonObject, workflowError } from '../workflow/workflow-runtime-policy.js';
 import { documentFileIds, normalizeProcessEightDDocument } from './process-eight-d-document.js';
 import { ProcessEightDService } from './process-eight-d.service.js';
-import { readProcessEightDFollowupSummaries } from './process-eight-d-followup.read-model.js';
+import { processEightDFollowupSql, readProcessEightDFollowupSummaries } from './process-eight-d-followup.read-model.js';
 import type { ProcessEightDRecord } from './process-eight-d.types.js';
 
 @Injectable()
@@ -24,6 +25,14 @@ export class ProcessEightDReadAdapter implements ProblemDomainReadAdapter, OnMod
   responseFormPredicate(form: DomainSourceResponseForm): Prisma.Sql {
     const exists = Prisma.sql`EXISTS (SELECT 1 FROM process_eight_d_reports eight_d WHERE eight_d.organization_id = p.organization_id AND eight_d.problem_id = p.id)`;
     return form === 'EIGHT_D' ? exists : Prisma.sql`NOT ${exists}`;
+  }
+
+  followupSql(actor: WorkflowActor, organizationId: string) {
+    return { ...processEightDFollowupSql(), authorize: async (tx: Prisma.TransactionClient) => {
+      if (actor.accountType !== 'INTERNAL' || (await tx.organization.findUnique({ where: { id: actor.organizationId }, select: { type: true } }))?.type !== 'INTERNAL'
+        || organizationId !== actor.organizationId && !await hasPlatformAdministrator(tx, actor.id)) workflowError('ORGANIZATION_SCOPE_DENIED', 403);
+      await assertWorkflowFeature(tx, actor, organizationId, 'process-quality:issues:read');
+    } };
   }
 
   async authorizeRead(tx: Prisma.TransactionClient, context: ProblemDomainReadContext) {

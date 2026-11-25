@@ -44,6 +44,20 @@ export class OrganizationForceDeleteController {
     return this.commands.forceDeleteDepartment(this.actor(request), organizationId, departmentId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
+  @Get(':organizationId/positions/:positionId/force-delete')
+  @ApiOkResponse({ type: OrganizationForceDeletePreviewDto })
+  previewPosition(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('positionId', ParseUUIDPipe) positionId: string, @Req() request: Request) {
+    return this.commands.previewPosition(this.actor(request), organizationId.toLowerCase(), positionId.toLowerCase());
+  }
+
+  @Post(':organizationId/positions/:positionId/force-delete')
+  @ApiCreatedResponse({ type: OrganizationForceDeleteResultDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  deletePosition(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('positionId', ParseUUIDPipe) positionId: string, @Body() dto: OrganizationForceDeleteDto, @Req() request: Request) {
+    return this.commands.forceDeletePosition(this.actor(request), organizationId.toLowerCase(), positionId.toLowerCase(), dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
+
   private actor(request: Request) {
     const session = (request as AuthorizedRequest)[AUTHENTICATED_SESSION];
     if (!session) adminError('AUTH_SESSION_REQUIRED', 401);

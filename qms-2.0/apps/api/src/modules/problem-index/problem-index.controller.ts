@@ -5,7 +5,7 @@ import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { ProblemQueryService } from './problem-query.service.js';
-import { ProblemIndexPageResponseDto, ProblemIndexQueryDto, ProblemIndexResponseDto } from './problem-index.dto.js';
+import { ProblemIndexPageResponseDto, ProblemIndexQueryDto, ProblemIndexResponseDto, ProcessFollowupPageResponseDto, ProcessFollowupQueryDto } from './problem-index.dto.js';
 import { ProblemWorkspaceService } from './problem-workspace.service.js';
 import { ProblemWorkspaceDto, ProblemWorkspaceQueryDto } from './problem-workspace.dto.js';
 
@@ -22,6 +22,14 @@ export class ProblemIndexController {
   list(@Query() query: ProblemIndexQueryDto, @Req() request: Request) {
     const authorized = request as AuthorizedRequest;
     return this.problems.list({ ...authorized[AUTHENTICATED_SESSION]!.user, sessionId: authorized[AUTHENTICATED_SESSION]!.id }, { ...query, organizationId: authorized.authorizedOrganizationId! });
+  }
+
+  @Get('process-followup')
+  @ApiOkResponse({ type: ProcessFollowupPageResponseDto })
+  @ApiQuery({ name: 'organizationId', required: false, type: String })
+  processFollowup(@Query() query: ProcessFollowupQueryDto, @Req() request: Request) {
+    const authorized = request as AuthorizedRequest;
+    return this.problems.listProcessFollowup({ ...authorized[AUTHENTICATED_SESSION]!.user, sessionId: authorized[AUTHENTICATED_SESSION]!.id }, { ...query, organizationId: authorized.authorizedOrganizationId! });
   }
 
   @Get(':id')

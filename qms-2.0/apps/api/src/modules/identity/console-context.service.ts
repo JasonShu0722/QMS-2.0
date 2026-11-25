@@ -11,7 +11,7 @@ const modulePermissions: Partial<Record<ConsoleModuleDto['key'], string[]>> = {
   'api-ingestion': INGESTION_PERMISSIONS,
   'api-integrations': INTEGRATION_PERMISSIONS,
   users: [...ADMIN_PERMISSIONS.filter(code => code.startsWith('account:users:')), 'account:users:delete'],
-  organizations: [...ADMIN_PERMISSIONS.filter(code => code.startsWith('organization:') || code.startsWith('account:roles:')), 'organization:read', 'organization:force-delete', 'organization:departments:force-delete'],
+  organizations: [...ADMIN_PERMISSIONS.filter(code => code.startsWith('organization:') || code.startsWith('account:roles:')), 'organization:read', 'organization:force-delete', 'organization:departments:force-delete', 'organization:positions:force-delete'],
   'master-data': [...masterMaintenance, 'material-master:read', 'component-project:read', 'customer-quality:complaints:read', 'supplier-quality:profiles:read', ...PROCESS_CONFIGURATION_PERMISSIONS],
   configuration: ['configuration:read', 'configuration:manage'],
   'ai-connections': AI_CONFIGURATION_PERMISSIONS.filter(code => code.startsWith('ai:connections:') || code === 'ai:credentials:manage'),

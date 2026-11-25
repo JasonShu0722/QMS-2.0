@@ -5,6 +5,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 const DEFAULT_PATTERN = '{CODE}-{YYMM}-{SEQ3}';
 const MAX_SEQUENCE = 999n;
 const CODE_PATTERN = /^[A-Z][A-Z0-9_-]{0,63}$/;
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 interface NumberRuleVersion {
   id: string;
@@ -35,6 +36,13 @@ export interface AllocateReportNumberInput {
   ruleCode: string;
   classificationCode: string;
   ruleVersionId?: string;
+  at?: Date;
+  createdById?: string;
+}
+
+export interface AllocateProcessEightDReportNumberInput {
+  organizationId: string;
+  boardCode: '0' | '1';
   at?: Date;
   createdById?: string;
 }
@@ -92,8 +100,7 @@ export class NumberingService {
   ): Promise<AllocatedReportNumber> {
     this.assertCode(input.ruleCode, 'NUMBER_RULE_CODE_INVALID');
     this.assertCode(input.classificationCode, 'NUMBER_CLASSIFICATION_INVALID');
-    const at = input.at ?? new Date();
-    const period = `${String(at.getUTCFullYear()).slice(-2)}${String(at.getUTCMonth() + 1).padStart(2, '0')}`;
+    const period = this.formatPeriod(input.at ?? new Date());
     const rule = input.ruleVersionId
       ? await tx.numberRuleVersion.findFirst({
         where: {
@@ -109,8 +116,37 @@ export class NumberingService {
       });
     if (!rule) throw new Error('NUMBER_RULE_NOT_FOUND');
     this.assertPattern(rule.pattern);
+    const sequence = await this.allocateSequence(tx, input, `${input.classificationCode}:${period}`);
+    return {
+      reportNumber: this.render(rule.pattern, input.classificationCode, period, sequence),
+      ruleVersionId: rule.id,
+      ruleVersion: rule.version,
+      sequence,
+    };
+  }
 
-    const scopeKey = `${input.classificationCode}:${period}`;
+  async allocateProcessEightDReportNumber(
+    tx: Pick<NumberingClient, '$queryRaw'>,
+    { organizationId, boardCode, at = new Date(), createdById }: AllocateProcessEightDReportNumberInput,
+  ): Promise<{ reportNumber: string; sequence: number }> {
+    if (boardCode !== '0' && boardCode !== '1') throw new Error('NUMBER_CLASSIFICATION_INVALID');
+    const period = this.formatPeriod(new Date(at.getTime() + BEIJING_OFFSET_MS));
+    const sequence = await this.allocateSequence(tx, { organizationId, ruleCode: 'PROCESS_EIGHT_D', createdById }, period);
+    return {
+      reportNumber: this.render(DEFAULT_PATTERN, `ZX8D-PQ${boardCode}`, period, sequence),
+      sequence,
+    };
+  }
+
+  assertImmutable(original: string, candidate: string): void {
+    if (original !== candidate) throw new Error('NUMBER_IMMUTABLE');
+  }
+
+  private async allocateSequence(
+    tx: Pick<NumberingClient, '$queryRaw'>,
+    input: Pick<AllocateReportNumberInput, 'organizationId' | 'ruleCode' | 'createdById'>,
+    scopeKey: string,
+  ): Promise<number> {
     const rows = await tx.$queryRaw<Array<{ allocated: bigint }>>`
       INSERT INTO number_sequences
         (id, organization_id, rule_code, scope_key, next_value, version, created_by_id, updated_by_id, created_at, updated_at)
@@ -130,17 +166,11 @@ export class NumberingService {
     if (!Number.isSafeInteger(sequence) || sequence < 1 || sequence > Number(MAX_SEQUENCE)) {
       throw new Error('NUMBER_SEQUENCE_EXHAUSTED');
     }
-    const reportNumber = this.render(rule.pattern, input.classificationCode, period, sequence);
-    return {
-      reportNumber,
-      ruleVersionId: rule.id,
-      ruleVersion: rule.version,
-      sequence,
-    };
+    return sequence;
   }
 
-  assertImmutable(original: string, candidate: string): void {
-    if (original !== candidate) throw new Error('NUMBER_IMMUTABLE');
+  private formatPeriod(at: Date): string {
+    return `${String(at.getUTCFullYear()).slice(-2)}${String(at.getUTCMonth() + 1).padStart(2, '0')}`;
   }
 
   private assertCode(value: string, code: string): void {

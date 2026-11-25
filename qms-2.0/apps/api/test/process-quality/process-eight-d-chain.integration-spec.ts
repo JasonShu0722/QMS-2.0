@@ -8,13 +8,11 @@ import { PrismaService } from '../../src/database/prisma.service.js';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { NumberingService } from '../../src/modules/problem-index/numbering.service.js';
-import { WorkflowDefinitionService } from '../../src/modules/workflow/workflow-definition.service.js';
-import { WorkflowClosureTemplateService } from '../../src/modules/workflow/workflow-closure-template.service.js';
 import { WorkflowClosureRoundService } from '../../src/modules/workflow/workflow-closure-round.service.js';
 import { FileScanWorkerService } from '../../src/modules/file-management/file-scan-worker.service.js';
 import { FileVerificationService } from '../../src/modules/file-management/file-verification.service.js';
 import { AuditLogService } from '../../src/modules/audit-log/audit-log.service.js';
-import { ProcessEightDService } from '../../src/modules/process-quality/process-eight-d.service.js';
+import { ProcessEightDWorkflowConfigurationService } from '../../src/modules/process-quality/process-eight-d-workflow-configuration.service.js';
 import { emptyProcessEightDDocument } from '../../src/modules/process-quality/process-eight-d-document.js';
 import { createWorkflowClosureFixture } from '../workflow/workflow-closure-round.fixture.js';
 import { requireDisposableProcessEightDDatabase } from './process-eight-d-task.fixture.js';
@@ -22,7 +20,7 @@ import { png } from './process-eight-d-pdf.fixture.js';
 
 requireDisposableProcessEightDDatabase();
 
-describe('complete process 8D HTTP chain with actual versioned storage and ClamAV', () => {
+describe('complete managed process 8D HTTP chain with actual versioned storage and ClamAV', () => {
   let app: INestApplication;
   beforeAll(async () => {
     app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
@@ -31,6 +29,17 @@ describe('complete process 8D HTTP chain with actual versioned storage and ClamA
     await app.init();
   }, 120_000);
   afterAll(async () => { await app?.close(); });
+
+  async function configureWorkflow(fixture: Awaited<ReturnType<typeof createWorkflowClosureFixture>>, additionalWorkPositions: string[] = []) {
+    const { professional, owner, manager, minister } = fixture;
+    const work = [owner.position.id, manager.position.id, minister.position.id, ...additionalWorkPositions];
+    return app.get(ProcessEightDWorkflowConfigurationService).update(professional.actor, { expectedVersion: 0, stages: [
+      { stage: 'ISSUE', positionIds: [professional.position.id] },
+      { stage: 'ANALYSIS', positionIds: work },
+      { stage: 'IMPLEMENTATION', positionIds: work },
+      { stage: 'CLOSURE', positionIds: [professional.position.id, manager.position.id, minister.position.id] },
+    ] }, randomUUID(), randomUUID());
+  }
 
   it('registers, issues, scans, submits, joins actual reviews and exports the immutable approved PDF', async () => {
     const prisma = app.get(PrismaService);
@@ -55,23 +64,17 @@ describe('complete process 8D HTTP chain with actual versioned storage and ClamA
     const unconfigured = await get(issuerCookie, 'process-quality/eight-d/binding').expect(200).expect('content-type', /application\/json/);
     expect(unconfigured.text).toBe('null');
     await app.get(NumberingService).publishRuleVersion({ organizationId: f.org.id, ruleCode: 'PROBLEM', pattern: '{CODE}-{YYMM}-{SEQ3}' });
-    const template = await app.get(WorkflowClosureTemplateService).initialize(f.professional.actor,
-      { policy: 'INTERNAL', domainCode: 'process-quality', code: randomUUID(), name: 'Actual process chain' }, randomUUID(), randomUUID());
-    const published = await app.get(WorkflowDefinitionService).publishVersion({ organizationId: f.org.id, userId: f.professional.user.id,
-      actor: f.professional.actor, definitionId: template.id, expectedRevision: template.revision, draftVersionId: template.version.id });
-    const core = app.get(ProcessEightDService);
-    await core.bind(f.professional.actor, { expectedVersion: 0, workflowDefinitionId: template.id, workflowVersionId: published.id }, randomUUID(), randomUUID());
-    const binding = await core.binding(f.professional.actor);
-    if (!binding) throw new Error('The actual workflow binding was not persisted');
-    await core.activate(f.professional.actor, { expectedVersion: binding.version, enabled: true }, randomUUID(), randomUUID());
+    await expect(configureWorkflow(f)).resolves.toMatchObject({ version: 1, missingStages: [] });
     const source = (await send(issuerCookie, 'post', 'process-quality/defects', {
       occurredAt: '2026-10-20T08:30:00+08:00', factoryCode: 'FACTORY_1', productCode: `HTTP-${randomUUID()}`, traceCode: `TRACE-${randomUUID()}`,
       description: '真实HTTP手工登记来源',
     }).expect(201)).body;
     expect(source).toMatchObject({ sourceKind: 'MANUAL', defectQuantity: 1 });
     const issued = (await send(issuerCookie, 'post', 'process-quality/eight-d', { sources: [{ defectId: source.id, expectedVersion: source.version }],
+      processBoardCode: '0', sourceConfirmations: [{ defectId: source.id, recurrence: 'NOT_RECURRENCE', relatedProblemIds: [] }],
       severity: 'LOW', responsibleSectionDepartmentId: f.section.id, ownerUserId: f.owner.user.id,
       analysisDueAt: '2026-11-01T00:00:00Z', closureDueAt: '2026-12-01T00:00:00Z' }).expect(201)).body;
+    expect((await get(issuerCookie, 'process-quality/eight-d/binding').expect(200)).text).toBe('null');
     const id = issued.problem.id;
     await get(ownerCookie, 'process-quality/eight-d/tasks').expect(200);
     await get(ownerCookie, 'process-quality/eight-d/notifications').expect(200);
@@ -120,7 +123,7 @@ describe('complete process 8D HTTP chain with actual versioned storage and ClamA
   }, 120_000);
 
   it('locates incomplete HTTP submissions without writes and keeps independent same-section reassignment separate from internal routes', async () => {
-    const prisma = app.get(PrismaService), core = app.get(ProcessEightDService);
+    const prisma = app.get(PrismaService);
     const f = await createWorkflowClosureFixture(prisma, app.get(WorkflowClosureRoundService));
     const codes = ['configuration:read', 'configuration:manage', 'workflow:manage', 'workflow:start',
       'process-quality:defects:read', 'process-quality:defects:write',
@@ -149,18 +152,13 @@ describe('complete process 8D HTTP chain with actual versioned storage and ClamA
       .set('Cookie', who).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
     const get = (who: string, path: string) => request(app.getHttpServer()).get(`/api/v1/${path}`).set('Cookie', who);
     await app.get(NumberingService).publishRuleVersion({ organizationId: f.org.id, ruleCode: 'PROBLEM', pattern: '{CODE}-{YYMM}-{SEQ3}' });
-    const template = await app.get(WorkflowClosureTemplateService).initialize(f.professional.actor,
-      { policy: 'INTERNAL', domainCode: 'process-quality', code: randomUUID(), name: 'Validation seam' }, randomUUID(), randomUUID());
-    const published = await app.get(WorkflowDefinitionService).publishVersion({ organizationId: f.org.id, userId: f.professional.user.id,
-      actor: f.professional.actor, definitionId: template.id, expectedRevision: template.revision, draftVersionId: template.version.id });
-    const binding = await core.bind(f.professional.actor, { expectedVersion: 0, workflowDefinitionId: template.id, workflowVersionId: published.id }, randomUUID(), randomUUID());
-    expect(binding).toMatchObject({ version: 1 });
-    await core.activate(f.professional.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
+    await expect(configureWorkflow(f, [crossOwner.position.id])).resolves.toMatchObject({ version: 1, missingStages: [] });
     const source = (await send(issuerCookie, 'post', 'process-quality/defects', {
       occurredAt: '2026-10-20T08:30:00+08:00', factoryCode: 'FACTORY_1', productCode: `HTTP-${randomUUID()}`, traceCode: `TRACE-${randomUUID()}`,
       description: 'Missing fields and exact reassignment seam',
     }).expect(201)).body;
     const issued = (await send(issuerCookie, 'post', 'process-quality/eight-d', { sources: [{ defectId: source.id, expectedVersion: source.version }],
+      processBoardCode: '1', sourceConfirmations: [{ defectId: source.id, recurrence: 'NOT_RECURRENCE', relatedProblemIds: [] }],
       severity: 'LOW', responsibleSectionDepartmentId: f.section.id, ownerUserId: f.owner.user.id,
       analysisDueAt: '2026-11-01T00:00:00Z', closureDueAt: '2026-12-01T00:00:00Z' }).expect(201)).body;
     const id = issued.problem.id, prefix = `process-quality/eight-d/${id}`;

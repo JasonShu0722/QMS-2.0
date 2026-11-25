@@ -32,11 +32,13 @@ import { ProcessEightDClosureAdapter } from '../../src/modules/process-quality/p
 import { ProcessEightDFileAdapter } from '../../src/modules/process-quality/process-eight-d-file.adapter.js';
 import { normalizeProcessEightDDocument } from '../../src/modules/process-quality/process-eight-d-document.js';
 import { ProcessEightDService } from '../../src/modules/process-quality/process-eight-d.service.js';
+import { ProcessEightDWorkflowConfigurationService } from '../../src/modules/process-quality/process-eight-d-workflow-configuration.service.js';
 import { ProcessEightDReportService } from '../../src/modules/process-quality/process-eight-d-report.service.js';
 import { ProcessEightDReadAdapter } from '../../src/modules/process-quality/process-eight-d-read.adapter.js';
 import { ProcessEightDAssignmentOptionsQueryDto } from '../../src/modules/process-quality/process-eight-d.dto.js';
 import { OutboxService } from '../../src/modules/task-notification/outbox.service.js';
 import { WorkflowClosureRegistry } from '../../src/modules/workflow/workflow-closure-registry.js';
+import { WorkflowClosureTemplateService } from '../../src/modules/workflow/workflow-closure-template.service.js';
 import { WorkflowClosureRoundService } from '../../src/modules/workflow/workflow-closure-round.service.js';
 import { WorkflowDefinitionService } from '../../src/modules/workflow/workflow-definition.service.js';
 import { WorkflowDeadlineExtensionService } from '../../src/modules/workflow/workflow-deadline-extension.service.js';
@@ -51,12 +53,15 @@ if (!url || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || !['postgres:', 'pos
   throw new Error('Process 8D requires disposable loopback PostgreSQL, never preview 55440.');
 }
 
-describe('process 8D real domain transactions', () => {
+describe('process 8D real domain transactions with managed workflow configuration', () => {
   const prisma = new PrismaService();
   const audit = new AuditLogService(prisma), outbox = new OutboxService(prisma), mutations = new AdminMutationService(prisma, audit);
   const numbering = new NumberingService(prisma), problems = new ProblemIndexService(prisma, numbering, audit, outbox);
   const responsibilities = new OrganizationResponsibilityService(prisma, mutations, audit);
   const registry = new WorkflowClosureRegistry([]), resources = new FileResourceAccess([]);
+  const definitions = new WorkflowDefinitionService(prisma, new WorkflowValidationService(), audit, registry);
+  const templates = new WorkflowClosureTemplateService(prisma, definitions, mutations);
+  const workflowConfiguration = new ProcessEightDWorkflowConfigurationService(prisma, mutations, audit, templates);
   const rounds = new WorkflowClosureRoundService(prisma, audit, responsibilities, registry, outbox);
   const extensions = new WorkflowDeadlineExtensionService(prisma, audit, responsibilities, registry, rounds, outbox);
   const ledger = new ProcessDefectLedgerService(prisma, mutations, audit);
@@ -66,7 +71,7 @@ describe('process 8D real domain transactions', () => {
   ]);
   const sourceLinks = new DomainSourceLinkService(prisma, audit, outbox);
   const service = new ProcessEightDService(prisma, ledger, new DomainSourceIssueService(prisma, problems, outbox), sourceLinks,
-    new WorkflowRuntimeService(prisma, audit, outbox, problems), problems, rounds, responsibilities, resources, audit, outbox, readRegistry, extensions);
+    new WorkflowRuntimeService(prisma, audit, outbox, problems), problems, rounds, responsibilities, resources, audit, outbox, readRegistry, extensions, undefined, workflowConfiguration);
   const closure = new ProcessEightDClosureAdapter(registry, service), files = new ProcessEightDFileAdapter(resources, service);
 
   beforeAll(async () => { await prisma.$connect(); closure.onModuleInit(); files.onModuleInit(); new ProcessEightDReadAdapter(readRegistry, service).onModuleInit(); }, 120_000);
@@ -93,7 +98,15 @@ describe('process 8D real domain transactions', () => {
     return row?.waiting === true;
   }
 
-  async function fixture(activate = true) {
+  async function legacyBinding(actor: ProcessEightDActor) {
+    const definition = await templates.initialize(actor, { code: randomUUID(), name: 'Legacy process 8D', policy: 'INTERNAL', domainCode: 'process-quality' }, randomUUID(), randomUUID());
+    const version = await definitions.publishVersion({ organizationId: actor.organizationId, userId: actor.id, actor,
+      definitionId: definition.id, draftVersionId: definition.version.id, expectedRevision: definition.revision });
+    const binding = await service.bind(actor, { expectedVersion: 0, workflowDefinitionId: definition.id, workflowVersionId: version.id }, randomUUID(), randomUUID());
+    return service.activate(actor, { expectedVersion: binding.version, enabled: true }, randomUUID(), randomUUID());
+  }
+
+  async function fixture(configure = true) {
     const organization = await prisma.organization.create({ data: { code: randomUUID(), name: '8D isolated fixture', type: 'INTERNAL' } });
     const department = await prisma.department.create({ data: { organizationId: organization.id, code: randomUUID(), name: '部' } });
     const section = await prisma.department.create({ data: { organizationId: organization.id, parentId: department.id, code: randomUUID(), name: '科' } });
@@ -122,22 +135,19 @@ describe('process 8D real domain transactions', () => {
     await prisma.$executeRaw`INSERT INTO department_minister_scopes (id, organization_id, department_id, section_department_id, minister_assignment_id, valid_from, created_by, updated_by)
       VALUES (${randomUUID()}::uuid, ${organization.id}::uuid, ${department.id}::uuid, ${section.id}::uuid, ${minister.assignment.id}::uuid, CURRENT_TIMESTAMP - INTERVAL '1 minute', ${issuer.user.id}::uuid, ${issuer.user.id}::uuid)`;
     await numbering.publishRuleVersion({ organizationId: organization.id, ruleCode: 'PROBLEM', pattern: '{CODE}-{YYMM}-{SEQ3}' });
-    const definitions = new WorkflowDefinitionService(prisma, new WorkflowValidationService(), audit, registry);
-    const definition = await definitions.createDraft({ organizationId: organization.id, userId: issuer.user.id, actor: issuer.actor, code: randomUUID(), name: 'Real process 8D', draft: {
-      nodes: [
-        { id: 'owner', type: 'ACTION', name: 'Owner', config: { isStart: true, assignment: { permission: 'workflow:act' }, processEightD: { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null } } },
-        { id: 'closure', type: 'APPROVAL', name: 'Parallel closure', config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: 'process-quality' } } },
-        { id: 'close', type: 'CLOSE', name: 'Close', config: { isEnd: true, assignment: { permission: 'workflow:act' } } },
-      ], transitions: [
-        { id: 'submit', from: 'owner', to: 'closure', action: 'SUBMIT' }, { id: 'approve', from: 'closure', to: 'close', action: 'APPROVE' }, { id: 'return', from: 'closure', to: 'owner', action: 'RETURN' },
-      ],
-    } });
-    const version = await definitions.publishVersion({ organizationId: organization.id, userId: issuer.user.id, actor: issuer.actor,
-      definitionId: definition.id, draftVersionId: definition.version.id, expectedRevision: definition.revision });
-    await service.bind(issuer.actor, { expectedVersion: 0, workflowDefinitionId: definition.id, workflowVersionId: version.id }, randomUUID(), randomUUID());
-    if (activate) await service.activate(issuer.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
+    const configureManaged = (expectedVersion: number, closureConfigured = true, overrides: Partial<Record<'ANALYSIS' | 'IMPLEMENTATION' | 'CLOSURE', string[]>> = {}) => {
+      const work = [owner, collaborator, manager, minister].map(person => person.position.id);
+      return workflowConfiguration.update(issuer.actor, { expectedVersion, stages: [
+        { stage: 'ISSUE', positionIds: [issuer.position.id] },
+        { stage: 'ANALYSIS', positionIds: overrides.ANALYSIS ?? work },
+        { stage: 'IMPLEMENTATION', positionIds: overrides.IMPLEMENTATION ?? work },
+        { stage: 'CLOSURE', positionIds: overrides.CLOSURE ?? (closureConfigured ? [issuer, manager, minister].map(person => person.position.id) : []) },
+      ] }, randomUUID(), randomUUID());
+    };
+    if (configure) await configureManaged(0);
     const source = () => ledger.create(issuer.actor, { description: '真实原台账来源，未知分类保留空', factoryCode: 'FACTORY_1', productCode: 'EIGHT-D-PRODUCT', traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     const input = (sources: { id: string; version: number }[]) => ({ sources: sources.map(s => ({ defectId: s.id, expectedVersion: s.version })), severity: 'LOW' as const,
+      processBoardCode: '0' as const, sourceConfirmations: sources.map(source => ({ defectId: source.id, recurrence: 'NOT_RECURRENCE' as const, relatedProblemIds: [] })),
       ownerUserId: owner.user.id, responsibleSectionDepartmentId: section.id, analysisDueAt: new Date('2026-11-01T00:00:00Z'), closureDueAt: new Date('2026-12-01T00:00:00Z') });
     const issue = async () => { const defect = await source(); const issued = await service.issue(issuer.actor, input([defect]), randomUUID(), randomUUID()); return String(issued.problem.id); };
     const read = (id: string) => service.read(owner.actor, id);
@@ -153,17 +163,161 @@ describe('process 8D real domain transactions', () => {
       return read(id);
     };
     const submit = async (id: string) => { const current = await ready(id); await service.submit(owner.actor, id, { expectedVersion: current.version }, randomUUID(), randomUUID()); return rounds.readProjection(prisma, organization.id, id); };
-    return { organization, department, section, otherSection, role, person, issuer, owner, manager, minister, collaborator, source, input, issue, read, ready, submit, draft };
+    return { organization, department, section, otherSection, role, person, issuer, owner, manager, minister, collaborator, source, input, issue, read, ready, submit, draft, configureManaged };
   }
 
-  it('does not issue until a published binding is separately enabled; records the real issuer as professional', async () => {
+  it('filters managed owners before pagination and validates issue, analysis handoff and managerial reassignment', async () => {
+    const f = await fixture(), source = await f.source();
+    const target = await f.person(f.otherSection.id);
+    await f.configureManaged(1, true, { IMPLEMENTATION: [target.position.id, f.manager.position.id] });
+    const query = (input: Partial<ProcessEightDAssignmentOptionsQueryDto>) => Object.assign(new ProcessEightDAssignmentOptionsQueryDto(), input);
+    const initial = query({ sectionDepartmentId: f.section.id, search: f.owner.user.username, pageSize: 1 });
+    expect(await service.assignmentOptions(f.issuer.actor, initial)).toMatchObject({ users: [], userTotal: 0 });
+    await expect(service.issue(f.issuer.actor, f.input([source]), randomUUID(), randomUUID())).rejects.toThrow('PROCESS_EIGHT_D_STAGE_UNAVAILABLE');
+    const extra = await prisma.userPosition.create({ data: { organizationId: f.organization.id, userId: f.owner.user.id, positionId: target.position.id, startedAt: new Date(Date.now() - 1_000) } });
+    expect(await service.assignmentOptions(f.issuer.actor, initial)).toMatchObject({ users: [{ id: f.owner.user.id }], userTotal: 1 });
+    const id = String((await service.issue(f.issuer.actor, f.input([source]), randomUUID(), randomUUID())).problem.id);
+    await service.save(f.owner.actor, id, { expectedVersion: 1, document: f.draft() }, randomUUID(), randomUUID());
+    const complete = { expectedVersion: (await f.read(id)).version, submissionDueAt: new Date('2026-11-10') };
+    await prisma.userPosition.update({ where: { id: extra.id }, data: { endedAt: new Date() } });
+    await expect(service.analysisComplete(f.owner.actor, id, complete, randomUUID(), randomUUID())).rejects.toThrow('PROCESS_EIGHT_D_STAGE_UNAVAILABLE');
+    await prisma.userPosition.update({ where: { id: extra.id }, data: { endedAt: null } });
+    await service.analysisComplete(f.owner.actor, id, complete, randomUUID(), randomUUID());
+    await prisma.userPosition.update({ where: { id: extra.id }, data: { endedAt: new Date() } });
+    await prisma.rolePermission.deleteMany({ where: { roleId: f.role.id, permission: { code: 'process-quality:issues:reassign' } } });
+    const current = await f.read(id);
+    expect(await service.read(f.manager.actor, id)).toMatchObject({ allowedActions: expect.arrayContaining(['reassign']) });
+    expect(await service.assignmentOptions(f.manager.actor, query({ action: 'REASSIGN', problemId: id }))).toMatchObject({ users: [{ id: f.manager.user.id }], userTotal: 1 });
+    await expect(service.reassign(f.manager.actor, id, { expectedVersion: current.version, ownerUserId: f.owner.user.id, responsibleSectionDepartmentId: f.section.id }, randomUUID(), randomUUID())).rejects.toThrow('PROCESS_EIGHT_D_STAGE_UNAVAILABLE');
+    await service.reassign(f.manager.actor, id, { expectedVersion: current.version, ownerUserId: f.manager.user.id, responsibleSectionDepartmentId: f.section.id }, randomUUID(), randomUUID());
+    expect(await f.read(id)).toMatchObject({ ownerUserId: f.manager.user.id, analysisCompletedAt: current.analysisCompletedAt });
+  }, 120_000);
+
+  it('returns an actionable HTTP 409 for an unqualified process 8D stage owner', async () => {
+    const fixtureData = await fixture(), source = await fixtureData.source();
+    await fixtureData.configureManaged(1, true, { IMPLEMENTATION: [fixtureData.manager.position.id] });
+
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    try {
+      await app.init();
+      const csrf = randomUUID();
+      const token = await app.get(SessionService).create(fixtureData.issuer.user.id, app.get(PrismaService), { reauthenticated: true, mfaVerified: true });
+      const response = await request(app.getHttpServer()).post('/api/v1/process-quality/eight-d')
+        .set('Cookie', `qms_session=${token}; qms_csrf=${csrf}`).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID())
+        .send(fixtureData.input([source])).expect(409);
+      expect(response.body).toMatchObject({
+        code: 'PROCESS_EIGHT_D_STAGE_UNAVAILABLE',
+        message: '人员不符合制程 8D 所需环节的岗位要求。如可重新选人，请选择符合条件的人员；否则请联系流程管理员检查岗位配置',
+      });
+    } finally { await app.close(); }
+  }, 120_000);
+
+  it('keeps same-section reassignment available when the owner loses the current edit stage', async () => {
+    const f = await fixture(), id = await f.issue();
+    await f.configureManaged(1, true, { ANALYSIS: [f.manager.position.id] });
+    await prisma.rolePermission.deleteMany({ where: { roleId: f.role.id, permission: { code: 'process-quality:issues:reassign' } } });
+
+    const current = await f.read(id);
+    expect(current.allowedActions).toContain('reassign');
+    expect(current.allowedActions).not.toContain('save');
+    const transfer = { expectedVersion: current.version, ownerUserId: f.manager.user.id, responsibleSectionDepartmentId: f.section.id };
+    expect((await service.read(f.collaborator.actor, id)).allowedActions).not.toContain('reassign');
+    await expect(service.reassign(f.collaborator.actor, id, transfer, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await service.reassign(f.owner.actor, id, transfer, randomUUID(), randomUUID());
+    expect(await f.read(id)).toMatchObject({ ownerUserId: f.manager.user.id });
+  }, 120_000);
+
+  it.each([['LOW', 'SECTION_MANAGER'], ['HIGH', 'MINISTER']] as const)('requires the actual issuer and risk-selected %s closure duties before opening a round', async (severity, duty) => {
+    const f = await fixture(), id = await f.issue();
+    if (severity === 'HIGH') await service.risk(f.issuer.actor, id, { expectedVersion: 1, severity }, randomUUID(), randomUUID());
+    const selected = severity === 'LOW' ? f.manager : f.minister;
+    const other = severity === 'LOW' ? f.minister : f.manager;
+    await f.configureManaged(1, true, { CLOSURE: [other.position.id] });
+    const current = await f.ready(id), submit = { expectedVersion: current.version };
+    expect(current.allowedActions).not.toContain('submit');
+    await expect(service.submit(f.owner.actor, id, submit, randomUUID(), randomUUID())).rejects.toThrow('PROCESS_EIGHT_D_STAGE_UNAVAILABLE');
+    expect(await rounds.readProjection(prisma, f.organization.id, id)).toBeNull();
+    expect(await f.read(id)).toMatchObject({ version: current.version, instanceVersion: current.instanceVersion, submittedAt: null });
+    await f.configureManaged(2, true, { CLOSURE: [selected.position.id] });
+    await expect(service.submit(f.owner.actor, id, submit, randomUUID(), randomUUID())).rejects.toThrow('PROCESS_EIGHT_D_STAGE_UNAVAILABLE');
+    await f.configureManaged(3, true, { CLOSURE: [f.issuer.position.id, selected.position.id] });
+    expect((await f.read(id)).allowedActions).toContain('submit');
+    await service.submit(f.owner.actor, id, submit, randomUUID(), randomUUID());
+    expect((await rounds.readProjection(prisma, f.organization.id, id))!.duties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ duty: 'PROFESSIONAL', userId: f.issuer.user.id }), expect.objectContaining({ duty, userId: selected.user.id }),
+    ]));
+  }, 120_000);
+
+  it('requires closure positions only for active review duties when the owner is also section manager', async () => {
+    const f = await fixture(), id = await f.issue();
+    const ready = await f.ready(id);
+    await service.reassign(f.owner.actor, id, { expectedVersion: ready.version, ownerUserId: f.manager.user.id,
+      responsibleSectionDepartmentId: f.section.id }, randomUUID(), randomUUID());
+    await f.configureManaged(1, true, { CLOSURE: [f.minister.position.id] });
+    const current = await service.read(f.manager.actor, id), submit = { expectedVersion: current.version };
+    expect(current.allowedActions).not.toContain('submit');
+    await expect(service.submit(f.manager.actor, id, submit, randomUUID(), randomUUID())).rejects.toThrow('PROCESS_EIGHT_D_STAGE_UNAVAILABLE');
+    await f.configureManaged(2, true, { CLOSURE: [f.issuer.position.id] });
+    expect((await service.read(f.manager.actor, id)).allowedActions).toContain('submit');
+    await service.submit(f.manager.actor, id, submit, randomUUID(), randomUUID());
+    expect((await rounds.readProjection(prisma, f.organization.id, id))?.duties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ duty: 'SECTION_MANAGER', userId: f.manager.user.id, status: 'SKIPPED_SAME_PERSON' }),
+      expect.objectContaining({ duty: 'PROFESSIONAL', userId: f.issuer.user.id, status: 'PENDING' }),
+    ]));
+    expect(await rounds.eligibleDuties(f.manager.actor)).toEqual([]);
+    expect(await rounds.eligibleDuties(f.issuer.actor)).toEqual([expect.objectContaining({ problemId: id, duty: 'PROFESSIONAL' })]);
+  }, 120_000);
+
+  it('rechecks the original managed stage of report replays without returning private facts', async () => {
+    const f = await fixture(), id = await f.issue(), key = randomUUID();
+    const input = { expectedVersion: 1, document: f.draft() };
+    const original = await service.save(f.owner.actor, id, input, randomUUID(), key);
+    await service.analysisComplete(f.owner.actor, id, { expectedVersion: (await f.read(id)).version, submissionDueAt: new Date('2026-11-10') }, randomUUID(), randomUUID());
+    await f.configureManaged(1, true, { IMPLEMENTATION: [f.manager.position.id] });
+    expect(await service.save(f.owner.actor, id, input, randomUUID(), key)).toEqual(original);
+    await f.configureManaged(2, true, { ANALYSIS: [f.manager.position.id], IMPLEMENTATION: [f.owner.position.id] });
+    const before = await f.read(id);
+    await expect(service.save(f.owner.actor, id, input, randomUUID(), key)).rejects.toMatchObject({ status: 403 });
+    expect(await f.read(id)).toEqual(before);
+  }, 120_000);
+
+  it('removes a closure approval from managed pending duties after the professional loses the only closure position', async () => {
+    const f = await fixture();
+    const otherPosition = (await f.person(f.department.id)).position;
+    await prisma.userPosition.create({ data: { organizationId: f.organization.id, userId: f.issuer.user.id, positionId: otherPosition.id, startedAt: new Date(Date.now() - 1_000) } });
+    const id = await f.issue(), round = (await f.submit(id))!;
+    const closure = await rounds.eligibleDuties(f.issuer.actor);
+    expect(closure).toEqual(expect.arrayContaining([expect.objectContaining({ problemId: id, duty: 'PROFESSIONAL' })]));
+    await prisma.userPosition.update({ where: { id: f.issuer.assignment.id }, data: { endedAt: new Date() } });
+    expect(await rounds.eligibleDuties(f.issuer.actor)).toEqual([]);
+    expect(await rounds.eligibleDuties(f.manager.actor)).toEqual([expect.objectContaining({ roundId: round.id, duty: 'SECTION_MANAGER' })]);
+    await expect(rounds.decide(f.issuer.actor, round.id, { expectedRoundVersion: round.version, duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: '核验完成' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    await f.configureManaged(1, true, { CLOSURE: [otherPosition.id, f.manager.position.id, f.minister.position.id] });
+    expect(await rounds.eligibleDuties(f.issuer.actor)).toEqual(expect.arrayContaining([expect.objectContaining({ roundId: round.id, duty: 'PROFESSIONAL' })]));
+  }, 120_000);
+
+  it('requires the managed closure positions even with an active legacy binding and issues only once for concurrent same-key retries after repair', async () => {
     const f = await fixture(false), source = await f.source();
-    await expect(service.issue(f.issuer.actor, f.input([source]), randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    const legacy = await legacyBinding(f.issuer.actor);
+    expect(legacy).toMatchObject({ enabled: true });
+    await expect(f.configureManaged(0, false)).resolves.toMatchObject({ version: 1, missingStages: ['CLOSURE'] });
+    const key = randomUUID();
+    await expect(service.issue(f.issuer.actor, f.input([source]), randomUUID(), key)).rejects.toMatchObject({ status: 400,
+      response: { code: 'PROCESS_EIGHT_D_WORKFLOW_NOT_READY' }, fields: { 'stages.CLOSURE': expect.any(Array) } });
     expect(await prisma.problemIndex.count({ where: { organizationId: f.organization.id } })).toBe(0);
-    await service.activate(f.issuer.actor, { expectedVersion: 1, enabled: true }, randomUUID(), randomUUID());
-    const result = await service.issue(f.issuer.actor, f.input([source]), randomUUID(), randomUUID());
-    const id = String(result.problem.id), model = await f.read(id);
+    await expect(f.configureManaged(1)).resolves.toMatchObject({ version: 2, missingStages: [] });
+    const results = await Promise.all(Array.from({ length: 2 }, () => service.issue(f.issuer.actor, f.input([source]), randomUUID(), key)));
+    const id = String(results[0]!.problem.id), model = await f.read(id);
+    expect(results.map(result => result.replayed).sort()).toEqual([false, true]);
+    expect(results.map(result => result.problem.id)).toEqual([id, id]);
+    expect(await prisma.problemIndex.count({ where: { organizationId: f.organization.id } })).toBe(1);
+    expect(await prisma.workflowInstance.count({ where: { organizationId: f.organization.id } })).toBe(1);
     expect(model).toMatchObject({ professionalUserId: f.issuer.user.id, ownerUserId: f.owner.user.id, version: 1, contentVersion: 1 });
+    const instance = await prisma.workflowInstance.findUniqueOrThrow({ where: { id: model.instanceId } });
+    expect(instance.workflowVersionId).not.toBe(legacy.workflowVersionId);
+    expect(await service.binding(f.issuer.actor)).toEqual(legacy);
     await expect(service.save(f.issuer.actor, id, { expectedVersion: 1, document: f.draft() }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
   }, 120_000);
 
@@ -243,6 +397,40 @@ describe('process 8D real domain transactions', () => {
       { status: 'fulfilled', value: { domainUiKey: 'process-eight-d' } },
       { status: 'fulfilled', value: { domainUiKey: 'process-eight-d' } },
     ]);
+  });
+
+  it('allocates across selected boards without writing back and rejects mixed recurrence before allocating', async () => {
+    const fixtureData = await fixture();
+    const first = await fixtureData.source(), second = await fixtureData.source();
+    const actor = fixtureData.issuer.actor;
+    const firstInput = fixtureData.input([first]);
+    const mixed = fixtureData.input([first, second]);
+    const firstKey = randomUUID();
+    await expect(service.issue(actor, { ...mixed, sourceConfirmations: [mixed.sourceConfirmations[0]!, { ...mixed.sourceConfirmations[1]!, recurrence: 'RECURRENCE' }] }, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ status: 400, response: { code: 'PROCESS_EIGHT_D_SOURCE_CONFIRMATION_INVALID' } });
+    await expect(service.issue(actor, { ...firstInput, processBoardCode: undefined }, randomUUID(), randomUUID()))
+      .rejects.toMatchObject({ status: 409, response: { code: 'PROCESS_EIGHT_D_BOARD_REQUIRED' } });
+    const before = await ledger.detail(actor, first.id);
+    const report = await service.issue(actor, firstInput, randomUUID(), firstKey);
+    const replayed = await service.issue(actor, firstInput, randomUUID(), firstKey);
+    const another = await service.issue(actor, { ...fixtureData.input([second]), processBoardCode: '1' }, randomUUID(), randomUUID());
+    const firstNumber = String(report.problem.reportNumber), secondNumber = String(another.problem.reportNumber);
+    expect(firstNumber).toMatch(/^ZX8D-PQ0-\d{4}-001$/);
+    expect(secondNumber).toBe(firstNumber.replace('PQ0', 'PQ1').replace(/001$/, '002'));
+    expect(replayed.problem.id).toBe(report.problem.id);
+    expect((await ledger.detail(actor, first.id)).operationSector).toBe(before.operationSector);
+    expect(await prisma.problemIndex.count({ where: { organizationId: fixtureData.organization.id } })).toBe(2);
+  });
+
+  it('rechecks the managed ISSUE stage before replaying an old issuance', async () => {
+    const f = await fixture();
+    const source = await f.source();
+    const input = f.input([source]);
+    const key = randomUUID();
+    const first = await service.issue(f.issuer.actor, input, randomUUID(), key);
+    await prisma.userPosition.update({ where: { id: f.issuer.assignment.id }, data: { endedAt: new Date() } });
+    await expect(service.issue(f.issuer.actor, input, randomUUID(), key)).rejects.toMatchObject({ response: { code: 'FEATURE_PERMISSION_DENIED' } });
+    expect(await prisma.problemIndex.count({ where: { id: first.problem.id } })).toBe(1);
   });
 
   it.each(['history', 'eligible'] as const)('reads concurrent deadline %s after both transactions hold real READ record locks without an upgrade deadlock', async operation => {
@@ -367,16 +555,28 @@ describe('process 8D real domain transactions', () => {
     await expect(f.read(id)).rejects.toMatchObject({ status: 401 });
   }, 120_000);
 
-  async function crossOrganizationFixture() {
-    const home = await fixture(), target = await fixture(), id = await target.issue();
+  async function organizationPair(configure: boolean) {
+    const home = await fixture(configure), target = await fixture(configure);
     const marker = await prisma.permission.findUniqueOrThrow({ where: { code: 'platform:admin' } });
     const role = await prisma.role.create({ data: { organizationId: home.organization.id, code: randomUUID(), name: 'Explicit platform marker', permissions: { create: { permissionId: marker.id } } } });
     await prisma.userRole.create({ data: { organizationId: home.organization.id, userId: home.issuer.user.id, roleId: role.id } });
     const actor = { ...home.issuer.actor, scopeOrganizationId: target.organization.id };
+    return { home, target, role, actor };
+  }
+
+  async function legacyCrossOrganizationFixture() {
+    const pair = await organizationPair(false);
+    await legacyBinding(pair.home.issuer.actor);
+    await legacyBinding(pair.target.issuer.actor);
+    return pair;
+  }
+
+  async function crossOrganizationFixture() {
+    const pair = await organizationPair(true), id = await pair.target.issue();
     const query = new ProblemQueryService(prisma, readRegistry);
     const storage = new S3CompatibleObjectStorage();
     const reports = new ProcessEightDReportService(prisma, service, new FileLifecycleService(prisma, new FilePolicyService(), storage, audit, resources), storage, audit);
-    return { home, target, id, role, actor, query, reports };
+    return { ...pair, id, query, reports };
   }
 
   it.each(['LIST', 'READ', 'REPORT'] as const)('allows a real platform administrator in A to %s a formal B 8D without impersonating its organization', async operation => {
@@ -598,7 +798,7 @@ describe('process 8D real domain transactions', () => {
   }, 120_000);
 
   it('manages target B binding GET, PUT and activation through real HTTP without changing administrator A identity or A configuration', async () => {
-    const f = await crossOrganizationFixture();
+    const f = await legacyCrossOrganizationFixture();
     const beforeA = await service.binding(f.home.issuer.actor), beforeB = (await service.binding(f.target.issuer.actor))!;
     const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
@@ -630,7 +830,7 @@ describe('process 8D real domain transactions', () => {
   }, 120_000);
 
   it.each(['MISSING', 'EXPIRED'] as const)('allows configuration with %s step-up and rejects writes and replays after the session is revoked', async state => {
-    const f = await crossOrganizationFixture();
+    const f = await legacyCrossOrganizationFixture();
     const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
     app.useGlobalFilters(new GlobalExceptionFilter());
@@ -674,7 +874,7 @@ describe('process 8D real domain transactions', () => {
   }, 120_000);
 
   it('isolates configuration receipts for the same actor and key in A and B, preserves CAS and rejects foreign workflow bindings', async () => {
-    const f = await crossOrganizationFixture(), a = (await service.binding(f.home.issuer.actor))!, b = (await service.binding(f.target.issuer.actor))!;
+    const f = await legacyCrossOrganizationFixture(), a = (await service.binding(f.home.issuer.actor))!, b = (await service.binding(f.target.issuer.actor))!;
     const key = randomUUID(), input = { expectedVersion: b.version, enabled: false };
     expect(a.version).toBe(b.version);
     const bChanged = await service.activate(f.actor, input, key, randomUUID());
@@ -693,7 +893,7 @@ describe('process 8D real domain transactions', () => {
   }, 120_000);
 
   it('revalidates cross-organization configuration MFA, internal active target and grants while denying ordinary users and suppliers', async () => {
-    const f = await crossOrganizationFixture(), binding = (await service.binding(f.target.issuer.actor))!;
+    const f = await legacyCrossOrganizationFixture(), binding = (await service.binding(f.target.issuer.actor))!;
     const input = { expectedVersion: binding.version, enabled: false };
     await prisma.user.update({ where: { id: f.actor.id }, data: { mfaRequirementOverride: true } });
     await prisma.session.update({ where: { id: f.actor.sessionId }, data: { mfaVerifiedAt: null } });
@@ -855,8 +1055,9 @@ describe('process 8D real domain transactions', () => {
     const [fresh] = await service.previewSources(f.issuer.actor, { sources: f.input([a]).sources, problemId: target });
     await service.sources(f.issuer.actor, target, { expectedVersion: 1, add: f.input([a]).sources, removeDefectIds: [], sourceConfirmations: [{ ...confirmation,
       relatedProblemIds: fresh!.relatedProblems.map(p => p.problemId), relatedSetToken: fresh!.relatedSetToken }] }, randomUUID(), randomUUID());
-    const [fact] = await prisma.$queryRaw<{ recurrence: string }[]>`SELECT recurrence FROM process_eight_d_source_confirmations WHERE problem_id = ${target}::uuid`;
-    expect(fact!.recurrence).toBe('RECURRENCE');
+    const facts = await prisma.$queryRaw<{ recurrence: string }[]>`SELECT recurrence FROM process_eight_d_source_confirmations
+      WHERE problem_id = ${target}::uuid AND defect_id = ${a.id}::uuid`;
+    expect(facts).toEqual([{ recurrence: 'RECURRENCE' }]);
     const readPermission = await prisma.permission.findUniqueOrThrow({ where: { code: 'process-quality:issues:read' } });
     await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: f.role.id, permissionId: readPermission.id } } });
     const [hidden] = await service.previewSources(f.issuer.actor, { sources: f.input([a]).sources });
@@ -1021,7 +1222,7 @@ describe('process 8D real domain transactions', () => {
   }, 120_000);
 
   it.each(['manager', 'minister'] as const)('replays a %s internal reassignment with current work/management eligibility, not cross-department grants', async person => {
-    const f = await fixture(), id = await f.issue(), target = await f.person(f.section.id), actor = f[person].actor;
+    const f = await fixture(), id = await f.issue(), target = f.manager, actor = f[person].actor;
     const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'process-quality:issues:reassign' } });
     await prisma.rolePermission.delete({ where: { roleId_permissionId: { roleId: f.role.id, permissionId: permission.id } } });
     const key = randomUUID(), input = { expectedVersion: 1, ownerUserId: target.user.id, responsibleSectionDepartmentId: f.section.id };

@@ -18,14 +18,14 @@ const domains = [
   { value: 'new-product-quality', label: '新品' },
 ] as const;
 export type EightDBindingDomain = typeof domains[number]['value'];
-type Props = { domain?: EightDBindingDomain; onDomainChange?: (domain: EightDBindingDomain) => void };
+type Props = { domain?: EightDBindingDomain; onDomainChange?: (domain: EightDBindingDomain) => void; allowedDomains?: readonly EightDBindingDomain[] };
 
-export function ProcessEightDBinding({ domain = 'process-quality', onDomainChange }: Props = {}) {
+export function ProcessEightDBinding({ domain = 'process-quality', onDomainChange, allowedDomains }: Props = {}) {
   const session = useWorkTabsStore(state => state.sessionScope);
-  return <BindingScope key={`${session ?? ''}:${domain}`} session={session} domain={domain} onDomainChange={onDomainChange} />;
+  return <BindingScope key={`${session ?? ''}:${domain}`} session={session} domain={domain} onDomainChange={onDomainChange} allowedDomains={allowedDomains} />;
 }
 
-function BindingScope({ session, domain, onDomainChange }: Props & { session?: string; domain: EightDBindingDomain }) {
+function BindingScope({ session, domain, onDomainChange, allowedDomains }: Props & { session?: string; domain: EightDBindingDomain }) {
   const { t } = useLanguage();
   const label = domains.find(item => item.value === domain)!.label;
   const base = `/api/v1/${domain}/eight-d`;
@@ -138,9 +138,9 @@ function BindingScope({ session, domain, onDomainChange }: Props & { session?: s
   }
   return <Card><Typography.Title level={3}>{t(`${label}8D流程绑定与启用`)}</Typography.Title>
     {onDomainChange && <label>{t('8D绑定领域')}<select aria-label={t('8D绑定领域')} value={domain} disabled={denied || loading || busy || !!uncertain} onChange={event => {
-      const next = domains.find(item => item.value === event.target.value);
+      const next = domains.find(item => item.value === event.target.value && (!allowedDomains || allowedDomains.includes(item.value)));
       if (next && next.value !== domain) leave(() => onDomainChange(next.value));
-    }}>{domains.map(item => <option key={item.value} value={item.value}>{t(`${item.label}质量`)}</option>)}</select></label>}
+    }}>{domains.filter(item => !allowedDomains || allowedDomains.includes(item.value)).map(item => <option key={item.value} value={item.value}>{t(`${item.label}质量`)}</option>)}</select></label>}
 
 
     {!!error && <Alert type="error" showIcon title={t(stale ? '绑定版本已变化，选择已保留，请刷新基线后重试。' : readFailed && !denied ? '无法加载8D绑定配置，请重试。' : safeAccountError(error))} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} />}

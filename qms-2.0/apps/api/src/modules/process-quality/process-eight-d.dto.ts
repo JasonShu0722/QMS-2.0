@@ -48,6 +48,8 @@ export class ProcessEightDSourceConfirmationDto {
 }
 export class IssueProcessEightDDto extends ProcessEightDScopeDto {
   @ApiProperty({ type: [ProcessEightDSourceDto] }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ValidateNested({ each: true }) @Type(() => ProcessEightDSourceDto) sources!: ProcessEightDSourceDto[];
+  @ApiPropertyOptional({ enum: ['0', '1'], description: 'Required for process sources with mixed or unconfirmed operation sectors.' }) @IsOptional() @IsIn(['0', '1']) processBoardCode?: '0' | '1';
+  @ApiPropertyOptional({ maxLength: 200, description: 'Report title; required if the selected sources do not share a nonempty description.' }) @IsOptional() @IsString() @MaxLength(200) issueTitle?: string;
   @ApiProperty({ enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] }) @IsIn(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']) severity!: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   @ApiProperty({ format: 'uuid' }) @IsUUID() ownerUserId!: string;
   @ApiProperty({ format: 'uuid' }) @IsUUID() responsibleSectionDepartmentId!: string;

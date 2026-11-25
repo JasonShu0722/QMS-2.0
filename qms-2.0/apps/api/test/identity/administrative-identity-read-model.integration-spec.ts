@@ -134,11 +134,28 @@ describe('administrative identity owner read-model on real PostgreSQL', () => {
     });
   });
 
-  it('performs no query for either empty id list, even on an already aborted real transaction', async () => {
+  it('adds only the display label to the position-deletion snapshot for explicitly selected users in the caller transaction', async () => {
+    await rollback(async tx => {
+      const org = await organization(tx); const other = await organization(tx);
+      const [firstId, secondId] = [randomUUID(), randomUUID()].sort();
+      const named = await user(tx, org.id, { id: firstId, fullName: 'Position holder', status: 'DISABLED', configurationRequired: true, securityVersion: 7 });
+      const unnamed = await user(tx, org.id, { id: secondId });
+      const foreign = await user(tx, other.id);
+      const deleted = await user(tx, org.id, { status: 'DISABLED', deletedAt: new Date() });
+      await user(tx, org.id);
+      expect(await model.positionDeletionUsers(tx, org.id, [unnamed.id, foreign.id, named.id, deleted.id, named.id])).toEqual([
+        { id: named.id, securityVersion: named.securityVersion, status: named.status, configurationRequired: named.configurationRequired, name: 'Position holder' },
+        { id: unnamed.id, securityVersion: unnamed.securityVersion, status: unnamed.status, configurationRequired: unnamed.configurationRequired, name: unnamed.username },
+      ]);
+    });
+  });
+
+  it('performs no query for empty id lists, even on an already aborted real transaction', async () => {
     await rollback(async tx => {
       await expect(tx.$queryRaw`SELECT 1 / 0`).rejects.toMatchObject({ code: 'P2010' });
-      // PostgreSQL would reject any further query with 25P02, so success proves both paths do not query.
+      // PostgreSQL would reject any further query with 25P02, so success proves these paths do not query.
       expect(await model.lifecycleUsers(tx, randomUUID(), [])).toEqual([]);
+      expect(await model.positionDeletionUsers(tx, randomUUID(), [])).toEqual([]);
       expect(await model.lockLifecycleUsers(tx, [])).toBeUndefined();
       expect(await model.lockResponsibilityUsers(tx, randomUUID(), [])).toEqual([]);
     });

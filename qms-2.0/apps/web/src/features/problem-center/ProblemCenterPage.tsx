@@ -6,6 +6,7 @@ import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
+import { LedgerFilterHeader, LedgerFilterPanel, LedgerFilterPopover } from '../../ui/ledger/FilterPopover';
 import { normalizePreferences, preferenceKey } from '../../ui/ledger/model';
 import { useLedgerScope, usePreference } from '../../ui/ledger/preferences';
 import { ProcessProblemDeadlines, ProcessProblemTitle, processSummaryValue } from '../process-quality/ProcessProblemSummary';
@@ -16,25 +17,44 @@ import {
   getProblemIndex,
   getProblemOrganizationId,
   getProblemViews,
+  getProcessFollowup,
   updateProblemView,
   type ProblemPage,
   type ProblemQuery,
   type ProblemView,
   type ProblemViewConfiguration,
+  type ProcessFollowupPage,
+  type ProcessFollowupQuery,
 } from './problem-center-api';
 import './problem-center.css';
 
-type ProblemItem = components['schemas']['ProblemIndexResponseDto'];
+type ProblemItem = components['schemas']['ProblemIndexResponseDto'] | ProcessFollowupPage['items'][number];
 type ProblemFilters = components['schemas']['ProblemSavedViewFiltersDto'];
 type ProblemSort = components['schemas']['ProblemSavedViewSortDto'];
 type ProblemStatus = NonNullable<ProblemFilters['status']>;
-type ColumnKey = ProblemViewConfiguration['visibleColumns'][number];
-type ColumnLayout = { order: ColumnKey[]; visible: ColumnKey[] };
+type LayoutKey = ProblemViewConfiguration['visibleColumns'][number];
+type ColumnKey = Exclude<LayoutKey, 'processStage'>;
+type ColumnLayout = { order: LayoutKey[]; visible: LayoutKey[] };
 type ErrorState = { message: string; traceId?: string; code?: string };
 
 const statuses: ProblemStatus[] = ['OPEN', 'IN_PROGRESS', 'PENDING', 'RESOLVED', 'CLOSED', 'ARCHIVED'];
 const sortFields: ProblemSort['sortBy'][] = ['createdAt', 'updatedAt', 'dueAt', 'reportNumber', 'status', 'severity'];
 const allColumns: ColumnKey[] = ['reportNumber', 'title', 'domainCode', 'problemType', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt'];
+const processColumns: LayoutKey[] = ['reportNumber', 'title', 'processStage', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt'];
+const processHeaderFilters = { reportNumber: 'search', title: 'search', processStage: 'stage', status: 'status', severity: 'severity', responsibleParty: 'responsibleSectionName', ownerId: 'ownerName', dueAt: 'dueFrom' } as const;
+const stageLabels: Record<NonNullable<ProcessFollowupQuery['stage']>, string> = {
+  ANALYSIS: '分析阶段', SUBMISSION: '完整提交阶段', CLOSURE: '关闭阶段', CLOSURE_REVIEW: '关闭审批中', CLOSED: '已关闭', ARCHIVED: '已归档',
+  CANCELLED: '已取消', SUSPENDED: '已暂停', FAILED: '流程失败', COMPLETED: '流程已结束',
+};
+function isFollowupStage(value: unknown): value is NonNullable<ProcessFollowupQuery['stage']> {
+  return typeof value === 'string' && Object.hasOwn(stageLabels, value);
+}
+const followupPath = '/app/process-quality/problems';
+type FollowupSnapshot = { scope: string; page: number; filters: ProblemFilters; sort: ProblemSort; selectedViewId: string; layout: ColumnLayout };
+let followupSnapshot: FollowupSnapshot | undefined;
+useWorkTabsStore.subscribe((next, previous) => {
+  if (next.sessionScope !== previous.sessionScope || previous.tabs.some(tab => tab.id === followupPath) && !next.tabs.some(tab => tab.id === followupPath)) followupSnapshot = undefined;
+});
 const defaultConfiguration: ProblemViewConfiguration = {
   schemaVersion: 1,
   filters: {},
@@ -42,9 +62,11 @@ const defaultConfiguration: ProblemViewConfiguration = {
   visibleColumns: [...allColumns],
   columnOrder: [...allColumns],
 };
-function normalizeColumnLayout(input: unknown): ColumnLayout {
-  const normalized = normalizePreferences(input, allColumns);
-  return { order: normalized.order as ColumnKey[], visible: normalized.visible as ColumnKey[] };
+function normalizeColumnLayout(input: unknown, processOnly: boolean): ColumnLayout {
+  const columns = processOnly ? processColumns : allColumns;
+  const normalized = normalizePreferences(input ?? (processOnly ? { order: processColumns, visible: processColumns.slice(0, -1) } : undefined), columns,
+    false, processOnly ? [['processStage', 'status', true]] : undefined);
+  return { order: normalized.order as LayoutKey[], visible: normalized.visible as LayoutKey[] };
 }
 const statusLabels: Record<ProblemStatus, string> = {
   OPEN: '待处理', IN_PROGRESS: '处理中', PENDING: '等待中', RESOLVED: '已解决', CLOSED: '已关闭', ARCHIVED: '已归档',
@@ -62,7 +84,7 @@ function isForbidden(error?: ErrorState) {
   return error?.code === 'FEATURE_PERMISSION_DENIED' || error?.code === 'ORGANIZATION_SCOPE_DENIED' || error?.code === 'HTTP_403';
 }
 
-function normalizeFilters(filters: ProblemFilters): ProblemFilters {
+function normalizeFilters(filters: ProblemFilters, processOnly = false): ProblemFilters {
   const source = filters as Record<string, unknown>;
   const normalized: ProblemFilters = {};
   const stringKeys: Array<keyof Pick<ProblemFilters, 'domainCode' | 'problemType' | 'severity' | 'ownerId' | 'search' | 'dueFrom' | 'dueTo' | 'overdueAt'>> =
@@ -71,21 +93,35 @@ function normalizeFilters(filters: ProblemFilters): ProblemFilters {
     if (typeof source[key] === 'string' && source[key]) normalized[key] = source[key];
   });
   if (statuses.includes(source.status as ProblemStatus)) normalized.status = source.status as ProblemStatus;
+  if (processOnly) {
+    if (isFollowupStage(source.stage)) normalized.stage = source.stage;
+    for (const key of ['ownerName', 'responsibleSectionName'] as const) {
+      if (typeof source[key] === 'string') normalized[key] = source[key];
+    }
+  }
   return normalized;
 }
 
-function normalizeConfiguration(configuration: ProblemViewConfiguration): ProblemViewConfiguration {
+function normalizeConfiguration(configuration: ProblemViewConfiguration, processOnly: boolean): ProblemViewConfiguration {
   const visibleColumns = allColumns.filter((column) => configuration.visibleColumns.includes(column));
-  const ordered = configuration.columnOrder.filter((column, index, source) => allColumns.includes(column) && source.indexOf(column) === index);
+  const ordered = configuration.columnOrder.filter((column, index, source) => allColumns.includes(column as ColumnKey) && source.indexOf(column) === index);
   const columnOrder = [...ordered, ...allColumns.filter((column) => !ordered.includes(column))];
   const sortBy = sortFields.includes(configuration.sort.sortBy) ? configuration.sort.sortBy : defaultConfiguration.sort.sortBy;
+  const processLayout = processOnly ? normalizeColumnLayout(configuration === defaultConfiguration ? undefined : { order: configuration.columnOrder, visible: configuration.visibleColumns }, true) : undefined;
   return {
     schemaVersion: 1,
-    filters: normalizeFilters(configuration.filters),
+    filters: normalizeFilters(configuration.filters, processOnly),
     sort: { sortBy, sortDirection: configuration.sort.sortDirection === 'asc' ? 'asc' : 'desc' },
-    visibleColumns: visibleColumns.length ? visibleColumns : ['reportNumber'],
-    columnOrder,
+    visibleColumns: processLayout?.visible ?? (visibleColumns.length ? visibleColumns : ['reportNumber']),
+    columnOrder: processLayout?.order ?? columnOrder,
   };
+}
+
+function processFilters({ search, status, severity, ownerName, stage, responsibleSectionName, dueFrom, dueTo, overdueAt }: ProblemFilters): ProblemFilters {
+  return { ...(search?.trim() ? { search: search.trim() } : {}), ...(status ? { status } : {}),
+    ...(severity?.trim() ? { severity: severity.trim() } : {}), ...(ownerName?.trim() ? { ownerName: ownerName.trim() } : {}),
+    ...(stage ? { stage } : {}), ...(responsibleSectionName?.trim() ? { responsibleSectionName: responsibleSectionName.trim() } : {}),
+    ...(dueFrom ? { dueFrom } : {}), ...(dueTo ? { dueTo } : {}), ...(overdueAt ? { overdueAt } : {}) };
 }
 
 function localDateTime(iso?: string) {
@@ -112,10 +148,11 @@ export function ProblemCenterPage({ processQuality = false, eightDDomain }: { pr
   const [searchParams] = useSearchParams();
   const session = useWorkTabsStore(state => state.sessionScope);
   const explicitOrganization = searchParams.get('organizationId')?.trim() ?? '';
-  return <ProblemCenterScope key={`${session}:${processQuality}:${eightDDomain}:${explicitOrganization || 'session-primary-organization'}`} explicitOrganization={explicitOrganization} processQuality={processQuality} eightDDomain={eightDDomain} />;
+  const scope = `${session}:${explicitOrganization || 'session-primary-organization'}`;
+  return <ProblemCenterScope key={`${scope}:${processQuality}:${eightDDomain}`} explicitOrganization={explicitOrganization} processQuality={processQuality} eightDDomain={eightDDomain} followupScope={session && processQuality && !eightDDomain ? scope : undefined} />;
 }
 
-function ProblemCenterScope({ explicitOrganization, processQuality: processOnly, eightDDomain }: { explicitOrganization: string; processQuality: boolean; eightDDomain?: EightDDomain }) {
+function ProblemCenterScope({ explicitOrganization, processQuality: processOnly, eightDDomain, followupScope }: { explicitOrganization: string; processQuality: boolean; eightDDomain?: EightDDomain; followupScope?: string }) {
   const processQuality = processOnly || !!eightDDomain;
   const followupTitle = eightDDomain === 'customer-quality' ? '客户问题跟进' : eightDDomain === 'new-product-quality' ? '新品问题跟进' : '制程问题跟进';
   const { locale, t } = useLanguage();
@@ -124,14 +161,22 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   const [organizationId, setOrganizationId] = useState<string>();
   const [organizationInput, setOrganizationInput] = useState(explicitOrganization);
   const [organizationError, setOrganizationError] = useState<ErrorState>();
-  const [filters, setFilters] = useState<ProblemFilters>({});
-  const [appliedFilters, setAppliedFilters] = useState<ProblemFilters>({});
-  const [sort, setSort] = useState<ProblemSort>(defaultConfiguration.sort);
-  const [viewLayout, setViewLayout] = useState<ColumnLayout>(() => normalizeColumnLayout(undefined));
-  const [page, setPage] = useState(1);
+  const [restored] = useState(() => followupScope && followupSnapshot?.scope === followupScope ? followupSnapshot : undefined);
+  const [filters, setFilters] = useState<ProblemFilters>(restored?.filters ?? {});
+  const [appliedFilters, setAppliedFilters] = useState<ProblemFilters>(restored?.filters ?? {});
+  const [searchInput, setSearchInput] = useState(restored?.filters.search ?? '');
+  const [sort, setSort] = useState<ProblemSort>(restored?.sort ?? defaultConfiguration.sort);
+  const [draftSort, setDraftSort] = useState(sort);
+  const [viewLayout, setViewLayout] = useState<ColumnLayout>(() => restored?.layout ?? normalizeColumnLayout(undefined, processOnly));
+  const [page, setPage] = useState(restored?.page ?? 1);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterField, setFilterField] = useState<keyof ProblemFilters>('search');
+  const filterAnchor = useRef<HTMLElement>(undefined);
+  const filterTrigger = useRef<HTMLButtonElement>(null);
+  const filterPanel = useRef<HTMLDivElement>(null);
   const ledgerId = eightDDomain ? `${eightDDomain}-problem-followup` : processOnly ? 'process-problem-followup' : 'problem-center';
   const [pageSize, setPageSize] = useLedgerPageSize(ledgerId, organizationId);
-  const [result, setResult] = useState<ProblemPage>();
+  const [result, setResult] = useState<ProblemPage | ProcessFollowupPage>();
   const [resultError, setResultError] = useState<ErrorState>();
   const [resultLoading, setResultLoading] = useState(false);
   const [views, setViews] = useState<ProblemView[]>([]);
@@ -139,11 +184,11 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   const [viewOffset, setViewOffset] = useState(0);
   const [viewsError, setViewsError] = useState<ErrorState>();
   const [viewsLoading, setViewsLoading] = useState(false);
-  const [selectedViewId, setSelectedViewId] = useState('');
+  const [selectedViewId, setSelectedViewId] = useState(restored?.selectedViewId ?? '');
   const ledgerScope = useLedgerScope(organizationId);
   const layoutKey = organizationId ? preferenceKey(ledgerScope, ledgerId, 'columns', 'default-layout') : undefined;
   const layoutStateKey = layoutKey ?? JSON.stringify([ledgerScope, ledgerId, 'default-layout']);
-  const [defaultLayout, setDefaultLayout] = usePreference(layoutKey, ledgerScope.sessionScope, normalizeColumnLayout, layoutStateKey);
+  const [defaultLayout, setDefaultLayout] = usePreference(layoutKey, ledgerScope.sessionScope, input => normalizeColumnLayout(input, processOnly), layoutStateKey);
   const activeLayout = useRef({ key: layoutStateKey, viewId: selectedViewId, value: defaultLayout });
   activeLayout.current = { key: layoutStateKey, viewId: selectedViewId, value: defaultLayout };
   const { order: columnOrder, visible: visibleColumns } = selectedViewId ? viewLayout : defaultLayout;
@@ -164,12 +209,18 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   const processReads = useRef(new Set<AbortController>());
   const revokeProcessAccess = useCallback(() => {
     if (!scopeActive.current) return;
+    if (followupScope && followupSnapshot?.scope === followupScope) followupSnapshot = undefined;
     scopeActive.current = false;
     problemResource.current = ''; viewResource.current = ''; viewGeneration.current += 1;
     processReads.current.forEach(controller => controller.abort()); processReads.current.clear();
     setAccessLost(true); setResult(undefined); setViews([]); setViewTotal(0); setSelectedViewId(''); setViewName('');
     setResultLoading(false); setViewsLoading(false); setMutating(false); setWriteForbidden(true);
-  }, []);
+  }, [followupScope]);
+  useEffect(() => {
+    if (followupScope && organizationId && !accessLost) {
+      followupSnapshot = { scope: followupScope, page, filters: appliedFilters, sort, selectedViewId, layout: viewLayout };
+    }
+  }, [followupScope, organizationId, accessLost, page, appliedFilters, sort, selectedViewId, viewLayout]);
   useEffect(() => {
     scopeActive.current = true;
     return () => {
@@ -195,8 +246,8 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     if (!selected || organizationId === selected) return;
     setOrganizationId(selected);
     setOrganizationInput(selected);
-    setPage(1);
-  }, [explicitOrganization, organizationId]);
+    if (!restored) setPage(1);
+  }, [explicitOrganization, organizationId, restored]);
 
   useEffect(() => {
     if (organizationId) setWriteForbidden(false);
@@ -241,9 +292,10 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     return () => controller.abort();
   }, [loadViews, organizationId, viewOffset, accessLost]);
 
-  const query = useMemo<ProblemQuery | undefined>(() => {
+  const query = useMemo<ProblemQuery | ProcessFollowupQuery | undefined>(() => {
     if (!organizationId || accessLost) return undefined;
-    const value: ProblemQuery = { organizationId, page, pageSize, ...appliedFilters, sortBy: sort.sortBy, sortDirection: sort.sortDirection };
+    if (processOnly) return { organizationId, page, pageSize, ...processFilters(appliedFilters), ...sort };
+    const value: ProblemQuery = { organizationId, page, pageSize, ...normalizeFilters(appliedFilters), ...sort };
     if (processQuality) {
       value.domainCode = eightDDomain ?? 'process-quality';
       if (eightDDomain) {
@@ -253,7 +305,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       value.responseForm = 'EIGHT_D';
     }
     return value;
-  }, [appliedFilters, organizationId, page, pageSize, sort, processQuality, eightDDomain, accessLost]);
+  }, [appliedFilters, organizationId, page, pageSize, sort, processOnly, processQuality, eightDDomain, accessLost]);
 
   useEffect(() => {
     if (!query || processQuality && !scopeActive.current) return;
@@ -264,7 +316,8 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     setResult(undefined);
     setResultError(undefined);
     setResultLoading(true);
-    void getProblemIndex(query, controller.signal).then((response) => {
+    const request = processOnly ? getProcessFollowup : getProblemIndex;
+    void request(query, controller.signal).then((response) => {
       if (problemResource.current === key && !controller.signal.aborted) setResult(response);
     }).catch((cause) => {
       if (controller.signal.aborted || (cause instanceof DOMException && cause.name === 'AbortError') || problemResource.current !== key) return;
@@ -277,7 +330,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       if (problemResource.current === key && !controller.signal.aborted) setResultLoading(false);
     });
     return () => { controller.abort(); processReads.current.delete(controller); };
-  }, [query, revision, processQuality, revokeProcessAccess]);
+  }, [query, revision, processOnly, processQuality, revokeProcessAccess]);
 
   const selectedView = views.find((view) => view.id === selectedViewId);
   function changeColumnLayout(next: Partial<ColumnLayout>) {
@@ -291,17 +344,22 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   }
   const configuration = useMemo<ProblemViewConfiguration>(() => ({
     schemaVersion: 1,
-    filters: { ...filters, ...(processQuality ? { domainCode: eightDDomain ?? 'process-quality', problemType: eightDDomain ? undefined : 'PROCESS_DEFECT' } : {}) },
-    sort: { ...sort },
-    visibleColumns: [...visibleColumns],
-    columnOrder: [...columnOrder],
-  }), [columnOrder, filters, sort, visibleColumns, processQuality, eightDDomain]);
+    filters: processOnly ? processFilters(filters) : { ...filters, ...(eightDDomain ? { domainCode: eightDDomain, problemType: undefined } : {}) },
+    sort: processOnly ? draftSort : sort,
+    visibleColumns,
+    columnOrder,
+  }), [columnOrder, filters, draftSort, sort, visibleColumns, processOnly, eightDDomain]);
 
   const applyConfiguration = (next: ProblemViewConfiguration, name?: string) => {
-    const normalized = normalizeConfiguration(next);
-    setFilters(normalized.filters);
-    setAppliedFilters(normalized.filters);
-    setSort(normalized.sort);
+    const normalized = normalizeConfiguration(next, processOnly);
+    const nextFilters = processOnly ? processFilters(normalized.filters) : normalized.filters;
+    if (processOnly && nextFilters.overdueAt) nextFilters.overdueAt = new Date().toISOString();
+    const nextSort = normalized.sort;
+    setFilters(nextFilters);
+    setSearchInput(nextFilters.search ?? '');
+    setAppliedFilters(nextFilters);
+    setSort(nextSort);
+    setDraftSort(nextSort);
     changeColumnLayout({ visible: normalized.visibleColumns, order: normalized.columnOrder });
     if (name !== undefined) setViewName(name);
     setPage(1);
@@ -312,7 +370,8 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
 
   const switchOrganization = () => {
     const selected = organizationInput.trim();
-    if (!selected) return;
+    if (!selected || processOnly && selected === organizationId) return;
+    if (processOnly) followupSnapshot = undefined;
     const next = new URLSearchParams(searchParams);
     next.set('organizationId', selected);
     problemResource.current = `switching:${selected}`;
@@ -325,6 +384,37 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     setViews([]);
     setMutationError(undefined);
   };
+
+  function focusFilter() {
+    filterPanel.current?.querySelector<HTMLElement>(`[data-followup-filter="${filterField}"]`)?.focus();
+  }
+
+  function openFilters(anchor: HTMLElement, field: keyof ProblemFilters = 'search') {
+    filterAnchor.current = anchor;
+    setFilterField(field);
+    if (!filterOpen) {
+      setFilters(appliedFilters);
+      setDraftSort(sort);
+    } else if (field === filterField) focusFilter();
+    setFilterOpen(true);
+  }
+  useEffect(() => {
+    if (filterOpen) filterPanel.current?.querySelector<HTMLElement>(`[data-followup-filter="${filterField}"]`)?.focus();
+  }, [filterOpen, filterField]);
+
+  function applyFilters(restoreFocus: boolean, nextFilters = filters) {
+    const next = processFilters(nextFilters);
+    const changed = JSON.stringify(next) !== JSON.stringify(appliedFilters) || draftSort.sortBy !== sort.sortBy || draftSort.sortDirection !== sort.sortDirection;
+    if (changed) {
+      setAppliedFilters(next);
+      setSort(draftSort);
+      setPage(1);
+    }
+    setFilters(next);
+    setSearchInput(next.search ?? '');
+    setFilterOpen(false);
+    if (restoreFocus) filterAnchor.current?.focus({ preventScroll: true });
+  }
 
   const mutate = async (operation: () => Promise<void>, message: string) => {
     const current = () => !processQuality || scopeActive.current;
@@ -361,7 +451,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       if (processQuality && !scopeActive.current) return;
       setViews((current) => [created, ...current]);
       setViewTotal((total) => total + 1);
-      setViewLayout({ visible: configuration.visibleColumns, order: configuration.columnOrder });
+      setViewLayout({ visible: visibleColumns, order: columnOrder });
       setSelectedViewId(created.id);
     }, '视图已保存');
   };
@@ -400,9 +490,9 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     })();
   };
 
-  const columns = useMemo<TableColumnsType<ProblemItem>>(() => {
+  const columns = (() => {
     const definitions: Record<ColumnKey, TableColumnsType<ProblemItem>[number]> = {
-      reportNumber: { title: t('报告编号'), dataIndex: 'reportNumber', render: (value: string, item) => <Link to={`/app/problem-workspace/${item.id}?organizationId=${encodeURIComponent(item.organizationId)}`}>{value}</Link> },
+      reportNumber: { title: t('报告编号'), dataIndex: 'reportNumber', render: (value: string, item) => <Link to={`/app/problem-workspace/${item.id}?organizationId=${encodeURIComponent(item.organizationId)}`} state={processOnly ? { processFollowupReturnScope: explicitOrganization ? 'explicit' : 'primary' } : undefined}>{value}</Link> },
       title: { title: t('标题'), dataIndex: ['summary', 'title'], render: (value: string, item) => processQuality ? <ProcessProblemTitle summary={item.summary} /> : value },
       domainCode: { title: t('领域'), dataIndex: 'domainCode' },
       problemType: { title: t('问题类型'), dataIndex: 'problemType' },
@@ -413,26 +503,41 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       dueAt: { title: t(processQuality ? '问题截止时间' : '截止时间'), dataIndex: 'dueAt', render: (value: string | null) => value ? new Date(value).toLocaleString(locale) : '—' },
       updatedAt: { title: t('更新时间'), dataIndex: 'updatedAt', render: (value: string) => new Date(value).toLocaleString(locale) },
     };
+    if (processOnly) {
+      definitions.title = { title: t('问题标题'), ellipsis: { showTitle: false }, render: (_, item: ProblemItem) => {
+        const { summary, reportNumber } = item;
+        const title = summary.title && summary.title !== reportNumber && summary.title !== summary.description.slice(0, 200) ? summary.title : summary.description || summary.title;
+        return <ProcessProblemTitle summary={{ ...summary, description: title }} />;
+      } };
+      definitions.dueAt = { title: t('办理期限'), render: (_, item: ProblemItem) => {
+        const value = item.dueAt;
+        const date = value && item.status !== 'CLOSED' && item.status !== 'ARCHIVED' ? new Date(value) : undefined;
+        if (!date || !Number.isFinite(date.getTime())) return '—';
+        return <time dateTime={date.toISOString()}>{date.toLocaleString(locale)}</time>;
+      } };
+      const widths: Partial<Record<LayoutKey, number>> = { reportNumber: 138, title: 245, processStage: 126, status: 90, severity: 84, responsibleParty: 130, ownerId: 104, dueAt: 170 };
+      return processColumns.map((key): TableColumnsType<ProblemItem>[number] => {
+        const definition = key === 'processStage' ? { title: t('当前环节'), render: (_: unknown, item: ProblemItem) =>
+          t('stage' in item && isFollowupStage(item.stage) ? stageLabels[item.stage] : '—') } : definitions[key];
+        const label = String(definition.title);
+        const field = processHeaderFilters[key as keyof typeof processHeaderFilters];
+        const triggerLabel = locale === 'en-US' ? `Filter by ${label}` : `按${label}筛选`;
+        return { ...definition, key, width: widths[key] ?? 150, onHeaderCell: () => ({ 'aria-label': label }),
+          title: field ? <LedgerFilterHeader aria-label={label} triggerLabel={triggerLabel} active={!!appliedFilters[field] || key === 'dueAt' && !!(appliedFilters.dueTo || appliedFilters.overdueAt)} expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === triggerLabel} disabled={!organizationId} onOpen={anchor => openFilters(anchor, field)} /> : label };
+      });
+    }
     const selected: TableColumnsType<ProblemItem> = allColumns.map((column) => ({ ...definitions[column], key: column, width: column === 'title' ? 260 : 170 }));
     if (processQuality) selected.push(
       { title: t('当前阶段'), key: 'processStage', width: 170, render: (_, item) => t(processSummaryValue(item.summary, 'stage') || '—') },
       { title: t('当前期限'), key: 'processDeadlines', width: 230, render: (_, item) => <ProcessProblemDeadlines problem={item} /> },
     );
     return selected;
-  }, [locale, t, processQuality, severityText]);
+  })();
 
   const disabledWrites = writeForbidden || mutating || viewsLoading;
   if (accessLost) return <main className="problem-center"><h1 className="sr-only">{t(processQuality ? followupTitle : '问题管理面板')}</h1><Alert role="alert" type="warning" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} /></main>;
-  return <main className="problem-center">
-    <div className="problem-center__heading">
-      <h1 className="sr-only">{t(processQuality ? followupTitle : '问题管理面板')}</h1>
-      <Space wrap>
-        <Space.Compact><Input aria-label={t('组织上下文')} value={organizationInput} onChange={(event) => setOrganizationInput(event.target.value)} /><Button onClick={switchOrganization}>{t('切换组织')}</Button></Space.Compact>
-        {processQuality ? <Button loading={resultLoading} onClick={() => setRevision(value => value + 1)}>{t('刷新')}</Button> : null}
-      </Space>
-    </div>
-    <Feedback error={organizationError} t={t} />
-    <Card title={t('保存视图')} loading={!organizationId && !organizationError}>
+  const organizationControl = <Space.Compact><Input aria-label={t('组织上下文')} value={organizationInput} onChange={(event) => setOrganizationInput(event.target.value)} /><Button onClick={switchOrganization}>{t('切换组织')}</Button></Space.Compact>;
+  const viewControls = <>
       <div className="problem-center__view-row">
         <label>{t('保存视图')}<select aria-label={t('保存视图')} value={selectedViewId} onChange={(event) => {
           const id = event.target.value;
@@ -441,7 +546,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
           const view = views.find((candidate) => candidate.id === id);
           if (view) setViewName(view.name);
         }} disabled={viewsLoading}><option value="">{t('请选择')}</option>{views.map((view) => <option value={view.id} key={view.id}>{view.name}</option>)}</select></label>
-        <label>{t('视图名称')}<Input aria-label={t('视图名称')} value={viewName} maxLength={80} onChange={(event) => setViewName(event.target.value)} /></label>
+        <label>{t('视图名称')}<Input aria-label={t('视图名称')} value={viewName || (processOnly && restored?.selectedViewId === selectedViewId ? selectedView?.name : '')} maxLength={80} onChange={(event) => setViewName(event.target.value)} /></label>
         <Space wrap>
           <Button disabled={!selectedView} onClick={() => selectedView && applyConfiguration(selectedView.configuration, selectedView.name)}>{t('应用视图')}</Button>
           <Button type="primary" disabled={disabledWrites} loading={mutating} onClick={saveView}>{t('保存新视图')}</Button>
@@ -453,6 +558,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
             cancelText={t('取消')}
             okButtonProps={{ danger: true }}
             disabled={disabledWrites || !selectedView}
+            getPopupContainer={processOnly ? trigger => trigger.parentElement ?? trigger : undefined}
             onConfirm={removeView}
           >
             <Button danger disabled={disabledWrites || !selectedView} loading={mutating}>{t('删除视图')}</Button>
@@ -463,10 +569,75 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       <Feedback error={viewsError} t={t} /><Feedback error={mutationError} t={t} />
       {mutationMessage ? <Alert type="success" showIcon role="status" title={t(mutationMessage)} /> : null}
       {viewTotal > 100 ? <Space className="problem-center__view-pages"><Button disabled={viewOffset === 0} onClick={() => setViewOffset(Math.max(0, viewOffset - 100))}>{t('上一页')}</Button><span>{viewOffset + 1}–{Math.min(viewOffset + 100, viewTotal)} / {viewTotal}</span><Button disabled={viewOffset + 100 >= viewTotal} onClick={() => setViewOffset(viewOffset + 100)}>{t('下一页')}</Button></Space> : null}
-    </Card>
+    </>;
+  const statusCounts = result?.statusCounts.length ? <Space wrap className="problem-center__counts">{result.statusCounts.map((entry) => <Tag key={entry.status}>{t(statusLabels[entry.status])}: {entry.count}</Tag>)}</Space> : null;
+  const updateColumnOrder = (keys: string[]) => changeColumnLayout({ order: keys.filter((key): key is LayoutKey => (processOnly ? processColumns : allColumns).includes(key as ColumnKey)) });
+  const updateVisibleColumns = (keys: string[]) => changeColumnLayout({ visible: keys.filter((key): key is LayoutKey => (processOnly ? processColumns : allColumns).includes(key as ColumnKey)) });
+  const emptyText = <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={page > 1 && (result?.total ?? 0) > 0 ? t('本页暂无问题') : t(processOnly && Object.keys(appliedFilters).length ? '没有匹配的问题' : '暂无问题')} />;
+  const refresh = () => {
+    if (processOnly && appliedFilters.overdueAt) {
+      const overdueAt = new Date().toISOString();
+      const advanceOverdueCutoff = (current: ProblemFilters) => current.overdueAt && current.overdueAt !== overdueAt ? { ...current, overdueAt } : current;
+      setAppliedFilters(advanceOverdueCutoff);
+      setFilters(advanceOverdueCutoff);
+    }
+    setRevision(value => value + 1);
+  };
+  if (processOnly) return <main className="problem-center process-quality-page">
+    <h1 className="sr-only">{t(followupTitle)}</h1>
+    <Feedback error={organizationError} t={t} />
+    {statusCounts}
+    <section aria-label={t('问题列表')} className="process-quality-card process-quality-compact-ledger">
+      <LedgerTable<ProblemItem> compactHeaders compactLayout pinnedHorizontalScroll className="process-quality-ledger"
+        actionBar={<div className="process-quality-toolbar-main" role="group" aria-label={t('台账工具栏')}>
+          <Input.Search aria-label={t('搜索报告编号或问题标题')} placeholder={t('搜索报告编号或问题标题')} allowClear maxLength={100} disabled={!organizationId} value={searchInput}
+            onChange={event => setSearchInput(event.target.value)} onSearch={search => applyFilters(false, { ...(filterOpen ? filters : appliedFilters), search })} />
+          <LedgerFilterPopover open={filterOpen} trigger={filterTrigger} label={t('筛选条件')} count={Object.keys(appliedFilters).length} disabled={!organizationId}
+            onOpen={openFilters} onDismiss={applyFilters} onFocus={focusFilter}>
+            <LedgerFilterPanel anchor={filterAnchor} trigger={filterTrigger} label={t('筛选面板')} title={t('筛选条件')} closeLabel={t('关闭筛选')} onDismiss={applyFilters}>
+              <div className="problem-center problem-center__popup" ref={filterPanel}>
+                <div className="problem-center__filters">
+                  <label>{t('搜索报告编号或问题标题')}<Input data-followup-filter="search" aria-label={t('报告编号检索')} maxLength={100} value={filters.search ?? ''} onChange={event => setFilters(current => ({ ...current, search: event.target.value }))} /></label>
+                  <label>{t('当前环节')}<select data-followup-filter="stage" aria-label={t('当前环节')} value={filters.stage ?? ''} onChange={event => setFilters(current => ({ ...current, stage: (event.target.value || undefined) as ProblemFilters['stage'] }))}><option value="">{t('全部环节')}</option>{Object.entries(stageLabels).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
+                  <label>{t('状态')}<select data-followup-filter="status" aria-label={t('状态筛选')} value={filters.status ?? ''} onChange={event => setFilters(current => ({ ...current, status: (event.target.value || undefined) as ProblemStatus | undefined }))}><option value="">{t('全部状态')}</option>{statuses.map(status => <option key={status} value={status}>{t(statusLabels[status])}</option>)}</select></label>
+                  <label>{t('风险')}<select data-followup-filter="severity" aria-label={t('严重度筛选')} value={filters.severity ?? ''} onChange={event => setFilters(current => ({ ...current, severity: event.target.value }))}><option value="">{t('全部风险')}</option>{['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map(value => <option key={value} value={value}>{severityText(value as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL')}</option>)}</select></label>
+                  <label>{t('负责人')}<Input data-followup-filter="ownerName" aria-label={t('负责人')} maxLength={100} value={filters.ownerName ?? ''} onChange={event => setFilters(current => ({ ...current, ownerName: event.target.value }))} /></label>
+                  <label>{t('责任科室')}<Input data-followup-filter="responsibleSectionName" aria-label={t('责任科室')} maxLength={100} value={filters.responsibleSectionName ?? ''} onChange={event => setFilters(current => ({ ...current, responsibleSectionName: event.target.value }))} /></label>
+                  <label>{t('办理期限起始')}<input data-followup-filter="dueFrom" aria-label={t('办理期限起始')} type="datetime-local" value={localDateTime(filters.dueFrom)} onChange={event => setFilters(current => ({ ...current, dueFrom: isoDateTime(event.target.value) }))} /></label>
+                  <label>{t('办理期限结束')}<input aria-label={t('办理期限结束')} type="datetime-local" value={localDateTime(filters.dueTo)} onChange={event => setFilters(current => ({ ...current, dueTo: isoDateTime(event.target.value) }))} /></label>
+                  <label>{t('排序字段')}<select aria-label={t('排序字段')} value={draftSort.sortBy} onChange={event => setDraftSort(current => ({ ...current, sortBy: event.target.value as ProblemSort['sortBy'] }))}>{sortFields.map(value => <option key={value} value={value}>{t(value === 'severity' ? '风险' : value === 'dueAt' ? '办理期限' : sortLabels[value])}</option>)}</select></label>
+                  <label>{t('排序方向')}<select aria-label={t('排序方向')} value={draftSort.sortDirection} onChange={event => setDraftSort(current => ({ ...current, sortDirection: event.target.value === 'asc' ? 'asc' : 'desc' }))}><option value="desc">{t('降序')}</option><option value="asc">{t('升序')}</option></select></label>
+                </div>
+                <Space wrap><Checkbox checked={!!filters.overdueAt} onChange={event => setFilters(current => ({ ...current, overdueAt: event.target.checked ? new Date().toISOString() : undefined }))}>{t('仅看当前已逾期')}</Checkbox><Button onClick={() => { applyConfiguration(defaultConfiguration, ''); setFilterOpen(false); filterAnchor.current?.focus(); }}>{t('重置')}</Button><Button type="primary" onClick={() => applyFilters(true)}>{t('应用筛选')}</Button></Space>
+                {organizationControl}
+                {viewControls}
+              </div>
+            </LedgerFilterPanel>
+          </LedgerFilterPopover>
+          <Button aria-label={t('刷新')} loading={resultLoading} disabled={!organizationId} onClick={refresh}>{t('刷新')}</Button>
+        </div>}
+        ledgerId={ledgerId} organizationId={organizationId} viewId={selectedViewId || 'default'} requiredColumnKeys={['reportNumber']}
+        columnOrder={columnOrder} visibleColumnKeys={visibleColumns} onColumnOrderChange={updateColumnOrder} onVisibleColumnKeysChange={updateVisibleColumns}
+        rowKey="id" loading={resultLoading} columns={columns} dataSource={result?.items ?? []} locale={{ emptyText: resultLoading ? t('加载中') : emptyText }}
+        bodyFallback={resultError ? <Space wrap><Feedback error={resultError} t={t} /><Button onClick={refresh}>{t('重试')}</Button></Space> : undefined}
+        pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => <Typography.Text>{t('总数')}: {total}</Typography.Text>,
+          onChange: (next, size) => { setPageSize(size); setPage(size === pageSize ? Math.min(10001, next) : 1); } }} />
+    </section>
+  </main>;
+
+  return <main className="problem-center">
+    <div className="problem-center__heading">
+      <h1 className="sr-only">{t(processQuality ? followupTitle : '问题管理面板')}</h1>
+      <Space wrap>
+        {organizationControl}
+        {processQuality ? <Button loading={resultLoading} onClick={refresh}>{t('刷新')}</Button> : null}
+      </Space>
+    </div>
+    <Feedback error={organizationError} t={t} />
+    <Card title={t('保存视图')} loading={!organizationId && !organizationError}>{viewControls}</Card>
 
     <section aria-label={t('问题列表')}>
-      {result?.statusCounts.length ? <Space wrap className="problem-center__counts">{result.statusCounts.map((entry) => <Tag key={entry.status}>{t(statusLabels[entry.status])}: {entry.count}</Tag>)}</Space> : null}
+      {statusCounts}
       <Feedback error={resultError} t={t} />
       <LedgerTable<ProblemItem> actionBar={<details className="problem-center__query" open={true}><summary>{t('筛选与排序')}</summary>
       <div className="problem-center__filters">

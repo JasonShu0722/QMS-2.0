@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { ApiError, apiRequest, csrfToken } from '../api/client';
@@ -12,6 +12,7 @@ vi.mock('./ConsoleLayout', () => ({ useConsoleContext: () => verified }));
 vi.mock('../api/client', async original => ({ ...await original<typeof import('../api/client')>(), apiRequest: vi.fn(), csrfToken: vi.fn() }));
 
 const endpoint = '/api/v1/process-quality/ledger-workflow-configuration';
+const eightDEndpoint = '/api/v1/process-quality/eight-d-workflow-configuration';
 const home = { id: '11111111-1111-4111-8111-111111111111', code: 'A', name: '会话组织A', type: 'INTERNAL', status: 'ACTIVE', configurationRequired: false } as const;
 const target = { ...home, id: '22222222-2222-4222-8222-222222222222', name: '管理目标B' };
 const boards = ['REGISTRATION', 'ANALYSIS', 'RESPONSIBILITY', 'DISPOSITION', 'CLOSURE'] as const;
@@ -81,6 +82,33 @@ it('denies users without the workflow management capability before requesting co
   view();
   expect(screen.getByRole('alert')).toHaveTextContent('无权访问此管理模块');
   expect(apiRequest).not.toHaveBeenCalled();
+});
+
+it('edits the four process 8D stages independently and shows missing positions', async () => {
+  const stages = ['ISSUE', 'ANALYSIS', 'IMPLEMENTATION', 'CLOSURE'].map(stage => ({ stage, positionIds: stage === 'ANALYSIS' ? ['removed-position'] : [] }));
+  const eightD = { version: 2, positions: configuration.positions, stages, missingStages: stages.map(({ stage }) => stage) };
+  vi.mocked(apiRequest).mockResolvedValueOnce(eightD).mockImplementationOnce(async (_path, init) => ({ ...eightD,
+    version: 3, stages: JSON.parse(String(init?.body)).stages, missingStages: ['ISSUE', 'IMPLEMENTATION', 'CLOSURE'],
+  }));
+  view();
+  fireEvent.click(screen.getByRole('button', { name: '制程内部 8D' }));
+  const analysis = await screen.findByRole('combobox', { name: '分析与对策' });
+  const form = within(analysis.closest('form')!);
+  expect(form.getAllByRole('combobox').map(control => control.getAttribute('aria-label'))).toEqual(['发单', '分析与对策', '实施与验证', '关闭审核']);
+  expect(form.getByText(/缺少有效岗位.*分析与对策/)).toBeVisible();
+  expect(form.getByText(/已失效岗位.*removed-position/)).toBeVisible();
+  const save = form.getByRole('button', { name: '保存配置' });
+  expect(save).toBeDisabled();
+  fireEvent.keyDown(analysis, { key: 'Backspace', code: 'Backspace' });
+  fireEvent.mouseDown(analysis);
+  fireEvent.click(await screen.findByText('分析员'));
+  fireEvent.click(save);
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(apiRequest).mock.calls.map(([path]) => path)).toEqual([eightDEndpoint, eightDEndpoint]);
+  expect(JSON.parse(String(vi.mocked(apiRequest).mock.calls[1][1]?.body))).toEqual({ expectedVersion: 2,
+    stages: stages.map(({ stage }) => ({ stage, positionIds: stage === 'ANALYSIS' ? ['analyst'] : [] })),
+  });
+  await waitFor(() => expect(form.getByText(/缺少有效岗位/)).not.toHaveTextContent('分析与对策'));
 });
 
 it('keeps edits on a version conflict and requires a reload before saving again', async () => {

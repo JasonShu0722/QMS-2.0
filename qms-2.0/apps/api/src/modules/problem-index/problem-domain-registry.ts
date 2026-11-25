@@ -19,6 +19,21 @@ export interface ProblemDomainReport {
   summary: ProblemDomainSummary; snapshot: ProblemReportSnapshot; sections: ProblemDomainSection[];
 }
 export interface ProblemDomainReadContext { actor: WorkflowActor; problem: ProblemIndex; purpose: ProblemReadPurpose }
+export interface ProblemFollowupSql {
+  authorize(tx: Prisma.TransactionClient): Promise<void>;
+  joins: Prisma.Sql;
+  projection: Prisma.Sql;
+  stage: Prisma.Sql;
+  sectionId: Prisma.Sql;
+  sectionName: Prisma.Sql;
+  ownerName: Prisma.Sql;
+  dueAt: Prisma.Sql;
+  search(pattern: string): Prisma.Sql;
+  summarize(facts: ProblemFollowupFacts): ProblemDomainSummary;
+}
+export interface ProblemFollowupFacts {
+  title: string; description: string; sectionName: string | null; ownerName: string | null;
+}
 export interface ProblemDomainReadAdapter {
   readonly domainCode: string;
   readonly sourceType: string;
@@ -26,6 +41,7 @@ export interface ProblemDomainReadAdapter {
   listRevisionIds?(tx: Prisma.TransactionClient, context: ProblemDomainReadContext): Promise<readonly string[] | null>;
   visibilityPredicate(actor: WorkflowActor, organizationId: string): Prisma.Sql;
   responseFormPredicate?(form: DomainSourceResponseForm): Prisma.Sql;
+  followupSql?(actor: WorkflowActor, organizationId: string): ProblemFollowupSql;
   authorizeRead(tx: Prisma.TransactionClient, context: ProblemDomainReadContext): Promise<void>;
   readSummaries(tx: Prisma.TransactionClient, actor: WorkflowActor, problems: readonly ProblemIndex[]): Promise<ReadonlyMap<string, ProblemDomainSummary>>;
   readWorkspace(tx: Prisma.TransactionClient, context: ProblemDomainReadContext, instance: WorkflowInstance | null): Promise<ProblemDomainWorkspace | null>;
@@ -70,6 +86,14 @@ export class ProblemDomainRegistry implements OnApplicationBootstrap {
     const predicates = this.adapters.map((adapter) => Prisma.sql`(p.domain_code = ${adapter.domainCode} AND p.source_type = ${adapter.sourceType} AND p.source_id IS NOT NULL AND (${adapter.visibilityPredicate(actor, organizationId)})
       ${responseForm ? Prisma.sql`AND (${adapter.responseFormPredicate?.(responseForm) ?? Prisma.sql`FALSE`})` : Prisma.empty})`);
     return predicates.length ? Prisma.sql`(${Prisma.join(predicates, ' OR ')})` : Prisma.sql`FALSE`;
+  }
+  followup(domainCode: string, sourceType: string, actor: WorkflowActor, organizationId: string) {
+    const adapter = this.adapters.find((entry) => entry.domainCode === domainCode && entry.sourceType === sourceType);
+    if (!adapter?.followupSql) throw new Error('PROBLEM_FOLLOWUP_UNAVAILABLE');
+    return {
+      sql: adapter.followupSql(actor, organizationId),
+      predicate: Prisma.sql`p.domain_code = ${domainCode} AND p.source_type = ${sourceType} AND p.source_id IS NOT NULL`,
+    };
   }
   forProblem(problem: Pick<ProblemIndex, 'domainCode' | 'sourceType' | 'sourceId'>): ProblemDomainReadAdapter {
     const adapter = this.adapters.find((entry) => entry.domainCode === problem.domainCode && entry.sourceType === problem.sourceType);

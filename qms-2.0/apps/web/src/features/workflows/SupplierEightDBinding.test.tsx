@@ -178,19 +178,20 @@ it('aborts an old session while obtaining CSRF without sending the write', async
   await act(async () => finish('csrf')); expect(writes()).toHaveLength(0);
 });
 
-it('guards an unsaved supplier risk change and retains the independent internal domain', async () => {
+it('guards an unsaved supplier risk change independently of the customer binding domain', async () => {
   await ready();
   fireEvent.change(screen.getByLabelText('供应商8D已发布流程版本'), { target: { value: '' } });
   fireEvent.change(screen.getByLabelText('供应商绑定风险'), { target: { value: 'HIGH' } });
   fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
   expect(screen.getByLabelText('供应商绑定风险')).toHaveValue('LOW');
   expect(screen.getByLabelText('供应商8D已发布流程版本')).toHaveValue('');
-  expect(screen.getByLabelText('8D绑定领域')).toHaveValue('process-quality');
+  expect(screen.getByLabelText('8D绑定领域')).toHaveValue('customer-quality');
   expect(writes()).toHaveLength(0);
   fireEvent.change(screen.getByLabelText('供应商绑定风险'), { target: { value: 'HIGH' } });
   fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
   expect(screen.getByLabelText('供应商绑定风险')).toHaveValue('HIGH');
   expect(screen.getByLabelText('供应商8D已发布流程版本')).toHaveValue('');
+  expect(screen.getByLabelText('8D绑定领域')).toHaveValue('customer-quality');
   expect(screen.getByRole('button', { name: '启用供应商8D' })).toBeDisabled();
   expect(writes()).toHaveLength(0);
 });

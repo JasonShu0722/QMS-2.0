@@ -161,6 +161,15 @@ export class OrganizationGovernanceController {
     return this.organizations.updatePosition(this.actor(request), organizationId, positionId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
+  @Delete(':organizationId/positions/:positionId')
+  @ApiOkResponse({ type: DeleteStructureResultDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'organization:structure:manage', organizationScope: scope })
+  deletePosition(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('positionId', ParseUUIDPipe) positionId: string, @Body() dto: DeleteStructureDto, @Req() request: Request) {
+    return this.organizations.deletePosition(this.actor(request), organizationId.toLowerCase(), positionId.toLowerCase(), dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
+
   @Get(':organizationId/users/:userId/positions')
   @ApiOkResponse({ type: UserPositionDto, isArray: true })
   @RequireAccess({ featurePermission: 'organization:structure:read', organizationScope: scope })

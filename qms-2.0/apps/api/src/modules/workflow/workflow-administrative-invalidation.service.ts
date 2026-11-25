@@ -4,10 +4,11 @@ import { isUUID } from 'class-validator';
 import { Prisma } from '../../generated/prisma/client.js';
 import type { AdminActor } from '../../common/security/admin-mutation.service.js';
 import { AdministrativeLifecycleRegistry } from '../../common/security/administrative-lifecycle.registry.js';
-import type { AdministrativeLifecycleEffect, AdministrativeLifecycleImpact } from '../../common/security/administrative-lifecycle.types.js';
+import { ADMINISTRATIVE_ENTITY_KINDS, type AdministrativeLifecycleEffect, type AdministrativeLifecycleImpact } from '../../common/security/administrative-lifecycle.types.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
 import { OutboxService } from '../task-notification/outbox.service.js';
+import { positionClosureStageLosses } from '../organization/organization-lifecycle.read-model.js';
 import { WorkflowClosureRegistry } from './workflow-closure-registry.js';
 import type { WorkflowAdministrativeImpact, WorkflowAdministrativeSnapshot } from './workflow-administrative-invalidation.types.js';
 import { jsonObject, workflowError } from './workflow-runtime-policy.js';
@@ -59,10 +60,17 @@ export class WorkflowAdministrativeInvalidationService implements Administrative
       if (!Array.isArray(impact.ministerScopeIds)) throw new BadRequestException();
       ids.push(...impact.ministerScopeIds);
     }
-    if (ids.some(id => typeof id !== 'string' || !isUUID(id)) || !['USER', 'DEPARTMENT', 'ORGANIZATION'].includes(impact.kind)) throw new BadRequestException();
+    if (ids.some(id => typeof id !== 'string' || !isUUID(id)) || !ADMINISTRATIVE_ENTITY_KINDS.includes(impact.kind)
+      || (impact.kind === 'POSITION' && (impact.positionIds.length !== 1 || impact.positionIds[0] !== impact.entityId
+        || impact.departmentIds.length > 0 || impact.organizationIds.length > 0))) throw new BadRequestException();
     const result = { module: this.module, changed: 0, pendingConfiguration: 0 };
     if (![impact.userIds, impact.departmentIds, impact.positionIds, impact.organizationIds, impact.ministerScopeIds ?? []].some(ids => ids.length)) return result;
-    const candidates = (await this.pending(tx)).filter(row => workflowInvalidationMatches(row, impact));
+    const lostClosureEligibility = (problemId?: string) => impact.kind === 'POSITION'
+      ? positionClosureStageLosses(tx, impact.organizationId, impact.entityId, problemId) : Promise.resolve([]);
+    const lostRounds = new Set(await lostClosureEligibility());
+    const matches = (row: PendingRow, losses: Set<string>) => workflowInvalidationMatches(row, impact)
+      || row.kind === 'closure' && losses.has(row.id);
+    const candidates = (await this.pending(tx)).filter(row => matches(row, lostRounds));
     const supplier = this.registry.hasDomain('supplier-quality') ? this.registry.get('supplier-quality') : null;
     if (supplier && !supplier.administrativeInvalidationTargets) throw new HttpException({ code: 'WORKFLOW_ACTION_INVALID',
       reason: 'ADMINISTRATIVE_INVALIDATION_TARGETS_REQUIRED', domainCode: supplier.domainCode }, 409);
@@ -91,7 +99,9 @@ export class WorkflowAdministrativeInvalidationService implements Administrative
 
     const reason = `ADMINISTRATIVE_${impact.kind}_DELETED`, traceId = randomUUID();
     for (const target of targets) {
-      const rows = (await this.pending(tx, target, true)).filter(row => workflowInvalidationMatches(row, impact));
+      const pendingRows = await this.pending(tx, target, true);
+      const losses = new Set(await lostClosureEligibility(target.problemId));
+      const rows = pendingRows.filter(row => matches(row, losses));
       if (!rows.length && !domainTargets.some(scope => scope.organizationId === target.organizationId && scope.problemId === target.problemId)) continue;
       for (const row of rows) {
         if (row.kind === 'closure') {

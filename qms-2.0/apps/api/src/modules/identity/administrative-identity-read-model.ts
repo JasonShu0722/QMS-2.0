@@ -1,6 +1,12 @@
 import { Injectable, Module } from '@nestjs/common';
 import { Prisma, type User } from '../../generated/prisma/client.js';
 
+const lifecycleUserSelect = { id: true, securityVersion: true, status: true, configurationRequired: true } as const;
+type LifecycleUser = Pick<User, keyof typeof lifecycleUserSelect>;
+
+const lifecycleUserWhere = (organizationId: string, userIds?: string[]): Prisma.UserWhereInput =>
+  ({ organizationId, deletedAt: null, ...(userIds ? { id: { in: userIds } } : {}) });
+
 export function administrativeUserDisplayName(userId: Prisma.Sql): Prisma.Sql {
   return Prisma.sql`(SELECT COALESCE(person.full_name, person.username) FROM users person WHERE person.id = ${userId})`;
 }
@@ -29,13 +35,27 @@ export class AdministrativeIdentityReadModel {
     tx: Prisma.TransactionClient,
     organizationId: string,
     userIds?: string[],
-  ): Promise<Pick<User, 'id' | 'securityVersion' | 'status' | 'configurationRequired'>[]> {
+  ): Promise<LifecycleUser[]> {
     if (userIds?.length === 0) return [];
     return tx.user.findMany({
-      where: { organizationId, deletedAt: null, ...(userIds ? { id: { in: userIds } } : {}) },
-      select: { id: true, securityVersion: true, status: true, configurationRequired: true },
+      where: lifecycleUserWhere(organizationId, userIds),
+      select: lifecycleUserSelect,
       orderBy: { id: 'asc' },
     });
+  }
+
+  async positionDeletionUsers(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    userIds: string[],
+  ): Promise<(LifecycleUser & { name: string })[]> {
+    if (userIds.length === 0) return [];
+    const users = await tx.user.findMany({
+      where: lifecycleUserWhere(organizationId, userIds),
+      select: { ...lifecycleUserSelect, username: true, fullName: true },
+      orderBy: { id: 'asc' },
+    });
+    return users.map(({ username, fullName, ...user }) => ({ ...user, name: fullName ?? username }));
   }
 
   async lockLifecycleUsers(tx: Prisma.TransactionClient, ids: string[]): Promise<void> {

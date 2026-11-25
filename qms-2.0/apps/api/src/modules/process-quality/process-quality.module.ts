@@ -33,16 +33,18 @@ import { ProcessOperationSectorService } from './process-operation-sector.servic
 import { ProcessOperationSectorController } from './process-operation-sector.controller.js';
 import { ProcessLedgerWorkflowConfigurationController } from './process-ledger-workflow-configuration.controller.js';
 import { ProcessLedgerWorkflowConfigurationService } from './process-ledger-workflow-configuration.service.js';
+import { ProcessEightDWorkflowConfigurationController } from './process-eight-d-workflow-configuration.controller.js';
+import { ProcessEightDWorkflowConfigurationService } from './process-eight-d-workflow-configuration.service.js';
 
 @Module({
   imports: [AdminMutationModule, AuditLogModule, FileManagementModule, MaterialMasterModule, ProblemIndexModule, WorkflowModule,
     PlatformConfigurationModule, SupplierQualityModule, OrganizationModule, ProblemReadModule, TaskNotificationModule],
-  controllers: [ProcessQualityController, ProcessOperationSectorController, ProcessLedgerWorkflowConfigurationController, ProcessEightDTaskController, ProcessEightDReportController, ProcessEightDController],
+  controllers: [ProcessQualityController, ProcessOperationSectorController, ProcessLedgerWorkflowConfigurationController, ProcessEightDWorkflowConfigurationController, ProcessEightDTaskController, ProcessEightDReportController, ProcessEightDController],
   providers: [ProcessDefectLedgerService, ProcessIssueService, ProcessProductionService, ProcessShipmentReportService,
     ProcessDefectFileResourceAdapter, ProcessShipmentReportFileResourceAdapter, ProcessEightDService, ProcessEightDClosureAdapter,
     ProcessEightDReadAdapter, ProcessEightDFileAdapter, ProcessEightDTaskService, ProcessEightDReminderService, ProcessEightDReportService,
-    ProcessDefectCompletionService, ProcessDefectIngestionAdapter, ProcessOperationSectorService, ProcessLedgerWorkflowConfigurationService],
+    ProcessDefectCompletionService, ProcessDefectIngestionAdapter, ProcessOperationSectorService, ProcessLedgerWorkflowConfigurationService, ProcessEightDWorkflowConfigurationService],
   exports: [ProcessDefectLedgerService, ProcessIssueService, ProcessProductionService, ProcessShipmentReportService,
-    ProcessEightDService, ProcessEightDReminderService, ProcessDefectCompletionService, ProcessDefectIngestionAdapter, ProcessOperationSectorService],
+    ProcessEightDService, ProcessEightDReminderService, ProcessDefectCompletionService, ProcessDefectIngestionAdapter, ProcessOperationSectorService, ProcessEightDWorkflowConfigurationService],
 })
 export class ProcessQualityModule {}

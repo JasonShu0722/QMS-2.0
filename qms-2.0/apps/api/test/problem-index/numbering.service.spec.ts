@@ -43,6 +43,20 @@ describe('NumberingService', () => {
     })).rejects.toThrow('NUMBER_SEQUENCE_EXHAUSTED');
   });
 
+  it('allocates a process 8D number without looking up a rule version', async () => {
+    const findFirst = jest.fn().mockResolvedValue(null);
+    const tx = {
+      numberRuleVersion: { findFirst },
+      $queryRaw: jest.fn().mockResolvedValue([{ allocated: 7n }]),
+    };
+    const service = new NumberingService({} as never);
+
+    await expect(service.allocateProcessEightDReportNumber(tx as never, {
+      organizationId: 'org-1', boardCode: '0', at: new Date('2026-11-25T00:00:00.000Z'),
+    })).resolves.toEqual({ reportNumber: 'ZX8D-PQ0-2611-007', sequence: 7 });
+    expect(findFirst).not.toHaveBeenCalled();
+  });
+
   it('keeps a generated number immutable', () => {
     const service = new NumberingService({} as never);
     expect(() => service.assertImmutable('QA-2609-001', 'QA-2609-001')).not.toThrow();

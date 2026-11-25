@@ -17,6 +17,39 @@ export function assertEightDSources(sources: readonly ProcessEightDSourceInput[]
     || sources.some(s => !isUUID(s.defectId) || !Number.isSafeInteger(s.expectedVersion) || s.expectedVersion < 1)) eightDError('PROCESS_EIGHT_D_SOURCES_INVALID', 400);
 }
 
+export function resolveProcessIssueBoard(sources: readonly { operationSector?: unknown }[], selected?: '0' | '1'): '0' | '1' {
+  const sector = sources[0]?.operationSector;
+  const inferred = sector === 'PCBA' ? '0' : sector === '装配' ? '1' : undefined;
+  if (inferred && sources.every(source => source.operationSector === sector)) {
+    if (selected !== undefined && selected !== inferred) eightDError('PROCESS_EIGHT_D_BOARD_REQUIRED', 409);
+    return inferred;
+  }
+  if (selected === '0' || selected === '1') return selected;
+  return eightDError('PROCESS_EIGHT_D_BOARD_REQUIRED', 409);
+}
+
+export function assertProcessIssueRecurrence(sourceCount: number, confirmations: readonly ProcessEightDSourceConfirmation[]): void {
+  const outcome = confirmations[0]?.recurrence;
+  if (confirmations.length !== sourceCount || (outcome !== 'RECURRENCE' && outcome !== 'NOT_RECURRENCE')
+    || confirmations.some(confirmation => confirmation.recurrence !== outcome)) {
+    eightDError('PROCESS_EIGHT_D_SOURCE_CONFIRMATION_INVALID', 400);
+  }
+}
+
+export function resolveProcessIssueTitle(sources: readonly { description?: unknown }[], title?: string): string {
+  if (title !== undefined) {
+    const trimmed = typeof title === 'string' ? title.trim() : '';
+    if (trimmed && trimmed.length <= 200) return trimmed;
+    return eightDError('PROCESS_EIGHT_D_TITLE_REQUIRED', 400);
+  }
+  const description = sources[0]?.description;
+  const common = typeof description === 'string' ? description.trim() : '';
+  if (common && sources.every(source => typeof source.description === 'string' && source.description.trim() === common)) {
+    return Array.from(common).slice(0, 200).join('');
+  }
+  return eightDError('PROCESS_EIGHT_D_TITLE_REQUIRED', 400);
+}
+
 export function assertSourceConfirmation(defectId: string, relatedProblemIds: readonly string[], confirmations: readonly ProcessEightDSourceConfirmation[]): void {
   const matches = confirmations.filter(c => c.defectId === defectId);
   if (!relatedProblemIds.length && !matches.length) return;

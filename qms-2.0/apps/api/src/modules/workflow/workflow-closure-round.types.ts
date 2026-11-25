@@ -33,6 +33,9 @@ export type WorkflowClosureContext = {
 export interface WorkflowClosureAdapter {
   readonly domainCode: string;
   lockAndRead(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string, operation: WorkflowClosureOperation): Promise<WorkflowClosureContext>;
+  assertStartParticipants?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, plan: WorkflowClosurePlan): Promise<void>;
+  lockParticipantStageConfiguration?(tx: Prisma.TransactionClient, context: WorkflowClosureContext): Promise<void>;
+  isParticipantStageEligible?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string): Promise<boolean>;
   lockSupplierSubmission?(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string, input: WorkflowSupplierSubmissionInput): Promise<WorkflowClosureContext>;
   complete(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor): Promise<void>;
   returnForChanges(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor): Promise<void>;

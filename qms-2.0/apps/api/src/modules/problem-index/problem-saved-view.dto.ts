@@ -1,12 +1,15 @@
-import { ApiProperty, ApiPropertyOptional, PartialType, PickType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, IntersectionType, PartialType, PickType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, ArrayUnique, Equals, IsArray, IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, Validate, ValidateNested, ValidatorConstraint, type ValidationArguments, type ValidatorConstraintInterface } from 'class-validator';
-import { ProblemIndexQueryDto, ProblemScopeQueryDto, PROBLEM_SORT_FIELDS } from './problem-index.dto.js';
+import { ProblemIndexQueryDto, ProblemScopeQueryDto, ProcessFollowupQueryDto, PROBLEM_SORT_FIELDS } from './problem-index.dto.js';
 
-export const PROBLEM_VIEW_COLUMNS = ['reportNumber', 'title', 'domainCode', 'problemType', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt'] as const;
+export const PROBLEM_VIEW_COLUMNS = ['reportNumber', 'title', 'domainCode', 'problemType', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt', 'processStage'] as const;
 type ProblemViewColumn = typeof PROBLEM_VIEW_COLUMNS[number];
 
-export class ProblemSavedViewFiltersDto extends PickType(ProblemIndexQueryDto, ['domainCode', 'problemType', 'status', 'severity', 'ownerId', 'search', 'dueFrom', 'dueTo', 'overdueAt'] as const) {}
+export class ProblemSavedViewFiltersDto extends IntersectionType(
+  PickType(ProblemIndexQueryDto, ['domainCode', 'problemType', 'status', 'severity', 'ownerId', 'search', 'dueFrom', 'dueTo', 'overdueAt'] as const),
+  PickType(ProcessFollowupQueryDto, ['stage', 'responsibleSectionDepartmentId', 'responsibleSectionName', 'ownerName'] as const),
+) {}
 
 export class ProblemSavedViewSortDto {
   @ApiProperty({ enum: PROBLEM_SORT_FIELDS }) @IsIn(PROBLEM_SORT_FIELDS) sortBy!: typeof PROBLEM_SORT_FIELDS[number];
@@ -34,8 +37,8 @@ export class ProblemSavedViewConfigurationDto {
   @ApiProperty({ enum: [1] }) @Equals(1) schemaVersion!: 1;
   @ApiProperty({ type: ProblemSavedViewFiltersDto }) @IsDefined() @IsObject() @ValidateNested() @Validate(ProblemViewFilterValuesConstraint) @Type(() => ProblemSavedViewFiltersDto) filters!: ProblemSavedViewFiltersDto;
   @ApiProperty({ type: ProblemSavedViewSortDto }) @IsDefined() @IsObject() @ValidateNested() @Type(() => ProblemSavedViewSortDto) sort!: ProblemSavedViewSortDto;
-  @ApiProperty({ type: [String], enum: PROBLEM_VIEW_COLUMNS, minItems: 1, maxItems: 10, uniqueItems: true }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(10) @ArrayUnique() @IsIn(PROBLEM_VIEW_COLUMNS, { each: true }) @Validate(ProblemViewVisibleColumnsConstraint) visibleColumns!: ProblemViewColumn[];
-  @ApiProperty({ type: [String], enum: PROBLEM_VIEW_COLUMNS, minItems: 1, maxItems: 10, uniqueItems: true }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(10) @ArrayUnique() @IsIn(PROBLEM_VIEW_COLUMNS, { each: true }) columnOrder!: ProblemViewColumn[];
+  @ApiProperty({ type: [String], enum: PROBLEM_VIEW_COLUMNS, minItems: 1, maxItems: PROBLEM_VIEW_COLUMNS.length, uniqueItems: true }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(PROBLEM_VIEW_COLUMNS.length) @ArrayUnique() @IsIn(PROBLEM_VIEW_COLUMNS, { each: true }) @Validate(ProblemViewVisibleColumnsConstraint) visibleColumns!: ProblemViewColumn[];
+  @ApiProperty({ type: [String], enum: PROBLEM_VIEW_COLUMNS, minItems: 1, maxItems: PROBLEM_VIEW_COLUMNS.length, uniqueItems: true }) @IsArray() @ArrayMinSize(1) @ArrayMaxSize(PROBLEM_VIEW_COLUMNS.length) @ArrayUnique() @IsIn(PROBLEM_VIEW_COLUMNS, { each: true }) columnOrder!: ProblemViewColumn[];
 }
 
 export class CreateProblemSavedViewDto {

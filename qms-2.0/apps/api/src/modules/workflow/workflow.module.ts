@@ -36,6 +36,6 @@ import { WorkflowAdministrativeInvalidationService } from './workflow-administra
     WorkflowAdministrativeInvalidationService,
     { provide: WORKFLOW_CLOSURE_ADAPTERS, useValue: [] },
     { provide: WORKFLOW_UPGRADE_ADAPTERS, useValue: [] }],
-  exports: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosureRoundService, WorkflowClosureRegistry, ClosureEventHandler, WorkflowDeadlineExtensionService],
+  exports: [WorkflowValidationService, WorkflowDefinitionService, WorkflowRuntimeService, WorkflowUpgradeService, WorkflowUpgradeRegistry, WorkflowClosureRoundService, WorkflowClosureRegistry, WorkflowClosureTemplateService, ClosureEventHandler, WorkflowDeadlineExtensionService],
 })
 export class WorkflowModule {}

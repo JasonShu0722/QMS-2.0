@@ -142,6 +142,7 @@ PR #75（7f6972b）已squash为7cd2707f1003546474cac72f6701aa6d8bfc0226，V0.0.3
 
 ## 权威来源
 
+- [制程内部 8D 报告编号规范](../../docs/superpowers/specs/2026-09-24-qms-2.0-phase-4-domain-quality-design.md#制程内部-8d-报告编号req-0047)（2026-11-25 纳入规格，实施状态见[制程计划第 6.1 节](../../docs/superpowers/plans/2026-11-24-qms-process-defect-ledger-flow.md#61-制程问题跟进req-0047)）
 - [阶段四设计规格](../../docs/superpowers/specs/2026-09-24-qms-2.0-phase-4-domain-quality-design.md)
 - [阶段四实施计划](../../docs/superpowers/plans/2026-09-24-qms-2.0-phase-4-domain-quality.md)
 - QMS 1.0 只读参考：`E:/WorkSpace/QMS/archive/qms-1.0/`

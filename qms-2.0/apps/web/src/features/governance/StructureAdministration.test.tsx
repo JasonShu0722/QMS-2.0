@@ -11,6 +11,8 @@ import type { AdminOrganization, AdminRole, PermissionCatalogGroup } from '../ad
 import type { components } from '@qms/contracts';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
+import { preferenceKey } from '../../ui/ledger/model';
+import { ApiError, registerReauthentication } from '../../api/client';
 
 vi.setConfig({ testTimeout: 30000 });
 
@@ -73,6 +75,131 @@ it('offers independent column settings for department and position ledgers', asy
   await userEvent.click(screen.getByRole('tab', { name: '岗位' }));
   await screen.findByText('质量工程师');
   expect(screen.getAllByRole('button', { name: '列设置' }).length).toBeGreaterThanOrEqual(1);
+});
+
+it('defaults to compact position columns with room for names, departments and actions', async () => {
+  view(['organization:structure:read', 'organization:structure:manage', 'account:roles:read']);
+  const action = await positionAction();
+  const table = within(action.closest('.position-structure-table')!);
+  expect(table.getAllByRole('separator', { name: /^调整列宽/ }).map(handle => Number(handle.getAttribute('aria-valuenow'))))
+    .toEqual([96, 184, 72, 156, 112, 200]);
+  const row = within(action.closest('tr')!);
+  expect(row.getAllByRole('button')).toEqual([row.getByRole('button', { name: /^编\s*辑$/ }), action, row.getByRole('button', { name: `删除岗位 · ${position.name}` })]);
+});
+
+it('confirms normal position deletion without issuing a force request and refreshes the list', async () => {
+  let deleted = false;
+  const path = '/api/v1/organizations/org-a/positions/position-a';
+  const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/positions?limit=100&offset=0')) return json(deleted ? [] : [position]);
+    if (url.endsWith('/csrf')) return json({ csrfToken: 'csrf-token' });
+    if (url.endsWith(path) && init?.method === 'DELETE') { deleted = true; return json({ id: position.id, deleted: true }); }
+    return json([]);
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  render(<LanguageProvider><StructureAdministration organization={organization(['organization:structure:read', 'organization:structure:manage', 'organization:positions:force-delete'])} /></LanguageProvider>);
+  await userEvent.click(await screen.findByRole('tab', { name: '岗位' }));
+  await userEvent.click(await screen.findByRole('button', { name: `删除岗位 · ${position.name}` }));
+  expect(fetchMock.mock.calls.some(([url, init]) => String(url).includes('/force-delete') || init?.method === 'DELETE')).toBe(false);
+  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '确认删除' }));
+  await waitFor(() => expect(screen.queryByText(position.name, { selector: 'td' })).not.toBeInTheDocument());
+  expect(fetchMock.mock.calls.find(([url, init]) => String(url).endsWith(path) && init?.method === 'DELETE')?.[1]?.body).toBe(JSON.stringify({ expectedVersion: position.version }));
+});
+
+it('does not expose position deletion to a reader', async () => {
+  view(['organization:structure:read']);
+  await userEvent.click(await screen.findByRole('tab', { name: '岗位' }));
+  await screen.findByText(position.name, { selector: 'td' });
+  expect(screen.queryByRole('button', { name: `删除岗位 · ${position.name}` })).not.toBeInTheDocument();
+});
+
+it.each([false, true])('keeps ordinary delete explicitly retryable after reauthentication (cancelled: %s)', async cancelled => {
+  const remove = vi.fn();
+  const unregister = registerReauthentication(async () => {
+    if (cancelled) throw new ApiError({ code: 'CLIENT_REAUTHENTICATION_CANCELLED', message: '' }, 400);
+  });
+  try {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/positions?limit=100&offset=0')) return json(remove.mock.calls.length === 2 ? [] : [position]);
+      if (url.endsWith('/csrf')) return json({ csrfToken: 'csrf-token' });
+      if (url.endsWith(`/positions/${position.id}`) && init?.method === 'DELETE') {
+        remove(init);
+        return remove.mock.calls.length === 1 ? json({ code: 'AUTH_REAUTHENTICATION_REQUIRED' }, 401) : json({ id: position.id, deleted: true });
+      }
+      return json([]);
+    }));
+    render(<LanguageProvider><StructureAdministration organization={organization(['organization:structure:read', 'organization:structure:manage'])} /></LanguageProvider>);
+    await userEvent.click(await screen.findByRole('tab', { name: '岗位' }));
+    await userEvent.click(await screen.findByRole('button', { name: `删除岗位 · ${position.name}` }));
+    const dialog = within(screen.getByRole('dialog'));
+    await userEvent.click(dialog.getByRole('button', { name: '确认删除' }));
+    await dialog.findByText(cancelled ? /已取消身份验证/ : /身份验证已完成/);
+    expect(remove).toHaveBeenCalledOnce();
+    expect(dialog.getByRole('button', { name: '确认删除' })).toBeEnabled();
+    await userEvent.click(dialog.getByRole('button', { name: '确认删除' }));
+    await waitFor(() => expect(screen.queryByText(position.name, { selector: 'td' })).not.toBeInTheDocument());
+  } finally { unregister(); }
+});
+
+it('previews force deletion after a reference conflict and confirms with that baseline', async () => {
+  const path = '/api/v1/organizations/org-a/positions/position-a';
+  const preview: components['schemas']['OrganizationForceDeletePreviewDto'] = {
+    id: position.id, name: position.name, code: position.code, kind: 'POSITION', version: position.version, previewToken: 'a'.repeat(64),
+    counts: { users: 2, positions: 1, assignments: 2, departments: 0, organizations: 0, managementBindings: 0, ministerScopes: 0 },
+    retainedHistory: ['历史签章'], positionImpact: { users: [{ id: 'user-a', name: '甲', pendingConfiguration: true }, { id: 'user-b', name: '乙', pendingConfiguration: false }], assignments: [], responsibilities: [], configurations: [{ source: '制程8D', count: 1 }] },
+  };
+  const command = vi.fn();
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.endsWith('/positions?limit=100&offset=0')) return json(command.mock.calls.length ? [] : [position]);
+    if (url.endsWith('/csrf')) return json({ csrfToken: 'csrf-token' });
+    if (url.endsWith(path) && init?.method === 'DELETE') return json({ code: 'STRUCTURE_REFERENCE_INVALID' }, 409);
+    if (url.endsWith(`${path}/force-delete`)) {
+      if (init?.method === 'POST') { command(init); return json({ ...preview, deletedAt: new Date().toISOString(), effects: [] }, 201); }
+      return json(preview);
+    }
+    return json([]);
+  }));
+  render(<LanguageProvider><StructureAdministration organization={organization(['organization:structure:read', 'organization:structure:manage', 'organization:positions:force-delete'])} /></LanguageProvider>);
+  await userEvent.click(await screen.findByRole('tab', { name: '岗位' }));
+  await userEvent.click(await screen.findByRole('button', { name: `删除岗位 · ${position.name}` }));
+  const dialog = within(screen.getByRole('dialog'));
+  await userEvent.click(dialog.getByRole('button', { name: '确认删除' }));
+  await dialog.findByText(/岗位已被引用/);
+  expect(command).not.toHaveBeenCalled();
+  await userEvent.click(dialog.getByRole('button', { name: '查看强制删除影响' }));
+  expect(await dialog.findByText('甲 · 进入待配置')).toBeVisible();
+  expect(dialog.getByText('乙 · 保留其他任职')).toBeVisible();
+  expect(dialog.getByText('制程8D：1')).toBeVisible();
+  expect(command).not.toHaveBeenCalled();
+  await userEvent.click(dialog.getByRole('button', { name: '确认强制删除' }));
+  await waitFor(() => expect(command).toHaveBeenCalledOnce());
+  expect(JSON.parse(command.mock.calls[0]![0].body)).toEqual({ expectedVersion: position.version, confirmed: true, previewToken: preview.previewToken });
+});
+
+it('keeps saved position column preferences until the user resets them', async () => {
+  const sessionScope = 'INTERNAL:org-a:current';
+  useWorkTabsStore.getState().bindSession(sessionScope);
+  const key = preferenceKey({ sessionScope }, 'structure-positions:all', 'columns')!;
+  const saved = JSON.stringify({ schema: 1, value: {
+    order: ['code', 'departmentId', 'name', 'status', 'categoryId', 'actions'],
+    visible: ['code', 'departmentId', 'name', 'status', 'actions'],
+    widths: { departmentId: 260 }, fixed: { code: 'left' },
+  } });
+  localStorage.setItem(key, saved);
+  view(['organization:structure:read', 'account:roles:read']);
+  const action = await positionAction();
+  const ledger = within(action.closest('.qms-ledger')!);
+  expect(ledger.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'))).toEqual(['代码', '部门', '名称', '状态', '操作']);
+  expect(ledger.getByRole('separator', { name: '调整列宽 部门' })).toHaveAttribute('aria-valuenow', '260');
+  expect(localStorage.getItem(key)).toBe(saved);
+
+  await userEvent.click(ledger.getByRole('button', { name: '列设置' }));
+  await userEvent.click(await screen.findByRole('button', { name: '恢复全部列' }));
+  expect(ledger.getAllByRole('columnheader').map(header => header.getAttribute('aria-label'))).toEqual(['代码', '名称', '状态', '部门', '岗位类别', '操作']);
+  expect(ledger.getByRole('separator', { name: '调整列宽 部门' })).toHaveAttribute('aria-valuenow', '156');
 });
 
 it('only exposes the position-permission entry when both read permissions are present', async () => {
