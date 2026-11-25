@@ -193,6 +193,27 @@ describe('process 8D real domain transactions with managed workflow configuratio
     expect(await f.read(id)).toMatchObject({ ownerUserId: f.manager.user.id, analysisCompletedAt: current.analysisCompletedAt });
   }, 120_000);
 
+  it('returns an actionable HTTP 409 for an unqualified process 8D stage owner', async () => {
+    const fixtureData = await fixture(), source = await fixtureData.source();
+    await fixtureData.configureManaged(1, true, { IMPLEMENTATION: [fixtureData.manager.position.id] });
+
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    try {
+      await app.init();
+      const csrf = randomUUID();
+      const token = await app.get(SessionService).create(fixtureData.issuer.user.id, app.get(PrismaService), { reauthenticated: true, mfaVerified: true });
+      const response = await request(app.getHttpServer()).post('/api/v1/process-quality/eight-d')
+        .set('Cookie', `qms_session=${token}; qms_csrf=${csrf}`).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID())
+        .send(fixtureData.input([source])).expect(409);
+      expect(response.body).toMatchObject({
+        code: 'PROCESS_EIGHT_D_STAGE_UNAVAILABLE',
+        message: '人员不符合制程 8D 所需环节的岗位要求。如可重新选人，请选择符合条件的人员；否则请联系流程管理员检查岗位配置',
+      });
+    } finally { await app.close(); }
+  }, 120_000);
+
   it('keeps same-section reassignment available when the owner loses the current edit stage', async () => {
     const f = await fixture(), id = await f.issue();
     await f.configureManaged(1, true, { ANALYSIS: [f.manager.position.id] });
