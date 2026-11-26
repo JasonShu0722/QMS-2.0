@@ -38,6 +38,32 @@ it('bridges PROCESS_DEFECT using the actual domainUiKey, suppressing legacy clai
   expect(screen.queryByText('旧通用处理')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '领取任务' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '释放任务' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('combobox', { name: '流程实例' })).not.toBeInTheDocument();
+});
+it('opens the scoped pre-upgrade instance from the 8D workspace after protecting the draft', async () => {
+  workspace.instances = [
+    { ...workspace.selectedInstance!, id: 'original', current: false, createdAt: '2026-10-24T10:00:00Z' },
+    { ...workspace.selectedInstance!, id: 'i', current: true, createdAt: '2026-10-25T10:00:00Z' },
+  ];
+  const previous = fetcher.getMockImplementation()!;
+  fetcher.mockImplementation((path: string, init: RequestInit = {}) => path.includes('instanceId=original')
+    ? response({ ...workspace, selectedInstance: workspace.instances[0], domain: { ...workspace.domain, summary: { ...workspace.domain!.summary, title: '升级前简报' } } })
+    : previous(path, init));
+  mount();
+  const description = await screen.findByDisplayValue('内嵌敏感正文');
+  fireEvent.change(description, { target: { value: '未保存草稿' } });
+  const instances = screen.getByRole('combobox', { name: '流程实例' });
+  fireEvent.change(instances, { target: { value: 'original' } });
+  fireEvent.click(await screen.findByRole('button', { name: '继续编辑' }));
+  expect(screen.getByDisplayValue('未保存草稿')).toBeVisible();
+  expect(fetcher.mock.calls.some(([path]) => path.includes('instanceId=original'))).toBe(false);
+  fireEvent.change(instances, { target: { value: 'original' } });
+  fireEvent.click(await screen.findByRole('button', { name: '放弃修改' }));
+  expect(await screen.findByText('历史实例只读')).toBeVisible();
+  expect(screen.getByRole('heading', { name: '升级前简报' })).toBeVisible();
+  expect(screen.getByText('外层敏感附件名.txt')).toBeVisible();
+  expect(fetcher.mock.calls.some(([path]) => path.endsWith('/workspace?organizationId=org&instanceId=original'))).toBe(true);
+  expect(screen.queryByRole('region', { name: '正式过程 8D 工作区' })).not.toBeInTheDocument();
 });
 it.each([['BRIEF', 'process-quality', true], ['EIGHT_D', 'customer-quality', true], ['EIGHT_D', 'process-quality', false]])('retains compatibility for %s %s current=%s', async (type, domain, current) => {
   workspace = fixture(type, domain, current, 'process-quality'); mount(); await screen.findByText('8D-1');

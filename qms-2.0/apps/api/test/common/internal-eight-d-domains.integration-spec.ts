@@ -224,7 +224,8 @@ describe('customer and new-product real internal 8D domain chains', () => {
       expect(closed.closedRevisionId).not.toBeNull();
       approved = await f.runtime.report.read(f.owner.actor, id, { view: 'APPROVED' }, randomUUID());
       expect(approved).toMatchObject({ problemId: id, revisionId: closed.closedRevisionId, status: 'APPROVED', view: 'APPROVED',
-        snapshot: { document: chainDocument(), professionalUserId: f.professional.user.id } });
+        snapshot: { professionalUserId: f.professional.user.id } });
+      expect(approved.snapshot.document).toStrictEqual(JSON.parse(JSON.stringify(chainDocument())));
       if (domain === 'customer-quality') expect(approved.attachments).toMatchObject([{ id: customerEvidence.fileId, rendering: 'EMBEDDED' }]);
       const table = internalEightDSql(f.runtime.core.domain).revisions;
       await expect(f.prisma.$executeRaw`UPDATE ${table} SET snapshot = '{}'::jsonb WHERE id = ${closed.closedRevisionId}::uuid`).rejects.toThrow();

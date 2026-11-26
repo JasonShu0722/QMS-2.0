@@ -82,11 +82,15 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
   }
   const choose = (value?: string) => setParams(problemScope(workspace?.problem.organizationId ?? organizationId, value), { state: followupState });
   const problemTitle = workspace?.problem.summary.title?.trim() || undefined;
+  const instanceSelector = workspace && <label>{t('流程实例')} <select aria-label={t('流程实例')} value={selected?.id ?? ''} onChange={(event) => { const id = event.target.value; requestLeave(() => choose(id)); }}>
+    {!workspace.instances.length ? <option value={selected?.id ?? ''}>{selected?.id ?? t('暂无流程实例')}</option> : workspace.instances.map((instance) => <option key={instance.id} value={instance.id}>{instance.current ? t('当前实例') : t('历史实例')} · {new Date(instance.createdAt).toLocaleString(locale)} · {instance.id}</option>)}
+  </select></label>;
   if (workspace && processEightD && current) {
     const returnLink = returnToProcessFollowup ? { pathname: '/app/process-quality/problems', search: returnScope === 'explicit' ? problemScope(workspace.problem.organizationId).toString() : '' }
       : `/app/problem-center?${problemScope(workspace.problem.organizationId)}`;
     return <main className="problem-workspace"><ProcessEightDWorkspace problemId={problemId} title={problemTitle}
-      back={<Link to={returnLink}>{t(returnToProcessFollowup ? '返回制程问题跟进' : '返回问题中心')}</Link>}
+      back={<Space wrap><Link to={returnLink}>{t(returnToProcessFollowup ? '返回制程问题跟进' : '返回问题中心')}</Link>
+        {workspace.instances.some(instance => !instance.current) && instanceSelector}</Space>}
       renderSourcePicker={props => <InternalEightDSourcePicker {...props} />} onRefresh={state.refresh} onAccessDenied={revoke} /></main>;
   }
   return <main className={`problem-workspace${focused ? ' is-focused' : ''}`}><h1 className="sr-only">{t('问题处理工作空间')}</h1><div className="problem-workspace__heading"><Button disabled={denied} aria-pressed={focused} onClick={() => setFocused((value) => !value)}>{t(focused ? '退出专注' : '专注处理')}</Button></div><ProblemError cause={state.error ?? error} />
@@ -95,9 +99,7 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
     {state.loading && !workspace ? <Spin aria-label={t('正在加载')} /> : workspace ? <>
       <header className="problem-header"><div><Tag>{workspace.problem.reportNumber}</Tag>{tab === 'overview' ? <h2>{current ? workspace.problem.summary.title : workspace.domain?.summary.title ?? t('历史数据不可用')}</h2> : null}</div>
         <Link to={returnToProcessFollowup ? { pathname: '/app/process-quality/problems', search: returnScope === 'explicit' ? problemScope(workspace.problem.organizationId).toString() : '' } : `/app/problem-center?${problemScope(workspace.problem.organizationId)}`}>{t(returnToProcessFollowup ? '返回制程问题跟进' : '返回问题中心')}</Link></header>
-      <label>{t('流程实例')} <select aria-label={t('流程实例')} value={selected?.id ?? ''} onChange={(event) => { const id = event.target.value; requestLeave(() => choose(id)); }}>
-        {!workspace.instances.length ? <option value={selected?.id ?? ''}>{selected?.id ?? t('暂无流程实例')}</option> : workspace.instances.map((instance) => <option key={instance.id} value={instance.id}>{instance.current ? t('当前实例') : t('历史实例')} · {new Date(instance.createdAt).toLocaleString(locale)} · {instance.id}</option>)}
-      </select></label>
+      {instanceSelector}
       {selected && !current ? <Alert type="info" title={t('历史实例只读')} /> : null}
       <Tabs className="problem-tabs" aria-label={t('问题视图')} activeKey={tab} destroyOnHidden onChange={(key) => requestLeave(() => { setTab(key); setUpgrading(false); })} items={[
         { key: 'overview', label: t('问题概览'), children: tab === 'overview' ? <>
