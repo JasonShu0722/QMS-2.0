@@ -7,7 +7,7 @@
 ## 活动位置
 
 - 活动 QMS 2.0 checkout 是 `D:\WorkSpace\QMS-2.0`，实现命令从其 `qms-2.0/` 子目录执行。
-- E 盘 checkout 和 C 盘 worktree 仅用于回退参考，不是活动开发位置。
+- 默认在活动 checkout 的本地 `main` 开发，不创建本地／远端分支或额外 Git worktree。可按不重叠文件所有权使用子代理并行实现；共享文件、生成契约、Git 索引和验证写入由主代理协调串行。现存辅助 checkout 和 worktree 仅用于回退参考，不是活动开发位置。
 - 本 checkout 使用 sparse checkout；QMS 1.0 保留在 Git 历史和原始只读归档中，不得扩展或执行。
 - Windows 本地配置位于 `D:\WorkSpace\QMS-2.0-local\Enter-Qms.ps1`；预览凭据和验收日志在 Git 外保存。
 
@@ -30,7 +30,7 @@
 - 涉及 QMS 2.0 行为、契约、数据、权限、流程或验收证据的任务，必须先使用项目级 `qms-superpowers-zh`：`qms-2.0/.agents/skills/qms-superpowers-zh/SKILL.md`。
 - 项目级技能负责路由 `superpowers-zh` 的设计、计划、隔离、TDD、子代理、审查、验证和收尾流程；它不替代领域技能和本文件的仓库边界。
 - 用户在 QMS 维护上下文中询问遗留工作、待修复问题、飞书待办，或要求接单 / 推进批准需求时，先读取 `qms-2.0/.agents/skills/qms-start-development/SKILL.md`。查看先只读，明确修复再接单；具体页面 / 报错、引用示例和规则讨论不自动触发表格接单。单独设置“开发中”仅授权该范围的本地开发，先评审需求与机器人初稿，不重复确认开工。
-- 负责人已要求本项目常规交付主动先复用 / 创建 Issue、验证审查通过后提交 / 推送功能分支并创建 / 更新 PR；复用该持续授权，不等提醒。只策划 / 只本地等限制优先；纯文档维护免 Issue / PR。合并、发布、台账写入及生产操作另核对授权，文档推送若触发自动部署同样适用。权威细则见 `qms-2.0/docs/DELIVERY-MAINTENANCE-PROCESS.md`，不配置定时接单。
+- 负责人已要求本项目常规交付主动先复用 / 创建 Issue。验证审查通过后仅沿已授权路径交付；只有获准的功能分支才走推送和创建 / 更新 PR。本地 `main` 开发不等于获准推送远端 `main` 或发布。只策划 / 只本地等限制优先；纯文档维护免 Issue / PR。合并、发布、台账写入及生产操作另核对授权，文档推送若触发自动部署同样适用。权威细则见 `qms-2.0/docs/DELIVERY-MAINTENANCE-PROCESS.md`，不配置定时接单。
 - 负责人已允许按权威交付流程主动分配版本；计划顶部使用开发治理规定的当前摘要接续。OpenClaw 可以通过批准的只读资料分析云端项目源码与文档并填写需求初稿，严禁修改项目源码、设置开发批准状态或执行生产操作；输入、五字段输出与责任边界见 `qms-2.0/docs/OPENCLAW-OPS-HANDOFF.md`。
 
 ## 前端与 API 契约

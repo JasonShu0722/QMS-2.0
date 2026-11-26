@@ -97,12 +97,21 @@ export class WorkflowRuntimeService {
   }
 
   readTransitionProjection(tx: Prisma.TransactionClient, organizationId: string, problemIndexId: string) {
-    return tx.$queryRaw<{ actorUserId: string; action: string; occurredAt: Date }[]>`
-      SELECT mutation.actor_user_id AS "actorUserId", mutation.action, mutation.created_at AS "occurredAt"
-      FROM workflow_mutations mutation
-      JOIN workflow_instances instance ON instance.id = mutation.instance_id AND instance.organization_id = mutation.organization_id
-      WHERE instance.organization_id = ${organizationId}::uuid AND instance.problem_index_id = ${problemIndexId}::uuid
-      ORDER BY mutation.created_at, mutation.instance_version, mutation.id`;
+    return tx.$queryRaw<{ actorUserId: string; action: string; occurredAt: Date; instanceId: string; instanceVersion: number }[]>`
+      WITH upgrades AS (
+        SELECT id, actor_user_id, after_instance_id, created_at FROM workflow_upgrades
+        WHERE organization_id = ${organizationId}::uuid AND problem_index_id = ${problemIndexId}::uuid
+      ), events AS (
+        SELECT mutation.actor_user_id, mutation.action, mutation.created_at, mutation.instance_version, mutation.id, mutation.instance_id
+        FROM workflow_mutations mutation
+        JOIN workflow_instances instance ON instance.id = mutation.instance_id AND instance.organization_id = mutation.organization_id
+        WHERE instance.organization_id = ${organizationId}::uuid AND instance.problem_index_id = ${problemIndexId}::uuid
+          AND (mutation.action <> 'START' OR NOT EXISTS (SELECT 1 FROM upgrades WHERE after_instance_id = mutation.instance_id))
+        UNION ALL
+        SELECT actor_user_id, 'UPGRADE', created_at, 0, id, after_instance_id FROM upgrades
+      )
+      SELECT actor_user_id AS "actorUserId", action, created_at AS "occurredAt", instance_id AS "instanceId", instance_version AS "instanceVersion" FROM events
+      ORDER BY created_at, instance_version, id`;
   }
 
   async startInstance(input: StartWorkflowInstanceInput, transaction?: Prisma.TransactionClient, mutate?: WorkflowDomainMutation, domainAccess?: WorkflowDomainAccess): Promise<WorkflowActionResult> {

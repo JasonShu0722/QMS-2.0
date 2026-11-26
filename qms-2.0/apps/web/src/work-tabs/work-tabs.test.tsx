@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { publishSessionSignal } from '../features/auth/session-invalidation';
 import { WorkTabs } from './WorkTabs';
 import { useWorkTabsStore } from './workTabsStore';
 
@@ -21,6 +22,55 @@ describe('work tabs store', () => {
     const state = useWorkTabsStore.getState();
     expect(state.tabs).toHaveLength(1);
     expect(state.activeTabId).toBe('problem:42');
+  });
+
+  it.each(['问题处理', 'Problem workspace'])('restores old %s placeholders without the technical ID', title => {
+    const scope = 'INTERNAL:org:user';
+    const problemId = '3fe4f86d-0000-4000-8000-000000000001';
+    const path = `/app/problem-workspace/${problemId}`;
+    const id = `problem:${problemId}`;
+    sessionStorage.setItem('qms:work-pages:v1', JSON.stringify({ scope, tabs: [{ id, title: `${title} · 3fe4f86d`, path }] }));
+    useWorkTabsStore.getState().bindSession(scope);
+    expect(useWorkTabsStore.getState().tabs).toEqual([{ id, title: '问题处理', path }]);
+  });
+
+  it.each(['装配工序尺寸超差', '8D-2026-001'])('keeps %s out of storage and restores the problem reference', title => {
+    const scope = 'INTERNAL:org:user';
+    const problemId = '3fe4f86d-0000-4000-8000-000000000001';
+    const problem = { id: `problem:${problemId}`, path: `/app/problem-workspace/${problemId}?organizationId=org` };
+    const account = { id: '/app/account', title: '个人账号', path: '/app/account' };
+    const storageKey = 'qms:work-pages:v1';
+    sessionStorage.setItem(storageKey, JSON.stringify({ scope, tabs: [account, { ...problem, title }] }));
+
+    const store = useWorkTabsStore.getState();
+    store.bindSession(scope);
+    expect(useWorkTabsStore.getState().tabs).toEqual([account, { ...problem, title: '问题处理' }]);
+    store.openTab({ ...problem, title: '问题处理' });
+    store.renameTab({ ...problem, title }, useWorkTabsStore.getState().authorizationGeneration);
+    expect(useWorkTabsStore.getState().tabs.at(-1)?.title).toBe(title);
+    const saved = sessionStorage.getItem(storageKey);
+    expect(JSON.parse(saved!)).toEqual({ scope, tabs: [problem, account] });
+
+    store.reset();
+    sessionStorage.setItem(storageKey, saved!);
+    store.bindSession(scope);
+    expect(useWorkTabsStore.getState().tabs).toEqual([{ ...problem, title: '问题处理' }, account]);
+    expect(useWorkTabsStore.getState().activeTabId).toBeUndefined();
+  });
+
+  it('invalidates inactive problem names while the header is unmounted', () => {
+    const problemId = '3fe4f86d-0000-4000-8000-000000000001';
+    const problem = { id: `problem:${problemId}`, path: `/app/problem-workspace/${problemId}` };
+    const store = useWorkTabsStore.getState();
+    store.bindSession('INTERNAL:org:user');
+    store.openTab({ ...problem, title: '问题处理' });
+    store.renameTab({ ...problem, title: '装配工序尺寸超差' }, useWorkTabsStore.getState().authorizationGeneration);
+    store.deactivate();
+
+    publishSessionSignal('revalidate');
+
+    expect(useWorkTabsStore.getState().tabs).toEqual([{ ...problem, title: '问题处理' }]);
+    expect(useWorkTabsStore.getState().activeTabId).toBeUndefined();
   });
 
   it('keeps tab references small and spills older tabs into the all panel', () => {

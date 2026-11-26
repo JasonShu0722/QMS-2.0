@@ -129,6 +129,11 @@ describe('workflow upgrade and immutable problem history', () => {
     expect(await prisma.workflowInstance.findUnique({ where: { id: upgraded.afterInstanceId } })).toMatchObject({ problemIndexId: context.problem.id, workflowVersionId: String(context.target.id), version: 1 });
     expect(await prisma.workflowMutation.count({ where: { instanceId: upgraded.afterInstanceId, action: 'START' } })).toBe(1);
     expect(await prisma.workflowUpgrade.count({ where: { problemIndexId: context.problem.id } })).toBe(1);
+    const history = await prisma.$transaction(tx => runtime.readTransitionProjection(tx, context.organization.id, context.problem.id));
+    expect(history.map(({ action, instanceId }) => ({ action, instanceId }))).toEqual([
+      { action: 'START', instanceId: context.started.instanceId },
+      { action: 'UPGRADE', instanceId: upgraded.afterInstanceId },
+    ]);
   });
 
   it.each([false, true])('quietly acknowledges the legitimate old START after upgrade without creating an obsolete task (foreign failure: %s)', async (foreignFailure) => {

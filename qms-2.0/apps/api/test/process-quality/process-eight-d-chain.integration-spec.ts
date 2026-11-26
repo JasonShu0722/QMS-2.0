@@ -41,6 +41,8 @@ describe('complete managed process 8D HTTP chain with actual versioned storage a
     const prisma = app.get(PrismaService);
     const rounds = app.get(WorkflowClosureRoundService);
     const f = await createWorkflowClosureFixture(prisma, rounds);
+    await prisma.user.update({ where: { id: f.professional.user.id }, data: { fullName: '专业审核员' } });
+    await prisma.user.update({ where: { id: f.manager.user.id }, data: { fullName: '科室负责人' } });
     const codes = ['configuration:read', 'configuration:manage', 'workflow:manage', 'workflow:start', 'task:read', 'notification:read',
       'process-quality:defects:read', 'process-quality:defects:write', 'process-quality:defects:close',
       ...['read', 'work', 'issue', 'report', 'sources', 'risk', 'reassign', 'deadlines'].map(action => `process-quality:issues:${action}`)];
@@ -105,6 +107,21 @@ describe('complete managed process 8D HTTP chain with actual versioned storage a
     expect(current.status).toBe('IN_REVIEW');
     await send(ownerCookie, 'put', prefix, { expectedVersion: current.version, document }).expect(409);
     let round = (await get(ownerCookie, `workflow-closure/problems/${id}/rounds`).expect(200)).body[0];
+    expect(round.duties).toEqual(expect.arrayContaining([
+      expect.objectContaining({ duty: 'PROFESSIONAL', userDisplayName: '专业审核员' }),
+      expect.objectContaining({ duty: 'SECTION_MANAGER', userDisplayName: '科室负责人' }),
+    ]));
+    await prisma.user.update({ where: { id: f.owner.user.id }, data: { fullName: '更名后的负责人' } });
+    await prisma.department.update({ where: { id: f.section.id }, data: { name: '更名后的科室' } });
+    await send(issuerCookie, 'post', `workflow-closure/rounds/${round.id}/decide`, { expectedRoundVersion: round.version,
+      duties: ['PROFESSIONAL'], decision: 'RETURN', comment: '补充验证证据' }).expect(200);
+    const flowRecords = (await get(ownerCookie, `${prefix}/flow-records`).expect(200)).body;
+    expect(flowRecords.filter((entry: { content: string }) => entry.content.includes('退回'))).toEqual([
+      expect.objectContaining({ person: '专业审核员', content: '专业审核退回：补充验证证据' }),
+    ]);
+    current = (await get(ownerCookie, prefix).expect(200)).body;
+    current = (await send(ownerCookie, 'post', `${prefix}/submit`, { expectedVersion: current.version }).expect(200)).body;
+    round = (await get(ownerCookie, `workflow-closure/problems/${id}/rounds`).expect(200)).body[0];
     round = (await send(issuerCookie, 'post', `workflow-closure/rounds/${round.id}/decide`, { expectedRoundVersion: round.version,
       duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: '分析、对策及有效性已确认' }).expect(200)).body;
     expect((await get(ownerCookie, prefix).expect(200)).body.status).toBe('IN_REVIEW');
@@ -112,7 +129,9 @@ describe('complete managed process 8D HTTP chain with actual versioned storage a
       duties: ['SECTION_MANAGER'], decision: 'APPROVE', comment: '管理侧同意关闭' }).expect(200);
     expect((await get(ownerCookie, prefix).expect(200)).body.status).toBe('CLOSED');
     const approved = (await get(ownerCookie, `${prefix}/report?view=APPROVED`).expect(200)).body;
-    expect(approved).toMatchObject({ status: 'APPROVED', view: 'APPROVED', snapshot: { document: { description: document.description } } });
+    expect(approved).toMatchObject({ status: 'APPROVED', view: 'APPROVED', snapshot: {
+      document: { description: document.description }, ownerName: '更名后的负责人', responsibleSectionName: '更名后的科室',
+    } });
     expect(approved.attachments[0]).toMatchObject({ id: upload.file.id, rendering: 'EMBEDDED' });
     const pdf = await get(ownerCookie, `${prefix}/report/pdf?view=APPROVED`).expect(200).expect('content-type', /application\/pdf/);
     expect(Buffer.isBuffer(pdf.body)).toBe(true);

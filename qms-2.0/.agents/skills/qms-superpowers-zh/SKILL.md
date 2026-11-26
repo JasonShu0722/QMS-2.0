@@ -26,9 +26,9 @@ description: Use when implementing, reviewing, debugging, or planning QMS 2.0 ch
 按任务需要加载以下 `superpowers-zh` 子技能：
 
 1. 设计或行为变化：`brainstorming`，然后 `writing-plans`。
-2. 开始实现计划：`using-git-worktrees`，检查隔离、依赖和基线测试；活动位置仍以仓库要求为准，先核对当前 Git 状态。
-3. 有两个以上相互独立的任务：`dispatching-parallel-agents`；有实现计划：`subagent-driven-development`。
-4. 每个实现任务：子代理使用 `test-driven-development`，先红灯、最小实现、绿灯和邻近回归。
+2. 开始实现计划：默认在唯一活动 checkout 的本地 `main` 核对 Git 状态、依赖和基线；不得自动创建分支或额外工作树，不路由 `using-git-worktrees` 绕过活动位置。
+3. 默认按文件所有权分派可独立任务，路由 `dispatching-parallel-agents` 或相应的并行子代理流程；共享文件、生成契约、Git 索引和验证写入由主代理协调串行。独立审查仍按下列步骤执行。
+4. 每个实现任务：执行者使用 `test-driven-development`，先红灯、最小实现、绿灯和邻近回归。
 5. 每个任务完成：先 `requesting-code-review` 做规格审查，再做质量审查；反馈返修使用 `receiving-code-review`，修复后重新审查。
 6. 宣称完成或进入合并前：`verification-before-completion`，最后按 `finishing-a-development-branch` 收尾。
 
@@ -38,7 +38,7 @@ description: Use when implementing, reviewing, debugging, or planning QMS 2.0 ch
 
 - 活动源码、测试和 Docker 构建上下文只能在 `qms-2.0/`；`archive/qms-1.0/` 只读。
 - 子代理必须收到完整任务文本、领域背景、依赖、文件所有权和验证命令；不得要求子代理自行猜测计划上下文。
-- 每个实现任务使用一个全新实现子代理。只在无共享写入和顺序依赖时并行；公共注册、权限目录、生成契约和阶段文档由主代理统一修改。共享 checkout 的 Git 索引、分支操作和验证期间写入按[工程工具](../../../docs/ENGINEERING-TOOLS.md)串行协调。
+- 默认由当前会话在活动 checkout 维护范围、依赖和集成；不使用额外工作树或分支。可将不重叠文件范围交给多个子代理并行实现。公共注册、权限目录、生成契约和阶段文档由主代理统一修改；Git 索引和验证期间写入按[工程工具](../../../docs/ENGINEERING-TOOLS.md)串行协调。
 - 子代理报告 `DONE_WITH_CONCERNS`、`NEEDS_CONTEXT` 或 `BLOCKED` 时，先处理状态再推进；不得用另一个未经说明的重试掩盖阻塞。
 - API DTO 变化必须运行 `contracts:generate`、`contracts:check`；生成文件不得手工编辑。
 - 关键功能必须使用真实 PostgreSQL、Worker、对象存储、扫描服务和浏览器证据；不得用 SQLite、Mock 或 Skip 替代计划要求。
@@ -47,7 +47,7 @@ description: Use when implementing, reviewing, debugging, or planning QMS 2.0 ch
 
 ## 交付接续
 
-按功能交付 Skill 调用交付流程：常规任务评审后主动先建 Issue，验证审查后按规则分配 / 复用版本并提 PR；纯文档免 Issue / PR，具体限制优先。各检查点记录授权和下一动作，不把缺少合并 / 发布授权误作本地、Issue 或 PR 的停止理由。
+按功能交付 Skill 调用交付流程：常规任务评审后主动先建 Issue，验证审查后按规则分配 / 复用版本，并仅沿获准的分支 PR 或主分支交付路径推进。未经许可不开分支／工作树，不把本地 `main` 开发视为推送或发布授权。纯文档免 Issue / PR；缺少后续授权只暂停受影响的交付动作。
 
 发布核验、最终回归、关闭 / 回填、只读字段接续和沉淀完成条件只在交付流程维护；代理 / CI / 人工证据与工程完成定义依[开发治理](../../../docs/DEVELOPMENT-GOVERNANCE.md)。每次方法步骤结束更新已有计划顶部摘要，保留历史和未覆盖范围，不因方法完成声称整个交付完成。
 

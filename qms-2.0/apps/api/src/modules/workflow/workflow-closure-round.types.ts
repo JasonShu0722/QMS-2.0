@@ -69,6 +69,7 @@ export type WorkflowClosureDutyRecord = {
   duty: WorkflowClosureDuty;
   status: WorkflowClosureDutyStatus;
   userId: string;
+  userDisplayName?: string | null;
   participant: WorkflowClosureParticipant;
   decidedBy: string | null;
   comment: string | null;

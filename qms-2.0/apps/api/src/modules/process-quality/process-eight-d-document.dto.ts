@@ -1,5 +1,5 @@
 import { applyDecorators } from '@nestjs/common';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsString, IsUUID,
@@ -52,6 +52,18 @@ function Rows(type: new () => object) {
   );
 }
 
+function OptionalText(maxLength = PROCESS_EIGHT_D_MAX_TEXT) {
+  return applyDecorators(ApiPropertyOptional({ type: String, maxLength }), ValidateIf((_object, value) => value !== undefined), IsString(), MaxLength(maxLength));
+}
+
+export class ProcessEightDTeamMemberDto {
+  @Identifier() id = '';
+  @Text(200) name = '';
+  @Text(200) department = '';
+  @Text() responsibility = '';
+  @Text() collaborationScope = '';
+}
+
 export class ProcessEightDTemporaryMeasureDto {
   @Identifier() id = '';
   @Text() description = '';
@@ -81,8 +93,11 @@ export class ProcessEightDCorrectiveActionDto {
   @Text(200) owner = '';
   @NullableDate() plannedAt: string | null = null;
   @Text() verificationMethod = '';
+  @OptionalText() selectionReason?: string = undefined;
   @FileIds() fileIds: string[] = [];
   @NullableDate() implementationAt: string | null = null;
+  @OptionalText(200) implementer?: string = undefined;
+  @OptionalText(200) verifier?: string = undefined;
   @Text() result = '';
   @Text() beforeState = '';
   @Text() afterState = '';
@@ -118,6 +133,12 @@ export class ProcessEightDStandardizationDto {
 }
 
 export class ProcessEightDDocumentDto {
+  @OptionalText() title?: string = undefined;
+  @ApiPropertyOptional({ type: () => ProcessEightDTeamMemberDto, isArray: true, maxItems: PROCESS_EIGHT_D_MAX_ROWS })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsArray() @ArrayMaxSize(PROCESS_EIGHT_D_MAX_ROWS) @ValidateNested({ each: true }) @Type(() => ProcessEightDTeamMemberDto)
+  team?: ProcessEightDTeamMemberDto[] = undefined;
+  @OptionalText() riskAssessment?: string = undefined;
   @Text() description = '';
   @FileIds() okFileIds: string[] = [];
   @FileIds() ngFileIds: string[] = [];

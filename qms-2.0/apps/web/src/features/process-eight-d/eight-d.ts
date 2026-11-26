@@ -20,16 +20,19 @@ export const eightDPath = (id: string, domain: InternalEightDDomain = 'process')
 export const extensionPath = (id: string) => `/api/v1/workflow-deadline-extensions/problems/${encodeURIComponent(id)}/requests`;
 export const roundPath = (id: string) => `/api/v1/workflow-closure/problems/${encodeURIComponent(id)}/rounds`;
 const fieldSections: Record<keyof EightDDocument, string> = {
+  title: 'input', riskAssessment: 'input', team: 'D1',
   description: 'D2', okFileIds: 'D2', ngFileIds: 'D2', temporaryMeasures: 'D3', containment: 'D3', optionalAffectedContainment: 'D3',
   analysisProcess: 'D4', analysisFileIds: 'D4', occurrenceCause: 'D4', escapeCause: 'D4', systemCause: 'D4', correctiveActions: 'D5-D6',
   horizontalDeployment: 'D7', standardization: 'D7', closureSummary: 'D8',
 };
 // Only map server-returned paths to existing UI regions; this is not a client validation policy.
-export function eightDFieldLocation(path: string) {
+export function eightDFieldLocation(path: string, domain?: InternalEightDDomain) {
   const match = /^(?:document\.)?([a-zA-Z]+)(?:\[(\d+)\]|\.(\d+))?(?:\.|$)/.exec(path);
   if (!match || !Object.hasOwn(fieldSections, match[1])) return undefined;
   const index = match[2] ?? match[3];
-  return { section: fieldSections[match[1] as keyof EightDDocument], row: index === undefined ? undefined : `${match[1]}[${index}]` };
+  const section = fieldSections[match[1] as keyof EightDDocument];
+  const verification = /(?:\.|^)(?:implementationAt|implementer|verifier|result|beforeState|afterState|firstBatch|followUpBatchCount|followUpDuration|verificationRecord|verificationFileIds|effective)(?:[.\[]|$)/.test(path);
+  return { section: section === 'D5-D6' && domain === 'process' ? verification ? 'D6' : 'D5' : section, row: index === undefined ? undefined : `${match[1]}[${index}]` };
 }
 export function useEightDText() {
   const { t, locale } = useLanguage();

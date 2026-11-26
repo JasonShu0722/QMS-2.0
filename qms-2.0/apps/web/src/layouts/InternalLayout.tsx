@@ -57,7 +57,7 @@ function InternalShell() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const activeDomain = internalDomains.find((domain) => domain.children.some((entry) => entry.path === active?.path));
   const [expandedDomains, setExpandedDomains] = useState<string[]>(sidebar.value.expandedDomains);
-  const problemRoute = /^\/app\/problem-workspace\/([0-9a-f-]{36})$/i.exec(location.pathname);
+  const problemId = /^\/app\/problem-workspace\/([0-9a-f-]{36})$/i.exec(location.pathname)?.[1];
   const processPath = location.pathname.replace(/\/$/, '');
   const implemented = ['/app/problem-center', '/app/my-tasks', '/app/problem-workspace', '/app/account', '/app/supplier-quality', '/app/supplier-incoming', '/app/supplier-concession', '/app/supplier-admission', '/app/supplier-pcn', '/app/supplier-performance', '/app/supplier-audit', '/app/supplier-quality-targets', '/app/supplier-ppap', '/app/supplier-asn', '/app/process-quality', '/app/customer-quality', '/app/audits', '/app/audit-standards', '/app/new-product-quality', '/app/quality-data', '/app/task-statistics', '/app/announcements', '/app/coordinate-inspection', '/app/site-scanning'].some((path) => location.pathname.startsWith(path));
   useLayoutEffect(() => {
@@ -69,17 +69,16 @@ function InternalShell() {
   useLayoutEffect(() => {
     if (navigationElement.current) navigationElement.current.scrollTop = sidebar.value.scrollTop;
   }, [sidebar, expandedDomains, menuCollapsed]);
-  useEffect(() => {
-    setMobileOpen(false);
+  useEffect(() => { setMobileOpen(false); }, [location.pathname, location.search]);
+  useLayoutEffect(() => {
     const store = useWorkTabsStore.getState();
     if (isWorkbench) { store.deactivate(); return; }
     if (!active) return;
     const path = `${location.pathname}${location.search}`;
-    const id = problemRoute ? `problem:${problemRoute[1]}` : location.pathname;
-    const existing = store.tabs.find((tab) => tab.id === id);
-    const title = problemRoute ? existing?.title ?? `${t('问题处理')} · ${problemRoute[1]!.slice(0, 8)}` : active.label;
+    const id = problemId ? `problem:${problemId}` : location.pathname;
+    const title = problemId ? '问题处理' : active.label;
     openTab({ id, path, title });
-  }, [location.pathname, location.search, isWorkbench, active, openTab, t]);
+  }, [location.pathname, location.search, isWorkbench, active, openTab, problemId]);
   const navigation = (mobile = false) => <InternalNavigation activePath={active?.path} isWorkbench={isWorkbench} collapsed={!mobile && menuCollapsed} expandedDomains={expandedDomains} onToggleDomain={path => {
     setExpandedDomains(current => {
       if (!current.includes(path)) { const next = [...current, path]; sidebar.update({ expandedDomains: next }); return next; }
@@ -103,7 +102,7 @@ function InternalShell() {
         {!isWorkbench && active && !implemented ? <EmptyDomain title={t(active.label)} /> : null}
         {location.pathname.startsWith('/app/problem-center') ? <ProblemCenterPage /> : null}
         {location.pathname.startsWith('/app/my-tasks') ? <MyTasksPage /> : null}
-        {location.pathname.startsWith('/app/problem-workspace') ? <ProblemWorkspacePage key={problemRoute?.[1]} problemId={problemRoute?.[1]} /> : null}
+        {location.pathname.startsWith('/app/problem-workspace') ? <ProblemWorkspacePage key={problemId} problemId={problemId} /> : null}
         {location.pathname.startsWith('/app/account') ? <AccountCenterPage /> : null}
         {location.pathname === '/app/supplier-quality' || location.pathname.startsWith('/app/supplier-quality/') ? <SupplierQualityPage /> : null}
         {location.pathname.startsWith('/app/supplier-incoming') ? <SupplierIncomingPage /> : null}

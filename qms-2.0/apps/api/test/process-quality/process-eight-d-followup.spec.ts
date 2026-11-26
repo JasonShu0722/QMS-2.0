@@ -46,7 +46,7 @@ const values = (summary: { fields?: { key: string; value: string | null }[] } | 
 it('uses authorized locked facts, batched names and ISO dates without reading any full snapshot', async () => {
   const s = setup([record(), record()]);
   const result = await s.read();
-  expect(result.get(s.records[0]!.problem.id)).toMatchObject({ title: '8D-001', description: 'Authorized description', domainUiKey: 'process-eight-d' });
+  expect(result.get(s.records[0]!.problem.id)).toMatchObject({ title: 'Authorized description', description: 'Authorized description', domainUiKey: 'process-eight-d' });
   expect(values(result.get(s.records[0]!.problem.id))).toEqual({ responsibleSectionName: 'Section Name', ownerName: 'Owner Name', stage: '分析阶段',
     analysisDueAt: '2026-11-01T00:00:00.000Z', submissionDueAt: null, closureDueAt: '2026-11-01T00:00:00.000Z', analysisCompletedAt: null, submittedAt: null });
   expect(s.service.readReport).not.toHaveBeenCalled();

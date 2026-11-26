@@ -15,7 +15,7 @@ function actor(request: AuthorizedRequest) {
 function projection(round: WorkflowClosureRound): WorkflowClosureRoundDto {
   return { id: round.id, problemId: round.problemId, instanceId: round.instanceId, workflowVersionId: round.workflowVersionId,
     contentVersion: round.contentVersion, roundNumber: round.roundNumber, status: round.status, version: round.version,
-    createdAt: round.createdAt, updatedAt: round.updatedAt, duties: round.duties.map(({ id, duty, status, userId, decidedBy, comment, decidedAt, version }) => ({ id, duty, status, userId, decidedBy, comment, decidedAt, version })) };
+    createdAt: round.createdAt, updatedAt: round.updatedAt, duties: round.duties.map(({ id, duty, status, userId, userDisplayName, decidedBy, comment, decidedAt, version }) => ({ id, duty, status, userId, userDisplayName, decidedBy, comment, decidedAt, version })) };
 }
 
 @Controller('api/v1/workflow-closure')

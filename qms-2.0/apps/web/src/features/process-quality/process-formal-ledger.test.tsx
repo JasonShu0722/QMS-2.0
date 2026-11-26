@@ -365,6 +365,9 @@ it('requires an explicit recurrence decision even for a source without existing 
   vi.mocked(apiRequest).mockImplementation(async path => path.endsWith('/sources/preview') ? [{ ...preview[0], relatedProblems: [], hasHiddenRelations: false }] : baseResponse(path));
   render(<LanguageProvider><MemoryRouter><ProcessEightDIssueDrawer sources={[defect]} onClose={vi.fn()} onIssued={vi.fn()} onDenied={vi.fn()} /></MemoryRouter></LanguageProvider>);
   expect(await screen.findByLabelText('非复发')).not.toBeChecked();
+  expect(screen.getByText('已选择 1 条来源。')).toBeVisible();
+  expect(screen.queryByRole('region', { name: '已关联问题' })).not.toBeInTheDocument();
+  expect(screen.queryByText('尚无已关联问题')).not.toBeInTheDocument();
 });
 
 it('asks once for recurrence and once for the board when issuing mixed sources', async () => {
@@ -374,7 +377,10 @@ it('asks once for recurrence and once for the board when issuing mixed sources',
     : baseResponse(path));
   const onIssued = vi.fn();
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessEightDIssueDrawer sources={[{ ...defect, operationSector: 'PCBA' }, assembly]} onClose={vi.fn()} onIssued={onIssued} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
-  await screen.findByText('装配不良');
+  const relations = within(await screen.findByRole('region', { name: '已关联问题' }));
+  expect(screen.getByText('已选择 2 条来源。')).toBeVisible();
+  expect(relations.getByRole('link', { name: 'PQ-OLD' })).toBeVisible();
+  expect(relations.queryByText('装配不良')).not.toBeInTheDocument();
   expect(screen.getAllByRole('radio', { name: '非复发' })).toHaveLength(1);
   await fillIssue();
   fireEvent.change(screen.getByRole('textbox', { name: '问题标题' }), { target: { value: '两板块缺陷核查' } });
@@ -389,6 +395,19 @@ it('asks once for recurrence and once for the board when issuing mixed sources',
     { defectId: defect.id, recurrence: 'NOT_RECURRENCE', relatedSetToken: 'opaque-exact-1' },
     { defectId: assembly.id, recurrence: 'NOT_RECURRENCE', relatedSetToken: 'assembly-token' },
   ] });
+});
+
+it('groups all related sources and keeps hidden-only relations private', async () => {
+  const hiddenSource = { ...defect, id: '22222222-2222-4222-8222-222222222222', description: '已选的第二条来源' };
+  vi.mocked(apiRequest).mockImplementation(async path => path.endsWith('/sources/preview')
+    ? [...preview, { defectId: hiddenSource.id, relatedProblems: [], hasHiddenRelations: true, relatedSetToken: 'hidden-token' }]
+    : baseResponse(path));
+  render(<LanguageProvider><MemoryRouter><ProcessEightDIssueDrawer sources={[defect, hiddenSource]} onClose={vi.fn()} onIssued={vi.fn()} onDenied={vi.fn()} /></MemoryRouter></LanguageProvider>);
+  const relations = within(await screen.findByRole('region', { name: '已关联问题' }));
+  expect(relations.getByText('2 条来源已有问题关联')).toBeVisible();
+  expect(relations.getByText('已选的第二条来源')).toBeVisible();
+  expect(relations.getAllByRole('link')).toHaveLength(1);
+  expect(relations.getAllByText('部分关联问题无权查看。')).toHaveLength(2);
 });
 
 it('revalidates the exact related-set token before POST and preserves draft when the relation set changes', async () => {

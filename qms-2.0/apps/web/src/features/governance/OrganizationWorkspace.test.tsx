@@ -62,48 +62,36 @@ it('limits the ready department delete impact to retained business data', async 
 });
 
 it('places management responsibilities inside the selected department workspace', async () => {
-  stub();
-  view([org]);
+  const { requests } = stub();
+  view([{ ...org, permissions: [...org.permissions, 'workflow:manage'] }]);
   await selectDepartment();
   const tab = (await screen.findByText('管理职责')).closest('[role="tab"]')!;
   fireEvent.click(tab);
   const panel = within(screen.getByLabelText('管理职责', { selector: 'section' }));
   expect((await panel.findByText('配置部门负责人')).closest('button')).toBeVisible();
-  const legacy = panel.getByText('其他流程职责（旧配置）').closest('[role="button"]')!;
-  expect(legacy).toHaveAttribute('aria-expanded', 'false');
-  fireEvent.click(legacy);
-  expect((await panel.findByText('旧职责预览')).closest('button')).toBeVisible();
+  expect(panel.getByRole('region', { name: '下级部门分管' })).toBeVisible();
+  expect(panel.queryByText('其他流程职责（旧配置）')).not.toBeInTheDocument();
+  expect(panel.queryByText('制程 8D 关闭审核预览')).not.toBeInTheDocument();
+  expect(requests.some(([path]) => /management-bindings|management-responsibilities|closure-preview|closure-options/.test(path))).toBe(false);
 }, 30000);
-it('aborts management reads on leaving the tab and rejects a late preview', async () => {
+it('aborts responsibility reads on leaving the tab and rejects late department leads', async () => {
   const { fetchMock } = stub();
   const original = fetchMock.getMockImplementation()!;
-  let finishPreview!: (response: Response) => void;
+  let finishLeads!: (response: Response) => void;
   let signal: AbortSignal | null | undefined;
-  fetchMock.mockImplementation((input, init) => String(input).includes('/management-responsibilities?')
-    ? (signal = init?.signal, new Promise<Response>(resolve => { finishPreview = resolve; }))
+  fetchMock.mockImplementation((input, init) => String(input).endsWith('/responsible-appointments') && !signal
+    ? (signal = init?.signal, new Promise<Response>(resolve => { finishLeads = resolve; }))
     : original(input, init));
   view([org]); await selectDepartment();
   const tab = (await screen.findByText('管理职责')).closest('[role="tab"]')!;
   fireEvent.click(tab);
-  const responsibilities = () => within(screen.getByLabelText('管理职责', { selector: 'section' }));
-  const openLegacy = () => fireEvent.click(responsibilities().getByText('其他流程职责（旧配置）').closest('[role="button"]')!);
-  openLegacy();
-  const firstPreview = (await responsibilities().findByText('旧职责预览')).closest('button')!;
-  await waitFor(() => expect(firstPreview).toBeEnabled());
-  fireEvent.click(firstPreview);
   await waitFor(() => expect(signal).toBeDefined());
   fireEvent.click(screen.getByText('基本信息').closest('[role="tab"]')!);
   expect(signal?.aborted).toBe(true);
-  const late: components['schemas']['ManagementResponsibilitiesDto'] = {
-    organizationId: org.id, sectionDepartmentId: department.id, at: '2026-10-25T00:00:00.000Z',
-    responsibilities: [], issues: [{ responsibility: 'SECTION_MANAGER', code: 'ASSIGNMENT_AMBIGUOUS' }],
-  };
-  await act(async () => finishPreview(json(late)));
+  await act(async () => finishLeads(json({ version: 1, assignmentIds: ['late-lead'], primaryAssignmentId: 'late-lead' })));
   fireEvent.click(tab);
-  openLegacy();
-  const previewButton = (await responsibilities().findByText('旧职责预览')).closest('button')!;
-  await waitFor(() => expect(previewButton).toBeEnabled());
-  expect(screen.queryByText('科室经理：存在多个有效任职候选')).not.toBeInTheDocument();
+  await waitFor(() => expect(fetchMock.mock.calls.filter(([path]) => String(path).endsWith('/responsible-appointments')).length).toBe(2));
+  expect(screen.queryByText(/late-lead/)).not.toBeInTheDocument();
 }, 30000);
 function stub() {
   const requests: Array<[string, RequestInit | undefined]> = [];
@@ -149,20 +137,29 @@ it('refreshes the parent department directory from the workspace context panel a
   let updated = false;
   fetchMock.mockImplementation((input, init) => String(input).includes('/org-a/departments?') ? (requests.push([String(input), init]), Promise.resolve(json([{ ...department, code: updated ? 'QA-NEW' : department.code, version: updated ? 5 : 4 }, child, sibling]))) : original(input, init));
   view([org, other], directoryChanged); await selectDepartment(); updated = true;
+  const context = () => within(screen.getByLabelText('部门岗位', { selector: 'section' }));
+  const selectedNode = async () => within(await screen.findByLabelText('可读组织与部门')).getByLabelText('质量部 · 部门/科室');
   const before = requests.filter(([path]) => path.includes('/org-a/departments?')).length;
-  const refreshButton = within(screen.getByRole('region', { name: '部门岗位' })).getByRole('button', { name: /^刷\s*新$/ });
+  const refreshButton = context().getByText(/^刷\s*新$/).closest('button')!;
   await waitFor(() => expect(refreshButton).toBeEnabled());
   fireEvent.click(refreshButton);
   await waitFor(() => expect(requests.filter(([path]) => path.includes('/org-a/departments?')).length).toBeGreaterThan(before));
+  const refreshedNode = await selectedNode();
+  expect(await within(refreshedNode).findByText('QA-NEW')).toBeVisible();
   expect(directoryChanged).not.toHaveBeenCalled();
-  expect(await within(await screen.findByLabelText('可读组织与部门')).findByLabelText('质量部 · 部门/科室')).toHaveAttribute('aria-pressed', 'true');
-  await userEvent.click(within(screen.getByRole('region', { name: '部门岗位' })).getByRole('button', { name: /^编\s*辑$/ }));
-  expect(within(screen.getByRole('dialog')).getByLabelText('代码')).toHaveValue('QA-NEW');
-  await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^保\s*存$/ }));
+  expect(refreshedNode).toHaveAttribute('aria-pressed', 'true');
+  const editButton = context().getByText(/^编\s*辑$/, { selector: 'button:not([aria-label]) span' }).closest('button')!;
+  expect(editButton).toBeEnabled();
+  fireEvent.click(editButton);
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByLabelText('代码')).toHaveValue('QA-NEW');
+  const saveButton = within(dialog).getByText(/^保\s*存$/).closest('button')!;
+  expect(saveButton).toBeEnabled();
+  fireEvent.click(saveButton);
   await waitFor(() => expect(requests.some(([, init]) => init?.method === 'PATCH')).toBe(true));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  await waitFor(() => expect(dialog).not.toBeVisible());
   expect(directoryChanged).not.toHaveBeenCalled();
-  expect(await within(await screen.findByLabelText('可读组织与部门')).findByLabelText('质量部 · 部门/科室')).toHaveAttribute('aria-pressed', 'true');
+  expect(await selectedNode()).toHaveAttribute('aria-pressed', 'true');
 }, 30000);
 
 it.each([{ failure: 'transport', change: 'none' }, { failure: 'json', change: 'none' }, { failure: 'transport', change: 'session' }, { failure: 'transport', change: 'version' }, { failure: 'transport', change: 'path' }])('recovers an unknown DELETE $failure result without a GET, but never across a $change change', async ({ failure, change }) => {
@@ -274,10 +271,16 @@ it('fails explicitly instead of silently truncating a directory beyond its bound
 
 it('uses parentId for a real department tree and filters positions without inheriting organization permissions', async () => {
   stub(); view();
-  const childNode = await screen.findByRole('button', { name: '质量科 · 部门/科室' });
-  expect(childNode.closest('li')?.parentElement?.closest('li')).toContainElement(screen.getByRole('button', { name: '质量部 · 部门/科室' }));
-  await selectDepartment();
-  await userEvent.click(screen.getByRole('tab', { name: '岗位' }));
+  const navigation = within(await screen.findByLabelText('可读组织与部门'));
+  const childNode = navigation.getByLabelText('质量科 · 部门/科室');
+  const parentNode = navigation.getByLabelText('质量部 · 部门/科室');
+  expect(childNode).toHaveRole('button');
+  expect(parentNode).toHaveRole('button');
+  expect(parentNode).toBeVisible();
+  expect(childNode.closest('li')?.parentElement?.closest('li')).toContainElement(parentNode);
+  fireEvent.click(parentNode);
+  const context = within(screen.getByLabelText('部门岗位', { selector: 'section' }));
+  fireEvent.click(context.getByText('岗位', { selector: '[role="tab"]' }));
   expect(await screen.findByText('质量工程师')).toBeVisible();
   expect(screen.queryByText('采购专员')).not.toBeInTheDocument();
 }, 30000);

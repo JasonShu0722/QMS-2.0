@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiRequest } from '../api/client';
+import { publishSessionSignal } from '../features/auth/session-invalidation';
 import { LanguageProvider } from '../i18n/Language';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { ShellHeader } from './ShellHeader';
@@ -28,6 +29,9 @@ beforeEach(() => {
 });
 
 describe('internal current page identity', () => {
+  const problemId = '3fe4f86d-0000-4000-8000-000000000001';
+  const problem = { id: `problem:${problemId}`, path: `/app/problem-workspace/${problemId}` };
+
   it('shows a single active page title and translates it with the header language', async () => {
     useWorkTabsStore.getState().openTab({ id: 'account', title: '个人账号', path: '/app/account' });
     mount();
@@ -52,6 +56,64 @@ describe('internal current page identity', () => {
     expect(within(header.getByRole('navigation', { name: '工作标签' })).getByRole('link', { name: '记录 B' })).toBeVisible();
   });
 
+  it.each(['问题概览', '问题处理'])('keeps the business title %s in the header, strip and English tab search', async title => {
+    localStorage.setItem('qms:locale:v1', 'en-US');
+    const store = useWorkTabsStore.getState();
+    store.openTab({ ...problem, title: '问题处理' });
+    store.renameTab({ ...problem, title, titleKind: 'business' }, store.authorizationGeneration);
+    mount();
+    const header = within(screen.getByRole('banner'));
+    expect(header.getByText(title, { exact: true })).toBeVisible();
+
+    act(() => store.openTab({ id: 'account', title: '个人账号', path: '/app/account' }));
+    expect(header.getByRole('link', { name: title })).toBeVisible();
+    expect(header.getByRole('link', { name: 'My account' })).toBeVisible();
+    await userEvent.click(header.getByRole('button', { name: 'All tabs' }));
+    const drawer = within(await screen.findByRole('dialog'));
+    await userEvent.type(drawer.getByRole('textbox', { name: 'Find open pages' }), title);
+    expect(drawer.getByRole('button', { name: title })).toBeVisible();
+    expect(drawer.getByRole('link', { name: `Open separately ${title}` })).toBeVisible();
+  });
+
+  it('clears cached problem names on a same-session revalidation and discards a late rename', async () => {
+    const scope = 'INTERNAL:org:user';
+    const title = '装配工序尺寸超差';
+    const otherProblem = { id: 'problem:other', path: '/app/problem-workspace/other', title: '8D-2026-001' };
+    const account = { id: 'account', title: '个人账号', path: '/app/account' };
+    const store = useWorkTabsStore.getState();
+    store.bindSession(scope);
+    store.openTab(account);
+    store.openTab(otherProblem);
+    store.openTab({ ...problem, title: '问题处理' });
+    const oldGeneration = useWorkTabsStore.getState().authorizationGeneration;
+    store.renameTab({ ...problem, title }, oldGeneration);
+    mount();
+    const header = within(screen.getByRole('banner'));
+    await userEvent.click(header.getByRole('button', { name: '全部标签' }));
+    const drawer = within(await screen.findByRole('dialog'));
+    expect(drawer.getByRole('button', { name: title })).toBeVisible();
+    const search = drawer.getByRole('textbox', { name: '查找已打开工作页' });
+    await userEvent.type(search, title);
+    expect(search).toHaveValue(title);
+
+    act(() => {
+      publishSessionSignal('revalidate');
+      store.bindSession(scope);
+      store.renameTab({ ...problem, title }, oldGeneration);
+    });
+    expect(search).toHaveValue('');
+    expect(header.getByRole('link', { name: '问题处理', current: 'page' })).toBeVisible();
+    expect(drawer.getAllByRole('button', { name: '问题处理' })).toHaveLength(2);
+    expect(drawer.queryByRole('button', { name: title })).not.toBeInTheDocument();
+    expect(drawer.queryByRole('button', { name: otherProblem.title })).not.toBeInTheDocument();
+    expect(drawer.getByRole('button', { name: account.title })).toBeVisible();
+    expect(useWorkTabsStore.getState().sessionScope).toBe(scope);
+
+    const newGeneration = useWorkTabsStore.getState().authorizationGeneration;
+    act(() => store.renameTab({ ...problem, title }, newGeneration));
+    expect(header.getByRole('link', { name: title, current: 'page' })).toBeVisible();
+  });
+
   it.each(['/app', '/app/workbench'])('shows the workbench identity at %s with retained inactive tabs', (path) => {
     const store = useWorkTabsStore.getState();
     store.openTab({ id: 'a', title: '记录 A', path: '/app/a' });
@@ -66,6 +128,15 @@ describe('internal current page identity', () => {
     expect(screen.getByLabelText('current path')).toHaveTextContent(path);
     expect(useWorkTabsStore.getState().activeTabId).toBeUndefined();
     expect(useWorkTabsStore.getState().tabs).toHaveLength(1);
+  });
+
+  it('keeps the workbench label at the left when a stale active tab remains', () => {
+    useWorkTabsStore.getState().openTab({ id: 'a', title: '问题处理 · 3fe4f86d', path: '/app/problem-workspace/3fe4f86d-0000-4000-8000-000000000001' });
+    mount(false, false, '/app/workbench');
+    const header = within(screen.getByRole('banner'));
+    expect(header.getByText('综合工作台')).toHaveClass('qms-home-label');
+    expect(header.queryByText('问题处理 · 3fe4f86d')).not.toBeInTheDocument();
+    expect(header.getByRole('button', { name: '全部标签' })).toBeVisible();
   });
 
   it('does not label another business route as the workbench while its tab is inactive', () => {

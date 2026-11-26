@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Button, Collapse, Descriptions, Form, Input, Modal, Select, Space, Table, Typography } from 'antd';
+import { Alert, Button, Form, Input, Modal, Select, Space, Table, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, createAdminMutation } from '../../api/client';
@@ -9,47 +9,34 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import type { AdminOrganization } from '../admin/admin';
 import { allStructurePages, organizationPath, type Department, type Position } from './governance';
 import { GovernanceFeedback } from './GovernanceFeedback';
-import { ProcessClosurePreview } from './ProcessClosurePreview';
 
-type Binding = components['schemas']['ManagementBindingDto'];
-type CreateBinding = components['schemas']['CreateManagementBindingDto'];
-type UpdateBinding = components['schemas']['UpdateManagementBindingDto'];
 type Scope = components['schemas']['MinisterScopeDto'];
 type Assignment = components['schemas']['ResponsibilityAssignmentDto'];
 type Assignments = components['schemas']['ResponsibilityAssignmentsDto'];
-type Preview = components['schemas']['ManagementResponsibilitiesDto'];
 type Leaders = components['schemas']['ResponsibleAppointmentsDto'];
 type UpdateLeaders = components['schemas']['UpdateResponsibleAppointmentsDto'];
 type CreateScope = components['schemas']['CreateMinisterScopeDto'];
 type UpdateScope = components['schemas']['UpdateMinisterScopeDto'];
 type Props = { organization: AdminOrganization; departmentId: string; departments: Department[]; positions: Position[] };
-type Editor = { kind: 'leaders' } | { kind: 'binding'; record?: Binding } | { kind: 'scope'; legacy: boolean; record?: Scope };
-type Values = { assignmentIds?: string[]; primaryAssignmentId?: string; responsibility: Binding['responsibility']; positionId: string; sectionDepartmentId: string; ministerAssignmentId: string; status: Scope['status']; validFrom?: string; validTo?: string; endMode: 'DEFAULT' | 'DATE' | 'UNBOUNDED' };
-type Attempt = { path: string; method: 'POST' | 'PATCH' | 'PUT'; body: UpdateLeaders | CreateScope | UpdateScope | CreateBinding | UpdateBinding };
+type Editor = { kind: 'leaders' } | { kind: 'scope'; record?: Scope };
+type Values = { assignmentIds?: string[]; primaryAssignmentId?: string; sectionDepartmentId: string; ministerAssignmentId: string; status: Scope['status']; validFrom?: string; validTo?: string; endMode: 'DEFAULT' | 'DATE' | 'UNBOUNDED' };
+type Attempt = { path: string; method: 'POST' | 'PATCH' | 'PUT'; body: UpdateLeaders | CreateScope | UpdateScope };
 
 const english: Record<string, string> = {
   '管理职责': 'Management responsibility', '本部门职责': 'Department responsibilities', '下级部门分管': 'Subordinate department coverage',
-  '其他流程职责（旧配置）': 'Other workflow responsibilities (legacy)', '旧配置供其他领域、延期与移交使用，不影响制程 8D 关闭审核。': 'Legacy configuration for other domains, deadline extensions and transfers; it does not affect process 8D closure.',
-  '新增旧职责绑定': 'Add legacy responsibility binding', '编辑旧职责绑定': 'Edit legacy responsibility binding', '新增旧分管': 'Add legacy coverage', '编辑旧分管': 'Edit legacy coverage',
-  '科室经理': 'Section manager', '部长': 'Minister', '职责岗位': 'Responsible position', '旧职责预览': 'Preview legacy responsibilities',
-  '本部门负责人': 'Department lead', '分管负责人': 'Assigned lead', '职责预览': 'Preview responsibilities', '职责预览结果': 'Responsibility preview results',
+  '本部门负责人': 'Department lead', '分管负责人': 'Assigned lead',
   '配置部门负责人': 'Configure department leads', '新增分管': 'Add coverage', '编辑分管': 'Edit coverage',
   '无组织职责读取权限': 'You cannot read organization responsibilities.', '分管部门': 'Covered department', '负责人': 'Responsible person', '主负责人': 'Primary lead',
   '仅一位负责人，自动设为主负责人。': 'The sole lead is automatically primary.', '请选择一位主负责人。': 'Select one primary lead.',
   '请补配有效的主负责人。': 'Configure an active primary lead.', '请先配置本部门负责人。': 'Configure department leads first.',
   '同一人员仅可选择一个任职。': 'Choose only one appointment per person.',
   '开始时间': 'Start time', '结束时间': 'End time', '结束方式': 'End mode', '默认任职结束时间': 'Default to appointment end', '指定结束时间': 'Specify end time', '无结束时间': 'No end time',
-  '职责来源': 'Responsibility sources', '职责绑定版本': 'Binding version', '任职有效期': 'Appointment validity', '分管有效期': 'Scope validity',
-  '未配置职责绑定': 'Responsibility binding is missing', '存在多个职责绑定': 'Multiple responsibility bindings', '未配置有效任职': 'Effective appointment is missing',
-  '存在多个有效任职候选': 'Multiple effective appointment candidates', '未配置下级部门分管': 'Subordinate department coverage is missing', '存在多个有效分管': 'Multiple effective scopes', '组织或部门已失效': 'Organization or department is inactive',
   '已选任职失效，请重新选择。': 'The selected appointment is invalid. Choose another.',
   '分管时间重叠或配置版本冲突，输入已保留，请核对后重试。': 'Scope overlap or version conflict. Inputs are retained; check and retry.',
   '保存结果尚未确认，请使用原请求重试。': 'Save result is unknown. Retry the original request.', '重试原请求': 'Retry original request', '放弃并刷新': 'Discard and refresh',
-  '已保存': 'Saved', '服务器当前时间': 'Server current time', '未获取分管来源有效期': 'Scope source validity is unavailable', '分管来源版本已变化，请重新预览': 'Scope source version changed; preview again',
-  '以下缺项仅为配置提示，不阻断本页维护；不代表审批结果。': 'These configuration issues do not block maintenance and are not approval results.',
+  '已保存': 'Saved', '服务器当前时间': 'Server current time',
   '请检查有效期及任职范围，输入已保留。': 'Check validity bounds and appointment scope. Inputs are retained.',
   '任职已失效或不可见': 'Appointment is inactive or unavailable',
-  '配置缺项': 'Missing configuration',
 };
 function localDate(value?: string | null) {
   if (!value) return '';
@@ -68,11 +55,6 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
   const navigate = useNavigate();
   const completeSessionNavigation = useCompletedSessionNavigation();
   const requestLeave = useNavigationGuard();
-  const [bindings, setBindings] = useState<Binding[]>([]);
-  const [legacyOpen, setLegacyOpen] = useState(false);
-  const [legacyLoading, setLegacyLoading] = useState(false);
-  const [legacyError, setLegacyError] = useState<unknown>();
-  const [processPreviewOpen, setProcessPreviewOpen] = useState(false);
   const [leaders, setLeaders] = useState<Leaders>();
   const [scopes, setScopes] = useState<Scope[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
@@ -86,17 +68,11 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [unknownAttempt, setUnknownAttempt] = useState<Attempt>();
-  const [preview, setPreview] = useState<Preview>();
-  const [previewScopes, setPreviewScopes] = useState<Scope[]>([]);
-  const [previewError, setPreviewError] = useState<unknown>();
-  const [previewLoading, setPreviewLoading] = useState(false);
   const pending = useRef(false);
   const alive = useRef(false);
   const ending = useRef(false);
   const [session] = useState(() => useWorkTabsStore.getState().sessionScope);
   const lifetime = useRef<AbortController | undefined>(undefined);
-  const previewController = useRef<AbortController | undefined>(undefined);
-  const previewGeneration = useRef(0);
   const [mutate] = useState(createAdminMutation);
   const [form] = Form.useForm<Values>();
   const selectedAppointment = Form.useWatch('ministerAssignmentId', form);
@@ -110,8 +86,8 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
   const current = useCallback(() => alive.current && !ending.current && session === useWorkTabsStore.getState().sessionScope, [session]);
   const reportError = useCallback((cause: unknown) => {
     if (cause instanceof ApiError && cause.status === 401) {
-      ending.current = true; lifetime.current?.abort(); previewController.current?.abort(); setEditor(undefined); setDirty(false); setUnknownAttempt(undefined);
-      setBindings([]); setLeaders(undefined); setScopes([]); setAssignments([]); setPreview(undefined); setPreviewScopes([]); form.resetFields();
+      ending.current = true; lifetime.current?.abort(); setEditor(undefined); setDirty(false); setUnknownAttempt(undefined);
+      setLeaders(undefined); setScopes([]); setAssignments([]); form.resetFields();
       completeSessionNavigation(() => { useWorkTabsStore.getState().reset(); navigate('/login', { replace: true }); });
     } else setError(cause);
   }, [completeSessionNavigation, navigate, form]);
@@ -130,53 +106,37 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
     return false;
   });
   const hasDescendants = departments.some(item => item.organizationId === organization.id && item.parentId === departmentId);
-  const ministerBindings = bindings.filter(item => item.responsibility === 'MINISTER' && item.status === 'ACTIVE');
   const effective = assignments.filter(item => item.departmentId === departmentId && eligiblePositions.some(position => position.id === item.positionId)
     && new Date(item.startedAt).getTime() <= Date.now() && (!item.endedAt || new Date(item.endedAt).getTime() > Date.now()));
-  const leadershipScope = editor?.kind === 'scope' && !editor.legacy;
-  const candidates = effective.filter(item => leadershipScope ? leaders?.assignmentIds.includes(item.assignmentId)
-    : ministerBindings.length === 1 && item.positionId === ministerBindings[0].positionId);
+  const candidates = effective.filter(item => leaders?.assignmentIds.includes(item.assignmentId));
   const invalidAppointment = !!selectedAppointment && !candidatesLoading && !candidatesError && !candidates.some(item => item.assignmentId === selectedAppointment);
   const labelDepartment = (id: string) => departments.find(item => item.id === id && item.organizationId === organization.id)?.name ?? id;
   const assignmentLabel = (item: Assignment) => `${item.fullName ? `${item.fullName} (${item.username})` : item.username} · ${item.positionName} / ${labelDepartment(item.departmentId)}`;
   const leadersPath = organizationPath(organization.id, `/departments/${encodeURIComponent(departmentId)}/responsible-appointments`);
-  const interval = (start: string, end: string | null) => `${start} — ${end ?? t('无结束时间')}`;
 
   useUnsavedChanges(!!editor && (dirty || !!unknownAttempt));
   useNavigationBusy(saving);
   useEffect(() => {
     alive.current = true; lifetime.current = new AbortController();
-    return () => { alive.current = false; lifetime.current?.abort(); previewController.current?.abort(); previewGeneration.current += 1; };
+    return () => { alive.current = false; lifetime.current?.abort(); };
   }, []);
   useEffect(() => {
     if (!read) return;
     let live = true;
     const controller = new AbortController();
     const query = `?departmentId=${encodeURIComponent(departmentId)}`;
-    setLoading(true); setError(undefined); setLeaders(undefined); setScopes([]); setPreview(undefined); setPreviewScopes([]);
+    setLoading(true); setError(undefined); setLeaders(undefined); setScopes([]);
     void Promise.all([
       apiRequest<Leaders>(leadersPath, { signal: controller.signal }),
       hasDescendants ? allStructurePages<Scope>(organizationPath(organization.id, `/minister-scopes${query}`), controller.signal) : [],
     ]).then(([nextLeaders, nextScopes]) => {
       if (!live || !current()) return;
       setLeaders(nextLeaders);
-      setScopes(nextScopes.filter(item => item.organizationId === organization.id && item.departmentId === departmentId));
+      setScopes(nextScopes.filter(item => item.organizationId === organization.id && item.departmentId === departmentId && item.departmentLeadership === true));
     }).catch(cause => { if (live && current()) reportError(cause); }).finally(() => { if (live && current()) setLoading(false); });
     return () => { live = false; controller.abort(); };
   }, [organization.id, departmentId, hasDescendants, leadersPath, read, revision, current, reportError]);
-  useEffect(() => {
-    if (!read || !legacyOpen) return;
-    const controller = new AbortController();
-    setLegacyLoading(true); setLegacyError(undefined); setBindings([]);
-    void allStructurePages<Binding>(organizationPath(organization.id, `/management-bindings?departmentId=${encodeURIComponent(departmentId)}`), controller.signal)
-      .then(items => { if (!controller.signal.aborted && current()) setBindings(items.filter(item => item.organizationId === organization.id && item.departmentId === departmentId)); })
-      .catch(cause => { if (!controller.signal.aborted && current()) {
-        setLegacyError(cause);
-        if (cause instanceof ApiError && cause.status === 401) reportError(cause);
-      } }).finally(() => { if (!controller.signal.aborted && current()) setLegacyLoading(false); });
-    return () => controller.abort();
-  }, [organization.id, departmentId, read, legacyOpen, revision, current, reportError]);
-  const needsAssignments = read && (!!editor || !!leaders?.assignmentIds.length || scopes.length > 0 || processPreviewOpen);
+  const needsAssignments = read && (!!editor || !!leaders?.assignmentIds.length || scopes.length > 0);
   useEffect(() => {
     if (!needsAssignments) return;
     let live = true;
@@ -201,13 +161,7 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
     return () => { live = false; controller.abort(); };
   }, [organization.id, departmentId, needsAssignments, revision, current, reportError]);
 
-  function clearLegacyPreview() {
-    previewGeneration.current += 1; previewController.current?.abort();
-    setPreview(undefined); setPreviewScopes([]); setPreviewError(undefined); setPreviewLoading(false);
-  }
   function reload() {
-    clearLegacyPreview();
-    setProcessPreviewOpen(false);
     setRevision(value => value + 1);
   }
   function closeEditor(refresh = false) {
@@ -224,7 +178,6 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
       if (pending.current || !current()) return;
       setError(undefined); setSaved(false); setDirty(false); setUnknownAttempt(undefined); form.resetFields();
       if (next.kind === 'leaders') form.setFieldsValue({ assignmentIds: leaders?.assignmentIds ?? [], primaryAssignmentId: leaders?.primaryAssignmentId ?? undefined });
-      else if (next.kind === 'binding') form.setFieldsValue(next.record ?? {});
       else form.setFieldsValue({ ...next.record, validFrom: localDate(next.record?.validFrom), validTo: localDate(next.record?.validTo), endMode: next.record ? next.record.validTo ? 'DATE' : 'UNBOUNDED' : 'DEFAULT' });
       setEditor(next);
     });
@@ -254,16 +207,6 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
       const body: UpdateLeaders = { expectedVersion: leaders.version, assignmentIds,
         ...(assignmentIds.length > 1 ? { primaryAssignmentId: values.primaryAssignmentId } : {}) };
       void submit({ path: leadersPath, method: 'PUT', body });
-    } else if (editor.kind === 'binding') {
-      const record = editor.record;
-      const path = organizationPath(organization.id, '/management-bindings');
-      if ((!record || values.status === 'ACTIVE' || values.positionId !== record.positionId) && !eligiblePositions.some(item => item.id === values.positionId)) {
-        setError(new ApiError({ code: 'STRUCTURE_REFERENCE_INVALID', message: '' }, 422)); return;
-      }
-      if (record) void submit({ path: `${path}/${encodeURIComponent(record.id)}`, method: 'PATCH', body: {
-        expectedVersion: record.version, status: values.status, ...(values.positionId !== record.positionId ? { positionId: values.positionId } : {}),
-      } });
-      else void submit({ path, method: 'POST', body: { departmentId, responsibility: values.responsibility, positionId: values.positionId } });
     } else {
       const path = organizationPath(organization.id, '/minister-scopes');
       const record = editor.record;
@@ -283,32 +226,11 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
         };
         void submit({ path: `${path}/${encodeURIComponent(record.id)}`, method: 'PATCH', body });
       } else {
-        const body: CreateScope = { departmentId, sectionDepartmentId: values.sectionDepartmentId, ministerAssignmentId: values.ministerAssignmentId,
-          ...(leadershipScope ? { departmentLeadership: true } : {}), ...dates };
+        const body: CreateScope = { departmentId, sectionDepartmentId: values.sectionDepartmentId, ministerAssignmentId: values.ministerAssignmentId, departmentLeadership: true, ...dates };
         void submit({ path, method: 'POST', body });
       }
     }
   }
-  async function loadPreview() {
-    if (pending.current || previewLoading || !legacyOpen || !read || !current()) return;
-    const generation = ++previewGeneration.current;
-    previewController.current?.abort();
-    const controller = new AbortController();
-    previewController.current = controller;
-    const isCurrent = () => current() && previewGeneration.current === generation && !controller.signal.aborted;
-    setPreviewLoading(true); setPreviewError(undefined); setPreview(undefined); setPreviewScopes([]);
-    try {
-      const result = await apiRequest<Preview>(organizationPath(organization.id, `/management-responsibilities?sectionDepartmentId=${encodeURIComponent(departmentId)}`), { signal: controller.signal });
-      if (!isCurrent()) return;
-      if (result.organizationId !== organization.id || result.sectionDepartmentId !== departmentId) throw new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: '' }, 403);
-      setPreview(result);
-      const sourceDepartments = [...new Set(result.responsibilities.filter(item => item.scopeId).map(item => item.departmentId))];
-      const sources = await Promise.all(sourceDepartments.map(id => allStructurePages<Scope>(organizationPath(organization.id, `/minister-scopes?departmentId=${encodeURIComponent(id)}`), controller.signal)));
-      if (isCurrent()) setPreviewScopes(sources.flat().filter(item => item.organizationId === organization.id));
-    } catch (cause) { if (isCurrent()) { setPreviewError(cause); if (cause instanceof ApiError && cause.status === 401) reportError(cause); } }
-    finally { if (isCurrent()) setPreviewLoading(false); }
-  }
-  const issueText: Record<Preview['issues'][number]['code'], string> = { STRUCTURE_INACTIVE: '组织或部门已失效', BINDING_MISSING: '未配置职责绑定', BINDING_AMBIGUOUS: '存在多个职责绑定', ASSIGNMENT_MISSING: '未配置有效任职', ASSIGNMENT_AMBIGUOUS: '存在多个有效任职候选', SCOPE_MISSING: '未配置下级部门分管', SCOPE_AMBIGUOUS: '存在多个有效分管' };
   if (!read) return <Alert type="warning" showIcon title={t('无组织职责读取权限')} />;
   const frozen = saving || !!unknownAttempt;
   const invalidSelection = editor?.kind === 'leaders' ? candidatesLoading || !!candidatesError
@@ -317,14 +239,13 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
     const item = effective.find(entry => entry.assignmentId === id);
     return item ? assignmentLabel(item) : `${id} · ${t(candidatesLoading ? '加载中' : '任职已失效或不可见')}`;
   };
-  const legacyRole = (value: Binding['responsibility']) => t(value === 'MINISTER' ? '部长' : '科室经理');
   const disabled = saving || loading || !!error || !active;
-  const scopeTable = (legacy: boolean) => <Table<Scope> rowKey="id" loading={loading} pagination={false} scroll={{ x: 900 }} dataSource={scopes.filter(scope => (scope.departmentLeadership !== true) === legacy)} columns={[
+  const scopeTable = <Table<Scope> rowKey="id" loading={loading} pagination={false} scroll={{ x: 900 }} dataSource={scopes} columns={[
     { title: t('分管部门'), dataIndex: 'sectionDepartmentId', render: labelDepartment },
     { title: t('分管负责人'), dataIndex: 'ministerAssignmentId', render: displayAssignment },
     { title: t('开始时间'), dataIndex: 'validFrom' }, { title: t('结束时间'), dataIndex: 'validTo', render: (value: string | null) => value ?? t('无结束时间') },
     { title: t('状态'), dataIndex: 'status', render: (value: string) => t(value === 'ACTIVE' ? '启用' : '停用') }, { title: t('版本'), dataIndex: 'version' },
-    { title: t('操作'), render: (_value, record) => manage ? <Button aria-label={`${t(legacy ? '编辑旧分管' : '编辑分管')} · ${labelDepartment(record.sectionDepartmentId)}`} disabled={saving || loading || !!error || (legacy && (legacyLoading || !!legacyError))} onClick={() => edit({ kind: 'scope', legacy, record })}>{t('编辑')}</Button> : t('只读') },
+    { title: t('操作'), render: (_value, record) => manage ? <Button aria-label={`${t('编辑分管')} · ${labelDepartment(record.sectionDepartmentId)}`} disabled={saving || loading || !!error} onClick={() => edit({ kind: 'scope', record })}>{t('编辑')}</Button> : t('只读') },
   ]} />;
   return <section className="governance-panel" aria-label={t('管理职责')}>
     {!editor && <GovernanceFeedback error={error} retry={() => { if (!pending.current) closeEditor(true); }} />}
@@ -342,52 +263,11 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
     ]} />
     {hasDescendants && <section className="governance-panel" aria-label={t('下级部门分管')}>
     <Typography.Title level={5}>{t('下级部门分管')}</Typography.Title>
-    {manage && <><Button disabled={disabled || !descendants.length || !leaders?.assignmentIds.length} onClick={() => edit({ kind: 'scope', legacy: false })}>{t('新增分管')}</Button>
+    {manage && <><Button disabled={disabled || !descendants.length || !leaders?.assignmentIds.length} onClick={() => edit({ kind: 'scope' })}>{t('新增分管')}</Button>
       {!loading && !leaders?.assignmentIds.length && <Typography.Text type="warning">{t('请先配置本部门负责人。')}</Typography.Text>}</>}
-    {scopeTable(false)}
+    {scopeTable}
     </section>}
-    {active && organization.permissions.includes('workflow:manage') && session?.split(':')[1] === organization.id && <ProcessClosurePreview key={revision} departmentId={departmentId} organizationId={organization.id} disabled={saving || loading} onSessionExpired={reportError} onOpenChange={setProcessPreviewOpen} owners={Array.from(new Map(effective.map(item => [item.userId, { value: item.userId, label: assignmentLabel(item) }])).values())} ownersLoading={candidatesLoading} ownersError={candidatesError} />}
-    <Collapse destroyOnHidden activeKey={legacyOpen ? ['legacy'] : []} onChange={keys => {
-      const open = keys.includes('legacy');
-      if (!open) clearLegacyPreview();
-      setLegacyOpen(open);
-    }} items={[{ key: 'legacy', label: t('其他流程职责（旧配置）'), children: <section className="governance-panel">
-    <Typography.Text type="secondary">{t('旧配置供其他领域、延期与移交使用，不影响制程 8D 关闭审核。')}</Typography.Text>
-    <GovernanceFeedback error={legacyError} retry={reload} />
-    <Space wrap>
-      {manage && <Button disabled={disabled || legacyLoading || !!legacyError} onClick={() => edit({ kind: 'binding' })}>{t('新增旧职责绑定')}</Button>}
-      <Button disabled={saving || loading || previewLoading} loading={previewLoading} onClick={() => void loadPreview()}>{t('旧职责预览')}</Button>
-    </Space>
-    <Table<Binding> rowKey="id" loading={legacyLoading} pagination={false} dataSource={bindings} columns={[
-      { title: t('管理职责'), dataIndex: 'responsibility', render: legacyRole },
-      { title: t('职责岗位'), dataIndex: 'positionId', render: (id: string) => positions.find(item => item.id === id && item.organizationId === organization.id)?.name ?? id },
-      { title: t('状态'), dataIndex: 'status', render: (value: string) => t(value === 'ACTIVE' ? '启用' : '停用') },
-      { title: t('版本'), dataIndex: 'version' },
-      { title: t('操作'), render: (_value, record) => manage && <Button aria-label={`${t('编辑旧职责绑定')} · ${legacyRole(record.responsibility)}`} disabled={saving || legacyLoading || !!legacyError} onClick={() => edit({ kind: 'binding', record })}>{t('编辑')}</Button> },
-    ]} />
-    {hasDescendants && <>
-      {manage && <Button disabled={disabled || legacyLoading || !!legacyError || !descendants.length || ministerBindings.length !== 1} onClick={() => edit({ kind: 'scope', legacy: true })}>{t('新增旧分管')}</Button>}
-      {scopeTable(true)}
-    </>}
-    <GovernanceFeedback error={previewError} retry={() => void loadPreview()} />
-    {preview && <section className="governance-panel" aria-label={t('职责预览结果')}>
-      <Typography.Text>{preview.at}</Typography.Text>
-      {!!preview.issues.length && <Alert type="info" showIcon title={t('配置缺项')} description={<ul>{preview.issues.map((item, index) => <li key={`${item.responsibility}:${item.code}:${index}`}>{legacyRole(item.responsibility)}：{t(issueText[item.code])}</li>)}</ul>} />}
-      <Table<Preview['responsibilities'][number]> rowKey={item => `${item.responsibility}:${item.assignmentId}:${item.bindingId}:${item.scopeId}`} pagination={false} scroll={{ x: 660 }} dataSource={preview.responsibilities} columns={[
-        { title: t('管理职责'), dataIndex: 'responsibility', render: legacyRole }, { title: t('姓名'), render: (_value, item) => item.fullName || item.username },
-        { title: t('岗位'), dataIndex: 'positionName' }, { title: t('部门'), dataIndex: 'departmentId', render: labelDepartment },
-        { title: t('职责来源'), render: (_value, item) => { const source = previewScopes.find(entry => entry.id === item.scopeId); return <Collapse size="small" items={[{ key: 'source', label: t('职责来源'), children: <Descriptions column={1} size="small" items={[
-          { key: 'binding', label: t('职责绑定版本'), children: `${item.bindingId} · v${item.bindingVersion}` },
-          { key: 'position', label: t('岗位'), children: `${item.positionName} · ${item.positionId} · v${item.positionVersion}` },
-          { key: 'assignment', label: t('任职有效期'), children: `${item.assignmentId} · ${interval(item.startedAt, item.endedAt)}` },
-          { key: 'scope', label: t('下级部门分管'), children: item.scopeId ? `${item.scopeId} · v${item.scopeVersion}` : '—' },
-          ...(item.scopeId ? [{ key: 'scopeDate', label: t('分管有效期'), children: source && source.version === item.scopeVersion ? interval(source.validFrom, source.validTo) : t(source ? '分管来源版本已变化，请重新预览' : '未获取分管来源有效期') }] : []),
-          { key: 'versions', label: t('版本'), children: `${t('组织')} v${item.organizationVersion} / ${t('部门')} v${item.departmentVersion} / ${t('分管部门')} v${item.sectionDepartmentVersion}` },
-        ]} /> }]} />; } },
-      ]} />
-    </section>}
-    </section> }]} />
-    {editor && <Modal open title={t(editor.kind === 'leaders' ? '配置部门负责人' : editor.kind === 'binding' ? editor.record ? '编辑旧职责绑定' : '新增旧职责绑定' : editor.record ? editor.legacy ? '编辑旧分管' : '编辑分管' : editor.legacy ? '新增旧分管' : '新增分管')} onOk={() => { if (!pending.current) form.submit(); }} onCancel={() => closeEditor()} okText={t('保存')} cancelText={t('取消')} confirmLoading={saving} okButtonProps={{ disabled: !!unknownAttempt || !!invalidSelection }} cancelButtonProps={{ disabled: saving }} closable={!saving} keyboard={!saving} mask={{ closable: !saving }}>
+    {editor && <Modal open title={t(editor.kind === 'leaders' ? '配置部门负责人' : editor.record ? '编辑分管' : '新增分管')} onOk={() => { if (!pending.current) form.submit(); }} onCancel={() => closeEditor()} okText={t('保存')} cancelText={t('取消')} confirmLoading={saving} okButtonProps={{ disabled: !!unknownAttempt || !!invalidSelection }} cancelButtonProps={{ disabled: saving }} closable={!saving} keyboard={!saving} mask={{ closable: !saving }}>
       <GovernanceFeedback error={error} />
       {error instanceof ApiError && error.status === 409 && <Alert type="warning" showIcon title={t('分管时间重叠或配置版本冲突，输入已保留，请核对后重试。')} />}
       {error instanceof ApiError && error.status === 422 && <Alert type="warning" showIcon title={t('请检查有效期及任职范围，输入已保留。')} />}
@@ -406,13 +286,6 @@ function ResponsibilitiesScope({ organization, departmentId, departments, positi
           {selectedLeaders.length > 1 && <Form.Item name="primaryAssignmentId" label={t('主负责人')} preserve={false} rules={[{ required: true, message: t('请选择一位主负责人。') }]}>
             <Select aria-label={t('主负责人')} virtual={false} options={effective.filter(item => selectedLeaders.includes(item.assignmentId)).map(item => ({ value: item.assignmentId, label: assignmentLabel(item) }))} />
           </Form.Item>}
-        </> : editor.kind === 'binding' ? <>
-          <Form.Item name="responsibility" label={t('管理职责')} rules={[{ required: true }]}><Select aria-label={t('管理职责')} virtual={false} disabled={frozen || !!editor.record} options={(['SECTION_MANAGER', 'MINISTER'] as const).map(value => ({ value, label: legacyRole(value) }))} /></Form.Item>
-          <Form.Item name="positionId" label={t('职责岗位')} rules={[{ required: true }]}><Select aria-label={t('职责岗位')} virtual={false} options={[
-            ...eligiblePositions.map(item => ({ value: item.id, label: item.name })),
-            ...(editor.record && !eligiblePositions.some(item => item.id === editor.record?.positionId) ? [{ value: editor.record.positionId, label: `${editor.record.positionId} · ${t('停用')}`, disabled: true }] : []),
-          ]} /></Form.Item>
-          {!editor.record && <Typography.Text type="secondary">{t('状态')}：{t('启用')}</Typography.Text>}
         </> : <>
           <Form.Item name="sectionDepartmentId" label={t('分管部门')} rules={[{ required: true }]}><Select aria-label={t('分管部门')} virtual={false} showSearch={{ optionFilterProp: 'label' }} options={[
             ...descendants.map(item => ({ value: item.id, label: item.name })),

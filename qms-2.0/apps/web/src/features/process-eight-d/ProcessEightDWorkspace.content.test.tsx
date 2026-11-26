@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { transferableAbortController } from 'node:util';
 import { createMemoryRouter, Link, Outlet, RouterProvider } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
@@ -56,6 +56,69 @@ function mount(onAccessDenied?: (cause: unknown) => void) {
   render(<RouterProvider router={router} />);
   return router;
 }
+
+it('keeps the draft while switching between problem input and the two corrective action chapters', async () => {
+  mount();
+  const description = await screen.findByDisplayValue('sensitive body');
+  fireEvent.change(description, { target: { value: 'unsaved description' } });
+  fireEvent.click(screen.getByRole('button', { name: '问题输入与风险评估' }));
+  expect(screen.getByRole('heading', { name: '风险评估' })).toBeVisible();
+  expect(description).not.toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'D5 · 制定永久纠正措施' }));
+  fireEvent.click(screen.getByRole('button', { name: '增加永久措施' }));
+  fireEvent.change(screen.getByLabelText('措施 1 对策'), { target: { value: '校验治具' } });
+  fireEvent.click(screen.getByRole('button', { name: 'D6 · 实施与验证' }));
+  expect(screen.getByRole('heading', { name: '措施 1 · 校验治具' })).toBeVisible();
+  expect(screen.getByLabelText('措施 1 对策')).not.toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '详情 措施 1' }));
+  fireEvent.change(screen.getByLabelText('措施 1 人工有效性结论'), { target: { value: 'false' } });
+  fireEvent.click(screen.getByRole('button', { name: 'D2 · 问题描述' }));
+  expect(screen.getByDisplayValue('unsaved description')).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'D6 · 实施与验证' }));
+  expect(screen.getByLabelText('措施 1 人工有效性结论')).toHaveValue('false');
+});
+
+it('shows the selected report snapshot in both corrective action lists', async () => {
+  const respond = fetcher.getMockImplementation()!;
+  fetcher.mockImplementation(async (url: string) => {
+    const response = await respond(url);
+    if (!url.includes('/report?')) return response;
+    const preview = await response.json();
+    const approved = url.includes('view=APPROVED');
+    const label = approved ? '批准版' : '当前保存版';
+    preview.snapshot.document.correctiveActions = ['校验治具', '复查批次'].map((action, index) => ({
+      id: `measure-${index}`, causeKind: 'OCCURRENCE', action: `${label}${action}`, owner: label, plannedAt: null,
+      verificationMethod: '', fileIds: [], implementationAt: null, result: '', beforeState: `${label}改善前 ${index}`,
+      afterState: `${label}改善后 ${index}`, firstBatch: '', followUpBatchCount: null, followUpDuration: '', verificationRecord: '',
+      verificationFileIds: ['verification-file'], effective: index === 0,
+    }));
+    return new Response(JSON.stringify(preview), { headers: { 'content-type': 'application/json' } });
+  });
+  mount();
+  await screen.findByDisplayValue('sensitive body');
+  fireEvent.click(screen.getByRole('tab', { name: '报告' }));
+  await screen.findByRole('button', { name: /^D5 ·/ });
+  for (const version of ['CURRENT', 'APPROVED']) {
+    const label = version === 'CURRENT' ? '当前保存版' : '批准版';
+    if (version === 'APPROVED') {
+      fireEvent.change(screen.getByLabelText('报告版本'), { target: { value: version } });
+      await screen.findByRole('button', { name: /^D5 ·/ });
+    }
+    fireEvent.click(screen.getByRole('button', { name: /^D5 ·/ }));
+    const plans = within(screen.getByRole('region', { name: '措施计划清单' }));
+    expect(plans.getByRole('heading', { name: `措施 1 · ${label}校验治具` })).toBeVisible();
+    expect(plans.getByRole('heading', { name: `措施 2 · ${label}复查批次` })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: /^D6 ·/ }));
+    const results = within(screen.getByRole('region', { name: '措施实绩清单' }));
+    expect(results.getByRole('heading', { name: `措施 2 · ${label}复查批次` })).toBeVisible();
+    fireEvent.click(results.getByRole('button', { name: '详情 措施 2' }));
+    expect(results.getByDisplayValue(`${label}改善前 1`)).toBeDisabled();
+    expect(results.getByDisplayValue(`${label}改善后 1`)).toBeDisabled();
+    expect(results.getByDisplayValue(`${label}改善后 1`)).toBeVisible();
+    expect(results.getByLabelText('措施 2 人工有效性结论')).toHaveValue('false');
+    expect(results.getByLabelText('措施 1 改善后')).not.toBeVisible();
+  }
+});
 
 it('aggregates panel pending and blocks route leaving until every panel settles', async () => {
   const router = mount(); await screen.findByDisplayValue('sensitive body');
@@ -135,7 +198,8 @@ it('rechecks evidence at the send boundary when pending starts while CSRF is in 
 it('closes an unchanged action without waiting on evidence that is readOnly only for that action', async () => {
   mount(); await screen.findByDisplayValue('sensitive body');
   fireEvent.click(screen.getByRole('button', { name: 'pending OK 附件（可选）' }));
-  fireEvent.click(screen.getByRole('button', { name: '调整风险' }));
+  fireEvent.click(screen.getByRole('button', { name: '更多' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: '调整风险' }));
   fireEvent.click(await screen.findByRole('button', { name: '取消' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   expect(screen.getByRole('button', { name: 'settled OK 附件（可选）' })).toBeVisible();
@@ -143,18 +207,20 @@ it('closes an unchanged action without waiting on evidence that is readOnly only
 
 it('retains simultaneous CLEAN receipts across document fields and across fields in one corrective action', async () => {
   mount(); await screen.findByDisplayValue('sensitive body');
+  fireEvent.click(screen.getByRole('button', { name: /^D5 ·/ }));
   fireEvent.click(screen.getByRole('button', { name: '增加永久措施' }));
   act(() => {
-    fireEvent.click(screen.getByRole('button', { name: 'ready OK 附件（可选）' }));
-    fireEvent.click(screen.getByRole('button', { name: 'ready NG 附件（可选）' }));
-    fireEvent.click(screen.getByRole('button', { name: 'ready 措施附件' }));
-    fireEvent.click(screen.getByRole('button', { name: 'ready 验证附件' }));
+    fireEvent.click(screen.getByRole('button', { name: 'ready OK 附件（可选）', hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'ready NG 附件（可选）', hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'ready 措施附件', hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'ready 验证附件', hidden: true }));
   });
-  for (const label of ['OK 附件（可选）', 'NG 附件（可选）', '措施附件', '验证附件']) expect(screen.getByText(`${label} (2)`)).toBeVisible();
+  for (const label of ['OK 附件（可选）', 'NG 附件（可选）', '措施附件', '验证附件']) expect(screen.getByText(`${label} (2)`)).toBeInTheDocument();
 });
 
 it('does not remove an evidence-bearing row while any panel is still pending', async () => {
   mount(); await screen.findByDisplayValue('sensitive body');
+  fireEvent.click(screen.getByRole('button', { name: /^D5 ·/ }));
   fireEvent.click(screen.getByRole('button', { name: '增加永久措施' }));
   fireEvent.click(screen.getByRole('button', { name: 'pending 措施附件' }));
   expect(screen.getByRole('button', { name: '移除措施 1' })).toBeDisabled();

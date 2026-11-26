@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Button, Space, Spin, Tabs, Tag } from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Alert, Button, Dropdown, Modal, Space, Spin, Tabs, Tag } from 'antd';
 import { useLocation } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
@@ -7,6 +7,7 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { EightDDocumentEditor } from './EightDDocumentEditor';
 import { EightDActionDialog, type EightDAction } from './EightDActionDialog';
 import { EightDControlledReport } from './EightDControlledReport';
+import { EightDProblemInput, EightDSourceSummary } from './EightDProblemInput';
 import { EightDEvidenceScopeContext } from './EightDEvidenceScope';
 import { EightDHistory, EightDRounds, ProcessEightDFlowRecords } from './EightDHistory';
 import { aborted, eightDFieldLocation, eightDPath, useEightDSeverityText, useEightDStyle, useEightDText, type EightDDocument, type EightDFields, type EightDRead, type EightDReport, type EightDWriteBody } from './eight-d';
@@ -18,16 +19,18 @@ export type { InternalEightDDomain } from '../internal-eight-d/domain';
 export type { InternalEightDSourcePickerProps, RenderInternalEightDSourcePicker } from '../internal-eight-d/source-picker';
 
 type Attempt = { path: string; method: 'POST' | 'PUT'; body: EightDWriteBody; key: string };
-type WorkspaceProps = { problemId: string; domain?: InternalEightDDomain; renderSourcePicker?: RenderInternalEightDSourcePicker; onAccessDenied?: (cause: unknown) => void };
-export function ProcessEightDWorkspace({ problemId, domain = 'process', renderSourcePicker, onAccessDenied }: WorkspaceProps) {
+type WorkspaceProps = { problemId: string; domain?: InternalEightDDomain; title?: string; back?: ReactNode; renderSourcePicker?: RenderInternalEightDSourcePicker; onRefresh?: () => void; onAccessDenied?: (cause: unknown) => void };
+export function ProcessEightDWorkspace({ problemId, domain = 'process', ...props }: WorkspaceProps) {
   eightDDomain(domain);
   const session = useWorkTabsStore(state => state.sessionScope);
   const { search } = useLocation();
-  const organizationId = new URLSearchParams(search).get('organizationId') || undefined;
-  return <Workspace key={JSON.stringify([domain, problemId, session, organizationId])} problemId={problemId} domain={domain} renderSourcePicker={renderSourcePicker} session={session} organizationId={organizationId} onAccessDenied={onAccessDenied} />;
+  const query = new URLSearchParams(search);
+  const organizationId = query.get('organizationId') || undefined;
+  const view = query.get('view') === 'report' ? 'report' : 'workspace';
+  return <Workspace key={JSON.stringify([domain, problemId, session, organizationId])} problemId={problemId} domain={domain} session={session} organizationId={organizationId} initialView={view} {...props} />;
 }
 
-function Workspace({ problemId, domain = 'process', renderSourcePicker, session, organizationId, onAccessDenied }: WorkspaceProps & { session?: string; organizationId?: string }) {
+function Workspace({ problemId, domain = 'process', title, back, renderSourcePicker, session, organizationId, initialView, onRefresh, onAccessDenied }: WorkspaceProps & { session?: string; organizationId?: string; initialView: string }) {
   const config = eightDDomain(domain);
   const text = useEightDText();
   const severityText = useEightDSeverityText();
@@ -44,7 +47,8 @@ function Workspace({ problemId, domain = 'process', renderSourcePicker, session,
   const [action, setAction] = useState<EightDAction>();
   const [actionVisible, setActionVisible] = useState(true);
   const [fieldTarget, setFieldTarget] = useState<ReturnType<typeof eightDFieldLocation>>();
-  const [tab, setTab] = useState('workspace');
+  const [tab, setTab] = useState(initialView);
+  const [flowLogOpen, setFlowLogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [fields, setFields] = useState<EightDFields>({});
@@ -186,6 +190,7 @@ function Workspace({ problemId, domain = 'process', renderSourcePicker, session,
   }, [current, problemId, revoke, onPendingChange]);
   const can = (name: string) => report?.allowedActions.includes(name);
   const locked = busy || !!pending || conflict || loading;
+  const actionDisabled = (name: EightDAction) => locked || dirty || !!action || evidenceBlocks(`${eightDPath(problemId, domain)}/${name}`);
   const open = (value: EightDAction) => { if (!locked && !dirty && !evidenceBlocks(`${eightDPath(problemId, domain)}/${value}`)) { setAction(value); setFieldTarget(undefined); setActionVisible(true); setModalDirty(false); setReceipt(false); } };
   const close = () => {
     if (writing.current || attempt.current) return;
@@ -195,40 +200,80 @@ function Workspace({ problemId, domain = 'process', renderSourcePicker, session,
     requestLeave(() => { setAction(undefined); setModalDirty(false); }, true);
   };
   const recovery = <>
-    {error && <Alert role="alert" type="error" title={error} description={Object.keys(fields).length ? <ul>{Object.entries(fields).map(([path, values]) => <li key={path}>{eightDFieldLocation(path) ? <button type="button" disabled={busy || loading || !!pending || evidencePending > 0} onClick={() => { setFieldTarget(eightDFieldLocation(path)); setTab('workspace'); setActionVisible(false); }}><code>{path}</code></button> : <code>{path}</code>} · {values.join(' / ')}</li>)}</ul> : undefined} />}
+    {error && <Alert role="alert" type="error" title={error} description={Object.keys(fields).length ? <ul>{Object.entries(fields).map(([path, values]) => <li key={path}>{eightDFieldLocation(path, domain) ? <button type="button" disabled={busy || loading || !!pending || evidencePending > 0} onClick={() => { setFieldTarget(eightDFieldLocation(path, domain)); setTab('workspace'); setActionVisible(false); }}><code>{path}</code></button> : <code>{path}</code>} · {values.join(' / ')}</li>)}</ul> : undefined} />}
     {conflict && <Button disabled={busy || loading} onClick={() => void load(true)}>{text('刷新基线并保留草稿', 'Refresh baseline and keep draft')}</Button>}
     {pending && <Button loading={busy} disabled={busy} onClick={() => void run(pending)}>{text('重试原请求', 'Retry original request')}</Button>}
   </>;
   if (denied) return <Alert role="alert" type="error" title={text('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。', 'Session expired or access denied. Sensitive content cleared. Sign in again or contact an authorized person.')} />;
+  const isProcess = domain === 'process';
+  const allowedActions = ([
+    ['analysis-complete', text('分析完成并设提交计划', 'Complete analysis and plan submission')],
+    ['submit', text('完整提交', 'Submit complete report')],
+    ['collaborators', text('维护协作者', 'Manage collaborators')],
+    ['reassign', text('专业重派 / 科室内转派', 'Professional / within-section reassignment')],
+    ['risk', text('调整风险', 'Change risk')],
+    ['sources', text('调整来源', 'Change sources')],
+    ['deadlines', text('设置期限', 'Set deadlines')],
+    ['extension', text('申请延期', 'Request extension')],
+  ] satisfies [EightDAction, string][]).filter(([name]) => can(name === 'extension' ? 'request-extension' : name));
+  const primaryAction = allowedActions.find(([name]) => name === 'analysis-complete' || name === 'submit');
+  const moreActions = allowedActions.filter(item => item !== primaryAction);
+  const saveDraft = (primary: boolean) => report && draft && can('save') && <Button
+    type={primary ? 'primary' : 'default'} disabled={locked || !!action && actionVisible} loading={busy}
+    onClick={() => void write(eightDPath(problemId, domain), 'PUT', { organizationId: report.organizationId, expectedVersion: report.version, document: draft })}
+  >{text('保存草稿', 'Save draft')}</Button>;
+  const dirtyMessage = dirty && <p role="status">{text('有未保存草稿，请先保存，再执行提交或责任 / 来源 / 计划变更。', 'Unsaved draft: save before submitting or changing responsibility, sources or plans.')}</p>;
+  const responsibilityName = (name?: string | null, id?: string | null) => name?.trim() || (id ? text('名称未记录', 'Name unavailable') : text('未配置', 'Not configured'));
   return <EightDEvidenceScopeContext.Provider value={evidenceScope}><section className={styles.workspace} style={css} aria-label={text(config.label[0], config.label[1])}>
-    <header className={styles.header}><div><h2>{report?.reportNumber ?? text(config.title[0], config.title[1])}</h2>{report && <Space wrap><Tag>{statusLabels.get(report.status) ?? report.status}</Tag><Tag>{severityText(report.severity)}</Tag><span>{text('内容版本', 'Content version')} {report.contentVersion} · {text('记录版本', 'Row version')} {report.version}</span></Space>}</div>
-      <Button disabled={busy || !!pending || !!action || evidencePending > 0} onClick={() => requestLeave(() => void load())}>{text('刷新工作区', 'Refresh workspace')}</Button>
+    <header className={styles.header}><div>{back}<h2>{title ?? report?.reportNumber ?? text(config.title[0], config.title[1])}</h2>{report && <Space wrap>
+      {title && (!isProcess || title.trim() !== report.reportNumber) && <Tag>{report.reportNumber}</Tag>}<Tag>{statusLabels.get(report.status) ?? report.status}</Tag><Tag>{severityText(report.severity)}</Tag>
+      {isProcess ? <span>{text('当前环节', 'Current step')} · {report.currentNodeName || text('未配置', 'Not configured')}</span>
+        : <span>{text('内容版本', 'Content version')} {report.contentVersion} · {text('记录版本', 'Row version')} {report.version}</span>}
+    </Space>}</div>
+      <Space wrap>
+        {isProcess && report && draft && (can('save') || allowedActions.length > 0) && <Space wrap role="group" aria-label={text('办理操作', 'Workflow actions')}>
+          {primaryAction && <Button type="primary" disabled={actionDisabled(primaryAction[0])} onClick={() => open(primaryAction[0])}>{primaryAction[1]}</Button>}
+          {saveDraft(!primaryAction)}
+          {moreActions.length > 0 && <Dropdown trigger={['click']} placement="bottomRight" autoFocus menu={{ items: moreActions.map(([name, label]) => ({
+            key: name, label, disabled: actionDisabled(name), onClick: () => open(name),
+          })) }}><Button aria-haspopup="menu" autoInsertSpace={false}>{text('更多', 'More')}</Button></Dropdown>}
+        </Space>}
+        <Button disabled={loading || busy || !!pending || !!action || evidencePending > 0} onClick={() => requestLeave(() => { onRefresh?.(); void load(); })}>{text('刷新工作区', 'Refresh workspace')}</Button>
+        {isProcess && report && <Button onClick={() => setFlowLogOpen(true)}>{text('流程日志', 'Workflow log')}</Button>}
+      </Space>
     </header>
     {(!action || !actionVisible) && recovery}
     {action && !actionVisible && <Button disabled={locked || dirty} onClick={() => setActionVisible(true)}>{text('返回操作表单', 'Return to action form')}</Button>}
     {receipt && <Alert role="status" type="success" title={text('服务端已确认保存 / 操作成功。', 'The server confirmed the save / operation.')} />}
     {loading && <Spin aria-label={text('正在加载工作区', 'Loading workspace')} />}
     {report && draft && <>
-      <section className={styles.section}><h3>{text('当前责任与计划', 'Current responsibility and plans')}</h3><p>{text('负责人', 'Owner')}：{report.ownerUserId} · {text('专业审核人', 'Professional reviewer')}：{report.professionalUserId}</p><p>{text('责任科室', 'Responsible section')}：{report.responsibleSectionDepartmentId} · {text('协作者', 'Collaborators')}：{report.collaboratorUserIds.join(', ') || '—'}</p>
+      {isProcess && dirtyMessage}
+      <section className={styles.section}><h3>{text('当前责任与计划', 'Current responsibility and plans')}</h3>
+        {isProcess ? <p>{text('负责人', 'Owner')}：{responsibilityName(report.ownerName, report.ownerUserId)} · {text('责任科室', 'Responsible section')}：{responsibilityName(report.responsibleSectionName, report.responsibleSectionDepartmentId)}</p>
+          : <><p>{text('负责人', 'Owner')}：{report.ownerUserId} · {text('专业审核人', 'Professional reviewer')}：{report.professionalUserId}</p><p>{text('责任科室', 'Responsible section')}：{report.responsibleSectionDepartmentId} · {text('协作者', 'Collaborators')}：{report.collaboratorUserIds.join(', ') || '—'}</p></>}
         <table aria-label={text('计划与实际', 'Planned and actual dates')}><thead><tr><th>{text('阶段', 'Stage')}</th><th>{text('计划', 'Planned')}</th><th>{text('实际', 'Actual')}</th></tr></thead><tbody>
           <tr><th scope="row">{text('分析', 'Analysis')}</th><td>{report.analysisDueAt ?? '—'}</td><td>{report.analysisCompletedAt ?? '—'}</td></tr>
           <tr><th scope="row">{text('完整提交', 'Complete submission')}</th><td>{report.submissionDueAt ?? '—'}</td><td>{report.submittedAt ?? '—'}</td></tr>
         </tbody></table><p>{text('关闭计划', 'Closure due')}：{report.closureDueAt ?? '—'}</p>
-        <Space wrap>{can('save') && <Button type="primary" disabled={locked || !!action && actionVisible} loading={busy} onClick={() => void write(eightDPath(problemId, domain), 'PUT', { organizationId: report.organizationId, expectedVersion: report.version, document: draft })}>{text('保存草稿', 'Save draft')}</Button>}
-          {([
-            ['analysis-complete', text('分析完成并设提交计划', 'Complete analysis and plan submission')], ['submit', text('完整提交', 'Submit complete report')], ['collaborators', text('维护协作者', 'Manage collaborators')], ['reassign', text('专业重派 / 科室内转派', 'Professional / within-section reassignment')], ['risk', text('调整风险', 'Change risk')], ['sources', text('调整来源', 'Change sources')], ['deadlines', text('设置期限', 'Set deadlines')],
-          ] as [EightDAction, string][]).filter(([name]) => can(name)).map(([name, label]) => <Button key={name} disabled={locked || dirty || !!action || evidenceBlocks(`${eightDPath(problemId, domain)}/${name}`)} onClick={() => open(name)}>{label}</Button>)}
-          {can('request-extension') && <Button disabled={locked || dirty || !!action} onClick={() => open('extension')}>{text('申请延期', 'Request extension')}</Button>}
-        </Space>{dirty && <p role="status">{text('有未保存草稿，请先保存，再执行提交或责任 / 来源 / 计划变更。', 'Unsaved draft: save before submitting or changing responsibility, sources or plans.')}</p>}
+        {!isProcess && <><Space wrap>{saveDraft(true)}
+          {allowedActions.map(([name, label]) => <Button key={name} disabled={actionDisabled(name)} onClick={() => open(name)}>{label}</Button>)}
+        </Space>{dirtyMessage}</>}
       </section>
       {report.closedRevisionId && <Alert type="info" title={text('已关闭：正文与批准版只读，批准版不随关闭后来源补充改变。', 'Closed: content and approved version are read-only. Source supplements do not change the approved version.')} />}
-      {tab === 'workspace' && <InternalEightDSourceFacts domain={domain} sources={report.sources} />}
+      {tab === 'workspace' && domain !== 'process' && <InternalEightDSourceFacts domain={domain} sources={report.sources} />}
       <Tabs activeKey={tab} onChange={value => { if (!locked && !action) { if (pendingPanels.current.size) requestLeave(() => setTab(value)); else setTab(value); } }} items={[
-        { key: 'workspace', label: text('工作区', 'Workspace'), children: tab === 'workspace' ? <EightDDocumentEditor domain={domain} problemId={problemId} document={draft} removalBlocked={evidencePending > 0} disabled={!can('save') || locked || !!action && actionVisible} read={read} onChange={change => { if (!writing.current && !attempt.current && can('save')) { setDraft(current => current ? change(current) : current); setDirty(true); setReceipt(false); } }} /> : null },
+        { key: 'workspace', label: text('工作区', 'Workspace'), children: tab === 'workspace' ? <EightDDocumentEditor
+          domain={domain} problemId={problemId} document={draft} chapterTarget={fieldTarget}
+          overview={domain === 'process' ? <EightDProblemInput sources={report.sources} severity={report.severity} /> : undefined}
+          sourceSummary={domain === 'process' ? <EightDSourceSummary sources={report.sources} /> : undefined}
+          teamContext={report}
+          removalBlocked={evidencePending > 0} disabled={!can('save') || locked || !!action && actionVisible} read={read}
+          onChange={change => { if (!writing.current && !attempt.current && can('save')) { setDraft(current => current ? change(current) : current); setDirty(true); setReceipt(false); } }}
+        /> : null },
         { key: 'report', label: text('报告', 'Report'), children: tab === 'report' ? <EightDControlledReport domain={domain} report={report} read={read} download={download} /> : null },
-        ...(domain === 'process' ? [{ key: 'flow-records', label: text('流程记录', 'Flow records'), children: tab === 'flow-records' ? <ProcessEightDFlowRecords report={report} read={read} /> : null }] : []),
-        { key: 'history', label: text('轨迹', 'History'), children: tab === 'history' ? <EightDHistory report={report} read={read} /> : null },
+        ...(domain === 'process' ? [] : [{ key: 'history', label: text('轨迹', 'History'), children: tab === 'history' ? <EightDHistory report={report} read={read} /> : null }]),
       ]} />
+      {flowLogOpen && <Modal open title={text('流程日志', 'Workflow log')} width={860} footer={null} onCancel={() => setFlowLogOpen(false)}><ProcessEightDFlowRecords report={report} read={read} /></Modal>}
       <EightDRounds problemId={problemId} read={read} revision={report.version} blocked={locked || dirty || !!action} onInboxClosed={() => void load()} />
       {action && <EightDActionDialog domain={domain} renderSourcePicker={renderSourcePicker} key={action} open={actionVisible} afterClose={focusField} action={action} report={report} read={read} write={write} frozen={!!pending || conflict || loading} busy={busy} recovery={recovery} onClose={close} onDirty={onModalDirty} />}
     </>}

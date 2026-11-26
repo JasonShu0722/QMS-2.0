@@ -176,6 +176,35 @@ describe('process 8D real domain transactions with managed workflow configuratio
     return { organization, department, section, otherSection, role, person, issuer, owner, manager, minister, collaborator, source, input, issue, read, ready, submit, draft, configureManaged, setLeaders, setScope };
   }
 
+  it('persists deleted D7 preset rows through HTTP save, reopen and report projection', async () => {
+    const f = await fixture(), id = await f.issue();
+    const permission = await prisma.permission.upsert({ where: { code: 'process-quality:issues:report' }, create: { code: 'process-quality:issues:report', name: '8D report' }, update: {} });
+    await prisma.rolePermission.create({ data: { roleId: f.role.id, permissionId: permission.id } });
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    try {
+      await app.init();
+      const csrf = randomUUID();
+      const token = await app.get(SessionService).create(f.owner.user.id, app.get(PrismaService), { reauthenticated: true, mfaVerified: true });
+      const cookie = `qms_session=${token}; qms_csrf=${csrf}`;
+      const path = `/api/v1/process-quality/eight-d/${id}`;
+      const scope = `organizationId=${f.organization.id}`;
+      const get = (url: string) => request(app.getHttpServer()).get(url).set('Cookie', cookie);
+      let current = (await get(`${path}?${scope}`).expect(200)).body;
+      expect(current.document.standardization).toHaveLength(11);
+      for (const standardization of [current.document.standardization.slice(1), []]) {
+        const saved = await request(app.getHttpServer()).put(path).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID())
+          .send({ organizationId: f.organization.id, expectedVersion: current.version, document: { ...current.document, standardization } }).expect(200);
+        expect(saved.body.document.standardization).toEqual(standardization);
+        current = (await get(`${path}?${scope}`).expect(200)).body;
+        expect(current.document.standardization).toEqual(standardization);
+        const report = await get(`${path}/report?${scope}&view=CURRENT`).expect(200);
+        expect(report.body.snapshot.document.standardization).toEqual(standardization);
+      }
+    } finally { await app.close(); }
+  }, 120_000);
+
   it('filters owners by responsible department and permits analysis and reassignment independently of issuance positions', async () => {
     const f = await fixture(), source = await f.source();
     const target = await f.person(f.otherSection.id);

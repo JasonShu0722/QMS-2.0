@@ -10,6 +10,7 @@ import { PrismaService } from '../../src/database/prisma.service.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { ProcessFollowupQueryDto } from '../../src/modules/problem-index/problem-index.dto.js';
 import { ProblemQueryService } from '../../src/modules/problem-index/problem-query.service.js';
+import { emptyProcessEightDDocument } from '../../src/modules/process-quality/process-eight-d-document.js';
 import { ProcessEightDService } from '../../src/modules/process-quality/process-eight-d.service.js';
 import type { WorkflowActor } from '../../src/modules/workflow/workflow-access-policy.js';
 
@@ -85,7 +86,7 @@ describe('process 8D follow-up list on PostgreSQL', () => {
       const instance = await prisma.workflowInstance.create({ data: { organizationId: org.id, problemIndexId: problem.id, workflowDefinitionId: definition.id,
         workflowVersionId: version.id, currentNodeId: closed ? close.id : options.stage === 'REVIEW' ? review.id : node.id, instanceKey: randomUUID(), status: options.stage === 'SUSPENDED' ? 'SUSPENDED' : closed ? 'COMPLETED' : 'RUNNING' } });
       await prisma.problemIndex.update({ where: { id: problem.id }, data: { workflowInstanceId: instance.id } });
-      const document = { title: options.title ?? 'Unrelated title', description: options.description ?? 'Unrelated description' };
+      const document = { ...emptyProcessEightDDocument(), title: options.title ?? 'Unrelated title', description: options.description ?? 'Unrelated description' };
       await prisma.$executeRaw`INSERT INTO process_eight_d_reports
         (organization_id, problem_id, responsible_section_department_id, professional_user_id, document, analysis_due_at, submission_due_at, closure_due_at, analysis_completed_at, submitted_at, created_by, updated_by)
         VALUES (${org.id}::uuid, ${problem.id}::uuid, ${options.sectionId ?? section.id}::uuid, ${owner.user.id}::uuid, ${JSON.stringify(document)}::jsonb,
@@ -94,7 +95,7 @@ describe('process 8D follow-up list on PostgreSQL', () => {
         ${options.stage === 'REVIEW' || closed ? new Date(dates.original) : null}::timestamptz, ${owner.user.id}::uuid, ${owner.user.id}::uuid)`;
       if (closed) {
         const revision = randomUUID();
-        const snapshot = { document: { title: 'Pinned snapshot title', description: 'Pinned snapshot description' }, ownerUserId: owner.user.id, responsibleSectionDepartmentId: section.id };
+        const snapshot = { document: { ...document, title: 'Pinned snapshot title', description: 'Pinned snapshot description' }, ownerUserId: owner.user.id, responsibleSectionDepartmentId: section.id };
         await prisma.$executeRaw`INSERT INTO process_eight_d_revisions (id, organization_id, problem_id, content_version, snapshot)
           VALUES (${revision}::uuid, ${org.id}::uuid, ${problem.id}::uuid, 1, ${JSON.stringify(snapshot)}::jsonb)`;
         await prisma.$executeRaw`UPDATE process_eight_d_reports SET closed_revision_id = ${revision}::uuid WHERE problem_id = ${problem.id}::uuid`;
@@ -115,6 +116,21 @@ describe('process 8D follow-up list on PostgreSQL', () => {
   function followupRequest(who: { cookie: string }, query: Record<string, string | number> = {}) {
     return request(app.getHttpServer()).get(followup).set('Cookie', who.cookie).query(query);
   }
+
+  it('returns the authorized 8D display title in the general problem summary', async () => {
+    const local = await fixture();
+    const issued = await local.create('TITLE-1', { title: 'Draft title' });
+    const fallback = await local.create('TITLE-2', { title: '', description: 'Observed defect' });
+    const numbered = await local.create('TITLE-3', { title: ' ', description: '' });
+    const closed = await local.create('TITLE-4', { title: 'Live report title', stage: 'CLOSED' });
+    await prisma.$executeRaw`UPDATE process_eight_d_reports SET issue_title = 'Issued 8D title' WHERE problem_id = ${issued.id}::uuid`;
+    for (const [problem, title] of [[issued, 'Issued 8D title'], [fallback, 'Observed defect'], [numbered, 'TITLE-3'], [closed, 'Pinned snapshot title']] as const) {
+      const response = await request(app.getHttpServer()).get(`${base}/${problem.id}`).set('Cookie', local.owner.cookie).expect(200);
+      expect(response.body.summary.title).toBe(title);
+      const workspace = await request(app.getHttpServer()).get(`${base}/${problem.id}/workspace`).set('Cookie', local.owner.cookie).expect(200);
+      expect(workspace.body).toMatchObject({ problem: { summary: { title } }, domain: { summary: { title }, sections: expect.arrayContaining([{ key: 'D5', title: expect.any(String), fields: expect.any(Array) }, { key: 'D6', title: expect.any(String), fields: expect.any(Array) }]) } });
+    }
+  }, 20000);
 
   it('applies HTTP query filters to the entire population before paging and counting', async () => {
     const local = await fixture();

@@ -3,6 +3,20 @@
 .header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--qms-section-gap); }
 .anchors { display: flex; gap: var(--qms-section-gap); flex-wrap: wrap; border-block-end: 1px solid var(--ed-border); padding-block: var(--qms-card-padding); }
 .anchors a { color: var(--ed-primary); padding: var(--qms-section-gap); }
+.chapterLayout { display: grid; grid-template-columns: minmax(160px, 210px) minmax(0, 1fr); gap: var(--qms-section-gap); align-items: start; }
+.chapterDirectory { position: sticky; inset-block-start: var(--qms-section-gap); max-height: calc(100dvh - 120px); overflow-y: auto; }
+.chapterNav { display: grid; gap: 4px; }
+.chapterNav button, .chapterToggle { padding: 8px 12px; border: 1px solid transparent; text-align: start; background: var(--ed-bg); color: var(--ed-text); border-radius: 6px; font: inherit; cursor: pointer; }
+.chapterNav button[aria-current='step'] { border-color: var(--ed-primary); color: var(--ed-primary); background: var(--ed-fill); }
+.chapterNav button:focus-visible, .chapterToggle:focus-visible { outline: 2px solid var(--ed-primary); outline-offset: -2px; }
+.chapterToggle { display: none; }
+.chapterContent { min-width: 0; }
+@media (max-width: 760px) {
+  .chapterLayout { grid-template-columns: minmax(0, 1fr); }
+  .chapterDirectory { position: static; max-height: none; }
+  .chapterToggle { display: block; width: 100%; border-color: var(--ed-border); }
+  .chapterNav[data-open='false'] { display: none; }
+}
 .section { scroll-margin-top: 16px; border: 1px solid var(--ed-border); border-radius: 8px; padding: var(--qms-card-padding); background: var(--ed-bg); min-width: 0; }
 .section h3 { margin-block-start: 0; }
 .fields { display: grid; gap: var(--qms-section-gap); grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--qms-form-column-min)), 1fr)); }
@@ -16,6 +30,26 @@
 .table { border-collapse: collapse; width: 100%; min-width: 1000px; font-size: 13px; }
 .table th, .table td { border: 1px solid var(--ed-border); padding: var(--qms-table-cell-padding-block) var(--qms-card-padding); text-align: start; vertical-align: top; min-width: 120px; }
 .table th { background: var(--ed-fill); }
+.entryTable { min-width: 0; }
+.entryTable th, .entryTable td { min-width: 76px; vertical-align: middle; overflow-wrap: anywhere; }
+.entryTable th { white-space: nowrap; }
+.entryTable input[type='date'] { min-width: 126px; }
+.entryTable select { min-width: 94px; }
+.entryTable tr:not(.entryDetails) td > .field > span, .positionGroup > .field > span { display: none; }
+.entryActions, .positionGroup { display: flex; align-items: center; gap: 4px; }
+.positionGroup > .field { flex: 1; min-width: 70px; }
+.entryActions > button { flex: none; }
+.entryPreview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-width: 80px; white-space: pre-wrap; }
+.entryDetails > td { background: var(--ed-fill); }
+.entryTable td:has(.entryActions) { width: 1%; }
+.entryTable td > span:not(.entryPreview) { display: block; min-width: 96px; }
+.correctiveList { container-type: inline-size; }
+.correctiveList h4 { margin: 0; }
+.correctivePending { display: block; min-inline-size: 140px; margin-block-start: 4px; }
+.correctiveDetails { position: sticky; inset-inline-start: var(--qms-card-padding); max-inline-size: calc(100cqi - 2 * var(--qms-card-padding)); }
+.correctiveDetails:focus-visible { outline: 2px solid var(--ed-primary); outline-offset: 2px; }
+.correctiveActionText { white-space: pre-wrap; overflow-wrap: anywhere; }
+.improvementPair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--qms-section-gap); min-inline-size: 0; margin: var(--qms-section-gap) 0 0; border: 1px solid var(--ed-border); border-radius: 6px; }
 .flowRecords { min-width: 0; }
 .flowRecords th, .flowRecords td { min-width: 0; }
 .flowRecords td:first-child, .flowRecords td:nth-child(2) { white-space: nowrap; }
@@ -31,3 +65,4 @@
 .modal { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--qms-section-gap); min-width: 0; }
 @media (max-width: 600px) { .header { align-items: stretch; } }
 @media (pointer: coarse) { .field input, .field select, .table input:not([type='checkbox']), .table select { min-height: 44px; } }
+@media (pointer: coarse) { .entryActions > button { min-height: 44px; min-width: 44px; } }

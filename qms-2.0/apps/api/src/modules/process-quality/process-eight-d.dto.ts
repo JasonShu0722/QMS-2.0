@@ -132,6 +132,9 @@ export class ProcessEightDReportDto {
   @ApiProperty() contentVersion!: number;
   @ApiProperty() status!: string;
   @ApiProperty({ enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] }) severity!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) ownerName?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) responsibleSectionName?: string | null;
+  @ApiPropertyOptional() currentNodeName?: string;
   @ApiProperty({ format: 'uuid' }) ownerUserId!: string;
   @ApiProperty({ format: 'uuid' }) professionalUserId!: string;
   @ApiProperty({ format: 'uuid' }) responsibleSectionDepartmentId!: string;

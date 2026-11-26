@@ -12422,6 +12422,13 @@ export interface components {
             /** Format: date-time */
             closureDueAt?: string;
         };
+        ProcessEightDTeamMemberDto: {
+            id: string;
+            name: string;
+            department: string;
+            responsibility: string;
+            collaborationScope: string;
+        };
         ProcessEightDTemporaryMeasureDto: {
             id: string;
             description: string;
@@ -12451,9 +12458,12 @@ export interface components {
             /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
             plannedAt: string | null;
             verificationMethod: string;
+            selectionReason?: string;
             fileIds: string[];
             /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
             implementationAt: string | null;
+            implementer?: string;
+            verifier?: string;
             result: string;
             beforeState: string;
             afterState: string;
@@ -12488,6 +12498,9 @@ export interface components {
             reason: string;
         };
         ProcessEightDDocumentDto: {
+            title?: string;
+            team?: components["schemas"]["ProcessEightDTeamMemberDto"][];
+            riskAssessment?: string;
             description: string;
             okFileIds: string[];
             ngFileIds: string[];
@@ -12513,6 +12526,7 @@ export interface components {
             status: "PENDING" | "WAITING" | "APPROVED" | "SKIPPED_SAME_PERSON" | "CANCELLED";
             /** Format: uuid */
             userId: string;
+            userDisplayName?: string | null;
             /** Format: uuid */
             decidedBy: string | null;
             comment: string | null;
@@ -12756,6 +12770,10 @@ export interface components {
             contentVersion: number;
             rowVersion: number;
             ownerUserId: string | null;
+            /** @enum {string} */
+            severity?: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            ownerName?: string | null;
+            responsibleSectionName?: string | null;
             /** Format: uuid */
             professionalUserId: string;
             /** Format: uuid */
@@ -14633,6 +14651,9 @@ export interface components {
             status: string;
             /** @enum {string} */
             severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            ownerName?: string | null;
+            responsibleSectionName?: string | null;
+            currentNodeName?: string;
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
@@ -15714,6 +15735,9 @@ export interface components {
             status: string;
             /** @enum {string} */
             severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            ownerName?: string | null;
+            responsibleSectionName?: string | null;
+            currentNodeName?: string;
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */
@@ -16840,6 +16864,9 @@ export interface components {
             status: string;
             /** @enum {string} */
             severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+            ownerName?: string | null;
+            responsibleSectionName?: string | null;
+            currentNodeName?: string;
             /** Format: uuid */
             ownerUserId: string;
             /** Format: uuid */

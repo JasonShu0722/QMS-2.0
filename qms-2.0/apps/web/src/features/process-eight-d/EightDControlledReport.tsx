@@ -3,6 +3,7 @@ import { Alert, Button, Space, Spin, Tag } from 'antd';
 import type { components } from '@qms/contracts';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { EightDDocumentEditor, EightDField } from './EightDDocumentEditor';
+import { EightDProblemInput, EightDSourceSummary } from './EightDProblemInput';
 import { useEightDEvidenceScope } from './EightDEvidenceScope';
 import { aborted, eightDPath, useEightDText, type EightDRead, type EightDReport } from './eight-d';
 import styles from './eight-d.module.css';
@@ -38,8 +39,11 @@ export function EightDControlledReport({ report, read, download, domain = 'proce
 
     {error ? <Alert type="error" title={text('报告读取或下载失败，请检查权限与版本后刷新。', 'Report reading or download failed. Check access and version, then refresh.')} /> : !controlled ? <Spin /> : <>
       <header><h2>{controlled.reportNumber}</h2><Tag>{controlled.label}</Tag><p>{controlled.view} · {text('内容版本', 'Content version')} {controlled.contentVersion} · {text('记录版本', 'Row version')} {controlled.rowVersion} · {controlled.generatedAt}</p></header>
-      <EightDDocumentEditor problemId={report.problemId} domain={domain} anchorId={`${report.problemId}-report`} document={controlled.snapshot.document} disabled read={read} onChange={() => {}} />
-      <InternalEightDSourceFacts domain={domain} sources={controlled.snapshot.sources} />
+      <EightDDocumentEditor problemId={report.problemId} domain={domain} anchorId={`${report.problemId}-report`} document={controlled.snapshot.document} disabled read={read} onChange={() => {}}
+        teamContext={controlled.snapshot}
+        sourceSummary={domain === 'process' ? <EightDSourceSummary sources={controlled.snapshot.sources} /> : undefined}
+        overview={domain === 'process' ? <EightDProblemInput sources={controlled.snapshot.sources} severity={controlled.snapshot.severity} /> : undefined} />
+      {domain !== 'process' && <InternalEightDSourceFacts domain={domain} sources={controlled.snapshot.sources} />}
       <details className={styles.section}><summary>{text('报告来源快照备查', 'Raw report source snapshots')}</summary>{controlled.snapshot.sources.map(source => <div key={source.sourceId}><strong>{source.sourceId}</strong> · v{source.sourceVersion}<pre className={styles.pre}>{JSON.stringify(source.sourceSnapshot, null, 2)}</pre></div>)}</details>
       <section className={styles.section}><h3>{text('版本附件', 'Version attachments')}</h3>{controlled.attachments.map(file => <p key={file.id}>{file.originalName} · {file.rendering} · {file.note} · {file.uses.join(', ')}</p>)}<AttachmentPanel resource={{ resourceType: eightDDomain(domain).resourceType, resourceId: report.problemId }} fileIds={controlled.attachments.map(file => file.id)} readOnly onAccessDenied={evidenceScope.onAccessDenied} onPendingChange={evidenceScope.onPendingChange} /></section>
       <details><summary>{text('报告绑定的批准与轮次快照', 'Approval and round snapshot bound to this report')}</summary><pre className={styles.pre}>{JSON.stringify({ approval: controlled.snapshot.approval, approvalRounds: controlled.snapshot.approvalRounds }, null, 2)}</pre></details>

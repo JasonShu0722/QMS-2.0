@@ -20,6 +20,7 @@ export interface ProcessEightDReport {
   organizationId: string;
   responsibleSectionDepartmentId: string;
   professionalUserId: string;
+  issueTitle?: string | null;
   document: ProcessEightDDocument;
   version: number;
   contentVersion: number;

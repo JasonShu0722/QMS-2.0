@@ -34,10 +34,14 @@ describe('process eight-d document DTO', () => {
     expect(typeof dto.ProcessEightDDocumentDto).toBe('function');
   });
 
-  it('normalizes a root draft returned by the real transforming ValidationPipe', async () => {
-    const document = await transform({});
+  it.each([false, true])('preserves the submitted D7 list through the real ValidationPipe and JSON read (remove all: %s)', async removeAll => {
+    const draft = policy.emptyProcessEightDDocument();
+    const standardization = removeAll ? [] : draft.standardization.slice(1);
+    const document = await transform({ ...draft, standardization });
     expect(Object.getPrototypeOf(document)).toBe(dto.ProcessEightDDocumentDto.prototype);
-    expect(policy.normalizeProcessEightDDocument(document)).toEqual(policy.emptyProcessEightDDocument());
+    const saved = policy.normalizeProcessEightDDocument(document);
+    expect(saved.standardization).toEqual(standardization);
+    expect(policy.normalizeProcessEightDDocument(JSON.parse(JSON.stringify(saved))).standardization).toEqual(standardization);
   });
 
   it('enforces the aggregate budget after the real ValidationPipe accepts each individual array', async () => {
@@ -49,7 +53,7 @@ describe('process eight-d document DTO', () => {
   });
 
   it.each(rowTypes)('normalizes the real ValidationPipe nested %s DTO independently of the root', async (section, Type) => {
-    const payload = { [section]: [fieldsFor(section)] };
+    const payload = { standardization: [], [section]: [fieldsFor(section)] };
     const document = await transform(payload);
     expect(Object.getPrototypeOf(document[section][0])).toBe(Type.prototype);
     expect(policy.normalizeProcessEightDDocument({ ...document })).toEqual(policy.normalizeProcessEightDDocument(payload));
@@ -108,7 +112,7 @@ describe('process eight-d document DTO', () => {
       }
       const root = schema(document.components!.schemas!.ProcessEightDDocumentDto!);
       expect(Object.keys(root.properties!)).toEqual([
-        'description', 'okFileIds', 'ngFileIds', 'temporaryMeasures', 'containment', 'optionalAffectedContainment',
+        'title', 'team', 'riskAssessment', 'description', 'okFileIds', 'ngFileIds', 'temporaryMeasures', 'containment', 'optionalAffectedContainment',
         'analysisProcess', 'analysisFileIds', 'occurrenceCause', 'escapeCause', 'systemCause',
         'correctiveActions', 'horizontalDeployment', 'standardization', 'closureSummary',
       ]);
