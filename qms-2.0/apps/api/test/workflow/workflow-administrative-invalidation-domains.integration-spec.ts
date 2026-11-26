@@ -34,6 +34,9 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
     userIds: [userId], departmentIds: [], positionIds: [], organizationIds: [],
   });
   const apply = (input: AdministrativeLifecycleImpact) => db.$transaction(tx => engine.apply(tx, admin.owner.actor, input), { isolationLevel: 'ReadCommitted', timeout: 30_000 });
+  const configureProcessLead = (organizationId: string, departmentId: string, assignmentId: string) => db.$executeRaw`
+    INSERT INTO department_responsible_appointments (organization_id,department_id,assignment_ids,primary_assignment_id,version)
+    VALUES (${organizationId}::uuid,${departmentId}::uuid,ARRAY[${assignmentId}::uuid],${assignmentId}::uuid,1)`;
   beforeAll(async () => {
     app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
@@ -101,8 +104,8 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
     const position = await db.position.create({ data: { organizationId: f.org.id, departmentId: a.id, code: randomUUID(), name: 'Same manager in A' } });
     const assignmentA = await db.userPosition.create({ data: { organizationId: f.org.id, userId: f.manager.user.id, positionId: position.id } });
     const ownerA = await f.person(a.id);
-    await db.$executeRaw`INSERT INTO department_management_bindings (id,organization_id,department_id,responsibility,position_id,created_by,updated_by)
-      VALUES (${randomUUID()}::uuid,${f.org.id}::uuid,${a.id}::uuid,'SECTION_MANAGER',${position.id}::uuid,${f.owner.user.id}::uuid,${f.owner.user.id}::uuid)`;
+    await configureProcessLead(f.org.id, a.id, assignmentA.id);
+    await configureProcessLead(f.org.id, f.section.id, f.manager.assignment.id);
     for (const code of [`${domain.permissionPrefix}:read`, `${domain.permissionPrefix}:work`]) await db.rolePermission.create({ data: {
       roleId: f.role.id, permissionId: (await db.permission.findUniqueOrThrow({ where: { code } })).id } });
     await db.workflowNode.update({ where: { id: f.node.id }, data: { config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: domain.domainCode } } } });
@@ -124,6 +127,8 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
     }
     const roundA = await rounds.start(ownerA.actor, problemA.id, { expectedContentVersion: 1, expectedInstanceVersion: 1 }, randomUUID(), randomUUID());
     const b = await rounds.start(f.owner.actor, f.problem.id, { expectedContentVersion: 1, expectedInstanceVersion: 1 }, randomUUID(), randomUUID());
+    expect(roundA.duties.find(duty => duty.duty === 'SECTION_MANAGER')?.participant).toMatchObject({ userId: f.manager.user.id, assignmentId: assignmentA.id });
+    expect(b.duties.find(duty => duty.duty === 'SECTION_MANAGER')?.participant).toMatchObject({ userId: f.manager.user.id, assignmentId: f.manager.assignment.id });
     const roundB = await rounds.decide(f.professional.actor, b.id, { expectedRoundVersion: b.version, duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: 'Retained approval' }, randomUUID(), randomUUID());
     await db.$executeRaw`UPDATE workflow_closure_rounds SET created_by=${f.manager.user.id}::uuid WHERE id=${roundB.id}::uuid`;
     const deadlineId = randomUUID();
@@ -168,6 +173,7 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
 
   it.each(Object.values(INTERNAL_EIGHT_D_DOMAINS).flatMap(domain => ['DIRECT', 'CHILD_ONLY', 'PARENT_AND_CHILD'].map(appointment => ({ ...domain, appointment, domain }))))('$domainCode cancels a submitted review when the professional loses $appointment appointments', async ({ domain, appointment }) => {
     const f = await createWorkflowClosureFixture(db, rounds), tables = internalEightDSql(domain);
+    if (domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS) await configureProcessLead(f.org.id, f.section.id, f.manager.assignment.id);
     for (const code of [`${domain.permissionPrefix}:read`, `${domain.permissionPrefix}:work`, `${domain.permissionPrefix}:issue`]) {
       await db.rolePermission.create({ data: { roleId: f.role.id, permissionId: (await db.permission.findUniqueOrThrow({ where: { code } })).id } });
     }
@@ -212,6 +218,10 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
 
   it.each(Object.values(INTERNAL_EIGHT_D_DOMAINS))('$domainCode cancels a minister scope severed by ancestor detachment, without disabling the surviving section', async domain => {
     const f = await createWorkflowClosureFixture(db, rounds, 'INTERNAL', 'HIGH'), tables = internalEightDSql(domain);
+    if (domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS) {
+      await configureProcessLead(f.org.id, f.dept.id, f.minister.assignment.id);
+      await db.$executeRaw`UPDATE department_minister_scopes SET department_leadership = true WHERE id = ${f.scopeId}::uuid`;
+    }
     const a = await db.department.create({ data: { organizationId: f.org.id, parentId: f.dept.id, code: randomUUID(), name: 'Removed ancestor A' } });
     const b = await db.department.create({ data: { organizationId: f.org.id, parentId: a.id, code: randomUUID(), name: 'Detached B' } });
     await db.department.update({ where: { id: f.section.id }, data: { parentId: b.id } });
@@ -240,6 +250,7 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
       VALUES (${f.problem.id}::uuid,${f.org.id}::uuid,${f.section.id}::uuid,${f.professional.user.id}::uuid,
       ${JSON.stringify(emptyProcessEightDDocument())}::jsonb,CURRENT_TIMESTAMP,${f.professional.user.id}::uuid,${f.professional.user.id}::uuid)`;
     const round = await rounds.start(f.owner.actor, f.problem.id, { expectedContentVersion: 1, expectedInstanceVersion: 1 }, randomUUID(), randomUUID());
+    expect(round.duties.find(duty => duty.duty === 'MINISTER')?.participant).toMatchObject({ userId: f.minister.user.id, scopeId: f.scopeId });
     const approved = await rounds.decide(f.professional.actor, round.id, { expectedRoundVersion: round.version,
       duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: 'Retain the actual professional approval' }, randomUUID(), randomUUID());
     const sectionBefore = await db.department.findUniqueOrThrow({ where: { id: f.section.id } });
@@ -266,6 +277,7 @@ describe('registered four-domain administrative hooks / real PostgreSQL (not del
 
   it.each(Object.values(INTERNAL_EIGHT_D_DOMAINS))('$domainCode unwinds its actual submitted report with a real cross-organization platform actor', async domain => {
     const f = await createWorkflowClosureFixture(db, rounds), tables = internalEightDSql(domain);
+    if (domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS) await configureProcessLead(f.org.id, f.section.id, f.manager.assignment.id);
     for (const code of [`${domain.permissionPrefix}:read`, `${domain.permissionPrefix}:work`]) {
       await db.rolePermission.create({ data: { roleId: f.role.id, permissionId: (await db.permission.findUniqueOrThrow({ where: { code } })).id } });
     }
