@@ -7,6 +7,7 @@ import { AuditExportService } from './modules/audit-log/audit-export.service.js'
 import { RecoveryMailService } from './modules/identity/recovery-mail.service.js';
 import { FileScanWorkerService } from './modules/file-management/file-scan-worker.service.js';
 import { TemporaryPasswordService } from './modules/identity/temporary-password.service.js';
+import { AdminUserBatchService } from './modules/identity/admin-user-batch.service.js';
 import { ProcessEightDReminderService } from './modules/process-quality/process-eight-d-reminder.service.js';
 import { SupplierEightDReminderService } from './modules/supplier-quality/supplier-eight-d-reminder.service.js';
 import { CUSTOMER_EIGHT_D_RUNTIME, NEW_PRODUCT_EIGHT_D_RUNTIME, type InternalEightDRuntime } from './common/eight-d/internal-eight-d-runtime.js';
@@ -55,6 +56,7 @@ async function bootstrap(): Promise<void> {
       await app.get(FileScanWorkerService).expireUploads();
       await app.get(AuditExportService).purgeExpired();
       await app.get(TemporaryPasswordService).purgeExpired();
+      await app.get(AdminUserBatchService).purgeExpired();
       await app.get(ProcessEightDReminderService).poll(options.batchSize);
       await app.get<InternalEightDRuntime>(CUSTOMER_EIGHT_D_RUNTIME).reminders.poll(options.batchSize);
       await app.get<InternalEightDRuntime>(NEW_PRODUCT_EIGHT_D_RUNTIME).reminders.poll(options.batchSize);

@@ -146,18 +146,20 @@ export class WorkflowRuntimeService {
       if (instance.version !== input.expectedVersion || problem.version !== input.expectedProblemVersion || instance.currentNodeId !== input.currentNodeId) workflowError('CONCURRENCY_CONFLICT', 409);
       const node = instance.currentNode;
       if (!node || isDomainControlledNode(node) || await isControlledEightDVersion(tx, input.organizationId, instance.workflowVersionId)) workflowError('WORKFLOW_ACTION_INVALID', 409);
-      const [task] = await tx.$queryRaw<{ claimed_by_user_id: string | null }[]>`
+      const reopening = input.action === 'REOPEN';
+      const [task] = reopening ? [] : await tx.$queryRaw<{ claimed_by_user_id: string | null }[]>`
         SELECT claimed_by_user_id FROM workflow_tasks
         WHERE organization_id = ${input.organizationId}::uuid AND workflow_instance_id = ${instance.id}::uuid
+          AND status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE')
           AND workflow_version_id = ${instance.workflowVersionId}::uuid AND workflow_node_id = ${node.id}::uuid
-          AND entry_instance_version = ${instance.version} AND status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE') FOR UPDATE`;
+          AND entry_instance_version = ${instance.version} ORDER BY id FOR UPDATE`;
       await participant?.lock(tx, input);
       await domainAccess?.(tx, { replay: false });
       await this.authorize(tx, input, 'workflow:act', true, participant);
       await this.authorizeNode(tx, input, node, participant);
-      if (input.action !== 'REOPEN' && task?.claimed_by_user_id && task.claimed_by_user_id !== input.actor.id) workflowError('TASK_CLAIM_OWNER_REQUIRED', 403);
+      if (task?.claimed_by_user_id && task.claimed_by_user_id !== input.actor.id) workflowError('TASK_CLAIM_OWNER_REQUIRED', 403);
       if (!actionAllowed(node.type, input.action)) workflowError('WORKFLOW_ACTION_INVALID', 409);
-      if (input.action === 'REOPEN' ? instance.status !== 'COMPLETED' : instance.status !== 'RUNNING') workflowError('WORKFLOW_ACTION_INVALID', 409);
+      if (reopening ? instance.status !== 'COMPLETED' : instance.status !== 'RUNNING') workflowError('WORKFLOW_ACTION_INVALID', 409);
       const closing = input.action === 'CLOSE';
       let target = node;
       if (closing) {
@@ -181,6 +183,16 @@ export class WorkflowRuntimeService {
         }
       }
       if (mutate) await mutate(tx);
+      if (reopening) {
+        await tx.$queryRaw`SELECT id FROM workflow_tasks
+          WHERE organization_id = ${input.organizationId}::uuid AND workflow_instance_id = ${instance.id}::uuid
+            AND status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE')
+            AND (assignee_user_id IS NOT NULL OR claimed_by_user_id IS NOT NULL) ORDER BY id FOR UPDATE`;
+        await tx.workflowTask.updateMany({ where: { organizationId: input.organizationId, workflowInstanceId: instance.id,
+          status: { in: ['PENDING', 'IN_PROGRESS', 'OVERDUE'] },
+          OR: [{ assigneeUserId: { not: null } }, { claimedByUserId: { not: null } }] },
+        data: { status: 'COMPLETED', completedAt: problem.closedAt ?? new Date(), version: { increment: 1 } } });
+      }
       const changed = await tx.workflowInstance.updateMany({
         where: { id: instance.id, organizationId: input.organizationId, version: input.expectedVersion, currentNodeId: input.currentNodeId },
         data: { currentNodeId: target.id, status: closing ? 'COMPLETED' : 'RUNNING', version: { increment: 1 }, updatedById: input.actor.id },
@@ -189,6 +201,7 @@ export class WorkflowRuntimeService {
       const problemVersion = await this.problems.applyWorkflowState(tx, {
         organizationId: input.organizationId, id: problem.id, expectedVersion: input.expectedProblemVersion,
         expectedInstanceId: instance.id, instanceId: instance.id, status: workflowProblemStatus(target, closing), actorUserId: input.actor.id,
+        traceId: input.traceId,
       });
       const result: WorkflowActionResult = { instanceId: instance.id, currentNodeId: target.id, workflowVersionId: instance.workflowVersionId, version: instance.version + 1, problemVersion, status: closing ? 'COMPLETED' : 'RUNNING' };
       await persistWorkflowMutation(tx, input, digest, input.action, node.id, node.id, result, { audit: this.audit, outbox: this.outbox });

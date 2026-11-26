@@ -19,7 +19,7 @@ describe('audit management PostgreSQL invariants', () => {
   const userId = randomUUID();
   const sessionId = randomUUID();
   const roleId = randomUUID();
-  const reviewerId = randomUUID();
+  const reviewerId = `f${randomUUID().slice(1)}`;
   const reviewerSessionId = randomUUID();
   const actor = { id: userId, organizationId, accountType: 'INTERNAL' as const, sessionId };
   const reviewer = { id: reviewerId, organizationId, accountType: 'INTERNAL' as const, sessionId: reviewerSessionId };
@@ -62,6 +62,139 @@ describe('audit management PostgreSQL invariants', () => {
     const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
     expect(execution.template_version_id).toBe(published.versionId);
   });
+
+  it('lets two auditors assign separate findings to each other concurrently', async () => {
+    const template = await service.createTemplate(actor, { name: '交叉分派', auditType: 'PRODUCT', definition: { items: [{ key: 'P1', text: '第一项' }, { key: 'P2', text: '第二项' }] } }, randomUUID(), randomUUID());
+    const published = await service.publishTemplate(actor, template.id, 1, randomUUID(), randomUUID());
+    const plan = await service.createPlan(actor, { year: 2026, title: '交叉分派', auditType: 'PRODUCT', plannedStart: '2026-10-01T00:00:00.000Z', plannedEnd: '2026-10-31T00:00:00.000Z' }, randomUUID(), randomUUID());
+    const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
+    const findings = [];
+    for (const itemKey of ['P1', 'P2']) {
+      const result = await service.recordChecklistResult(actor, execution.id, { itemKey, result: 'NG' }, randomUUID(), randomUUID());
+      findings.push(await service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID()));
+    }
+    const [first, second] = findings;
+    const firstKey = randomUUID();
+    const assigned = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM audit_ncs WHERE id IN (${first!.id}::uuid, ${second!.id}::uuid) FOR UPDATE`;
+      const [backend] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      const requests = Promise.allSettled([
+        service.assignNc(actor, first!.id, reviewer.id, 1, randomUUID(), firstKey),
+        service.assignNc(reviewer, second!.id, actor.id, 1, randomUUID(), randomUUID()),
+      ]);
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const waiters = await prisma.$queryRaw<{ pid: number }[]>`SELECT pid FROM pg_stat_activity WHERE ${backend!.pid} = ANY(pg_blocking_pids(pid)) AND query LIKE '%FROM audit_ncs%'`;
+        if (waiters.length === 2) return { requests, queued: true };
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      return { requests, queued: false };
+    });
+    const results = await assigned.requests;
+    expect(assigned.queued).toBe(true);
+    expect(results).toMatchObject([
+      { status: 'fulfilled', value: { assignee_user_id: reviewer.id, version: 2 } },
+      { status: 'fulfilled', value: { assignee_user_id: actor.id, version: 2 } },
+    ]);
+    const replay = await service.assignNc(actor, first!.id, reviewer.id, 1, randomUUID(), firstKey);
+    expect(results[0]).toEqual({ status: 'fulfilled', value: replay });
+    expect(await prisma.auditEvent.count({ where: { resourceId: first!.id, action: 'AUDIT_NC_ASSIGNED' } })).toBe(1);
+  }, 15_000);
+
+  it('lets reassignment win over a concurrent response on the same rejected finding', async () => {
+    const template = await service.createTemplate(actor, { name: '退回复核', auditType: 'PRODUCT', definition: { items: [{ key: 'P1', text: '符合' }] } }, randomUUID(), randomUUID());
+    const published = await service.publishTemplate(actor, template.id, 1, randomUUID(), randomUUID());
+    const plan = await service.createPlan(actor, { year: 2026, title: '退回复核', auditType: 'PRODUCT', plannedStart: '2026-10-01T00:00:00.000Z', plannedEnd: '2026-10-31T00:00:00.000Z' }, randomUUID(), randomUUID());
+    const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
+    const result = await service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'NG' }, randomUUID(), randomUUID());
+    const nc = await service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID());
+    await service.assignNc(actor, nc.id, reviewer.id, 1, randomUUID(), randomUUID());
+    await service.respondNc(reviewer, nc.id, { expectedVersion: 2, response: '初次整改' }, randomUUID(), randomUUID());
+    await service.verifyNc(actor, nc.id, 3, false, randomUUID(), randomUUID());
+    const target = await prisma.user.create({ data: { id: `0${randomUUID().slice(1)}`, organizationId, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'fixture' } });
+
+    async function waitForWaiter(blocker: number, queryFragment: string) {
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const [waiter] = await prisma.$queryRaw<{ pid: number }[]>`SELECT pid FROM pg_stat_activity WHERE ${blocker} = ANY(pg_blocking_pids(pid)) AND query LIKE ${`%${queryFragment}%`}`;
+        if (waiter) return waiter.pid;
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      return undefined;
+    }
+
+    const race = await prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${target.id}::uuid FOR UPDATE`;
+      const [backend] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      const assignment = service.assignNc(actor, nc.id, target.id, 4, randomUUID(), randomUUID()).catch((error: unknown) => error);
+      const assigningPid = await waitForWaiter(backend!.pid, 'FROM users');
+      const response = service.respondNc(reviewer, nc.id, { expectedVersion: 4, response: '再次整改' }, randomUUID(), randomUUID()).catch((error: unknown) => error);
+      const respondingPid = assigningPid && await waitForWaiter(assigningPid, 'FROM audit_ncs');
+      const [identityProbe] = await Promise.allSettled([
+        prisma.$queryRaw`SELECT id FROM users WHERE id = ${reviewer.id}::uuid FOR SHARE NOWAIT`,
+      ]);
+      return { assignment, response, assigningPid, respondingPid, identityProbe };
+    });
+    const [assignment, response] = await Promise.all([race.assignment, race.response]);
+    expect(race.assigningPid).toEqual(expect.any(Number));
+    expect(race.respondingPid).toEqual(expect.any(Number));
+    expect(race.identityProbe?.status).toBe('fulfilled');
+    expect(assignment).toMatchObject({ assignee_user_id: target.id, status: 'ASSIGNED', version: 5 });
+    expect(response).toMatchObject({ status: 409, response: { code: 'CONCURRENCY_CONFLICT' } });
+    expect(await service.listNcsForExecution(actor, execution.id)).toMatchObject([{ assignee_user_id: target.id, status: 'ASSIGNED', version: 5 }]);
+  }, 15_000);
+
+  it('lets an auditor recover an assigned finding after its owner is permanently deleted', async () => {
+    const template = await service.createTemplate(actor, { name: '责任人补配', auditType: 'PRODUCT', definition: { items: [{ key: 'P1', text: '符合' }] } }, randomUUID(), randomUUID());
+    const published = await service.publishTemplate(actor, template.id, 1, randomUUID(), randomUUID());
+    const plan = await service.createPlan(actor, { year: 2026, title: '责任人补配', auditType: 'PRODUCT', plannedStart: '2026-10-01T00:00:00.000Z', plannedEnd: '2026-10-31T00:00:00.000Z' }, randomUUID(), randomUUID());
+    const execution = await service.createExecution(actor, plan.id, published.versionId, randomUUID(), randomUUID());
+    const result = await service.recordChecklistResult(actor, execution.id, { itemKey: 'P1', result: 'NG' }, randomUUID(), randomUUID());
+    const nc = await service.createNcFromNg(actor, execution.id, result.id, { severity: 'MAJOR', duePolicyVersion: 'AUDIT-SLA-2026.1', calendarVersion: 'CN-WORKDAY-2026.1', dueBusinessDays: 30 }, randomUUID(), randomUUID());
+    const previous = await prisma.user.create({ data: { organizationId, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'fixture' } });
+    await service.assignNc(actor, nc.id, previous.id, 1, randomUUID(), randomUUID());
+    await prisma.user.update({ where: { id: previous.id }, data: { status: 'DISABLED' } });
+    await expect(service.assignNc(actor, nc.id, reviewerId, 2, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    await prisma.user.update({ where: { id: previous.id }, data: { deletedAt: new Date() } });
+    expect(await service.listNcsForExecution(actor, execution.id)).toMatchObject([{ status: 'ASSIGNED', assignee_user_id: previous.id, assignee_deleted: true }]);
+    await expect(service.assignNc(actor, nc.id, previous.id, 2, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 403 });
+    const retiring = await prisma.user.create({ data: { organizationId, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'fixture' } });
+    let signalLocked!: (pid: number) => void;
+    let signalRelease!: () => void;
+    const locked = new Promise<number>(resolve => { signalLocked = resolve; });
+    const release = new Promise<void>(resolve => { signalRelease = resolve; });
+    const deletion = prisma.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM users WHERE id = ${retiring.id}::uuid FOR UPDATE`;
+      await tx.user.update({ where: { id: retiring.id }, data: { status: 'DISABLED', deletedAt: new Date() } });
+      const [backend] = await tx.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+      signalLocked(backend!.pid);
+      await release;
+    });
+    const pid = await locked;
+    const assigning = service.assignNc(actor, nc.id, retiring.id, 2, randomUUID(), randomUUID()).catch((error: unknown) => error);
+    let waiting = false;
+    try {
+      for (let attempt = 0; attempt < 100 && !waiting; attempt++) {
+        const [waiter] = await prisma.$queryRaw<{ pid: number }[]>`SELECT pid FROM pg_stat_activity WHERE ${pid} = ANY(pg_blocking_pids(pid)) AND query LIKE '%FOR SHARE%'`;
+        waiting = !!waiter;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+    } finally {
+      signalRelease();
+      await deletion;
+      await assigning;
+    }
+    expect(waiting).toBe(true);
+    expect(await assigning).toMatchObject({ status: 409, response: { code: 'CONCURRENCY_CONFLICT' } });
+    expect(await service.listNcsForExecution(actor, execution.id)).toMatchObject([{ version: 2, assignee_user_id: previous.id }]);
+    const key = randomUUID();
+    const assigned = await service.assignNc(actor, nc.id, reviewerId, 2, randomUUID(), key);
+    expect(assigned).toMatchObject({ status: 'ASSIGNED', assignee_user_id: reviewerId, version: 3, due_at: nc.due_at });
+    expect(await service.assignNc(actor, nc.id, reviewerId, 2, randomUUID(), key)).toEqual(assigned);
+    expect(await prisma.auditEvent.findMany({ where: { resourceId: nc.id, action: 'AUDIT_NC_ASSIGNED' }, orderBy: { createdAt: 'asc' } }))
+      .toMatchObject([{}, { metadata: { targetUserId: previous.id, reasonCode: 'AUDIT_NC_HISTORICAL_ASSIGNEE_DELETED', resourceVersion: 3 } }]);
+    await service.respondNc(reviewer, nc.id, { expectedVersion: 3, response: '补配后已完成整改' }, randomUUID(), randomUUID());
+    await service.verifyNc(actor, nc.id, 4, true, randomUUID(), randomUUID());
+    expect(await service.closeNc(actor, nc.id, 5, randomUUID(), randomUUID())).toMatchObject({ status: 'CLOSED', version: 6 });
+  }, 30_000);
 
   it('creates NC atomically from NG and enforces verify-before-close', async () => {
     const template = await service.createTemplate(actor, { name: '产品审核', auditType: 'PRODUCT', definition: { items: [{ key: 'P1', text: '产品符合' }] } }, randomUUID(), randomUUID());

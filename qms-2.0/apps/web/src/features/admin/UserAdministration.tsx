@@ -14,8 +14,9 @@ import { accountAvatarEpoch } from '../account/account-avatar-state';
 import { PositionSelector } from './PositionSelector';
 import { UserPositionsEditor } from './UserPositionsEditor';
 import { AuthorizationSources, canReadAuthorizationSources } from '../governance/AuthorizationSources';
+import { organizationPath, type UserPosition } from '../governance/governance';
 import { UserForceDelete } from './UserForceDelete';
-import { canPreviewPositions, type AuthorizationPreview } from './position-authorization';
+import { canPreviewPositions, loadPositionDirectory, previewPositions, type AuthorizationPreview, type PositionDirectory } from './position-authorization';
 import './user-administration.css';
 
 type CreateUser = components['schemas']['CreateAdminUserDto'];
@@ -23,8 +24,34 @@ type UpdateUser = components['schemas']['UpdateAdminUserDto'];
 type UserForm = CreateUser & Pick<AdminUser, 'status'>;
 type ResetIssued = components['schemas']['PasswordResetIssuedDto'];
 type UserMutation = ReturnType<typeof createAdminMutation>;
+type BulkOperation = 'positions' | 'disable' | 'delete' | 'forceDelete';
+type BulkOutcome = { message: string; traceId?: string; unknown?: boolean };
+type BulkWrite = (signal: AbortSignal) => Promise<unknown>;
+type BulkEntry = { user: AdminUser; outcome?: BulkOutcome; retry?: BulkWrite };
+type BulkRun = { operation: BulkOperation; entries: BulkEntry[]; started?: boolean; reauthenticated?: 'confirm' | 'retry' };
+type DeleteResult = components['schemas']['AdminUserForceDeleteResultDto'];
+type DeleteUser = components['schemas']['DeleteInternalAdminUserDto'];
+type AppendPositions = components['schemas']['AppendUserPositionsDto'];
 
-export function UserAdministration({ organization, organizations, targetUserId, onDenied }: { organization: AdminOrganization; organizations: AdminOrganization[]; targetUserId?: string; onDenied?: (error: ApiError) => void }) {
+const bulkLabels: Record<BulkOperation, readonly [string, string]> = {
+  positions: ['批量配置任职', 'Assign positions'], disable: ['批量停用', 'Disable selected accounts'],
+  delete: ['批量删除', 'Delete selected accounts'], forceDelete: ['批量强制删除', 'Permanently delete selected accounts'],
+};
+
+function preparePositionAppend(organizationId: string, user: AdminUser, additions: string[]): BulkWrite {
+  if (user.accountType !== 'INTERNAL') throw new ApiError({ code: 'STRUCTURE_DISABLED', message: '' }, 409);
+  const path = organizationPath(organizationId, `/users/${encodeURIComponent(user.id)}/positions`);
+  const body: AppendPositions = { positionIds: [...additions] };
+  const mutate = createAdminMutation();
+  return signal => mutate<UserPosition[]>(path, 'POST', body, signal, result => {
+    if (!Array.isArray(result) || result.some(entry => typeof entry?.positionId !== 'string')) throw new Error('Invalid position result');
+  });
+}
+
+export function UserAdministration({ organization, organizations, targetUserId, onDenied, onOpenPendingUsers }: {
+  organization: AdminOrganization; organizations: AdminOrganization[]; targetUserId?: string;
+  onDenied?: (error: ApiError) => void; onOpenPendingUsers?: () => void;
+}) {
   const [pageSize, setPageSize] = useLedgerPageSize('admin-users', organization.id);
   const [page, setPage] = useState(1);
   const { t, locale } = useLanguage();
@@ -57,6 +84,12 @@ export function UserAdministration({ organization, organizations, targetUserId, 
   const [mfa, setMfa] = useState<{ user: AdminUser; organizationId: string }>();
   const [batch, setBatch] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
+  const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [bulk, setBulk] = useState<BulkRun>();
+  const [bulkPositions, setBulkPositions] = useState<string[]>([]);
+  const [bulkDirectory, setBulkDirectory] = useState<PositionDirectory>();
+  const [bulkDirectoryError, setBulkDirectoryError] = useState<string>();
+  const bulkScope = useRef<AbortController | undefined>(undefined);
   const batchPending = useRef(false);
   const reportBatchBusy = useCallback((value: boolean) => { batchPending.current = value; setBatchBusy(value); }, []);
   const [form] = Form.useForm<UserForm>();
@@ -70,7 +103,8 @@ export function UserAdministration({ organization, organizations, targetUserId, 
   const actionLock = useRef(false);
   const sessionEnding = useRef(false);
   const scopeGeneration = useRef(0);
-  useUnsavedChanges((!!editing && dirty) || mutationUnknown);
+  const bulkUnknown = !!bulk?.entries.some(entry => entry.outcome?.unknown);
+  useUnsavedChanges((!!editing && dirty) || mutationUnknown || bulkUnknown || (!!bulk && !bulk.started && bulkPositions.length > 0));
   useNavigationBusy(busy);
   const requestLeave = useNavigationGuard();
   const [target, setTarget] = useState<{ organizationId: string; userId: string; user?: AdminUser; error?: string }>();
@@ -95,12 +129,31 @@ export function UserAdministration({ organization, organizations, targetUserId, 
   useEffect(() => { setSourceUser(undefined); }, [sourceScopeKey]);
   const canAssignPositions = canRead && canPreviewPositions(organization);
   const canReadPositions = canRead && organization.permissions.includes('organization:structure:read');
+  const canBulkPositions = canAssignPositions && organization.type === 'INTERNAL';
+  const canBulkDelete = canRead && canDelete && organization.type === 'INTERNAL';
+  const bulkOperation = bulk?.operation;
+  useLayoutEffect(() => {
+    const controller = new AbortController();
+    bulkScope.current = controller;
+    setSelectedUserIds([]); setBulk(undefined); setBulkPositions([]);
+    return () => controller.abort();
+  }, [sourceScopeKey, organization.type]);
+  useEffect(() => {
+    if (bulkOperation !== 'positions') return;
+    const controller = new AbortController();
+    setBulkDirectory(undefined); setBulkDirectoryError(undefined);
+    void loadPositionDirectory(organization.id, controller.signal).then(directory => {
+      if (!controller.signal.aborted) setBulkDirectory(directory);
+    }).catch(cause => { if (!controller.signal.aborted) setBulkDirectoryError(safeAccountError(cause)); });
+    return () => controller.abort();
+  }, [bulkOperation, sourceScopeKey, organization.id]);
   useEffect(() => { setPage(1); scopeGeneration.current += 1; setLifecycleDenied(false); setProfileConflict(false); setEditing(undefined); setAssignment(undefined); setPositionUser(undefined); setCreatePositions([]); setCreatePreview(undefined); setReset(undefined); setMutationUnknown(false); setAbandonMutation(false); pendingMutation.current = undefined; setTemporary(undefined); setTemporaryBusy(false); setCommandPending(false); setMfa(undefined); setBatch(false); setSuccess(undefined); setBusy(false); setDirty(false); form.resetFields(); mutate.current = createAdminMutation(); }, [organization.id, canRead, canReadRoles, canAssignPositions, canCreate, sessionScope, sourceScopeKey, form]);
   useLayoutEffect(() => {
     let retired = false;
     return useWorkTabsStore.subscribe(state => {
       if (retired || state.sessionScope === sessionScope) return;
       retired = true; scopeGeneration.current += 1;
+      bulkScope.current?.abort(); setSelectedUserIds([]); setBulk(undefined); setBulkPositions([]);
       setLifecycleDenied(true); setUsers([]); setTarget(undefined); setEditing(undefined); setAssignment(undefined); setSourceUser(undefined); setPositionUser(undefined); setReset(undefined); setMutationUnknown(false); setAbandonMutation(false); pendingMutation.current = undefined; setTemporary(undefined); setMfa(undefined); setBatch(false); setDirty(false); setBusy(false); setTemporaryBusy(false); setCommandPending(false); setSuccess(undefined); setError(undefined); form.resetFields(); mutate.current = createAdminMutation();
     });
   }, [sessionScope, form]);
@@ -227,32 +280,180 @@ export function UserAdministration({ organization, organizations, targetUserId, 
     } catch (cause) { if (alive.current && generation === scopeGeneration.current) setFailure(cause); }
     finally { actionLock.current = false; if (alive.current && generation === scopeGeneration.current) setBusy(false); }
   }
+
+  const text = (zh: string, en: string) => locale === 'en-US' ? en : zh;
+  const selectedUsers = users.filter(user => user.organizationId === organization.id && selectedUserIds.includes(user.id));
+  const canSelectUsers = canRead && (canStatus || canBulkPositions || canBulkDelete);
+  const bulkBlocked = busy || batchBusy || commandPending || mutationUnknown || !!editing || batch;
+  const selectedCount = (count: number) => text(`已选择 ${count} 个账号`, `${count} accounts selected`);
+
+  function openBulk(operation: BulkOperation) {
+    if (bulkBlocked || loading || actionLock.current || bulk || !selectedUsers.length) return;
+    setBulkPositions([]); setBulkDirectory(undefined); setBulkDirectoryError(undefined);
+    setBulk({ operation, entries: selectedUsers.map(user => ({ user })) });
+  }
+
+  async function runBulk(retryOnly = false) {
+    const signal = bulkScope.current?.signal;
+    if (!bulk || !signal || signal.aborted || actionLock.current || bulkBlocked) return;
+    const { operation } = bulk;
+    const deleting = operation === 'delete' || operation === 'forceDelete';
+    if ((deleting && !canBulkDelete) || (operation === 'disable' && !canStatus)
+      || (operation === 'positions' && (!canBulkPositions || !bulkPositions.length))) return;
+    if (bulk.started && !bulk.reauthenticated && !retryOnly) return;
+
+    actionLock.current = true;
+    setBusy(true);
+    setSelectedUserIds([]);
+    const entries = [...bulk.entries];
+    const publish = (reauthenticated?: BulkRun['reauthenticated']) => setBulk({ operation, started: true, entries: [...entries], reauthenticated });
+    publish();
+    let refresh = false;
+    try {
+      for (const [index, entry] of entries.entries()) {
+        if (signal.aborted || scope.current !== organization.id) return;
+        if (retryOnly ? !entry.retry : !!entry.outcome) continue;
+        const { user } = entry;
+        let write = entry.retry;
+        const path = scopePath(`users/${encodeURIComponent(user.id)}`, organization.id);
+        try {
+          if (!write && operation === 'positions') write = preparePositionAppend(organization.id, user, bulkPositions);
+          if (!write && operation === 'disable' && user.status !== 'DISABLED') {
+            const mutation = createAdminMutation();
+            write = requestSignal => mutation<AdminUser>(path, 'PATCH', { status: 'DISABLED' }, requestSignal, result => {
+              if (result?.id !== user.id || result.organizationId !== organization.id || result.status !== 'DISABLED') throw new Error('Invalid status result');
+            });
+          }
+          if (!write && deleting) {
+            const expectedSecurityVersion = user.securityVersion;
+            if (!Number.isInteger(expectedSecurityVersion) || expectedSecurityVersion < 1 || expectedSecurityVersion > 2147483647) throw new ApiError({ code: 'CONCURRENCY_CONFLICT', message: '' }, 409);
+            const body: DeleteUser = { expectedSecurityVersion, mode: operation === 'forceDelete' ? 'FORCE' : 'STANDARD' };
+            const mutation = createAdminMutation({ replayAfterReauthentication: false });
+            write = requestSignal => mutation<DeleteResult>(path, 'DELETE', body, requestSignal, result => {
+              if (result?.userId !== user.id || result.deleted !== true || !Array.isArray(result.effects)) throw new Error('Invalid deletion result');
+            });
+          }
+          signal.throwIfAborted();
+          if (write) { refresh = true; await write(signal); }
+          if (signal.aborted) return;
+          const message = !write ? text('无需变更', 'No change needed')
+            : operation === 'positions' ? text('任职配置已处理', 'Position assignments processed')
+            : operation === 'disable' ? text('已停用', 'Disabled')
+            : operation === 'delete' ? text('已删除', 'Deleted') : text('已永久删除', 'Permanently deleted');
+          entries[index] = { user, outcome: { message } };
+        } catch (cause) {
+          if (signal.aborted) return;
+          const error = cause instanceof ApiError ? cause : undefined;
+          if (error?.code === 'CLIENT_REAUTHENTICATION_COMPLETED') {
+            entries[index] = { ...entry, retry: write };
+            publish(retryOnly ? 'retry' : 'confirm');
+            return;
+          }
+          const interrupted = error?.status === 401 || error?.code === 'AUTH_REAUTHENTICATION_REQUIRED' || error?.code === 'CLIENT_REAUTHENTICATION_CANCELLED';
+          const deniedOrConflict = error?.status === 401 || error?.status === 409 || (error?.status === 403 && error.code !== 'AUTH_REAUTHENTICATION_REQUIRED');
+          const unknown = !!write && !deniedOrConflict && (entry.outcome?.unknown || (!interrupted && (!error?.status || error.status >= 500 || error.status === 408 || error.status === 425)));
+          const message = unknown ? text('请求结果尚未确认', 'Request result is unconfirmed')
+            : operation === 'delete' && error?.code === 'ADMIN_USER_ACTIVE_REFERENCES'
+              ? text('账号存在当前引用，无法删除', 'The account has active references and cannot be deleted')
+              : t(safeAccountError(cause));
+          entries[index] = { user, outcome: { message, traceId: error?.traceId, unknown }, retry: unknown ? write : undefined };
+          if (interrupted) {
+            for (const [remainingIndex, remaining] of entries.entries()) {
+              if (!remaining.outcome) entries[remainingIndex] = { ...remaining, outcome: { message: text('未处理', 'Not processed') } };
+            }
+            publish();
+            break;
+          }
+        }
+        publish();
+      }
+    } finally {
+      actionLock.current = false;
+      if (!signal.aborted && scope.current === organization.id) {
+        setBusy(false);
+        if (refresh) setRevision(value => value + 1);
+      }
+    }
+  }
+
+  const clearBulk = () => { if (!actionLock.current) { setBulk(undefined); setBulkPositions([]); } };
+  const bulkLabel = bulk ? text(...bulkLabels[bulk.operation]) : undefined;
+  const bulkCloseLabel = bulkUnknown ? text('放弃确认并关闭', 'Discard unconfirmed requests and close') : text('关闭', 'Close');
+  const bulkConfirm = bulk?.operation === 'positions' ? text('确认追加任职', 'Add positions')
+    : bulk?.operation === 'disable' ? text('确认停用', 'Confirm disable')
+    : bulk?.operation === 'delete' ? (bulk.reauthenticated ? text('重新确认删除', 'Reconfirm deletion') : text('确认删除', 'Confirm deletion'))
+    : bulk?.reauthenticated ? text('重新确认永久删除', 'Reconfirm permanent deletion') : text('确认永久删除', 'Confirm permanent deletion');
+  const bulkFinished = !!bulk?.started && !bulk.reauthenticated;
+  const availablePositions = bulkDirectory?.positions.filter(position => position.status === 'ACTIVE' && (position.departmentId === null || bulkDirectory.departments.some(department => department.id === position.departmentId && department.status === 'ACTIVE')));
   const mutationRecovery = mutationUnknown && <><Alert type="warning" showIcon title={t('原请求结果尚未确认，请重试原请求或明确放弃。')} /><Space wrap><Button loading={busy} disabled={busy} onClick={() => { const command = pendingMutation.current; if (command) void perform(command.action, command.message, true); }}>{t('重试确认结果')}</Button><Button disabled={busy} onClick={() => setAbandonMutation(true)}>{t('放弃修改')}</Button></Space></>;
   const organizationOptions = organizations.filter((entry) => allows(entry, editing === 'new' ? 'users:create' : 'users:transfer')).map((entry) => ({ value: entry.id, label: entry.name }));
   if (lifecycleDenied) return <Alert type="error" showIcon title={t('管理权限或会话已失效，已清除用户内容')} description={<>{error && t(error)}{errorDescription}</>} />;
   const actionBar = <div className="admin-toolbar"><Space wrap>
-    {canRead && <><Input.Search aria-label={t('搜索用户')} placeholder={t('用户名或邮箱')} allowClear onSearch={setSearch} />
-      <Select aria-label={t('用户状态')} placeholder={t('全部状态')} allowClear value={status} onChange={setStatus} options={[{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }]} /></>}
-    {canCreate && <Button type="primary" disabled={busy || commandPending || mutationUnknown} onClick={() => edit('new')}>{t('创建用户')}</Button>}
-    {canCreate && organization.type === 'INTERNAL' && <Button disabled={busy || commandPending || mutationUnknown} onClick={() => setBatch(true)}>{t('批量创建账号')}</Button>}
+    {canRead && <><Input.Search aria-label={t('搜索用户')} placeholder={t('用户名或邮箱')} allowClear disabled={!!bulk} onSearch={value => { if (value !== search) setSelectedUserIds([]); setSearch(value); }} />
+      <Select aria-label={t('用户状态')} placeholder={t('全部状态')} allowClear disabled={!!bulk} value={status} onChange={value => { setSelectedUserIds([]); setStatus(value); }} options={[{ value: 'ACTIVE', label: t('启用') }, { value: 'DISABLED', label: t('停用') }]} /></>}
+    {canCreate && <Button type="primary" disabled={busy || commandPending || mutationUnknown || !!bulk} onClick={() => edit('new')}>{t('创建用户')}</Button>}
+    {canCreate && organization.type === 'INTERNAL' && <Button disabled={busy || commandPending || mutationUnknown || !!bulk} onClick={() => setBatch(true)}>{t('批量创建账号')}</Button>}
+    {onOpenPendingUsers && <Button disabled={busy || batchBusy || commandPending || mutationUnknown || !!bulk} onClick={() => requestLeave(onOpenPendingUsers)}>{text('待配置用户', 'Pending users')}</Button>}
+    {canSelectUsers && !!selectedUsers.length && <Space wrap role="group" aria-label={text('批量操作', 'Bulk actions')}>
+      <Typography.Text role="status">{selectedCount(selectedUsers.length)}</Typography.Text>
+      <Button disabled={bulkBlocked || !!bulk} onClick={() => setSelectedUserIds([])}>{text('取消选择', 'Clear selection')}</Button>
+      {canBulkPositions && <Button disabled={bulkBlocked || !!bulk} onClick={() => openBulk('positions')}>{text(...bulkLabels.positions)}</Button>}
+      {canStatus && <Button disabled={bulkBlocked || !!bulk} onClick={() => openBulk('disable')}>{text(...bulkLabels.disable)}</Button>}
+      {canBulkDelete && <>
+        <Button disabled={bulkBlocked || !!bulk} onClick={() => openBulk('delete')}>{text(...bulkLabels.delete)}</Button>
+        <Button danger disabled={bulkBlocked || !!bulk} onClick={() => openBulk('forceDelete')}>{text(...bulkLabels.forceDelete)}</Button>
+      </>}
+    </Space>}
   </Space></div>;
   return <>
     {targetUserId !== undefined && (!canRead ? <Alert type="error" title={t('无权查看目标账号')} showIcon /> : target?.organizationId === organization.id && target.userId === targetUserId && target.error ? <Alert type="error" title={t(target.error)} showIcon /> : target?.organizationId === organization.id && target.userId === targetUserId && target.user ? <section aria-label={t('目标账号')}>
       <Typography.Title level={4}>{t('目标账号')}</Typography.Title>
       <Descriptions column={1} items={[{ key: 'username', label: t('用户名'), children: target.user.username }, { key: 'name', label: t('姓名'), children: target.user.fullName || t('未填写') }, { key: 'phone', label: t('电话'), children: target.user.phone || t('未填写') }, { key: 'email', label: t('邮箱'), children: target.user.email ?? '—' }, { key: 'type', label: t('账号类型'), children: target.user.accountType === 'INTERNAL' ? t('内部账号') : t('供应商账号') }, { key: 'organization', label: t('主组织'), children: target.user.organization.name }, { key: 'status', label: t('状态'), children: target.user.status === 'ACTIVE' ? t('启用') : t('停用') }]} />
-      <Button disabled={busy || mutationUnknown} onClick={() => edit(target.user!)}>{t('管理用户')}</Button>
+      <Button disabled={busy || mutationUnknown || !!bulk} onClick={() => edit(target.user!)}>{t('管理用户')}</Button>
     </section> : <Typography.Text role="status">{t('正在加载目标账号')}</Typography.Text>)}
     {error && !editing && !assignment && !reset && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
     {success && <Alert type="success" title={t(success)} showIcon />}
     {!canRead && actionBar}
-    {canRead && <LedgerTable<AdminUser> actionBar={actionBar} ledgerId="admin-users" organizationId={organization.id} requiredColumnKeys={['username', 'actions']} rowKey="id" loading={loading} dataSource={users} scroll={{ x: 850 }} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: busy || batchBusy, onChange: (nextPage, size) => requestLeave(() => { setPage(size === pageSize ? nextPage : 1); setPageSize(size); }) }} columns={[
+    {canRead && <LedgerTable<AdminUser> actionBar={actionBar} ledgerId="admin-users" organizationId={organization.id} requiredColumnKeys={['username', 'actions']} rowKey="id" loading={loading} dataSource={users} scroll={{ x: 850 }} rowSelection={canSelectUsers ? {
+      fixed: true, selectedRowKeys: selectedUserIds, preserveSelectedRowKeys: true,
+      onChange: keys => { if (!bulkBlocked && !loading && !bulk && !actionLock.current) setSelectedUserIds(keys.map(String)); },
+      getTitleCheckboxProps: () => ({ disabled: bulkBlocked || loading || !!bulk || !users.length, 'aria-label': text('选择当前页账号', 'Select accounts on this page') }),
+      getCheckboxProps: user => ({ disabled: bulkBlocked || loading || !!bulk || user.organizationId !== organization.id, 'aria-label': user.username }),
+    } : undefined} pagination={{ current: page, pageSize, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], disabled: busy || batchBusy || !!bulk, onChange: (nextPage, size) => requestLeave(() => { setPage(size === pageSize ? nextPage : 1); setPageSize(size); }) }} columns={[
       { key: 'username', title: t('用户名'), dataIndex: 'username' }, { key: 'fullName', title: t('姓名'), render: (_, user) => user.fullName || t('未填写') }, { key: 'phone', title: t('电话'), render: (_, user) => user.phone || t('未填写') }, { key: 'email', title: t('邮箱'), dataIndex: 'email' },
       { key: 'accountType', title: t('账号类型'), render: (_, user) => user.accountType === 'INTERNAL' ? t('内部') : t('供应商') },
       { key: 'organization', title: t('主组织'), render: (_, user) => user.organization.name },
       { key: 'positions', title: t('任职摘要'), width: 240, render: (_, user) => user.positions?.length ? <Typography.Paragraph className="admin-user-positions-summary" ellipsis={{ rows: 2, tooltip: user.positions.map(position => `${position.department?.name ?? t('组织直属')} · ${position.name}`).join('；') }}>{user.positions.map(position => `${position.department?.name ?? t('组织直属')} · ${position.name}`).join('；')}{(user.totalPositions ?? 0) > user.positions.length && `；${t('更多任职请查看详情')}`}</Typography.Paragraph> : '—' },
       { key: 'status', title: t('状态'), render: (_, user) => <Tag color={user.status === 'ACTIVE' ? 'green' : 'default'}>{user.status === 'ACTIVE' ? t('启用') : t('停用')}</Tag> },
-      { key: 'actions', title: t('操作'), width: 128, fixed: 'right', render: (_, user) => <Button className="admin-user-manage-action" size="small" disabled={busy || batchBusy || commandPending || mutationUnknown} onClick={() => requestLeave(() => edit(user))}>{t('管理用户')}</Button> },
+      { key: 'actions', title: t('操作'), width: 128, fixed: 'right', render: (_, user) => <Button className="admin-user-manage-action" size="small" disabled={busy || batchBusy || commandPending || mutationUnknown || !!bulk} onClick={() => requestLeave(() => edit(user))}>{t('管理用户')}</Button> },
     ]} />}
+    {bulk && <Modal title={bulkLabel} open onCancel={clearBulk} closable={!busy && !bulkUnknown} keyboard={!busy && !bulkUnknown} mask={{ closable: !busy && !bulkUnknown }}
+      styles={{ body: { maxHeight: 'min(60vh, 480px)', overflowY: 'auto' } }}
+      footer={bulkFinished ? <Space wrap>
+        {bulkUnknown && <Button loading={busy} disabled={bulkBlocked} onClick={() => void runBulk(true)}>{t('重试确认结果')}</Button>}
+        <Button aria-label={bulkCloseLabel} disabled={busy} onClick={clearBulk}>{bulkCloseLabel}</Button>
+      </Space> : undefined}
+      okText={bulkConfirm} onOk={() => void runBulk(bulk.reauthenticated === 'retry')} confirmLoading={busy}
+      okButtonProps={{ 'aria-label': bulkConfirm, danger: bulk.operation === 'forceDelete', disabled: bulkBlocked || (bulk.operation === 'positions' && !bulkPositions.length) }}
+      cancelButtonProps={{ disabled: busy }} cancelText={bulkUnknown ? bulkCloseLabel : t('取消')}>
+      <Typography.Paragraph>{selectedCount(bulk.entries.length)}</Typography.Paragraph>
+      {!bulk.started && bulk.operation === 'positions' && <>
+        <Select aria-label={t('任职岗位')} mode="multiple" maxCount={100} style={{ width: '100%' }} optionFilterProp="label"
+          value={bulkPositions} onChange={setBulkPositions} loading={!bulkDirectory && !bulkDirectoryError} disabled={busy || !availablePositions?.length}
+          options={availablePositions?.map(position => ({ value: position.id, label: `${position.name} · ${position.code}`, title: position.departmentId === null ? t('组织直属') : bulkDirectory?.departments.find(department => department.id === position.departmentId)?.name }))} />
+        {bulkDirectoryError && <Alert type="error" showIcon title={t(bulkDirectoryError)} />}
+        {availablePositions?.length === 0 && <Alert type="warning" showIcon title={t('当前组织没有可用岗位')} />}
+      </>}
+      {bulk.operation === 'delete' && !bulkFinished && <Alert type="warning" showIcon
+        title={text('删除后，所选账号不可通过启用恢复。', 'Deleted accounts cannot be restored by enabling them.')}
+        description={text('存在当前引用的账号将跳过，历史业务及审计记录保留。', 'Accounts with active references will be skipped. Historical business and audit records are preserved.')} />}
+      {bulk.operation === 'forceDelete' && !bulkFinished && <Alert type="warning" showIcon title={t('永久删除当前账号，不可通过启用恢复。')} description={t('撤销当前凭证和有效任职，解除当前配置；保留历史签章、审批、业务及审计记录，不改写原签署人。')} />}
+      {bulk.operation === 'disable' && !bulk.started && <Alert type="warning" showIcon title={text('停用后，所选账号将无法登录。', 'Selected accounts will no longer be able to sign in.')} />}
+      {bulk.reauthenticated && <Alert type="info" showIcon title={text('身份验证已完成，请重新确认删除。', 'Identity verified. Please reconfirm deletion.')} />}
+      <ul aria-live="polite">{bulk.entries.map(({ user, outcome }) => <li key={user.id}>
+        {user.username}{outcome && `${text('：', ': ')}${outcome.message}`}{outcome?.traceId && <> · <code>{outcome.traceId}</code></>}
+      </li>)}</ul>
+    </Modal>}
     {positionUser && canReadPositions && <UserPositionsEditor key={`${sessionScope}:${organization.id}:${positionUser.id}`} organizationId={organization.id} user={positionUser} readOnly={!canAssignPositions || positionUser.status !== 'ACTIVE'} onClose={() => setPositionUser(undefined)} onSessionEnding={() => { sessionEnding.current = true; }} onSaved={() => { setPositionUser(undefined); setSuccess('任职已保存'); setRevision(value => value + 1); }} />}
     {mfa && canRead && mfa.organizationId === organization.id && <UserMfaPolicy key={`${organization.id}:${mfa.user.id}`} user={mfa.user} organizationId={organization.id} canWrite={canReset} onClose={() => setMfa(undefined)} onSaved={() => { setRevision((value) => value + 1); setSuccess('MFA 设置已保存'); }} />}
     <Modal title={t('批量创建账号')} open={batch && canCreate} closable={!batchBusy} keyboard={!batchBusy} mask={{ closable: !batchBusy }} onCancel={() => { if (batchPending.current) return; requestLeave(() => setBatch(false)); }} footer={null} destroyOnHidden width={950}>

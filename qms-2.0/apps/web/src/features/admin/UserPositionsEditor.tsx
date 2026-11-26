@@ -80,14 +80,14 @@ export function UserPositionsEditor({ organizationId, user, onClose, onSaved, on
       {!loading && directory && <>
         <Typography.Paragraph>{t('新增任职')}：{names(selected.filter(id => !expected.includes(id)))}</Typography.Paragraph>
         <Typography.Paragraph>{t('撤销任职')}：{names(expected.filter(id => !selected.includes(id)))}</Typography.Paragraph>
-        <PositionSelector organizationId={organizationId} targetUserId={user.id} directory={directory} value={selected} onChange={value => { if (!unknown && !pending.current) setSelected(value); }} preview={preview} onPreviewChange={setPreview} disabled={busy || conflict || unknown} allowEmpty />
-        {preview && <>
+        <PositionSelector organizationId={organizationId} targetUserId={user.id} directory={directory} value={selected} onChange={value => { if (!unknown && !pending.current) setSelected(value); }} preview={preview} onPreviewChange={setPreview} disabled={busy || conflict || unknown} allowEmpty
+          previewAction={<Button type="primary" loading={busy} disabled={loading || conflict || !preview || unknown} onClick={() => void save()}>{t('保存任职')}</Button>}
+          permissionChanges={preview && <>
           <Typography.Paragraph>{t('将获得的权限')}：{preview.effectivePermissionCodes.filter(code => !currentPermissions.includes(code)).join(', ') || t('无')}</Typography.Paragraph>
           <Typography.Paragraph>{t('将撤销的权限')}：{currentPermissions.filter(code => !preview.effectivePermissionCodes.includes(code)).join(', ') || t('无')}</Typography.Paragraph>
           <Typography.Paragraph>{t('仍保留的权限')}：{currentPermissions.filter(code => preview.effectivePermissionCodes.includes(code)).join(', ') || t('无')}</Typography.Paragraph>
-        </>}
+          </>} />
       </>}
-      {!readOnly && <Button type="primary" loading={busy} disabled={loading || conflict || !preview || unknown} onClick={() => void save()}>{t('保存任职')}</Button>}
       {!readOnly && unknown && <Button disabled={busy || loading} loading={busy} onClick={() => void save()}>{t('重试确认结果')}</Button>}
       <Typography.Text strong>{t('任职记录（含历史）')}</Typography.Text>
       <Table<UserPosition> size="small" rowKey="id" loading={loading} dataSource={assignments} pagination={{ placement: ['topStart'] }} scroll={{ x: 560 }} columns={[

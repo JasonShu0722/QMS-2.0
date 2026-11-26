@@ -24,7 +24,8 @@ export function AuditNcClosurePanel() {
   const [assignee, setAssignee] = useState('');
   const conflict = error instanceof ApiError && error.status === 409;
   const requestLeave = useNavigationGuard();
-  useUnsavedChanges(Boolean(action) && (Boolean(note) || action?.type === 'assign' && assignee !== (action.item.assignee_user_id ?? '')));
+  useUnsavedChanges(Boolean(action) && (Boolean(note) || action?.type === 'assign'
+    && assignee !== (action.item.assignee_deleted ? '' : action.item.assignee_user_id ?? '')));
   useNavigationBusy(busy);
   function close() { if (!busy) requestLeave(() => { setAction(undefined); setNote(''); }, true); }
   function lookup() { if (!busy) requestLeave(() => { setAction(undefined); setNote(''); void load(executionInput); }); }
@@ -56,7 +57,7 @@ export function AuditNcClosurePanel() {
     if (!busy) requestLeave(() => {
       setError(undefined);
       setNote('');
-      setAssignee(item.assignee_user_id ?? '');
+      setAssignee(type === 'assign' && item.assignee_deleted ? '' : item.assignee_user_id ?? '');
       setAction({ type, item });
     });
   }
@@ -96,7 +97,8 @@ export function AuditNcClosurePanel() {
     {loading ? <Spin /> : items ? <RecordList items={items} itemKey={item => item.id} empty={<Empty description="该执行暂无整改记录" />} renderItem={(item) => <>
       <RecordListDetails title={<Space><Typography.Text strong>{item.severity}</Typography.Text><Tag>{statusLabels[item.status] ?? item.status}</Tag></Space>} description={<Space orientation="vertical"><span>期限：{new Date(item.due_at).toLocaleString()}</span>{item.response ? <span>整改回复：{item.response}</span> : null}{item.verification_note ? <span>验证结论：{item.verification_note}</span> : null}{item.problem_index_id ? <span>正式问题：{item.problem_index_id}</span> : null}</Space>} />
       <RecordListActions>{canWrite ? [
-      ...(['OPEN', 'REJECTED'].includes(item.status) ? [<Button key="assign" onClick={() => open('assign', item)}>分派整改</Button>] : []),
+      ...(['OPEN', 'REJECTED'].includes(item.status) || item.status === 'ASSIGNED' && item.assignee_deleted
+        ? [<Button key="assign" onClick={() => open('assign', item)}>{item.assignee_deleted ? '重新分派整改' : '分派整改'}</Button>] : []),
       ...(['ASSIGNED', 'REJECTED'].includes(item.status) && item.assignee_user_id === userId ? [<Button key="response" onClick={() => open('response', item)}>提交整改</Button>] : []),
       ...(item.status === 'RESPONDED' && item.assignee_user_id !== userId ? [<Button key="verify" onClick={() => open('verify', item)}>验证整改</Button>] : []),
       ...(item.status === 'VERIFIED' ? [<Button key="close" onClick={() => open('close', item)}>关闭整改</Button>] : []),

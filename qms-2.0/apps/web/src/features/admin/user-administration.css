@@ -2,6 +2,12 @@
   white-space: nowrap;
 }
 
+.admin-position-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--qms-section-gap);
+}
+
 .admin-user-positions-summary.ant-typography {
   margin-bottom: 0;
 }

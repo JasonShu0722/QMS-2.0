@@ -13,7 +13,7 @@ import { ACTIVE_PERMISSION_CODES } from '../authorization/permission-catalog.js'
 import { organizationInitialization, organizationGovernancePermissions, recordOrganizationInitialization, rejectDeletedOrganizationCreation } from './organization-initialization.js';
 import { archiveOrganizationHistory, archivedOrganizationDelete } from './organization-history-archive.js';
 import { lockPositionDeletionConfiguration, ministerAssignmentReferences, positionManagementReferences, positionWorkflowReferences, structureBusinessReferences } from './organization-lifecycle.read-model.js';
-import type { CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, UpdatePositionPermissionsDto, ReplacePositionRolesDto, ReplaceUserPositionsDto, DeleteStructureDto, OrganizationLifecycleDto } from './organization.dto.js';
+import type { AppendUserPositionsDto, CreateOrganizationDto, UpdateOrganizationDto, OrganizationListQueryDto, CreateDepartmentDto, UpdateDepartmentDto, CreatePositionDto, UpdatePositionDto, UpdatePositionPermissionsDto, ReplacePositionRolesDto, ReplaceUserPositionsDto, DeleteStructureDto, OrganizationLifecycleDto } from './organization.dto.js';
 
 const governancePermissions = organizationGovernancePermissions;
 const organizationSelect = { id: true, code: true, name: true, type: true, parentId: true, status: true, version: true } as const;
@@ -611,6 +611,63 @@ export class OrganizationService {
       return transaction.userPosition.findMany({ where: { organizationId, userId, ...effectivePositionAssignmentWhere() }, include: { position: { select: positionSelect } }, orderBy: [{ positionId: 'asc' }, { id: 'asc' }] });
     }, async (transaction) => {
       if (dto.authorizationBaseline !== undefined) await this.onboarding.authorizeAdjustment(transaction, actor, organizationId, { ...dto, authorizationBaseline: dto.authorizationBaseline, targetUserId: userId });
+    });
+  }
+
+  appendUserPositions(actor: AdminActor, organizationId: string, userId: string, dto: AppendUserPositionsDto, traceId: string, key?: string) {
+    const permission = ['organization:positions:assign', 'account:users:read'];
+    const positionIds = [...dto.positionIds].sort();
+    const ids = Prisma.join(positionIds.map(id => Prisma.sql`${id}::uuid`));
+    const action = 'USER_POSITIONS_APPENDED';
+    const authorizeTarget = async (transaction: AdminTransaction) => {
+      const user = await transaction.user.findFirst({ where: { id: userId, organizationId, deletedAt: null, accountType: 'INTERNAL', configurationRequired: false }, select: { id: true } });
+      if (!user) adminError('STRUCTURE_NOT_FOUND', 404);
+    };
+    return this.mutations.run({ actor, organizationId, key, action, payload: { userId, positionIds }, permission, traceId, isolationLevel: 'ReadCommitted' }, async transaction => {
+      if (actor.accountType !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
+      await this.lockOrganization(transaction, organizationId);
+      const departments = await transaction.$queryRaw<{ id: string }[]>(Prisma.sql`
+        SELECT id FROM departments WHERE organization_id = ${organizationId}::uuid AND id IN (
+          SELECT department_id FROM positions WHERE organization_id = ${organizationId}::uuid AND id IN (${ids})
+        ) ORDER BY id FOR SHARE
+      `);
+      await this.lockPositions(transaction, organizationId, positionIds);
+      await transaction.$queryRaw(Prisma.sql`
+        SELECT id FROM roles WHERE organization_id = ${organizationId}::uuid AND id IN (
+          SELECT role_id FROM position_roles WHERE organization_id = ${organizationId}::uuid AND position_id IN (${ids})
+        ) ORDER BY id FOR SHARE
+      `);
+      await transaction.$queryRaw`SELECT id FROM users WHERE id = ${userId}::uuid AND organization_id = ${organizationId}::uuid FOR UPDATE`;
+      await this.activeOrganization(transaction, organizationId);
+      await authorizeTarget(transaction);
+      const now = new Date();
+      const held = await transaction.userPosition.findMany({
+        where: { organizationId, userId, positionId: { in: positionIds }, OR: [{ endedAt: null }, { endedAt: { gt: now } }] },
+        select: { positionId: true },
+      });
+      const heldIds = new Set(held.map(({ positionId }) => positionId));
+      const addedIds = positionIds.filter(id => !heldIds.has(id));
+      if (addedIds.length) {
+        const positions = await transaction.position.findMany({
+          where: { id: { in: addedIds }, organizationId, deletedAt: null, configurationRequired: false, status: 'ACTIVE', OR: [{ departmentId: null }, { department: { status: 'ACTIVE', deletedAt: null, configurationRequired: false } }] },
+          select: { departmentId: true },
+        });
+        if (positions.length !== addedIds.length) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+        const lockedDepartments = new Set(departments.map(({ id }) => id));
+        if (positions.some(({ departmentId }) => departmentId !== null && !lockedDepartments.has(departmentId))) adminError('CONCURRENCY_CONFLICT', 409);
+      }
+      const policy = await this.lockPositionRoles(transaction, organizationId, addedIds, addedIds);
+      const granted = await this.refreshPositionAccess(transaction, actor, organizationId, permission, policy);
+      if (addedIds.length) {
+        await transaction.userPosition.createMany({ data: addedIds.map(positionId => ({ organizationId, userId, positionId, startedAt: now })) });
+        if (policy.positionIds.length) await this.invalidatePositionUsers(transaction, actor, organizationId, [userId], granted);
+        await this.record(transaction, actor, organizationId, action, 'User', userId, traceId, undefined, { positionIds: addedIds });
+      }
+      return transaction.userPosition.findMany({ where: { organizationId, userId, ...effectivePositionAssignmentWhere() }, include: { position: { select: positionSelect } }, orderBy: [{ positionId: 'asc' }, { id: 'asc' }] });
+    }, undefined, async transaction => {
+      if (actor.accountType !== 'INTERNAL') adminError('ORGANIZATION_SCOPE_DENIED', 403);
+      await this.activeOrganization(transaction, organizationId);
+      await authorizeTarget(transaction);
     });
   }
 

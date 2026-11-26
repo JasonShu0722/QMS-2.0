@@ -104,6 +104,7 @@ export class AuditNcResponseDto {
   @ApiPropertyOptional({ nullable: true }) calendar_version!: string | null;
   @ApiPropertyOptional({ nullable: true }) due_business_days!: number | null;
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) assignee_user_id!: string | null;
+  @ApiPropertyOptional({ description: 'The recorded assignee has been permanently deleted' }) assignee_deleted?: boolean;
   @ApiPropertyOptional({ type: String, nullable: true }) response!: string | null;
   @ApiPropertyOptional({ type: String, nullable: true }) verification_note!: string | null;
   @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true }) verified_by_id!: string | null;

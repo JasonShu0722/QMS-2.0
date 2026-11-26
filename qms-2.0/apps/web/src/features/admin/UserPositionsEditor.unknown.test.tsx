@@ -1,12 +1,13 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { UserPositionsEditor } from './UserPositionsEditor';
 import type { AdminUser } from './admin';
 import type { AuthorizationPreview } from './position-authorization';
 
-vi.mock('./PositionSelector', () => ({ PositionSelector: ({ disabled, onChange, onPreviewChange }: { disabled: boolean; onChange: (value: string[]) => void; onPreviewChange: (preview: AuthorizationPreview) => void }) => <fieldset disabled={disabled}><button onClick={() => onChange(['p1'])}>恢复原任职</button><button onClick={() => onChange([])}>清空任职</button><button onClick={() => onPreviewChange({ authorizationBaseline: 'baseline-1', positions: [], effectivePermissionCodes: [], effectiveMfaRequired: false, retainedSources: [] })}>预览授权</button></fieldset> }));
+vi.mock('./PositionSelector', () => ({ PositionSelector: ({ disabled, onChange, onPreviewChange, previewAction }: { disabled: boolean; onChange: (value: string[]) => void; onPreviewChange: (preview: AuthorizationPreview) => void; previewAction?: ReactNode }) => <fieldset disabled={disabled}><button onClick={() => onChange(['p1'])}>恢复原任职</button><button onClick={() => onChange([])}>清空任职</button><button onClick={() => onPreviewChange({ authorizationBaseline: 'baseline-1', positions: [], effectivePermissionCodes: [], effectiveMfaRequired: false, retainedSources: [] })}>预览授权</button>{previewAction}</fieldset> }));
 const user = { id: 'user', username: 'alice' } as AdminUser;
 const position = { id: 'p1', name: 'Quality engineer', status: 'ACTIVE', departmentId: null };
 const assignments = [{ id: 'a1', positionId: 'p1', position, startedAt: '2020-01-01', endedAt: null }];
@@ -111,7 +112,7 @@ it('preserves a known 409 draft through baseline reload and requires a fresh pre
   fireEvent.click(screen.getByRole('button', { name: '读取最新任职基线' }));
   expect(screen.queryByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' })).not.toBeInTheDocument();
   await waitFor(() => expect(assignmentReads).toBe(2));
-  expect(screen.getByRole('button', { name: '保存任职' })).toBeDisabled();
+  expect(await screen.findByRole('button', { name: '保存任职' })).toBeDisabled();
   fireEvent.click(screen.getByRole('button', { name: '预览授权' }));
   fireEvent.click(screen.getByRole('button', { name: '保存任职' }));
   await waitFor(() => expect(saved).toHaveBeenCalledOnce());

@@ -1,6 +1,7 @@
 import { Injectable, Module } from '@nestjs/common';
 import type { Prisma } from '../../generated/prisma/client.js';
-import type { AdminActor } from './admin-mutation.service.js';
+import { adminError, type AdminActor } from './admin-mutation.service.js';
+import { hasCurrentAdministrativeUserReferences } from './administrative-user-references.read-model.js';
 import type { AdministrativeLifecycleEffect, AdministrativeLifecycleImpact } from './administrative-lifecycle.types.js';
 
 @Injectable()
@@ -19,6 +20,11 @@ export class AdministrativeLifecycleRegistry {
       throw new Error('ADMIN_LIFECYCLE_EFFECTS_INCOMPLETE');
     }
     this.frozen = true;
+  }
+
+  async assertNoCurrentUserReferences(tx: Prisma.TransactionClient, userId: string) {
+    if (!this.frozen) throw new Error('ADMIN_LIFECYCLE_EFFECTS_INCOMPLETE');
+    if (await hasCurrentAdministrativeUserReferences(tx, userId)) adminError('ADMIN_USER_ACTIVE_REFERENCES', 409);
   }
 
   async apply(tx: Prisma.TransactionClient, actor: AdminActor, impact: AdministrativeLifecycleImpact) {

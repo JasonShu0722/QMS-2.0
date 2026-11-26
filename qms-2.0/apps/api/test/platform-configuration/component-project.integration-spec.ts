@@ -1,8 +1,10 @@
 import 'reflect-metadata';
 import { jest } from '@jest/globals';
 import { randomUUID } from 'node:crypto';
+import { setTimeout as delay } from 'node:timers/promises';
 import { Test } from '@nestjs/testing';
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { Client } from 'pg';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module.js';
 import { PrismaService } from '../../src/database/prisma.service.js';
@@ -20,6 +22,24 @@ if (!connection || process.env.QMS_DISPOSABLE_TEST_DB !== 'true'
   throw new Error('Component project tests require disposable loopback PostgreSQL, never preview 55440.');
 }
 jest.setTimeout(120_000);
+
+async function withSqlStates<Result>(work: (states: string[]) => Promise<Result>) {
+  const states: string[] = [];
+  const query = Client.prototype.query;
+  const spy = jest.spyOn(Client.prototype, 'query').mockImplementation(function (this: Client, ...args: Parameters<Client['query']>) {
+    const result: unknown = Reflect.apply(query, this, args);
+    if (!(result instanceof Promise)) return result;
+    return result.catch((error: { code?: string }) => {
+      if (error.code) states.push(error.code);
+      throw error;
+    });
+  } as Client['query']);
+  try {
+    return await work(states);
+  } finally {
+    spy.mockRestore();
+  }
+}
 
 describe('component project mapping with real PostgreSQL / HTTP', () => {
   let app: INestApplication;
@@ -64,6 +84,34 @@ describe('component project mapping with real PostgreSQL / HTTP', () => {
     const position = await prisma.position.create({ data: { organizationId: f.org.id, departmentId: department.id, code: randomUUID(), name: 'Not a permission name' } });
     const assignment = await prisma.userPosition.create({ data: { organizationId: f.org.id, userId: user.id, positionId: position.id, startedAt, endedAt } });
     return { user, department, position, assignment };
+  }
+
+  async function waitForBlockedQuery(blocker: number, pattern: string) {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const [waiter] = await prisma.$queryRaw<{ pid: number }[]>`SELECT pid FROM pg_stat_activity
+        WHERE ${blocker} = ANY(pg_blocking_pids(pid)) AND query LIKE ${pattern}`;
+      if (waiter) return waiter.pid;
+      await delay(10);
+    }
+    throw new Error(`Expected PostgreSQL lock wait for ${pattern}`);
+  }
+
+  function forceDelete(actor: Fixture, target: Fixture['user'], key: string) {
+    return request(app.getHttpServer()).delete(`/api/v1/admin/users/${target.id}`).set('Cookie', actor.cookie)
+      .set('x-csrf-token', csrf).set('Idempotency-Key', key).send({ mode: 'FORCE', expectedSecurityVersion: target.securityVersion });
+  }
+
+  async function useEngineerSession(f: Fixture, user: Fixture['user']) {
+    const token = await app.get(SessionService).create(user.id, prisma, { mfaVerified: true, reauthenticated: true });
+    const session = (await app.get(SessionService).resolve(token))!;
+    return { ...f, user, actor: { ...session.user, sessionId: session.id }, cookie: `qms_session=${token}; qms_csrf=${csrf}` };
+  }
+
+  async function lifecycleAdministrator(f: Fixture, user: Fixture['user']) {
+    const marker = await prisma.permission.findUniqueOrThrow({ where: { code: 'platform:admin' } });
+    const role = await prisma.role.create({ data: { organizationId: f.org.id, name: 'Lifecycle administrator', code: randomUUID(), permissions: { create: { permissionId: marker.id } } } });
+    await prisma.userRole.create({ data: { organizationId: f.org.id, userId: user.id, roleId: role.id } });
+    return useEngineerSession(f, user);
   }
 
   it('owns two mapping tables without a legacy new-product project dependency', async () => {
@@ -155,6 +203,176 @@ describe('component project mapping with real PostgreSQL / HTTP', () => {
     const resolved = (await get(f, 'component-project-mappings/resolve', { componentCode: 'abc-X' }).expect(200)).body;
     expect(resolved).toMatchObject({ project: { version: 2, stage: 'MASS_PRODUCTION' }, customerEngineer: { assignmentId: null, userId: null }, projectEngineer: { assignmentId: null, userId: null } });
   });
+
+  it.each(['create', 'update', 'bulk-apply'] as const)('lets a project create and %s assign their operators to each other concurrently', async (operation) => {
+    const first = await fixture();
+    const firstEngineer = await engineer(first);
+    const secondEngineer = await engineer(first);
+    const operators = await Promise.all([firstEngineer, secondEngineer].map(async ({ user }) => {
+      await prisma.userRole.create({ data: { organizationId: first.org.id, userId: user.id, roleId: first.role.id } });
+      return useEngineerSession(first, user);
+    }));
+    const [creator, peer] = [operators[0]!, operators[1]!];
+    const records = 'component-project-records';
+    const mappings = 'component-project-mappings';
+    const firstBody = { code: randomUUID(), name: 'First project', stage: 'NEW_PRODUCT', customerEngineerAssignmentId: secondEngineer.assignment.id };
+    const secondChanges = { customerEngineerAssignmentId: firstEngineer.assignment.id };
+    const existing = operation === 'create' ? undefined : await project(first);
+    const bulk = operation === 'bulk-apply' ? { selection: [{ id: (await mapping(first, existing.id)).id, expectedVersion: 1 }], changes: secondChanges } : undefined;
+    const preview = bulk ? (await write(peer, 'post', `${mappings}/bulk-preview`, bulk).expect(200)).body : undefined;
+    const secondBody = { code: randomUUID(), name: 'Second project', stage: 'NEW_PRODUCT', ...secondChanges };
+    const firstKey = randomUUID();
+    const secondKey = randomUUID();
+    const secondWrite = () => {
+      if (bulk) return write(peer, 'post', `${mappings}/bulk-apply`, { ...bulk, previewToken: preview.previewToken }, secondKey);
+      if (existing) return write(peer, 'patch', `${records}/${existing.id}`, { expectedVersion: 1, ...secondChanges }, secondKey);
+      return write(peer, 'post', records, secondBody, secondKey);
+    };
+    const { gate, results, states } = await withSqlStates(async (states) => {
+      const gate = await prisma.$transaction(async (transaction) => {
+        await transaction.$queryRaw`SELECT id FROM sessions WHERE id IN (${creator.actor.sessionId}::uuid, ${peer.actor.sessionId}::uuid) FOR UPDATE`;
+        const [backend] = await transaction.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+        const requests = Promise.allSettled([write(creator, 'post', records, firstBody, firstKey), secondWrite()]);
+        for (let attempt = 0; attempt < 100; attempt++) {
+          const waiters = await prisma.$queryRaw<{ pid: number }[]>`SELECT pid FROM pg_stat_activity
+            WHERE ${backend!.pid} = ANY(pg_blocking_pids(pid)) AND query LIKE '%FROM sessions%FOR UPDATE%'`;
+          if (waiters.length === 2) {
+            const compatible = await transaction.$queryRaw<{ id: string }[]>`SELECT id FROM users
+              WHERE id IN (${creator.user.id}::uuid, ${peer.user.id}::uuid) FOR SHARE SKIP LOCKED`;
+            const writable = await transaction.$queryRaw<{ id: string }[]>`SELECT id FROM users
+              WHERE id IN (${creator.user.id}::uuid, ${peer.user.id}::uuid) FOR NO KEY UPDATE SKIP LOCKED`;
+            return { requests, compatible: compatible.length, writable: writable.length };
+          }
+          await delay(10);
+        }
+        return { requests, compatible: -1, writable: -1 };
+      });
+      return { gate, results: await gate.requests, states };
+    });
+    expect(states.filter(state => state !== '40001')).toEqual([]);
+    expect(gate.compatible).toBe(2);
+    expect(gate.writable).toBe(0);
+    const expectedStatuses = [201, existing ? 200 : 201];
+    const responses = results.map(result => {
+      if (result.status === 'rejected') throw result.reason;
+      return result.value;
+    });
+    expect(responses.filter(response => response.status === 409).length).toBeLessThanOrEqual(1);
+    for (const [index, response] of responses.entries()) {
+      if (response.status === 409) {
+        expect(states).toContain('40001');
+        expect(response.body.code).toBe('CONCURRENCY_CONFLICT');
+      } else expect(response.status).toBe(expectedStatuses[index]);
+    }
+    const firstReplay = await write(creator, 'post', records, firstBody, firstKey).expect(201);
+    const secondReplay = await secondWrite().expect(expectedStatuses[1]!);
+    if (responses[0]?.status === 201) expect(firstReplay.body).toEqual(responses[0].body);
+    if (responses[1]?.status === expectedStatuses[1]) expect(secondReplay.body).toEqual(responses[1].body);
+    const persisted = await get(first, 'component-project-records').expect(200);
+    expect(persisted.body.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: firstBody.code, version: 1, customerEngineerAssignmentId: secondEngineer.assignment.id }),
+      expect.objectContaining({ code: existing?.code ?? secondBody.code, version: existing ? 2 : 1, ...secondChanges }),
+    ]));
+    expect(await prisma.adminMutation.count({ where: { organizationId: first.org.id, key: { in: [firstKey, secondKey] } } })).toBe(2);
+  }, 15_000);
+
+  it.each(['create', 'update', 'bulk-apply'] as const)('finishes project %s when the assigned engineer force-deletes its operator', async (operation) => {
+    const operator = await fixture();
+    const { user, assignment } = await engineer(operator);
+    const deleter = await lifecycleAdministrator(operator, user);
+    const records = 'component-project-records';
+    const mappings = 'component-project-mappings';
+    const existing = operation === 'create' ? undefined : await project(deleter);
+    const changes = { customerEngineerAssignmentId: assignment.id };
+    const code = existing?.code ?? randomUUID();
+    const projectKey = randomUUID();
+    const deleteKey = randomUUID();
+    const prepareWrite = async () => {
+      if (operation === 'bulk-apply') {
+        const bulk = { selection: [{ id: (await mapping(deleter, existing.id)).id, expectedVersion: 1 }], changes };
+        const { previewToken } = (await write(operator, 'post', `${mappings}/bulk-preview`, bulk).expect(200)).body;
+        return () => write(operator, 'post', `${mappings}/bulk-apply`, { ...bulk, previewToken }, projectKey);
+      }
+      if (existing) return () => write(operator, 'patch', `${records}/${existing.id}`, { expectedVersion: 1, ...changes }, projectKey);
+      return () => write(operator, 'post', records, { code, name: 'Concurrent project', stage: 'NEW_PRODUCT', ...changes }, projectKey);
+    };
+    const submit = await prepareWrite();
+    const remove = () => forceDelete(deleter, operator.user, deleteKey);
+    const { results, states } = await withSqlStates(async (states) => {
+      const requests: PromiseLike<request.Response>[] = [];
+      let results: PromiseSettledResult<request.Response>[];
+      try {
+        await prisma.$transaction(async (transaction) => {
+          await transaction.$queryRaw`SELECT id FROM sessions WHERE id = ${operator.actor.sessionId}::uuid FOR UPDATE`;
+          const [backend] = await transaction.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+          requests.push(submit().then(response => response));
+          const operatorPid = await waitForBlockedQuery(backend!.pid, '%FROM sessions%FOR UPDATE%');
+          requests.push(remove().then(response => response));
+          await waitForBlockedQuery(operatorPid, '%FROM users%ORDER BY id FOR UPDATE%');
+        }, { timeout: 10_000 });
+      } finally {
+        results = await Promise.allSettled(requests);
+      }
+      return { results, states };
+    });
+    expect(states).toEqual([]);
+    const [projectResponse, deleteResponse] = results.map(result => {
+      if (result.status === 'rejected') throw result.reason;
+      return result.value;
+    });
+    expect(projectResponse?.status).toBe(existing ? 200 : 201);
+    expect(deleteResponse?.status).toBe(200);
+    expect((await remove().expect(200)).body).toEqual(deleteResponse?.body);
+    await submit().expect(401);
+    const version = existing ? 2 : 1;
+    const [persisted] = await prisma.$queryRaw<{ id: string; version: number; assignmentId: string }[]>`SELECT id, version, customer_engineer_assignment_id AS "assignmentId"
+      FROM component_project_records WHERE organization_id = ${operator.org.id}::uuid AND code = ${code}`;
+    expect(persisted).toMatchObject({ version, assignmentId: assignment.id });
+    const projectAction = operation === 'bulk-apply' ? 'COMPONENT_PROJECT_BULK_UPDATED' : existing ? 'COMPONENT_PROJECT_UPDATED' : 'COMPONENT_PROJECT_CREATED';
+    expect(await prisma.auditEvent.count({ where: { actorUserId: operator.user.id, action: projectAction, outcome: 'SUCCESS' } })).toBe(1);
+    expect(await prisma.auditEvent.count({ where: { resourceId: operator.user.id, action: 'USER_FORCE_DELETED', outcome: 'SUCCESS' } })).toBe(1);
+    expect(await prisma.adminMutation.count({ where: { organizationId: operator.org.id, key: { in: [projectKey, deleteKey] } } })).toBe(2);
+  }, 20_000);
+
+  it('rejects a fresh engineer assignment after force deletion holds the target lock', async () => {
+    const operator = await fixture();
+    const target = await engineer(operator);
+    const targetSession = await useEngineerSession(operator, target.user);
+    const deleter = await lifecycleAdministrator(operator, (await engineer(operator)).user);
+    const projectKey = randomUUID();
+    const deleteKey = randomUUID();
+    const body = { code: randomUUID(), name: 'Stale engineer assignment', stage: 'NEW_PRODUCT', customerEngineerAssignmentId: target.assignment.id };
+    const submit = () => write(operator, 'post', 'component-project-records', body, projectKey);
+    const { results, states } = await withSqlStates(async (states) => {
+      const requests: PromiseLike<request.Response>[] = [];
+      let results: PromiseSettledResult<request.Response>[];
+      try {
+        await prisma.$transaction(async (transaction) => {
+          await transaction.$queryRaw`SELECT id FROM sessions WHERE id = ${targetSession.actor.sessionId}::uuid FOR UPDATE`;
+          const [backend] = await transaction.$queryRaw<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
+          requests.push(forceDelete(deleter, target.user, deleteKey).then(response => response));
+          const deleterPid = await waitForBlockedQuery(backend!.pid, '%UPDATE%sessions%');
+          requests.push(submit().then(response => response));
+          await waitForBlockedQuery(deleterPid, '%FROM users target%FOR KEY SHARE%');
+        }, { timeout: 10_000 });
+      } finally {
+        results = await Promise.allSettled(requests);
+      }
+      return { results, states };
+    });
+    expect(states).toEqual(['40001']);
+    const [deleted, rejected] = results.map(result => {
+      if (result.status === 'rejected') throw result.reason;
+      return result.value;
+    });
+    expect(deleted?.status).toBe(200);
+    expect(rejected?.status).toBe(409);
+    expect(rejected?.body.code).toBe('CONCURRENCY_CONFLICT');
+    expect((await submit().expect(409)).body.code).toBe('STRUCTURE_REFERENCE_INVALID');
+    expect((await get(operator, 'component-project-records', { exactCode: body.code }).expect(200)).body.total).toBe(0);
+    expect(await prisma.adminMutation.count({ where: { organizationId: operator.org.id, key: projectKey } })).toBe(0);
+    expect(await prisma.auditEvent.count({ where: { actorUserId: operator.user.id, action: 'COMPONENT_PROJECT_CREATED', outcome: 'SUCCESS' } })).toBe(0);
+  }, 20_000);
 
   it('rejects duplicate trimmed codes without uppercasing or guessing a stage, and validates all input', async () => {
     const f = await fixture();

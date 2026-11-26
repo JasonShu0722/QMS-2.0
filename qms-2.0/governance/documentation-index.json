@@ -486,7 +486,7 @@
           },
           {
             "path": "apps/web/src/features/admin/AdminPage.tsx",
-            "sha256": "3f891652527d21000f1cf1e3fe23c8c65e87619b81e851c72a30f3c9a3d8e8a0"
+            "sha256": "20d5d4c9c70e1437eaa6381c5adc8e0d12db2aac9cb950cc129d6eb374f7aaef"
           },
           {
             "path": "apps/web/src/features/admin/AdminPage.targeting.test.tsx",
@@ -514,7 +514,7 @@
           },
           {
             "path": "apps/web/src/features/governance/governance.ts",
-            "sha256": "8b298d7e4236d298114e5094470dee36362aaa2cfc3363010df63cf31bd0febf"
+            "sha256": "23bce6bca41496eedde3dab47516315de4711b70cf53c9db694f04f97c3f95df"
           },
           {
             "path": "apps/web/src/features/governance/PositionRolesDrawer.tsx",
@@ -534,7 +534,7 @@
           },
           {
             "path": "apps/web/src/i18n/Language.tsx",
-            "sha256": "27d70ba1d9b29ad819d61b36b8543921d887ecce06e6ff55f688a5fc4c0666f7"
+            "sha256": "877ee0bfcc81ad008eadaf1810ef9ef6863688ebbbd0b9daac0d06b8e659c833"
           },
           {
             "path": "apps/web/component-project-preview.html",

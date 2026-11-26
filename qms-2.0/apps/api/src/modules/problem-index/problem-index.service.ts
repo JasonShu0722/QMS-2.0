@@ -123,13 +123,30 @@ export class ProblemIndexService {
   async applyWorkflowState(transaction: Prisma.TransactionClient, input: {
     organizationId: string; id: string; expectedVersion: number; expectedInstanceId: string | null;
     instanceId: string; status: 'IN_PROGRESS' | 'PENDING' | 'RESOLVED' | 'CLOSED'; actorUserId: string | null;
-    problemType?: string;
+    problemType?: string; traceId?: string;
   }): Promise<number> {
+    let deletedOwnerId: string | undefined;
+    if (input.status === 'IN_PROGRESS' || input.status === 'PENDING') {
+      const [owner] = await transaction.$queryRaw<{ id: string; deleted_at: Date | null }[]>`
+        SELECT owner.id, owner.deleted_at FROM problem_indexes problem JOIN users owner ON owner.id = problem.owner_id
+        WHERE problem.id = ${input.id}::uuid AND problem.organization_id = ${input.organizationId}::uuid
+          AND problem.version = ${input.expectedVersion} AND problem.archived_at IS NULL
+          AND (problem.closed_at IS NOT NULL OR problem.status NOT IN ('OPEN', 'IN_PROGRESS', 'PENDING'))
+        FOR KEY SHARE OF owner`;
+      if (owner?.deleted_at) deletedOwnerId = owner.id;
+    }
     const updated = await transaction.problemIndex.updateMany({
       where: { id: input.id, organizationId: input.organizationId, version: input.expectedVersion, workflowInstanceId: input.expectedInstanceId, archivedAt: null },
-      data: { workflowInstanceId: input.instanceId, status: input.status, ...(input.problemType ? { problemType: input.problemType } : {}), closedAt: input.status === 'CLOSED' ? new Date() : null, version: { increment: 1 }, updatedById: input.actorUserId },
+      data: { workflowInstanceId: input.instanceId, status: input.status, ...(input.problemType ? { problemType: input.problemType } : {}),
+        ...(deletedOwnerId ? { ownerId: null } : {}), closedAt: input.status === 'CLOSED' ? new Date() : null,
+        version: { increment: 1 }, updatedById: input.actorUserId },
     });
     if (updated.count !== 1) throw new HttpException({ code: 'CONCURRENCY_CONFLICT' }, 409);
+    if (deletedOwnerId) {
+      await this.audit.record({ organizationId: input.organizationId, actorUserId: input.actorUserId,
+        action: 'PROBLEM_INDEX_UPDATED', resourceType: 'ProblemIndex', resourceId: input.id, outcome: 'SUCCESS', traceId: input.traceId ?? randomUUID(),
+        metadata: { targetUserId: deletedOwnerId, reasonCode: 'WORKFLOW_HISTORICAL_OWNER_DELETED', resourceVersion: input.expectedVersion + 1 } }, transaction);
+    }
     return input.expectedVersion + 1;
   }
 

@@ -8,7 +8,7 @@ import { assertRecentAuthentication } from '../../common/security/session-securi
 import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import { effectivePositionAssignmentWhere, roleGrantSources } from '../../common/security/effective-role-grants.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
-import type { DeleteAdminUserDto } from './admin-user-lifecycle.dto.js';
+import type { DeleteAdminUserDto, DeleteInternalAdminUserDto } from './admin-user-lifecycle.dto.js';
 import { ESignatureService } from '../e-signature/e-signature.service.js';
 
 @Injectable()
@@ -19,14 +19,15 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
     registry.register(this);
   }
 
-  deleteUser(actor: AdminActor, userId: string, dto: DeleteAdminUserDto, organizationId: string, traceId: string, key?: string) {
+  deleteUser(actor: AdminActor, userId: string, dto: DeleteInternalAdminUserDto, organizationId: string, traceId: string, key?: string) {
     if (!Number.isInteger(dto.expectedSecurityVersion) || dto.expectedSecurityVersion < 1 || dto.expectedSecurityVersion > 2147483647) throw new BadRequestException('Invalid security version');
+    const action = dto.mode === 'STANDARD' ? 'USER_DELETED' : 'USER_FORCE_DELETED';
     return this.mutations.run({
-      actor, organizationId: actor.organizationId, key, action: 'USER_FORCE_DELETED',
+      actor, organizationId: actor.organizationId, key, action,
       payload: { userId, organizationId, expectedSecurityVersion: dto.expectedSecurityVersion },
       permission: ['account:users:read', 'account:users:delete'], traceId, isolationLevel: 'ReadCommitted',
     }, async tx => {
-      return this.deleteIdentity(tx, actor, userId, dto, organizationId, traceId);
+      return this.deleteIdentity(tx, actor, userId, dto, organizationId, traceId, action);
     }, async tx => {
       // AdminMutation locks actor first; share the organization/department lock before target locks, mapping deadlocks to 409.
       await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('administrative-lifecycle', 0))::text`;
@@ -67,13 +68,15 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
   async deleteSupplierAccount(tx: AdminTransaction, actor: AdminActor, userId: string, organizationId: string, dto: DeleteAdminUserDto, traceId: string) {
     if (!Number.isInteger(dto.expectedSecurityVersion) || dto.expectedSecurityVersion < 1 || dto.expectedSecurityVersion > 2147483647) throw new BadRequestException("Invalid security version");
     await this.authorizeSupplierAccountDeletion(tx, actor, userId, organizationId);
-    return this.deleteIdentity(tx, actor, userId, dto, organizationId, traceId);
+    return this.deleteIdentity(tx, actor, userId, dto, organizationId, traceId, 'USER_FORCE_DELETED');
   }
 
-  private async deleteIdentity(tx: AdminTransaction, actor: AdminActor, userId: string, dto: DeleteAdminUserDto, organizationId: string, traceId: string) {
+  private async deleteIdentity(tx: AdminTransaction, actor: AdminActor, userId: string, dto: DeleteAdminUserDto, organizationId: string, traceId: string,
+    action: 'USER_DELETED' | 'USER_FORCE_DELETED') {
     const target = await tx.user.findFirst({ where: { id: userId, organizationId, deletedAt: null } });
     if (!target) adminError('ADMIN_USER_NOT_FOUND', 404);
     if (target.securityVersion !== dto.expectedSecurityVersion) adminError('CONCURRENCY_CONFLICT', 409);
+    if (action === 'USER_DELETED') await this.registry.assertNoCurrentUserReferences(tx, userId);
     const impact: AdministrativeLifecycleImpact = {
       kind: 'USER', entityId: userId, organizationId, receiptOrganizationId: actor.organizationId,
       userIds: [userId], departmentIds: [], positionIds: [], organizationIds: [],
@@ -85,7 +88,7 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
       assignmentIds: grant.sources.flatMap(source => source.kind === 'POSITION' ? [source.assignmentId] : []),
       positionIds: grant.sources.flatMap(source => source.kind === 'POSITION' ? [source.positionId] : []),
     }));
-    const effects = await this.registry.apply(tx, actor, impact);
+    const effects = action === 'USER_DELETED' ? [await this.apply(tx, actor, impact)] : await this.registry.apply(tx, actor, impact);
     const originalIdentity = JSON.stringify({
       id: target.id, organizationId: target.organizationId, username: target.username, email: target.email,
       fullName: target.fullName, phone: target.phone, accountType: target.accountType, status: target.status, authorizationSources,
@@ -99,7 +102,7 @@ export class AdminUserLifecycleService implements AdministrativeLifecycleEffect 
       passwordHash: randomBytes(48).toString('base64url'), mustChangePassword: false,
       status: 'DISABLED', deletedAt: new Date(), configurationRequired: false,
     } });
-    await this.audit.record({ actorUserId: actor.id, organizationId: actor.organizationId, action: 'USER_FORCE_DELETED',
+    await this.audit.record({ actorUserId: actor.id, organizationId: actor.organizationId, action,
       resourceType: 'User', resourceId: userId, outcome: 'SUCCESS', traceId,
       metadata: { targetUserId: userId, organizationId, status: 'DELETED' } }, tx);
     return { userId, deleted: true as const, effects };

@@ -7,7 +7,7 @@ import { PrismaService } from '../../database/prisma.service.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { OrganizationService } from '../organization/organization.service.js';
-import { readComponentEngineerAssignment } from './component-project.service.js';
+import { lockComponentEngineerUsers, readComponentEngineerAssignment } from './component-project.service.js';
 import type { ComponentProjectRecordDto, ComponentProjectMappingDto } from './component-project.dto.js';
 import { ComponentProjectBulkApplyDto, ComponentProjectBulkPreviewDto, type ComponentProjectBulkChangesDto, type ComponentProjectBulkPreviewResultDto, type ComponentProjectBulkApplyResultDto } from './component-project-bulk.dto.js';
 
@@ -79,7 +79,7 @@ export class ComponentProjectBulkService {
 
   async apply(actor: AdminActor, organizationId: string, input: ComponentProjectBulkApplyDto, traceId: string, key?: string): Promise<ComponentProjectBulkApplyResultDto> {
     const dto = await this.input(ComponentProjectBulkApplyDto, input, organizationId);
-    return this.mutations.run({ actor, organizationId, permission: 'component-project:manage', authentication: 'active', action: 'COMPONENT_PROJECT_BULK_UPDATED',
+    return this.mutations.run({ actor, organizationId, permission: 'component-project:manage', authentication: 'active', activeActorUserLock: 'SHARE', action: 'COMPONENT_PROJECT_BULK_UPDATED',
       payload: { organizationId, selection: byId(dto.selection), changes: dto.changes, previewToken: dto.previewToken }, traceId, key, isolationLevel: 'Serializable' }, async (transaction) => {
       try {
         const snapshot = await this.snapshot(transaction, organizationId, dto, true);
@@ -141,6 +141,8 @@ export class ComponentProjectBulkService {
   }
 
   private async snapshot(transaction: AdminTransaction, organizationId: string, dto: ComponentProjectBulkPreviewDto, lock: boolean) {
+    const assignmentIds = new Set([dto.changes.customerEngineerAssignmentId, dto.changes.projectEngineerAssignmentId]);
+    if (lock) await lockComponentEngineerUsers(transaction, organizationId, [...assignmentIds]);
     const ids = dto.selection.map(({ id }) => id);
     const selected = await transaction.$queryRaw<Mapping[]>(Prisma.sql`SELECT ${mappingColumns} FROM component_project_mappings
       WHERE organization_id = ${organizationId}::uuid AND id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))}) ORDER BY id`);
@@ -157,7 +159,7 @@ export class ComponentProjectBulkService {
     const members = allMappings.filter(({ projectRecordId }) => projectRecordId !== null);
     const preview = buildComponentProjectBulkPreview(organizationId, dto, mappings, projects, members);
     const now = new Date();
-    for (const id of new Set([dto.changes.customerEngineerAssignmentId, dto.changes.projectEngineerAssignmentId])) {
+    for (const id of assignmentIds) {
       if (id && !(await readComponentEngineerAssignment(transaction, organizationId, id, now)).valid) adminError('STRUCTURE_REFERENCE_INVALID', 409);
     }
     return { mappings, projects, members, preview };

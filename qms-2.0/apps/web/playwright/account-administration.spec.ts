@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { createRequire } from 'node:module';
+import ExcelJS from 'exceljs';
 import { test as base, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import type { components } from '@qms/contracts';
 import { fillSecret } from './secret-input';
@@ -8,7 +10,8 @@ import { changePositionPermissions, choosePosition, confirmPositionPreview, crea
 const baseURL = process.env.QMS_ACCEPTANCE_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL;
 const internalPassword = process.env.QMS_SEED_INTERNAL_PASSWORD;
 const supplierPassword = process.env.QMS_SEED_SUPPLIER_PASSWORD;
-if (!baseURL || !internalPassword || !supplierPassword || !process.env.DATABASE_URL) throw new Error('ABC acceptance requires a real gateway, disposable PostgreSQL DATABASE_URL and both seed passwords; skipping is forbidden.');
+const databaseURL = process.env.DATABASE_URL;
+if (!baseURL || !internalPassword || !supplierPassword || !databaseURL) throw new Error('ABC acceptance requires a real gateway, disposable PostgreSQL DATABASE_URL and both seed passwords; skipping is forbidden.');
 
 type Schema = components['schemas'];
 type User = Schema['AdminUserDto'];
@@ -52,7 +55,22 @@ async function settings(page: Page) {
   return dialog;
 }
 
-const test = base.extend<{ admin: { client: APIRequestContext; organization: Organization; users: User[]; grants: PositionGrant[]; createUser: () => Promise<{ user: User; secret: string; grant: PositionGrant }> } }>({
+const test = base.extend<{ platformAdmin: true; admin: { client: APIRequestContext; organization: Organization; users: User[]; grants: PositionGrant[]; createUser: () => Promise<{ user: User; secret: string; grant: PositionGrant }> } }>({
+  platformAdmin: async ({}, use) => {
+    const requireApi = createRequire(new URL('../../api/package.json', import.meta.url));
+    const { PrismaPg } = requireApi('@prisma/adapter-pg');
+    const { PrismaClient } = await import('../../api/dist/generated/prisma/client.js');
+    const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseURL }) });
+    try {
+      const assignment = await prisma.userRole.findFirstOrThrow({ where: { user: { username: 'local.internal', organization: { code: 'LOCAL-INTERNAL' } }, role: { code: 'LOCAL_MEMBER' } } });
+      const marker = await prisma.permission.findUniqueOrThrow({ where: { code: 'platform:admin' } });
+      const grant = { roleId: assignment.roleId, permissionId: marker.id };
+      const existing = await prisma.rolePermission.findUnique({ where: { roleId_permissionId: grant } });
+      if (!existing) await prisma.rolePermission.create({ data: grant });
+      try { await use(true); }
+      finally { if (!existing) await prisma.rolePermission.deleteMany({ where: grant }); }
+    } finally { await prisma.$disconnect(); }
+  },
   admin: async ({ playwright }, use) => {
     const client = await playwright.request.newContext({ baseURL });
     expect((await apiLogin(client, 'local.internal', internalPassword!)).status()).toBe(200);
@@ -74,6 +92,9 @@ const test = base.extend<{ admin: { client: APIRequestContext; organization: Org
     try { await use({ client, organization: organization!, users, grants, createUser }); }
     finally {
       for (const user of users) {
+        if (user.status === 'DISABLED') {
+          expect((await write(client, scope(`users/${user.id}`, user.organizationId), 'PATCH', { status: 'ACTIVE' })).status()).toBe(200);
+        }
         await replacePositionAppointments(client, user.organizationId, user.id, []);
         expect((await write(client, scope(`users/${user.id}`, user.organizationId), 'PATCH', { status: 'DISABLED' })).status()).toBe(200);
       }
@@ -178,7 +199,7 @@ test('A supplier profile restores email and cannot enter internal administration
 
 test('B UI creates, searches, edits, disables and re-enables a user', async ({ page, browser, admin }) => {
   await uiLogin(page, 'local.internal', internalPassword!);
-  await page.goto('/app/admin');
+  await page.goto(`/console/users?organizationId=${admin.organization.id}`);
   const grant = await createPositionGrant(admin.client, admin.organization.id, { name: unique('abc_ui_empty'), permissionCodes: [] });
   admin.grants.push(grant);
   await page.getByRole('button', { name: '创建用户', exact: true }).click();
@@ -200,10 +221,11 @@ test('B UI creates, searches, edits, disables and re-enables a user', async ({ p
   expect(storage.includes(secret)).toBe(false);
   await expect(dialog).toHaveCount(0);
   const row = await searchUser(page, username);
-  await row.getByRole('button', { name: /^编\s*辑$/ }).click();
-  await page.getByRole('dialog').getByLabel('邮箱').fill(`${username}.edited@example.test`);
+  await row.getByRole('button', { name: '管理用户', exact: true }).click();
+  const management = page.getByRole('dialog', { name: '管理用户', exact: true });
+  await management.getByLabel('邮箱').fill(`${username}.edited@example.test`);
   const patched = page.waitForResponse((response) => response.url().includes(`/users/${user.id}?`) && response.request().method() === 'PATCH');
-  await page.getByRole('button', { name: '保存用户' }).click();
+  await management.getByRole('button', { name: '保存用户' }).click();
   const update = await patched;
   expect(update.status()).toBe(200);
   expect(update.request().postDataJSON()).toEqual({ email: `${username}.edited@example.test`, expectedProfileVersion: user.profileVersion });
@@ -212,14 +234,118 @@ test('B UI creates, searches, edits, disables and re-enables a user', async ({ p
   const loginProbe = await browser.newContext({ baseURL });
   try {
     expect((await apiLogin(session.request, username, secret)).status()).toBe(200);
-    await row.getByRole('button', { name: /^停\s*用$/ }).click();
+    await row.getByRole('button', { name: '管理用户', exact: true }).click();
+    await management.getByRole('tab', { name: '状态与删除', exact: true }).click();
+    await management.getByRole('button', { name: /^停\s*用$/ }).click();
     await expect(page.getByText('用户已停用')).toBeVisible();
     expect((await session.request.get('/api/v1/auth/session')).status()).toBe(401);
     expect((await apiLogin(loginProbe.request, username, secret)).status()).toBe(401);
-    await row.getByRole('button', { name: /^启\s*用$/ }).click();
+    await management.getByRole('button', { name: /^启\s*用$/ }).click();
     await expect(page.getByText('用户已启用')).toBeVisible();
     expect((await apiLogin(loginProbe.request, username, secret)).status()).toBe(200);
   } finally { await session.close(); await loginProbe.close(); }
+});
+
+test('B previews five-column creation and grants an eligible account access after reconfiguration', async ({ page, browser, platformAdmin, admin }) => {
+  expect(platformAdmin).toBe(true);
+  await uiLogin(page, 'local.internal', internalPassword!);
+  await page.goto(`/console/users?organizationId=${admin.organization.id}`);
+  const username = unique('batch_valid');
+  const invalidUsername = unique('batch_invalid');
+  const fullName = `浏览器验收 · ${username}`;
+  const secret = password();
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('账号清单');
+  sheet.addRows([
+    ['用户名', '姓名', '账号类型', '主组织', '密码'],
+    [username, fullName, '内部账号', admin.organization.code, secret],
+    [invalidUsername, '主组织缺失', '内部账号', '', secret],
+  ]);
+  await page.getByRole('button', { name: '批量创建账号', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: '批量创建账号' });
+  const preview = page.waitForResponse(response => response.url().includes('/api/v1/admin/users/batch/preview') && response.request().method() === 'POST');
+  await dialog.getByLabel('账号清单文件').setInputFiles({ name: 'batch-accounts.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(await workbook.xlsx.writeBuffer()) });
+  expect((await preview).ok()).toBe(true);
+  const ready = dialog.getByRole('row').filter({ hasText: username });
+  const skipped = dialog.getByRole('row').filter({ hasText: invalidUsername });
+  await expect(ready.getByText('可创建')).toBeVisible();
+  await expect(skipped.getByText('待跳过')).toBeVisible();
+  expect((await dialog.innerText()).includes(secret)).toBe(false);
+  const confirmation = page.waitForResponse(response => response.url().includes('/api/v1/admin/users/batch/confirm') && response.request().method() === 'POST');
+  await dialog.getByRole('button', { name: '创建账号', exact: true }).click();
+  const response = await confirmation;
+  expect(response.ok()).toBe(true);
+  const result = await response.json() as Schema['AdminUserBatchConfirmResultDto'];
+  expect(result.rows.map(row => [row.username, row.status])).toEqual([[username, 'SUCCESS']]);
+  const userId = result.rows[0]!.userId;
+  expect(userId).toBeTruthy();
+  expect(JSON.stringify(result).includes(secret)).toBe(false);
+  await expect(ready.getByText('待配置')).toBeVisible();
+  await expect(skipped.getByText('跳过', { exact: true })).toBeVisible();
+  await dialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('button', { name: '待配置用户', exact: true }).click();
+  await expect(page).toHaveURL(/\/console\/reconfiguration\?[^#]*kind=USER/);
+  const pending = page.getByRole('region', { name: '待配置管理', exact: true });
+  await expect(pending.getByRole('combobox', { name: '对象类型' })).toBeVisible();
+  await pending.getByRole('button', { name: `配置 · ${fullName}`, exact: true }).click();
+  const editor = pending.getByRole('region', { name: `配置 · ${fullName}`, exact: true });
+  const reconfigured = page.waitForResponse(entry => new URL(entry.url()).pathname.startsWith('/api/v1/admin/reconfiguration/USER/') && entry.request().method() === 'POST');
+  await editor.getByRole('button', { name: '确认补配', exact: true }).click();
+  const reconfiguration = await reconfigured;
+  expect(reconfiguration.ok()).toBe(true);
+  expect(await reconfiguration.json()).toMatchObject({ kind: 'USER', configurationRequired: false, status: 'DISABLED' });
+  const createdUser = await positionRead<User>(admin.client, scope(`users/${userId}`, admin.organization.id));
+  admin.users.push(createdUser);
+  await expect(pending.getByRole('button', { name: `配置 · ${fullName}`, exact: true })).toHaveCount(0);
+  await page.goto(`/console/users?organizationId=${admin.organization.id}`);
+  const reconfiguredUser = await searchUser(page, username);
+  await expect(reconfiguredUser.getByRole('cell', { name: '停用', exact: true })).toBeVisible();
+  const grant = await createPositionGrant(admin.client, admin.organization.id, { name: unique('abc_batch_access'), permissionCodes: ['account:users:read'] });
+  admin.grants.push(grant);
+  await reconfiguredUser.getByRole('checkbox', { name: username, exact: true }).check();
+  await page.getByRole('button', { name: '批量配置任职', exact: true }).click();
+  const bulk = page.getByRole('dialog', { name: '批量配置任职', exact: true });
+  await choosePosition(page, bulk, grant.position);
+  const appendPath = `/api/v1/organizations/${admin.organization.id}/users/${userId}/positions`;
+  const appended = page.waitForResponse(entry => new URL(entry.url()).pathname === appendPath && entry.request().method() === 'POST');
+  await bulk.getByRole('button', { name: '确认追加任职', exact: true }).click();
+  const assignment = await appended;
+  expect(assignment.ok()).toBe(true);
+  expect((await assignment.json() as Schema['UserPositionDto'][]).map(item => item.positionId)).toContain(grant.position.id);
+  await expect(bulk.getByText(`${username}：任职配置已处理`)).toBeVisible();
+  await bulk.getByRole('button', { name: '关闭', exact: true }).filter({ hasText: /^关\s*闭$/ }).click();
+  await expect(bulk).toHaveCount(0);
+  await expect(reconfiguredUser.getByText(grant.position.name, { exact: false })).toBeVisible();
+  await expect(reconfiguredUser.getByRole('cell', { name: '停用', exact: true })).toBeVisible();
+  await reconfiguredUser.getByRole('button', { name: '管理用户', exact: true }).click();
+  const management = page.getByRole('dialog', { name: '管理用户', exact: true });
+  await management.getByRole('tab', { name: '状态与删除', exact: true }).click();
+  const enabled = page.waitForResponse(entry => new URL(entry.url()).pathname === `/api/v1/admin/users/${userId}` && entry.request().method() === 'PATCH');
+  await management.getByRole('button', { name: /^启\s*用$/ }).click();
+  const activation = await enabled;
+  expect(activation.ok()).toBe(true);
+  createdUser.status = (await activation.json() as User).status;
+  await expect(page.getByText('用户已启用')).toBeVisible();
+  const actor = await browser.newContext({ baseURL });
+  try {
+    const userPage = await actor.newPage();
+    await uiLogin(userPage, username, secret);
+    await userPage.goto(`/console/users?organizationId=${admin.organization.id}`);
+    await searchUser(userPage, username);
+    await expect(userPage.getByRole('button', { name: '批量创建账号', exact: true })).toHaveCount(0);
+  } finally { await actor.close(); }
+});
+
+test('B read-only administrator cannot enter batch creation or pending users', async ({ page, admin }) => {
+  const fixture = await admin.createUser();
+  await changePositionPermissions(admin.client, admin.organization.id, fixture.grant.position.id, ['account:users:read']);
+  await uiLogin(page, fixture.user.username, fixture.secret);
+  await page.goto(`/console/users?organizationId=${admin.organization.id}`);
+  await searchUser(page, fixture.user.username);
+  await expect(page.getByRole('button', { name: '批量创建账号', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '待配置用户', exact: true })).toHaveCount(0);
+  const denied = await write(page.request, scope('users/batch/preview', admin.organization.id), 'POST', { rows: [] });
+  expect(denied.status()).toBe(403);
 });
 
 test('C position permissions and appointments grant access while all six legacy writes stay frozen', async ({ page, browser, admin }) => {

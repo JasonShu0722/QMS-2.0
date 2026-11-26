@@ -43,6 +43,22 @@ it('keeps the closure action unavailable before independent verification', async
   expect(screen.queryByRole('button', { name: '关闭整改' })).not.toBeInTheDocument();
 });
 
+it('offers replacement only for the assigned finding with a deleted responsible user', async () => {
+  const affected = { ...openNc, status: 'ASSIGNED', assignee_user_id: 'deleted-handler', assignee_deleted: true, version: 2 };
+  const ordinary = { ...affected, id: 'nc-2', assignee_user_id: 'active-handler', assignee_deleted: false };
+  vi.mocked(apiRequest).mockImplementation(async path => String(path).endsWith('/ncs') ? [affected, ordinary] : { organizationId: 'org-1', permissions: ['audit-management:write'] });
+  render(<AuditNcClosurePanel />);
+  fireEvent.change(screen.getByLabelText('整改审核执行 ID'), { target: { value: 'execution-1' } });
+  fireEvent.click(screen.getByRole('button', { name: '查看整改记录' }));
+  fireEvent.click(await screen.findByRole('button', { name: '重新分派整改' }));
+  expect(screen.getByLabelText('整改责任人用户 ID')).toHaveValue('');
+  fireEvent.change(screen.getByLabelText('整改责任人用户 ID'), { target: { value: 'replacement-handler' } });
+  fireEvent.click(screen.getByRole('button', { name: '确认提交' }));
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/audit-management/ncs/nc-1/assign', expect.objectContaining({
+    method: 'PUT', body: JSON.stringify({ expectedVersion: 2, assigneeUserId: 'replacement-handler' }),
+  })));
+});
+
 it.each(['response', 'verify'] as const)('keeps the %s draft visible after 409 until refresh is explicitly confirmed', async (action) => {
   const item = { ...openNc, status: action === 'response' ? 'ASSIGNED' : 'RESPONDED', assignee_user_id: action === 'response' ? 'reviewer-1' : 'handler-1', version: 3 };
   vi.mocked(apiRequest).mockImplementation(async (path, init) => {

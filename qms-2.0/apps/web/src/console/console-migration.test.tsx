@@ -91,6 +91,28 @@ it('dispatches the real user component only after directory and matching managem
   expect(useWorkTabsStore.getState().tabs).toEqual([]);
 });
 
+it('routes the user list shortcut to the authorized home-scope pending users queue', async () => {
+  view();
+  await screen.findByTestId('users');
+  expect(mocks.props.users?.onOpenPendingUsers).toBeTypeOf('function');
+  act(() => (mocks.props.users?.onOpenPendingUsers as () => void)());
+  await screen.findByTestId('reconfiguration');
+  expect(mocks.props.reconfiguration).toMatchObject({ initialKind: 'USER', organization: { id: homeId } });
+});
+
+it('hides the pending users shortcut when the home-scope module is unavailable', async () => {
+  mocks.context.modules = mocks.context.modules.filter(module => module.key !== 'reconfiguration');
+  view();
+  await screen.findByTestId('users');
+  expect(mocks.props.users?.onOpenPendingUsers).toBeUndefined();
+});
+
+it('rejects a pending kind on a different management route', async () => {
+  view('/console/users?kind=USER');
+  expect(await screen.findByText(/管理定位无效/)).toBeVisible();
+  expect(screen.queryByTestId('users')).not.toBeInTheDocument();
+});
+
 it.each([
   ['organizations', 'organizations'], ['master-data/suppliers', 'suppliers'], ['master-data/customers', 'customers'], ['master-data/materials', 'materials'], ['master-data/component-projects', 'component-projects'], ['master-data/projects', 'projects'], ['master-data/operations', 'operations'], ['configuration', 'configuration'], ['ai-connections', 'ai-connections'], ['ai-applications', 'ai-applications'], ['audit-log', 'audit-log'], ['outbox', 'outbox'], ['reconfiguration', 'reconfiguration'], ['problem-reconfiguration', 'problem-reconfiguration'], ['supplier-accounts', 'supplier-accounts'],
 ])('routes %s to its standalone existing domain component', async (path, name) => {

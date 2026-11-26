@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Select, Space, Tag, Typography } from 'antd';
 import { safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
@@ -9,9 +9,11 @@ type Props = {
   preview?: AuthorizationPreview; onPreviewChange: (preview: AuthorizationPreview | undefined) => void;
   targetUserId?: string; disabled?: boolean; allowEmpty?: boolean; directory?: PositionDirectory;
   previewPositionIds?: string[];
+  previewAction?: ReactNode;
+  permissionChanges?: ReactNode;
 };
 
-export function PositionSelector({ organizationId, value, onChange, preview, onPreviewChange, targetUserId, disabled = false, allowEmpty = false, directory: suppliedDirectory, previewPositionIds = value }: Props) {
+export function PositionSelector({ organizationId, value, onChange, preview, onPreviewChange, targetUserId, disabled = false, allowEmpty = false, directory: suppliedDirectory, previewPositionIds = value, previewAction, permissionChanges }: Props) {
   const { t } = useLanguage();
   const [directory, setDirectory] = useState<PositionDirectory>();
   const [loading, setLoading] = useState(false);
@@ -44,22 +46,29 @@ export function PositionSelector({ organizationId, value, onChange, preview, onP
     } catch (cause) { if (alive.current && request === generation.current && currentIdentity.current === identity) setError(safeAccountError(cause)); }
     finally { if (alive.current && request === generation.current && currentIdentity.current === identity) setPreviewBusy(false); }
   }
+  const permissions = preview && <>
+    {preview.positions.flatMap(position => position.historicalSources.map(source => <Typography.Paragraph key={`${position.id}:${source.roleId}`}>{t('历史兼容授权')} · {source.name} · {source.permissionCodes.join(', ') || t('无系统权限')}</Typography.Paragraph>))}
+    <Typography.Paragraph>{t('有效权限')}：{preview.effectivePermissionCodes.map(code => <Tag key={code}>{code}</Tag>)}{!preview.effectivePermissionCodes.length && t('无系统权限')}</Typography.Paragraph>
+    {!!preview.retainedSources?.length && <><Typography.Text strong>{t('仍保留的历史授权来源')}</Typography.Text>{preview.retainedSources.map(source => <Typography.Paragraph key={source.roleId}>{source.name} · {source.permissionCodes.join(', ') || t('无系统权限')}</Typography.Paragraph>)}</>}
+    {permissionChanges}
+  </>;
   return <Space orientation="vertical" className="admin-form-stack">
     <Select aria-label={t('任职岗位')} mode="multiple" maxCount={100} value={value} loading={loading} disabled={disabled || loading || !directory} optionFilterProp="label"
       options={directory && [{ label: t('组织直属'), options: directory.positions.filter(position => position.departmentId === null).map(position => ({ value: position.id, label: `${position.name} · ${position.code}`, disabled: position.status !== 'ACTIVE' })) }, ...directory.departments.map(department => ({ label: department.name, options: directory.positions.filter(position => position.departmentId === department.id).map(position => ({ value: position.id, label: `${position.name} · ${position.code}`, disabled: position.status !== 'ACTIVE' || department.status !== 'ACTIVE' })) }))]}
       onChange={selected => { generation.current++; onPreviewChange(undefined); onChange(selected); }} />
     {!loading && directory && !directory.positions.some(position => position.status === 'ACTIVE' && (position.departmentId === null || directory.departments.some(department => department.id === position.departmentId && department.status === 'ACTIVE'))) && <Alert showIcon type="warning" title={t('当前组织没有可用岗位')} />}
     {error && <Alert showIcon type="error" title={t(error)} action={!directory ? <Button onClick={() => setRevision(value => value + 1)}>{t('重试')}</Button> : undefined} />}
-    <Button disabled={disabled || loading || !directory || (!allowEmpty && !previewPositionIds.length)} loading={previewBusy} onClick={() => void loadPreview()}>{t('预览授权')}</Button>
+    <div className="admin-position-preview-actions">
+      <Button disabled={disabled || loading || !directory || (!allowEmpty && !previewPositionIds.length)} loading={previewBusy} onClick={() => void loadPreview()}>{t('预览授权')}</Button>
+      {previewAction}
+    </div>
     {preview && <section aria-label={t('权限预览')}>
       {preview.positions.map(position => <div key={position.id}>
         <Typography.Text strong>{position.department?.name ?? t('组织直属')} · {position.name}</Typography.Text>
         {!position.permissionCodes.length && !position.historicalSources.some(source => source.permissionCodes.length) && <Alert showIcon type="warning" title={t('该岗位未配置系统权限')} />}
-        {position.historicalSources.map(source => <Typography.Paragraph key={source.roleId}>{t('历史兼容授权')} · {source.name} · {source.permissionCodes.join(', ') || t('无系统权限')}</Typography.Paragraph>)}
       </div>)}
-      <Typography.Paragraph>{t('有效权限')}：{preview.effectivePermissionCodes.map(code => <Tag key={code}>{code}</Tag>)}{!preview.effectivePermissionCodes.length && t('无系统权限')}</Typography.Paragraph>
       <Typography.Paragraph>{t('MFA 要求')}：{t(preview.effectiveMfaRequired ? '需要 MFA' : '不要求 MFA')}</Typography.Paragraph>
-      {!!preview.retainedSources?.length && <><Typography.Text strong>{t('仍保留的历史授权来源')}</Typography.Text>{preview.retainedSources.map(source => <Typography.Paragraph key={source.roleId}>{source.name} · {source.permissionCodes.join(', ') || t('无系统权限')}</Typography.Paragraph>)}</>}
+      {previewAction ? <details key={preview.authorizationBaseline}><summary>{t('权限明细')}</summary>{permissions}</details> : permissions}
     </section>}
   </Space>;
 }

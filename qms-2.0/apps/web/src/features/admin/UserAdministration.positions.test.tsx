@@ -1,14 +1,11 @@
 import { act, fireEvent, render as testingRender, screen, waitFor, within } from '@testing-library/react';
-import baseUserEvent, { PointerEventsCheckLevel } from '@testing-library/user-event';
 import { ConfigProvider } from 'antd';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { UserAdministration } from './UserAdministration';
-import { openUserManagement } from './user-management-test-helpers';
 import type { AdminOrganization, AdminUser } from './admin';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
-const userEvent = baseUserEvent.setup({ pointerEventsCheck: PointerEventsCheckLevel.Never });
 const render = (children: ReactNode) => testingRender(<ConfigProvider theme={{ token: { motion: false } }}>{children}</ConfigProvider>);
 
 const organization: AdminOrganization = { id: 'org', name: 'Organization', code: 'O', type: 'INTERNAL', permissions: ['account:users:read', 'account:users:create', 'account:roles:read', 'account:roles:assign', 'organization:structure:read', 'organization:positions:assign'] };
@@ -19,6 +16,56 @@ const json = (value: unknown, status = 200) => new Response(JSON.stringify(value
 beforeEach(() => { useWorkTabsStore.getState().reset(); localStorage.clear(); document.documentElement.lang = 'zh-CN'; vi.stubEnv('NODE_ENV', 'development'); });
 afterEach(() => { useWorkTabsStore.getState().reset(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
+async function openDialog(name: string) {
+  const element = await screen.findByLabelText(name, { selector: '[role="dialog"]' });
+  const wrapper = element.closest<HTMLElement>('.ant-modal-wrap')!;
+  await waitFor(() => {
+    expect(wrapper.style.display).not.toBe('none');
+    expect(element.classList.contains('ant-zoom-appear')).toBe(false);
+  }, { container: wrapper });
+  expect(element).toBeVisible();
+  return within(element);
+}
+
+async function openAppointments() {
+  const row = (await screen.findByText(user.username, { selector: 'td' })).closest('tr')!;
+  const manage = within(row).getByText('管理用户', { selector: 'button > span' }).closest('button')!;
+  expect(manage).toHaveAccessibleName('管理用户');
+  expect(manage).toBeVisible();
+  await clickAndSettle(manage);
+  const management = await openDialog('管理用户');
+  const appointments = management.getByText('任职与授权', { selector: '[role="tab"]' });
+  fireEvent.click(appointments);
+  expect(appointments).toHaveAttribute('aria-selected', 'true');
+  return management;
+}
+
+async function openTransfer() {
+  const management = await openAppointments();
+  const transfer = management.getByText(/^调\s*岗$/, { selector: 'button > span' }).closest('button')!;
+  expect(transfer).toHaveAccessibleName(/^调\s*岗$/);
+  expect(transfer).toBeVisible();
+  await clickAndSettle(transfer);
+  return openDialog('alice · 用户任职');
+}
+
+async function clickAndSettle(element: HTMLElement) {
+  await act(async () => {
+    fireEvent.click(element);
+  });
+}
+
+async function choosePosition(dialog: ReturnType<typeof within>, label: string) {
+  const input = dialog.getByLabelText('任职岗位', { selector: 'input[role="combobox"]' });
+  await waitFor(() => expect(input).toBeEnabled(), { container: input });
+  fireEvent.mouseDown(input);
+  const listId = input.getAttribute('aria-controls');
+  const list = document.getElementById(listId ?? '');
+  const popup = list?.closest<HTMLElement>('.ant-select-dropdown');
+  expect(popup).toBeInTheDocument();
+  fireEvent.click(within(popup!).getByText(label, { selector: '.ant-select-item-option-content' }));
+}
+
 it('displays direct appointment summaries and retains both direct and departmental positions in a transfer', async () => {
   const direct = { ...position, id: 'direct', code: 'ADMIN', name: '组织管理员', departmentId: null };
   const assignments = [direct, position].map(item => ({ id: `a-${item.id}`, organizationId: 'org', userId: user.id, positionId: item.id, position: item, startedAt: '2020-01-01T00:00:00Z', endedAt: null }));
@@ -27,24 +74,31 @@ it('displays direct appointment summaries and retains both direct and department
     if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
     if (path.includes('/departments?')) return json([department]);
     if (path.includes('/organizations/org/positions?')) return json([direct, position]);
-    if (path.endsWith('/position-authorization/preview')) return json({ authorizationBaseline: 'direct-transfer', positions: [], effectivePermissionCodes: [], effectiveMfaRequired: false });
+    if (path.endsWith('/position-authorization/preview')) return json({ authorizationBaseline: 'direct-transfer', positions: [], effectivePermissionCodes: ['problem-index:read'], effectiveMfaRequired: false });
     if (path.includes('/users/u1/positions')) { if (init?.method === 'PUT') writes.push(JSON.parse(String(init.body))); return json(assignments); }
     if (path.includes('/users/u1/roles')) return json({ userId: user.id, organizationId: 'org', roles: [], effectiveRoles: [], permissions: [] });
     return json([{ ...user, positions: [{ id: direct.id, code: direct.code, name: direct.name, department: null }] }]);
   }));
-  render(<MemoryRouter><UserAdministration organization={organization} organizations={[organization]} /></MemoryRouter>);
+  await act(async () => {
+    render(<MemoryRouter><UserAdministration organization={organization} organizations={[organization]} /></MemoryRouter>);
+  });
   expect(await screen.findByText('组织直属 · 组织管理员')).toBeVisible();
-  const management = await openUserManagement('任职与授权');
-  const transfer = management.getByText(/^调\s*岗$/, { selector: 'button > span' }).closest('button')!;
-  expect(transfer).toHaveAccessibleName(/^调\s*岗$/);
-  fireEvent.click(transfer);
-  const dialog = within(await screen.findByLabelText('alice · 用户任职', { selector: '[role="dialog"]' }));
+  const dialog = await openTransfer();
+  const save = dialog.getByText('保存任职', { selector: 'button > span' }).closest('button')!;
+  expect(save).toHaveAccessibleName('保存任职');
   const preview = dialog.getByText('预览授权', { selector: 'button > span' }).closest('button')!;
+  expect(save.parentElement).toBe(preview.parentElement);
+  expect(save).toBeDisabled();
   await waitFor(() => expect(preview).toBeEnabled());
-  fireEvent.click(preview);
-  await waitFor(() => expect(dialog.getByText('保存任职', { selector: 'button > span' }).closest('button')).toBeEnabled());
-  fireEvent.click(dialog.getByText('保存任职', { selector: 'button > span' }).closest('button')!);
-  await waitFor(() => expect(writes).toHaveLength(1));
+  await clickAndSettle(preview);
+  expect(save).toBeEnabled();
+  const details = dialog.getByText('权限明细').closest('details')!;
+  expect(details.open).toBe(false);
+  expect(within(details).getByText('problem-index:read', { selector: '.ant-tag' })).not.toBeVisible();
+  fireEvent.click(within(details).getByText('权限明细', { selector: 'summary' }));
+  expect(within(details).getByText('problem-index:read', { selector: '.ant-tag' })).toBeVisible();
+  await clickAndSettle(save);
+  expect(writes).toHaveLength(1);
   expect(writes[0]).toEqual({ positionIds: ['direct', 'p1'], expectedPositionIds: ['direct', 'p1'], authorizationBaseline: 'direct-transfer' });
 });
 
@@ -59,16 +113,14 @@ it('requires an authorization preview and atomically sends positions with the ne
     return json([]);
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await userEvent.click(screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!);
-  const dialog = within(await screen.findByLabelText('创建用户', { selector: '[role="dialog"]' }));
+  fireEvent.click(screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!);
+  const dialog = await openDialog('创建用户');
   const save = dialog.getByText('保存用户', { selector: 'button > span' }).closest('button')!;
   expect(save).toHaveAccessibleName('保存用户');
   expect(save).toBeDisabled();
   fireEvent.change(dialog.getByLabelText('用户名'), { target: { value: 'alice' } });
   fireEvent.change(dialog.getByLabelText('初始密码'), { target: { value: 'Long-password-123!' } });
-  await waitFor(() => expect(dialog.getByLabelText('任职岗位')).toBeEnabled());
-  await userEvent.click(dialog.getByLabelText('任职岗位'));
-  await userEvent.click(await screen.findByText('Quality engineer · QA'));
+  await choosePosition(dialog, 'Quality engineer · QA');
   fireEvent.click(dialog.getByText('预览授权', { selector: 'button > span' }).closest('button')!);
   expect(await dialog.findByText('该岗位未配置系统权限')).toBeVisible();
   fireEvent.click(save);
@@ -84,29 +136,33 @@ it('does not create an unassigned internal account when the administrator lacks 
   }));
   const restricted = { ...organization, permissions: ['account:users:read', 'account:users:create'] };
   render(<UserAdministration organization={restricted} organizations={[restricted]} />);
-  await userEvent.click(screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!);
-  const dialog = within(await screen.findByLabelText('创建用户', { selector: '[role="dialog"]' }));
-  await waitFor(() => expect(dialog.getByText('缺少岗位授权所需权限，无法创建内部账号')).toBeVisible());
+  fireEvent.click(screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!);
+  const dialog = await openDialog('创建用户');
+  const alert = dialog.getByText('缺少岗位授权所需权限，无法创建内部账号');
+  expect(alert.closest('[role="alert"]')).toBeVisible();
   expect(dialog.getByText('保存用户', { selector: 'button > span' }).closest('button')).toBeDisabled();
   expect(writes).toEqual([]);
 });
 
 it('keeps legacy and effective role sources read-only even for a role assignment administrator', async () => {
   const writes: string[] = [];
-  vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
+  const fetch = vi.fn(async (path: string, init: RequestInit) => {
     if (init.method && init.method !== 'GET') writes.push(path);
     if (path.includes('/users/u1/roles')) return json({ userId: 'u1', organizationId: 'org', roles: [], effectiveRoles: [{ id: 'r1', name: 'Legacy', sources: [{ kind: 'DIRECT' }] }], permissions: [] });
     return json(path.includes('/admin/roles') ? [] : [user]);
-  }));
-    const limited = { ...organization, permissions: organization.permissions.filter(code => code !== 'organization:structure:read') };
-    render(<UserAdministration organization={limited} organizations={[limited]} />);
-  const management = await openUserManagement('任职与授权');
+  });
+  vi.stubGlobal('fetch', fetch);
+  const limited = { ...organization, permissions: organization.permissions.filter(code => code !== 'organization:structure:read') };
+  render(<UserAdministration organization={limited} organizations={[limited]} />);
+  const management = await openAppointments();
   expect(management.queryByRole('button', { name: '分配角色' })).not.toBeInTheDocument();
   const sources = management.getByText('查看授权来源', { selector: 'button > span' }).closest('button')!;
   expect(sources).toHaveAccessibleName('查看授权来源');
-  await userEvent.click(sources);
-  const dialog = within(await screen.findByLabelText('alice · 授权来源', { selector: '[role="dialog"]' }));
-  await waitFor(() => expect(dialog.getByText('Legacy')).toBeVisible());
+  await clickAndSettle(sources);
+  const dialog = await openDialog('alice · 授权来源');
+  expect(dialog.getByText('Legacy')).toBeVisible();
+  expect(dialog.getByText('历史直接分配（只读）')).toBeVisible();
+  expect(fetch.mock.calls.map(([path]) => path)).toContain('/api/v1/admin/users/u1/roles?organizationId=org');
   expect(dialog.queryByRole('combobox')).not.toBeInTheDocument();
   expect(dialog.queryByRole('button', { name: '保存角色分配' })).not.toBeInTheDocument();
   expect(writes).toEqual([]);
@@ -122,11 +178,9 @@ it('drops a late authorization preview after leaving the organization', async ()
     return json([]);
   }));
   const view = render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await userEvent.click(screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!);
+  fireEvent.click(screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!);
   const dialog = within(await screen.findByLabelText('创建用户', { selector: '[role="dialog"]' }));
-  await waitFor(() => expect(dialog.getByLabelText('任职岗位')).toBeEnabled());
-  await userEvent.click(dialog.getByLabelText('任职岗位'));
-  await userEvent.click(await screen.findByText('Quality engineer · QA'));
+  await choosePosition(dialog, 'Quality engineer · QA');
   fireEvent.click(dialog.getByText('预览授权', { selector: 'button > span' }).closest('button')!);
   await waitFor(() => expect(finish).toBeDefined());
   const next = { ...organization, id: 'next' };
@@ -151,15 +205,11 @@ it('keeps the account draft after an authorization conflict and requires a fresh
     return json([]);
   }));
   render(<UserAdministration organization={organization} organizations={[organization]} />);
-  await userEvent.click(screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!);
-  const dialogElement = await screen.findByLabelText('创建用户', { selector: '[role="dialog"]' });
-  await waitFor(() => expect(dialogElement).toBeVisible());
-  const dialog = within(dialogElement);
+  fireEvent.click(screen.getByText('创建用户', { selector: 'button > span' }).closest('button')!);
+  const dialog = await openDialog('创建用户');
   fireEvent.change(dialog.getByLabelText('用户名'), { target: { value: 'alice' } });
   fireEvent.change(dialog.getByLabelText('初始密码'), { target: { value: 'Long-password-123!' } });
-  await waitFor(() => expect(dialog.getByLabelText('任职岗位')).toBeEnabled());
-  await userEvent.click(dialog.getByLabelText('任职岗位'));
-  await userEvent.click(await screen.findByText('Quality engineer · QA'));
+  await choosePosition(dialog, 'Quality engineer · QA');
   fireEvent.click(dialog.getByText('预览授权', { selector: 'button > span' }).closest('button')!);
   await dialog.findByLabelText('权限预览', { selector: 'section' });
   await waitFor(() => expect(dialog.getByText('保存用户', { selector: 'button > span' }).closest('button')).toBeEnabled());
@@ -199,35 +249,21 @@ it.each([false, true])('shows historical appointments and saves only the effecti
     listReads++;
     return json([user]);
   }));
-  render(<MemoryRouter><Routes><Route path="/" element={<UserAdministration organization={organization} organizations={[organization]} />} /><Route path="/login" element={<p>Reauthenticate</p>} /></Routes></MemoryRouter>);
-  const accountRow = (await screen.findByText('alice')).closest('tr')!;
-  const manage = within(accountRow).getByText('管理用户', { selector: 'button > span' }).closest('button')!;
-  expect(manage).toHaveAccessibleName('管理用户');
-  fireEvent.click(manage);
-  const managementElement = await screen.findByLabelText('管理用户', { selector: '[role="dialog"]' });
-  await waitFor(() => expect(managementElement).toBeVisible());
-  const management = within(managementElement);
-  const appointments = management.getByText('任职与授权', { selector: '[role="tab"]' });
-  fireEvent.click(appointments);
-  await waitFor(() => expect(appointments).toHaveAttribute('aria-selected', 'true'));
-  const transfer = management.getByText(/^调\s*岗$/, { selector: 'button > span' }).closest('button')!;
-  expect(transfer).toHaveAccessibleName(/^调\s*岗$/);
-  fireEvent.click(transfer);
-  const dialogElement = await screen.findByLabelText('alice · 用户任职', { selector: '[role="dialog"]' });
-  await waitFor(() => expect(dialogElement).toBeVisible());
-  const dialog = within(dialogElement);
-  expect(await dialog.findByText('Former position')).toBeVisible();
-  await waitFor(() => expect(dialog.getByLabelText('任职岗位')).toBeEnabled());
-  await userEvent.click(dialog.getByLabelText('任职岗位'));
-  await userEvent.click(await screen.findByText('Quality lead · QE'));
-  fireEvent.click(dialog.getByText('预览授权', { selector: 'button > span' }).closest('button')!);
-  await dialog.findByLabelText('权限预览', { selector: 'section' });
-  await waitFor(() => expect(dialog.getByText('保存任职', { selector: 'button > span' }).closest('button')).toBeEnabled());
+  await act(async () => {
+    render(<MemoryRouter><Routes><Route path="/" element={<UserAdministration organization={organization} organizations={[organization]} />} /><Route path="/login" element={<p>Reauthenticate</p>} /></Routes></MemoryRouter>);
+  });
+  const dialog = await openTransfer();
+  expect(dialog.getByText('Former position', { selector: 'td' })).toBeVisible();
+  await choosePosition(dialog, 'Quality lead · QE');
+  await clickAndSettle(dialog.getByText('预览授权', { selector: 'button > span' }).closest('button')!);
+  expect(dialog.getByLabelText('权限预览', { selector: 'section' })).toBeInTheDocument();
+  const save = dialog.getByText('保存任职', { selector: 'button > span' }).closest('button')!;
+  expect(save).toBeEnabled();
   expect(previewBody).toEqual({ positionIds: ['p1', 'p2'], targetUserId: 'u1' });
-  fireEvent.click(dialog.getByText('保存任职', { selector: 'button > span' }).closest('button')!);
-  await waitFor(() => expect(write).toEqual({ positionIds: ['p1', 'p2'], expectedPositionIds: ['p1'], authorizationBaseline: 'transfer-baseline' }));
+  await clickAndSettle(save);
+  expect(write).toEqual({ positionIds: ['p1', 'p2'], expectedPositionIds: ['p1'], authorizationBaseline: 'transfer-baseline' });
   if (self) {
-    await waitFor(() => expect(useWorkTabsStore.getState().sessionScope).toBeUndefined());
+    expect(useWorkTabsStore.getState().sessionScope).toBeUndefined();
     expect(screen.getByText('Reauthenticate')).toBeVisible();
     expect(listReads).toBe(1);
   } else expect(useWorkTabsStore.getState().sessionScope).toBe('INTERNAL:org:actor');
