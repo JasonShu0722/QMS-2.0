@@ -284,8 +284,10 @@ async function openIssue() {
   await screen.findByText('PQ-OLD');
   return onIssued;
 }
-async function fillIssue() {
-  const drawer = within(screen.getByText('发起正式内部8D').closest('[role="dialog"]') as HTMLElement);
+function issueDrawer() {
+  return within(screen.getByText('发起正式内部8D', { selector: '.ant-drawer-title' }).closest<HTMLElement>('[role="dialog"]')!);
+}
+async function fillIssue(drawer = issueDrawer()) {
   fireEvent.click(drawer.getByLabelText('非复发'));
   await selectOption('风险等级', '高', drawer);
   await selectOption('责任科室', '制造科', drawer);
@@ -365,6 +367,9 @@ it('requires an explicit recurrence decision even for a source without existing 
   vi.mocked(apiRequest).mockImplementation(async path => path.endsWith('/sources/preview') ? [{ ...preview[0], relatedProblems: [], hasHiddenRelations: false }] : baseResponse(path));
   render(<LanguageProvider><MemoryRouter><ProcessEightDIssueDrawer sources={[defect]} onClose={vi.fn()} onIssued={vi.fn()} onDenied={vi.fn()} /></MemoryRouter></LanguageProvider>);
   expect(await screen.findByLabelText('非复发')).not.toBeChecked();
+  expect(screen.getByText('已选择 1 条来源。')).toBeVisible();
+  expect(screen.queryByRole('region', { name: '已关联问题' })).not.toBeInTheDocument();
+  expect(screen.queryByText('尚无已关联问题')).not.toBeInTheDocument();
 });
 
 it('asks once for recurrence and once for the board when issuing mixed sources', async () => {
@@ -374,21 +379,38 @@ it('asks once for recurrence and once for the board when issuing mixed sources',
     : baseResponse(path));
   const onIssued = vi.fn();
   render(<LanguageProvider><MemoryRouter><UnsavedChangesProvider><ProcessEightDIssueDrawer sources={[{ ...defect, operationSector: 'PCBA' }, assembly]} onClose={vi.fn()} onIssued={onIssued} onDenied={vi.fn()} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider>);
-  await screen.findByText('装配不良');
-  expect(screen.getAllByRole('radio', { name: '非复发' })).toHaveLength(1);
-  await fillIssue();
-  fireEvent.change(screen.getByRole('textbox', { name: '问题标题' }), { target: { value: '两板块缺陷核查' } });
-  fireEvent.click(screen.getByText('确认发起8D'));
-  expect(await screen.findByText(/请选择本次 8D 的板块/)).toBeVisible();
+  const drawer = issueDrawer();
+  const relations = within(await drawer.findByLabelText('已关联问题', { selector: 'section' }));
+  expect(drawer.getByText('已选择 2 条来源。')).toBeVisible();
+  expect(relations.getByRole('link', { name: 'PQ-OLD' })).toBeVisible();
+  expect(relations.queryByText('装配不良')).not.toBeInTheDocument();
+  expect(drawer.getAllByLabelText('非复发', { selector: 'input[type="radio"]' })).toHaveLength(1);
+  await fillIssue(drawer);
+  fireEvent.change(drawer.getByLabelText('问题标题'), { target: { value: '两板块缺陷核查' } });
+  fireEvent.click(drawer.getByText('确认发起8D'));
+  expect(await drawer.findByText(/请选择本次 8D 的板块/)).toBeVisible();
   expect(onIssued).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('radio', { name: '装配' }));
-  fireEvent.click(screen.getByText('确认发起8D'));
+  fireEvent.click(drawer.getByLabelText('装配', { selector: 'input[type="radio"]' }));
+  fireEvent.click(drawer.getByText('确认发起8D'));
   await waitFor(() => expect(onIssued).toHaveBeenCalledTimes(1));
   const call = vi.mocked(apiRequest).mock.calls.find(([path, init]) => path.endsWith('/eight-d') && init?.method === 'POST');
   expect(JSON.parse(String(call?.[1]?.body))).toMatchObject({ issueTitle: '两板块缺陷核查', processBoardCode: '1', sourceConfirmations: [
     { defectId: defect.id, recurrence: 'NOT_RECURRENCE', relatedSetToken: 'opaque-exact-1' },
     { defectId: assembly.id, recurrence: 'NOT_RECURRENCE', relatedSetToken: 'assembly-token' },
   ] });
+});
+
+it('groups all related sources and keeps hidden-only relations private', async () => {
+  const hiddenSource = { ...defect, id: '22222222-2222-4222-8222-222222222222', description: '已选的第二条来源' };
+  vi.mocked(apiRequest).mockImplementation(async path => path.endsWith('/sources/preview')
+    ? [...preview, { defectId: hiddenSource.id, relatedProblems: [], hasHiddenRelations: true, relatedSetToken: 'hidden-token' }]
+    : baseResponse(path));
+  render(<LanguageProvider><MemoryRouter><ProcessEightDIssueDrawer sources={[defect, hiddenSource]} onClose={vi.fn()} onIssued={vi.fn()} onDenied={vi.fn()} /></MemoryRouter></LanguageProvider>);
+  const relations = within(await screen.findByRole('region', { name: '已关联问题' }));
+  expect(relations.getByText('2 条来源已有问题关联')).toBeVisible();
+  expect(relations.getByText('已选的第二条来源')).toBeVisible();
+  expect(relations.getAllByRole('link')).toHaveLength(1);
+  expect(relations.getAllByText('部分关联问题无权查看。')).toHaveLength(2);
 });
 
 it('revalidates the exact related-set token before POST and preserves draft when the relation set changes', async () => {
@@ -406,6 +428,7 @@ it('revalidates the exact related-set token before POST and preserves draft when
 });
 
 it.each([401, 403])('clears parent sources, relations and draft when the preflight preview returns %i', async status => {
+  compactTable.enabled = true;
   let reads = 0;
   let reject!: (cause: unknown) => void;
   vi.mocked(apiRequest).mockImplementation(async path => {
@@ -416,10 +439,10 @@ it.each([401, 403])('clears parent sources, relations and draft when the preflig
   mount();
   fireEvent.click(await screen.findByLabelText('选择制程不良 表面划伤'));
   fireEvent.click(within(screen.getByLabelText('台账工具栏')).getByLabelText('发起 8D', { selector: 'button' }));
-  await screen.findByText('PQ-OLD');
-  await fillIssue();
-  const drawer = within(screen.getByText('发起正式内部8D', { selector: '.ant-drawer-title' }).closest<HTMLElement>('[role="dialog"]')!);
-  fireEvent.click(drawer.getByRole('radio', { name: 'PCBA' }));
+  const drawer = issueDrawer();
+  expect(await drawer.findByText('PQ-OLD')).toBeVisible();
+  await fillIssue(drawer);
+  fireEvent.click(drawer.getByLabelText('PCBA', { selector: 'input[type="radio"]' }));
   fireEvent.change(drawer.getByLabelText('判定说明'), { target: { value: '敏感判定草稿' } });
   fireEvent.change(drawer.getByLabelText('分析/对策期限'), { target: { value: '2026-11-10' } });
   fireEvent.click(drawer.getByText('确认发起8D'));

@@ -47,6 +47,7 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
   const alive = useRef(true);
   const submitting = useRef(false);
   const sourceRefs = sources.map(record => ({ defectId: record.id, expectedVersion: record.version }));
+  const relatedSources = previews?.filter(item => item.relatedProblems.length || item.hasHiddenRelations) ?? [];
   const firstSector = sources[0]?.operationSector;
   const inferredBoard = (firstSector === 'PCBA' || firstSector === '装配') && sources.every(source => source.operationSector === firstSector) ? firstSector : undefined;
   const firstDescription = sources[0]?.description?.trim();
@@ -140,12 +141,13 @@ export function ProcessEightDIssueDrawer({ sources, onClose, onIssued, onDenied 
     <ProcessError cause={error} fallback={error instanceof Error ? error.message : '发单失败，请重试。'} />
     {writer.uncertain ? <Alert type="warning" title="发单结果未知；请勿更改请求，重试将使用原请求及同一幂等键。" /> : null}
     {changedRelations ? <Alert type="warning" title="关联集合已变化，请查看最新预览并重新判定是否复发；已保留发单草稿。" /> : null}
-    {previewLoading ? <Spin aria-label="加载来源预览" /> : !previews ? <Button onClick={() => void loadPreviews()}>重试来源预览</Button> : <section aria-label="发单来源预览" className="process-quality-source-preview">{previews.map(item => <section key={item.defectId} className="process-quality-card">
+    {previewLoading ? <Spin aria-label="加载来源预览" /> : !previews ? <Button onClick={() => void loadPreviews()}>重试来源预览</Button> : relatedSources.length ? <section aria-label="已关联问题" className="process-quality-source-preview">
+      <Typography.Text>{relatedSources.length} 条来源已有问题关联</Typography.Text>
+      {relatedSources.map(item => <section key={item.defectId} className="process-quality-card">
       <Typography.Text strong>{sources.find(record => record.id === item.defectId)?.description}</Typography.Text>
       {item.relatedProblems.map(problem => <div key={problem.problemId}><Link to={`/app/problem-workspace/${problem.problemId}`}>{problem.reportNumber}</Link> · <span>{problem.title}</span> <span>{problem.status}</span></div>)}
       {item.hasHiddenRelations ? <Alert type="warning" title="部分关联问题无权查看。" /> : null}
-      {!item.relatedProblems.length && !item.hasHiddenRelations ? <Typography.Paragraph type="secondary">尚无已关联问题</Typography.Paragraph> : null}
-    </section>)}</section>}
+    </section>)}</section> : null}
     {previews ? <Space direction="vertical" className="process-quality-card">
       <Radio.Group aria-label="整单复发判定" disabled={invalidated || writer.busy || writer.uncertain || previewLoading} value={recurrence} onChange={event => { setDirty(true); setRecurrence(event.target.value); }}><Radio value="RECURRENCE">复发</Radio><Radio value="NOT_RECURRENCE">非复发</Radio></Radio.Group>
       <Input aria-label="判定说明" placeholder="判定说明（可空）" maxLength={2000} disabled={invalidated || writer.busy || writer.uncertain || previewLoading} value={reason} onChange={event => { setDirty(true); setReason(event.target.value); }} />

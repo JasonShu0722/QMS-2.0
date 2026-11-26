@@ -129,14 +129,22 @@ describe('bounded shared internal 8D core (unit only)', () => {
     const { service, tx, queries } = fixture(domain);
     const source = { sourceDomain: domain.sourceDomain, sourceType: domain.sourceType, sourceId: randomUUID(), sourceVersion: 9,
       sourceSnapshot: { realDomainOwnedField: 'preserved' } };
-    Object.assign(tx, { domainSourceIssueLink: { findMany: async () => [source] } });
+    const responsibleSection = { id: randomUUID(), organizationId: actor.organizationId, name: '制程质量科' };
+    Object.assign(tx, {
+      domainSourceIssueLink: { findMany: async () => [source] },
+      department: { findFirst: async ({ where }: { where: { id: string; organizationId: string } }) =>
+        where.id === responsibleSection.id && where.organizationId === responsibleSection.organizationId ? { name: responsibleSection.name } : null },
+    });
     service.rounds = { readHistoryProjection: async () => [] };
     const record = { problem: { id: problemId, organizationId: actor.organizationId, sourceId: source.sourceId }, instance: {},
-      collaboratorUserIds: [], report: { document: {}, contentVersion: 2, version: 3 } };
+      collaboratorUserIds: [], report: { document: {}, contentVersion: 2, version: 3, responsibleSectionDepartmentId: responsibleSection.id } };
     const snapshot = await service.fullSnapshot(tx, record);
     expect(queries[0]!.sql).toContain(`SELECT ${domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS ? 'defect_id' : 'source_id'} AS "defectId"`);
     expect(queries[0]!.sql).toContain(`FROM ${domain.storagePrefix}_source_confirmations`);
     expect(snapshot.sources).toEqual([source]);
+    expect(snapshot.responsibleSectionDepartmentId).toBe(responsibleSection.id);
+    if (domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS) expect(snapshot.responsibleSectionName).toBe(responsibleSection.name);
+    else expect(snapshot).not.toHaveProperty('responsibleSectionName');
   });
 
   it.each(domains)('%s locks the problem/instance/own report and queries only the matching identity', async (_name, domain) => {

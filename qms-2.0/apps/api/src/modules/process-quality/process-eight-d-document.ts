@@ -3,7 +3,7 @@ import { validateSync, type ValidationError } from 'class-validator';
 import {
   PROCESS_EIGHT_D_MAX_FILES, PROCESS_EIGHT_D_MAX_ROWS, ProcessEightDContainmentDto, ProcessEightDCorrectiveActionDto,
   ProcessEightDDocumentDto, ProcessEightDHorizontalDeploymentDto,
-  ProcessEightDStandardizationDto, ProcessEightDTemporaryMeasureDto,
+  ProcessEightDStandardizationDto, ProcessEightDTeamMemberDto, ProcessEightDTemporaryMeasureDto,
 } from './process-eight-d-document.dto.js';
 
 export type ProcessEightDDocument = ProcessEightDDocumentDto;
@@ -31,6 +31,7 @@ const standardizationPresets = [
 ] as const;
 
 const rowTypes = {
+  team: ProcessEightDTeamMemberDto,
   temporaryMeasures: ProcessEightDTemporaryMeasureDto,
   containment: ProcessEightDContainmentDto,
   optionalAffectedContainment: ProcessEightDContainmentDto,
@@ -82,8 +83,13 @@ export function emptyProcessEightDDocument(): ProcessEightDDocument {
 
 export function normalizeProcessEightDDocument(input: unknown): ProcessEightDDocument {
   const document = readObject(input, ProcessEightDDocumentDto, '');
+  if (!Object.hasOwn(input as object, 'standardization')) {
+    document.standardization = standardizationPresets.map(([key, documentName]) =>
+      Object.assign(new ProcessEightDStandardizationDto(), { id: key, key, documentName }));
+  }
   for (const key of Object.keys(rowTypes) as (keyof typeof rowTypes)[]) {
-    const rows: unknown[] = document[key];
+    const rows = document[key] as unknown[] | undefined;
+    if (key === 'team' && rows === undefined) continue;
     if (!Array.isArray(rows) || rows.length > PROCESS_EIGHT_D_MAX_ROWS) reject(key, `必须为不超过 ${PROCESS_EIGHT_D_MAX_ROWS} 行的数组`);
     const type: new () => { id: string } = rowTypes[key];
     const normalized = Array.from(rows, (row, index) => readObject(row, type, `${key}[${index}]`));
@@ -106,15 +112,9 @@ export function normalizeProcessEightDDocument(input: unknown): ProcessEightDDoc
     const preset = standardizationPresets.find(([key]) => key === row.key);
     if (preset && row.documentName !== preset[1]) reject(`standardization[${index}].documentName`, '预置文件名称不得改写');
   }
-  const suppliedRows = document.standardization;
-  document.standardization = standardizationPresets.map(([key, documentName]) => {
-    const supplied = suppliedRows.find((row) => row.key === key);
-    if (supplied) return supplied;
-    if (suppliedRows.some((row) => row.id === key)) reject('standardization', '新增行 id 不得占用预置 id');
-    return Object.assign(new ProcessEightDStandardizationDto(), { id: key, key, documentName });
-  });
-  document.standardization.push(...suppliedRows.filter((row) => !standardizationPresets.some(([key]) => key === row.key)));
-  if (document.standardization.length > PROCESS_EIGHT_D_MAX_ROWS) reject('standardization', `含预置项最多 ${PROCESS_EIGHT_D_MAX_ROWS} 行`);
+  for (const [key] of standardizationPresets) {
+    if (!seenKeys.has(key) && document.standardization.some(row => row.id === key)) reject('standardization', '新增行 id 不得占用预置 id');
+  }
   return structuredClone(document);
 }
 

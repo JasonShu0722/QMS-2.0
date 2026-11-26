@@ -43,6 +43,7 @@ button.qms-domain-toggle { width: 100%; border: 0; background: transparent; font
 .qms-home-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qms-topbar-work > .qms-work-tabs { flex: 1; padding: 0; background: transparent; border: 0; }
 .qms-topbar-work > .qms-work-tab-manager { min-width: 0; }
+.qms-topbar-work > .qms-home-label + .qms-work-tab-manager { margin-inline-start: auto; }
 .qms-announcement-reminder { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--qms-warning); font-size: 13px; }
 .qms-announcement-reminder strong { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--qms-warning); color: var(--qms-surface); font-size: 12px; }
 .qms-topbar .qms-mobile-menu { display: none; }
@@ -69,6 +70,7 @@ button.qms-domain-toggle { width: 100%; border: 0; background: transparent; font
   .qms-navigation { display: none; }
   .qms-topbar { min-height: 54px; margin: 0 var(--qms-page-padding); gap: var(--qms-section-gap); padding: 4px 0; box-sizing: border-box; }
   .qms-topbar .qms-mobile-menu { display: inline-flex; flex-shrink: 0; }
+  .qms-topbar-work:has(> .qms-work-tabs) > .qms-home-label { display: none; }
   .qms-topbar-actions { gap: var(--qms-section-gap); }
   .qms-topbar .ant-btn { min-width: 44px; min-height: 44px; }
   .qms-topbar .qms-appearance-trigger, .qms-topbar .language-switcher { padding: 6px; }

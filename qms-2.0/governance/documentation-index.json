@@ -100,11 +100,11 @@
         "sources": [
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
+            "sha256": "f82e91d56ee94a70f7f21bfeeedb8f4e727011e8745a179dfbc4c7f2891bdb2b"
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bc94d99ebac39ff79803b939571074e5b452e4e0db78975cad48783891d09afd"
+            "sha256": "3c5bef91e2e3954028ad5819dab577ba07f6adea4de60576ec1e1ce5239cd027"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -112,11 +112,11 @@
           },
           {
             "path": ".agents/skills/qms-feature-delivery/SKILL.md",
-            "sha256": "869817b15ca0ee551d1bf84f05b41782d303df67cccc53bd3ebbf3b5bd0ce06d"
+            "sha256": "58fbb4b1cf2974220495419f7f8ff9ff3ecc907a1229130dea41aca046fea008"
           },
           {
             "path": ".agents/skills/qms-superpowers-zh/SKILL.md",
-            "sha256": "3a17d11e21d4679302f6257e7ae0500c76ff4e3b4ce491a404ef70ca6a9e38ed"
+            "sha256": "b2fb9d3ec560974c6f71bc6b71d8dad217c5ac27f92b5adee67324019fb48073"
           }
         ]
       }
@@ -190,7 +190,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bc94d99ebac39ff79803b939571074e5b452e4e0db78975cad48783891d09afd"
+            "sha256": "3c5bef91e2e3954028ad5819dab577ba07f6adea4de60576ec1e1ce5239cd027"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -262,15 +262,15 @@
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
+            "sha256": "f82e91d56ee94a70f7f21bfeeedb8f4e727011e8745a179dfbc4c7f2891bdb2b"
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bc94d99ebac39ff79803b939571074e5b452e4e0db78975cad48783891d09afd"
+            "sha256": "3c5bef91e2e3954028ad5819dab577ba07f6adea4de60576ec1e1ce5239cd027"
           },
           {
             "path": ".agents/skills/qms-start-development/SKILL.md",
-            "sha256": "b666475bcc8847bb7a425ba011b89c6f597f7de1990161cf3c8cfac9f3ec3168"
+            "sha256": "bcc1ef7ba2d9583c1f238a1da07014823664d844ac43f680f4c262451a30f4ce"
           },
           {
             "path": "docs/DOCUMENTATION-MAINTENANCE.md",
@@ -348,9 +348,9 @@
             "sha256": "271a0561fc9eb221beebd7923957ffae27187463580b7a35f12d3d834cebc1fd"
           }
         ],
-        "reviewedOn": "2026-10-19",
-        "owner": "QMS 工程维护者（人工验收接续实际复核）",
-        "reason": "V0.0.20：复核纯文档/业务分流、指定来源运行门禁、同次构建复用，以及集中推送和持续阻断只读接续；业务门禁和独立合并发布授权保持有效。"
+        "reviewedOn": "2026-11-25",
+        "owner": "QMS 工程维护者（交付复盘）",
+        "reason": "复核 V0.0.20 的纯文档与业务分流、指定来源运行、构建复用及集中推送规则；按 PR #179 的教训补齐定向覆盖映射、全量 CI 失败归因与过程中接续。业务门禁和独立合并发布授权保持有效。"
       }
     },
     {
@@ -418,7 +418,7 @@
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
+            "sha256": "f82e91d56ee94a70f7f21bfeeedb8f4e727011e8745a179dfbc4c7f2891bdb2b"
           },
           {
             "path": "../docs/superpowers/specs/2026-10-19-qms-account-overview-density-design.md",
@@ -506,7 +506,7 @@
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.test.tsx",
-            "sha256": "9be93e9098cd6871c9540ede9a881a7ae690a6bf9ab718e54b57d0d216607283"
+            "sha256": "b5ce508f6e711248c1ee2a4192dcb2a55585b4b23b6eba44029ba3c158f75d91"
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.css",
@@ -574,11 +574,11 @@
           },
           {
             "path": "apps/web/src/features/governance/DepartmentResponsibilities.tsx",
-            "sha256": "39f7fc96d46cbf58966e91c8025e18576da387c059a0d8247dab63a4732b9db0"
+            "sha256": "1e6e53b4a80a886c2cd36b705f6e7789c5b55d8c77c5cbc9e88cc23fbe98515f"
           },
           {
             "path": "apps/web/src/features/governance/DepartmentResponsibilities.test.tsx",
-            "sha256": "298714079de5c0f5d9fc7be825dbc946d663d08aa585cb12c63fa8548e0793ec"
+            "sha256": "b3a29930976d03d0f28d5eed8c861207c519711eb1f7ac5e111804aa89a03506"
           },
           {
             "path": "apps/web/src/features/imports/MasterDataImport.tsx",
@@ -726,7 +726,7 @@
           },
           {
             "path": "apps/web/src/layouts/InternalLayout.tsx",
-            "sha256": "d8e845ac39cb6ef1102c203e188674790740ae77ac332d29d4dee9242265ccc0"
+            "sha256": "7a6a967c812a9b2b95a4fa26bb1bb77d0a222e2eba5542c025f2efdebf77721e"
           },
           {
             "path": "apps/web/src/layouts/sidebarState.ts",
@@ -750,7 +750,7 @@
           },
           {
             "path": "apps/web/src/layouts/shell.css",
-            "sha256": "f90003eeac72d39f6acfd168aaa282ab6634b6faf44073bc0e7c9f87b7ce0894"
+            "sha256": "8a28611f0de46c34d72495bbf93345bed27d833ddd5098a6fc11a4b69bf38935"
           },
           {
             "path": "apps/web/src/console/console.css",
@@ -976,11 +976,11 @@
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
+            "sha256": "f82e91d56ee94a70f7f21bfeeedb8f4e727011e8745a179dfbc4c7f2891bdb2b"
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bc94d99ebac39ff79803b939571074e5b452e4e0db78975cad48783891d09afd"
+            "sha256": "3c5bef91e2e3954028ad5819dab577ba07f6adea4de60576ec1e1ce5239cd027"
           },
           {
             "path": "docs/OPENCLAW-OPS-HANDOFF.md",
@@ -1112,7 +1112,7 @@
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bc94d99ebac39ff79803b939571074e5b452e4e0db78975cad48783891d09afd"
+            "sha256": "3c5bef91e2e3954028ad5819dab577ba07f6adea4de60576ec1e1ce5239cd027"
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",
@@ -1120,15 +1120,15 @@
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
+            "sha256": "f82e91d56ee94a70f7f21bfeeedb8f4e727011e8745a179dfbc4c7f2891bdb2b"
           },
           {
             "path": ".agents/skills/qms-start-development/SKILL.md",
-            "sha256": "b666475bcc8847bb7a425ba011b89c6f597f7de1990161cf3c8cfac9f3ec3168"
+            "sha256": "bcc1ef7ba2d9583c1f238a1da07014823664d844ac43f680f4c262451a30f4ce"
           },
           {
             "path": ".agents/skills/qms-superpowers-zh/SKILL.md",
-            "sha256": "3a17d11e21d4679302f6257e7ae0500c76ff4e3b4ce491a404ef70ca6a9e38ed"
+            "sha256": "b2fb9d3ec560974c6f71bc6b71d8dad217c5ac27f92b5adee67324019fb48073"
           }
         ]
       }
@@ -1146,7 +1146,7 @@
         "sources": [
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bc94d99ebac39ff79803b939571074e5b452e4e0db78975cad48783891d09afd"
+            "sha256": "3c5bef91e2e3954028ad5819dab577ba07f6adea4de60576ec1e1ce5239cd027"
           },
           {
             "path": "docs/PLATFORM-HANDOFF.md",
@@ -1214,23 +1214,23 @@
           },
           {
             "path": "AGENTS.md",
-            "sha256": "9b47254122cee19d8fb6de032fb8b45d0179bc697ba50c0ecdc54a03eaa50602"
+            "sha256": "b64b3c9568c4191031047913827aa022646f3a5e70b7ddc642632b0e1de579af"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
-            "sha256": "c2038352f547069d1324f63722aaa2518b32acb13fa465f5bb55deeccec27940"
+            "sha256": "f82e91d56ee94a70f7f21bfeeedb8f4e727011e8745a179dfbc4c7f2891bdb2b"
           },
           {
             "path": "docs/DEVELOPMENT-GOVERNANCE.md",
-            "sha256": "bc94d99ebac39ff79803b939571074e5b452e4e0db78975cad48783891d09afd"
+            "sha256": "3c5bef91e2e3954028ad5819dab577ba07f6adea4de60576ec1e1ce5239cd027"
           },
           {
             "path": ".agents/skills/qms-feature-delivery/SKILL.md",
-            "sha256": "869817b15ca0ee551d1bf84f05b41782d303df67cccc53bd3ebbf3b5bd0ce06d"
+            "sha256": "58fbb4b1cf2974220495419f7f8ff9ff3ecc907a1229130dea41aca046fea008"
           },
           {
             "path": ".agents/skills/qms-start-development/SKILL.md",
-            "sha256": "b666475bcc8847bb7a425ba011b89c6f597f7de1990161cf3c8cfac9f3ec3168"
+            "sha256": "bcc1ef7ba2d9583c1f238a1da07014823664d844ac43f680f4c262451a30f4ce"
           }
         ]
       }

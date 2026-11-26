@@ -6,6 +6,7 @@ import { Prisma } from '../../src/generated/prisma/client.js';
 import { INTERNAL_EIGHT_D_DOMAINS as domains, type InternalEightDDomainDescriptor } from '../../src/common/eight-d/internal-eight-d-domain.js';
 import { internalEightDSections } from '../../src/common/eight-d/internal-eight-d-sections.js';
 import { DomainProblemReadAdapter } from '../../src/modules/problem-index/domain-problem-read.adapter.js';
+import { workspaceProjection } from '../../src/modules/problem-index/problem-domain-projection.js';
 import { ProblemDomainRegistry } from '../../src/modules/problem-index/problem-domain-registry.js';
 import type { ProblemDomainReport } from '../../src/modules/problem-index/problem-domain-registry.js';
 import { ReportingService } from '../../src/modules/reporting/reporting.service.js';
@@ -13,6 +14,7 @@ import type { ProblemReportDto } from '../../src/modules/reporting/reporting.dto
 import { WorkflowClosureRegistry } from '../../src/modules/workflow/workflow-closure-registry.js';
 import { FileResourceAccess } from '../../src/modules/file-management/file-resource-access.js';
 import { emptyProcessEightDDocument } from '../../src/modules/process-quality/process-eight-d-document.js';
+import { ProcessEightDReadAdapter } from '../../src/modules/process-quality/process-eight-d-read.adapter.js';
 import type { ProcessEightDRecord } from '../../src/modules/process-quality/process-eight-d.types.js';
 import type { WorkflowClosureContext } from '../../src/modules/workflow/workflow-closure-round.types.js';
 
@@ -88,6 +90,17 @@ function reportingConsumer(f: ReturnType<typeof setup>) {
   const reporting = new ReportingService(prisma as never, problems as never, workspaces as never);
   return { tx, problems, workspaces, report: () => reporting.report(f.actor, f.organizationId, f.problemId, {}) };
 }
+
+it('projects a bounded process D1 summary when valid team notes exceed the workspace field limit', async () => {
+  const fixture = setup(domains.PROCESS);
+  fixture.snapshot.document.team = [{ id: randomUUID(), name: 'Team member', department: 'Quality',
+    responsibility: '责'.repeat(10_000), collaborationScope: '协'.repeat(10_000) }];
+  const adapter = new ProcessEightDReadAdapter(fixture.registry, fixture.service as never);
+  const workspace = await adapter.readWorkspace(fixture.tx as never, fixture.readContext, fixture.record.instance);
+
+  expect(workspaceProjection(workspace).sections.find(section => section.key === 'D1')?.fields)
+    .toEqual([{ key: 'teamMemberCount', label: '团队成员数', value: '1' }]);
+});
 
 describe.each([domains.CUSTOMER, domains.NEW_PRODUCT])('$domainCode real ReportingService consumer', domain => {
   it.each(['eight-d', 'legacy'] as const)('returns UNAVAILABLE without an immutable revision in the %s branch', async branch => {
@@ -248,7 +261,8 @@ describe.each(Object.values(domains))('$domainCode bounded adapters', domain => 
     const summaries = await f.read.readSummaries(f.tx as never, f.actor, [f.record.problem, second.problem]);
     expect(summaries.size).toBe(2);
     expect(f.tx.$queryRaw).toHaveBeenCalledTimes(1);
-    expect(summaries.get(f.problemId)).toMatchObject({ title: '8D-001', description: 'Current description', domainUiKey: domain.resourceType });
+    const process = domain === domains.PROCESS;
+    expect(summaries.get(f.problemId)).toMatchObject({ title: process ? 'Current description' : '8D-001', description: 'Current description', domainUiKey: domain.resourceType });
     expect(summaries.get(f.problemId)?.fields).toHaveLength(8);
     expect(f.service.readReport).not.toHaveBeenCalled();
     const workspace = await f.read.readWorkspace(f.tx as never, f.readContext, null);

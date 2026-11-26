@@ -30,7 +30,22 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
   const { t, locale } = useLanguage();
   const [params, setParams] = useSearchParams();
   const location = useLocation();
-  const read = useCallback((signal: AbortSignal) => readWorkspace(problemId, organizationId, instanceId, signal), [problemId, organizationId, instanceId]);
+  const tabPath = `${location.pathname}${location.search}`;
+  const updateTabTitle = useCallback((title: string | undefined, authorizationGeneration: number) => {
+    useWorkTabsStore.getState().renameTab({ id: `problem:${problemId}`, path: tabPath,
+      title: title || '问题处理', titleKind: title ? 'business' : undefined }, authorizationGeneration);
+  }, [problemId, tabPath]);
+  const read = useCallback(async (signal: AbortSignal) => {
+    const { authorizationGeneration } = useWorkTabsStore.getState();
+    try {
+      const result = await readWorkspace(problemId, organizationId, instanceId, signal);
+      if (!signal.aborted) updateTabTitle(result.problem.summary.title?.trim() || result.problem.reportNumber?.trim(), authorizationGeneration);
+      return result;
+    } catch (cause) {
+      if (!signal.aborted) updateTabTitle(undefined, authorizationGeneration);
+      throw cause;
+    }
+  }, [problemId, organizationId, instanceId, updateTabTitle]);
   const state = useProblemRead(read, `${problemId}:${organizationId}:${instanceId}`);
   const [tab, setTab] = useState(params.get('view') === 'report' ? 'report' : 'overview');
   const [focused, setFocused] = useState(false);
@@ -47,8 +62,9 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
   const followupState = returnToProcessFollowup ? { processFollowupReturnScope: returnScope } : undefined;
   const revokeRead = state.revoke;
   const revoke = useCallback(() => {
+    updateTabTitle(undefined, useWorkTabsStore.getState().authorizationGeneration);
     revokeRead(); setDenied(true); setError(undefined); setUpgrading(false); setPending(false); setFocused(false);
-  }, [revokeRead]);
+  }, [revokeRead, updateTabTitle]);
   const DomainUi = useProblemDomainUi(workspace?.domain?.summary.domainUiKey);
   const selected = workspace?.selectedInstance;
   const current = !!selected?.current;
@@ -65,15 +81,25 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
     finally { writing.current = false; setPending(false); state.refresh(); }
   }
   const choose = (value?: string) => setParams(problemScope(workspace?.problem.organizationId ?? organizationId, value), { state: followupState });
+  const problemTitle = workspace?.problem.summary.title?.trim() || undefined;
+  const instanceSelector = workspace && <label>{t('流程实例')} <select aria-label={t('流程实例')} value={selected?.id ?? ''} onChange={(event) => { const id = event.target.value; requestLeave(() => choose(id)); }}>
+    {!workspace.instances.length ? <option value={selected?.id ?? ''}>{selected?.id ?? t('暂无流程实例')}</option> : workspace.instances.map((instance) => <option key={instance.id} value={instance.id}>{instance.current ? t('当前实例') : t('历史实例')} · {new Date(instance.createdAt).toLocaleString(locale)} · {instance.id}</option>)}
+  </select></label>;
+  if (workspace && processEightD && current) {
+    const returnLink = returnToProcessFollowup ? { pathname: '/app/process-quality/problems', search: returnScope === 'explicit' ? problemScope(workspace.problem.organizationId).toString() : '' }
+      : `/app/problem-center?${problemScope(workspace.problem.organizationId)}`;
+    return <main className="problem-workspace"><ProcessEightDWorkspace problemId={problemId} title={problemTitle}
+      back={<Space wrap><Link to={returnLink}>{t(returnToProcessFollowup ? '返回制程问题跟进' : '返回问题中心')}</Link>
+        {workspace.instances.some(instance => !instance.current) && instanceSelector}</Space>}
+      renderSourcePicker={props => <InternalEightDSourcePicker {...props} />} onRefresh={state.refresh} onAccessDenied={revoke} /></main>;
+  }
   return <main className={`problem-workspace${focused ? ' is-focused' : ''}`}><h1 className="sr-only">{t('问题处理工作空间')}</h1><div className="problem-workspace__heading"><Button disabled={denied} aria-pressed={focused} onClick={() => setFocused((value) => !value)}>{t(focused ? '退出专注' : '专注处理')}</Button></div><ProblemError cause={state.error ?? error} />
     {denied && <Alert role="alert" type="error" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} />}
     <Button disabled={denied || state.loading || pending} onClick={() => { setError(undefined); requestLeave(() => { setUpgrading(false); state.refresh(); }); }}>{t('刷新工作空间')}</Button>
     {state.loading && !workspace ? <Spin aria-label={t('正在加载')} /> : workspace ? <>
       <header className="problem-header"><div><Tag>{workspace.problem.reportNumber}</Tag>{tab === 'overview' ? <h2>{current ? workspace.problem.summary.title : workspace.domain?.summary.title ?? t('历史数据不可用')}</h2> : null}</div>
         <Link to={returnToProcessFollowup ? { pathname: '/app/process-quality/problems', search: returnScope === 'explicit' ? problemScope(workspace.problem.organizationId).toString() : '' } : `/app/problem-center?${problemScope(workspace.problem.organizationId)}`}>{t(returnToProcessFollowup ? '返回制程问题跟进' : '返回问题中心')}</Link></header>
-      <label>{t('流程实例')} <select aria-label={t('流程实例')} value={selected?.id ?? ''} onChange={(event) => { const id = event.target.value; requestLeave(() => choose(id)); }}>
-        {!workspace.instances.length ? <option value={selected?.id ?? ''}>{selected?.id ?? t('暂无流程实例')}</option> : workspace.instances.map((instance) => <option key={instance.id} value={instance.id}>{instance.current ? t('当前实例') : t('历史实例')} · {new Date(instance.createdAt).toLocaleString(locale)} · {instance.id}</option>)}
-      </select></label>
+      {instanceSelector}
       {selected && !current ? <Alert type="info" title={t('历史实例只读')} /> : null}
       <Tabs className="problem-tabs" aria-label={t('问题视图')} activeKey={tab} destroyOnHidden onChange={(key) => requestLeave(() => { setTab(key); setUpgrading(false); })} items={[
         { key: 'overview', label: t('问题概览'), children: tab === 'overview' ? <>

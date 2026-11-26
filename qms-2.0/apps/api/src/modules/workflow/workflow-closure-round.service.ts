@@ -91,8 +91,17 @@ export class WorkflowClosureRoundService {
       await this.context(tx, actor, problemId, 'READ');
       const rows = await tx.$queryRaw<RoundRow[]>(Prisma.sql`SELECT ${roundColumns} FROM workflow_closure_rounds
         WHERE organization_id = ${actor.organizationId}::uuid AND problem_id = ${problemId}::uuid ORDER BY round_number DESC`);
+      const rounds = await Promise.all(rows.map(row => this.hydrate(tx, row)));
+      const userIds = [...new Set(rounds.flatMap(round => round.duties.map(duty => duty.userId)))];
+      const users = userIds.length ? await tx.user.findMany({
+        where: { organizationId: actor.organizationId, id: { in: userIds } },
+        select: { id: true, fullName: true },
+      }) : [];
+      const names = new Map(users.map(user => [user.id, user.fullName?.trim() || null]));
       await this.authorize(tx, actor);
-      return Promise.all(rows.map(row => this.hydrate(tx, row)));
+      return rounds.map(round => ({ ...round, duties: round.duties.map(duty => ({
+        ...duty, userDisplayName: names.get(duty.userId) ?? null,
+      })) }));
     });
   }
 

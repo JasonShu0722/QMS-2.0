@@ -62,6 +62,14 @@ describe('process eight-d document policy', () => {
     expect(draft.correctiveActions[0]).toMatchObject({ plannedAt: null, implementationAt: null, followUpBatchCount: null, effective: null });
   });
 
+  it('projects preset rows for a stored legacy document missing the D7 field', () => {
+    const legacy = { closureSummary: 'Historical work' };
+    expect(policy.normalizeProcessEightDDocument(legacy)).toEqual({
+      ...policy.emptyProcessEightDDocument(), closureSummary: legacy.closureSummary,
+    });
+    expect(legacy).not.toHaveProperty('standardization');
+  });
+
   it.each([
     null, [], 'document', 1, { unexpected: true }, { description: null }, { okFileIds: null },
     { okFileIds: ['not-a-uuid'] }, { analysisFileIds: [42] }, { ngFileIds: Array(101).fill(fileId) },
@@ -120,10 +128,10 @@ describe('process eight-d document policy', () => {
     expect(() => policy.normalizeProcessEightDDocument({ [Symbol('unknown')]: '' })).toThrow(policy.ProcessEightDDocumentError);
   });
 
-  it('applies the row limit after restoring missing standardization presets', () => {
+  it('applies the row limit to the supplied standardization list', () => {
     const customRows = (length: number) => Array.from({ length }, (_, index) => ({ id: `custom-${index}`, key: `CUSTOM_${index}`, documentName: 'Custom' }));
-    expect(policy.normalizeProcessEightDDocument({ standardization: customRows(89) }).standardization).toHaveLength(100);
-    expect(() => policy.normalizeProcessEightDDocument({ standardization: customRows(90) })).toThrow(policy.ProcessEightDDocumentError);
+    expect(policy.normalizeProcessEightDDocument({ standardization: customRows(100) }).standardization).toHaveLength(100);
+    expect(() => policy.normalizeProcessEightDDocument({ standardization: customRows(101) })).toThrow(policy.ProcessEightDDocumentError);
   });
 
   it('checks summaries and both cause-specific D5 plans without requiring optional D4 or evidence', () => {
@@ -181,12 +189,15 @@ describe('process eight-d document policy', () => {
     expect(paths(document)).toEqual([]);
   });
 
-  it('keeps preset names/keys while appending custom standardization rows', () => {
-    const document = policy.normalizeProcessEightDDocument({ standardization: [{ id: 'custom', key: 'CUSTOM', documentName: 'Custom work record' }] });
-    expect(document.standardization).toHaveLength(12);
+  it('keeps the explicit standardization order and validates preset names and unique keys', () => {
+    const preset = policy.emptyProcessEightDDocument().standardization[0]!;
+    const custom = { id: 'custom', key: 'CUSTOM', documentName: 'Custom work record' };
+    const document = policy.normalizeProcessEightDDocument({ standardization: [custom, preset] });
+    expect(document.standardization).toMatchObject([custom, preset]);
     expect(policy.normalizeProcessEightDDocument(document)).toEqual(document);
-    expect(() => policy.normalizeProcessEightDDocument({ standardization: [{ ...document.standardization[0]!, documentName: 'Renamed' }] })).toThrow(policy.ProcessEightDDocumentError);
-    expect(() => policy.normalizeProcessEightDDocument({ standardization: [document.standardization[0], document.standardization[0]] })).toThrow(policy.ProcessEightDDocumentError);
+    expect(() => policy.normalizeProcessEightDDocument({ standardization: [{ ...preset, documentName: 'Renamed' }] })).toThrow(policy.ProcessEightDDocumentError);
+    expect(() => policy.normalizeProcessEightDDocument({ standardization: [preset, { ...preset, id: 'different' }] })).toThrow(policy.ProcessEightDDocumentError);
+    expect(() => policy.normalizeProcessEightDDocument({ standardization: [{ ...custom, id: preset.id }] })).toThrow(policy.ProcessEightDDocumentError);
     expect(() => policy.normalizeProcessEightDDocument({ standardization: [{ id: 'x', key: 'CUSTOM', documentName: 'A' }, { id: 'y', key: 'CUSTOM', documentName: 'B' }] })).toThrow(policy.ProcessEightDDocumentError);
   });
 

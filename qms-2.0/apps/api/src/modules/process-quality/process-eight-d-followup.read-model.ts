@@ -6,12 +6,16 @@ import { eightDError } from './process-eight-d-policy.js';
 import type { ProcessEightDRecord } from './process-eight-d.types.js';
 
 type FollowupFacts = {
-  description: string; ownerId: string | null; sectionId: string;
+  title?: string | null; description: string; ownerId: string | null; sectionId: string;
   analysisDueAt: string | null; submissionDueAt: string | null; closureDueAt: string | null;
   analysisCompletedAt: string | null; submittedAt: string | null;
 };
 type NameRow = { kind: 'owner' | 'section'; id: string; name: string };
 const iso = (date: Date | null) => date?.toISOString() ?? null;
+
+export function processEightDDisplayTitle(record: ProcessEightDRecord, document: Pick<FollowupFacts, 'title' | 'description'>): string {
+  return (record.report.issueTitle?.trim() || document.title?.trim() || document.description?.trim() || record.problem.reportNumber).slice(0, 200);
+}
 
 export function processEightDFollowupSql(): Omit<ProblemFollowupSql, 'authorize'> {
   const tables = internalEightDSql(INTERNAL_EIGHT_D_DOMAINS.PROCESS);
@@ -87,7 +91,7 @@ export async function readProcessEightDFollowupSummaries(tx: Prisma.TransactionC
     if (report.closedRevisionId) {
       // Extract only list fields from the pinned revision, never sources, evidence or approval-round history.
       const [snapshot] = await tx.$queryRaw<FollowupFacts[]>(Prisma.sql`SELECT
-        snapshot #>> '{document,description}' AS description, snapshot ->> 'ownerUserId' AS "ownerId",
+        snapshot #>> '{document,title}' AS title, COALESCE(snapshot #>> '{document,description}', '') AS description, snapshot ->> 'ownerUserId' AS "ownerId",
         snapshot ->> 'responsibleSectionDepartmentId' AS "sectionId",
         snapshot #>> '{deadlines,analysisDueAt}' AS "analysisDueAt", snapshot #>> '{deadlines,submissionDueAt}' AS "submissionDueAt",
         snapshot #>> '{deadlines,closureDueAt}' AS "closureDueAt", snapshot ->> 'analysisCompletedAt' AS "analysisCompletedAt",
@@ -97,7 +101,7 @@ export async function readProcessEightDFollowupSummaries(tx: Prisma.TransactionC
       if (!snapshot) eightDError('PROBLEM_REPORT_REVISION_NOT_FOUND', 404);
       selected = snapshot;
     } else {
-      selected = { description: report.document.description, ownerId: problem.ownerId, sectionId: report.responsibleSectionDepartmentId,
+      selected = { title: report.document.title, description: report.document.description, ownerId: problem.ownerId, sectionId: report.responsibleSectionDepartmentId,
         analysisDueAt: iso(report.analysisDueAt), submissionDueAt: iso(report.submissionDueAt), closureDueAt: iso(report.closureDueAt),
         analysisCompletedAt: iso(report.analysisCompletedAt), submittedAt: iso(report.submittedAt) };
     }
@@ -119,7 +123,8 @@ export async function readProcessEightDFollowupSummaries(tx: Prisma.TransactionC
     const sections = new Map(names.filter(n => n.kind === 'section').map(n => [n.id, n.name]));
     for (const record of group) {
       const selected = facts.get(record.problem.id)!;
-      summaries.set(record.problem.id, { title: record.problem.reportNumber, description: selected.description, domainUiKey: domain.resourceType, fields: [
+      const title = domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS ? processEightDDisplayTitle(record, selected) : record.problem.reportNumber;
+      summaries.set(record.problem.id, { title, description: selected.description, domainUiKey: domain.resourceType, fields: [
         { key: 'responsibleSectionName', label: '责任科室', value: sections.get(selected.sectionId) ?? null },
         { key: 'ownerName', label: '负责人', value: selected.ownerId ? owners.get(selected.ownerId) ?? null : null },
         { key: 'stage', label: '当前阶段', value: stage(record, selected) },

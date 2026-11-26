@@ -31,6 +31,9 @@ export class ProcessEightDReportSnapshotDto {
   @ApiProperty() contentVersion!: number;
   @ApiProperty() rowVersion!: number;
   @ApiProperty({ type: String, nullable: true }) ownerUserId!: string | null;
+  @ApiPropertyOptional({ type: String, enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] }) severity?: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) ownerName?: string | null;
+  @ApiPropertyOptional({ type: String, nullable: true }) responsibleSectionName?: string | null;
   @ApiProperty({ format: 'uuid' }) professionalUserId!: string;
   @ApiProperty({ format: 'uuid' }) responsibleSectionDepartmentId!: string;
   @ApiProperty({ type: [String] }) collaboratorUserIds!: string[];

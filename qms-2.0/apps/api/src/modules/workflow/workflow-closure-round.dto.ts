@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsIn, IsInt, IsString, Matches, Max, MaxLength, Min } from 'class-validator';
 import type { WorkflowClosureDuty } from './workflow-closure-policy.js';
 
@@ -22,6 +22,7 @@ export class WorkflowClosureDutyRecordDto {
   @ApiProperty({ enum: ['PROFESSIONAL', 'SECTION_MANAGER', 'MINISTER'] }) duty!: WorkflowClosureDuty;
   @ApiProperty({ enum: ['PENDING', 'WAITING', 'APPROVED', 'SKIPPED_SAME_PERSON', 'CANCELLED'] }) status!: string;
   @ApiProperty({ format: 'uuid' }) userId!: string;
+  @ApiPropertyOptional({ type: String, nullable: true }) userDisplayName?: string | null;
   @ApiProperty({ type: String, format: 'uuid', nullable: true }) decidedBy!: string | null;
   @ApiProperty({ type: String, nullable: true }) comment!: string | null;
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) decidedAt!: string | null;

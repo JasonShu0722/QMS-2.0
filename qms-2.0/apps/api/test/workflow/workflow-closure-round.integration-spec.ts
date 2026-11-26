@@ -139,11 +139,15 @@ describe('workflow closure rounds real PostgreSQL', () => {
 
   it('replays the final approval after completion without executing adapter complete a second time', async () => {
     const f = await fixture(); const r = await f.decide(f.professional.actor, await f.start(), ['PROFESSIONAL']);
+    const names = { [f.professional.user.id]: '专业审核员', [f.manager.user.id]: '科室负责人' };
+    await Promise.all(Object.entries(names).map(([id, fullName]) => prisma.user.update({ where: { id }, data: { fullName } })));
     await prisma.workflowNode.create({ data: { organizationId: f.org.id, workflowVersionId: f.node.workflowVersionId, nodeKey: 'end', type: 'CLOSE', name: 'Terminal node', config: { isEnd: true } } });
     const key = randomUUID(); const done = await f.decide(f.manager.actor, r, ['SECTION_MANAGER'], 'APPROVE', key);
     expect(await f.decide(f.manager.actor, r, ['SECTION_MANAGER'], 'APPROVE', key)).toEqual(done);
     expect((await prisma.problemIndex.findUniqueOrThrow({ where: { id: f.problem.id } })).version).toBe(2);
-    expect((await service.history(f.owner.actor, f.problem.id))[0]).toEqual(done);
+    expect(await service.history(f.owner.actor, f.problem.id)).toEqual([{
+      ...done, duties: done.duties.map(duty => ({ ...duty, userDisplayName: names[duty.userId] })),
+    }]);
   });
 
   it('returns 409 rather than cancelling a round when the fixed runtime version has advanced', async () => {
@@ -184,13 +188,20 @@ describe('workflow closure rounds real PostgreSQL', () => {
 
   it('rolls back duty decisions, domain closure and receipts when audit persistence fails', async () => {
     const f = await fixture(); const r = await f.decide(f.professional.actor, await f.start(), ['PROFESSIONAL']);
+    const historyBefore = await service.history(f.owner.actor, f.problem.id);
     const failingAudit = new AuditLogService(prisma);
-    failingAudit.record = async () => { throw new Error('Audit unavailable'); };
+    failingAudit.record = async (event, tx) => {
+      await audit.record(event, tx);
+      throw new Error('Audit unavailable');
+    };
     const failing = new WorkflowClosureRoundService(prisma, failingAudit, responsibilities, new WorkflowClosureRegistry([adapter]));
     const key = randomUUID();
-    await expect(failing.decide(f.manager.actor, r.id, { expectedRoundVersion: r.version, duties: ['SECTION_MANAGER'], decision: 'APPROVE', comment: 'Check' }, key, randomUUID())).rejects.toThrow('Audit unavailable');
-    expect((await service.history(f.owner.actor, f.problem.id))[0]).toEqual(r);
+    const traceId = randomUUID();
+    await expect(failing.decide(f.manager.actor, r.id, { expectedRoundVersion: r.version, duties: ['SECTION_MANAGER'], decision: 'APPROVE', comment: 'Check' }, key, traceId)).rejects.toThrow('Audit unavailable');
+    expect(await service.history(f.owner.actor, f.problem.id)).toEqual(historyBefore);
+    expect(await prisma.problemIndex.findUniqueOrThrow({ where: { id: f.problem.id } })).toMatchObject({ status: 'OPEN', version: 1, closedAt: null });
     expect((await prisma.workflowInstance.findUniqueOrThrow({ where: { id: f.instance.id } })).status).toBe('RUNNING');
+    expect(await prisma.auditEvent.count({ where: { traceId } })).toBe(0);
     expect(await prisma.$queryRaw`SELECT key FROM workflow_closure_receipts WHERE key = ${key}`).toEqual([]);
   });
 

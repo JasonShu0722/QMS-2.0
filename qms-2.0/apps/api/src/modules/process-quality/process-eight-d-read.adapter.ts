@@ -10,7 +10,7 @@ import { assertWorkflowFeature, type WorkflowActor } from '../workflow/workflow-
 import { jsonObject, workflowError } from '../workflow/workflow-runtime-policy.js';
 import { documentFileIds, normalizeProcessEightDDocument } from './process-eight-d-document.js';
 import { ProcessEightDService } from './process-eight-d.service.js';
-import { processEightDFollowupSql, readProcessEightDFollowupSummaries } from './process-eight-d-followup.read-model.js';
+import { processEightDDisplayTitle, processEightDFollowupSql, readProcessEightDFollowupSummaries } from './process-eight-d-followup.read-model.js';
 import type { ProcessEightDRecord } from './process-eight-d.types.js';
 
 @Injectable()
@@ -60,10 +60,11 @@ export class ProcessEightDReadAdapter implements ProblemDomainReadAdapter, OnMod
 
   async readWorkspace(tx: Prisma.TransactionClient, context: ProblemDomainReadContext, instance: WorkflowInstance | null) {
     if (!await this.eightD(tx, context.problem)) return this.legacy.readWorkspace(tx, context, instance);
-    const { record } = await this.service.readReport(tx, this.readActor(context.actor, context.problem), context.problem.id);
+    const { record, snapshot } = await this.service.readReport(tx, this.readActor(context.actor, context.problem), context.problem.id);
+    const document = normalizeProcessEightDDocument(jsonObject(snapshot).document);
     return { domainVersion: record.report.version, revisionId: record.report.closedRevisionId,
-      summary: this.summary(record.problem.reportNumber, record.report.document.description),
-      sections: internalEightDSections(record.report.document) };
+      summary: this.summary(processEightDDisplayTitle(record, document), document.description),
+      sections: internalEightDSections(document, 'process') };
   }
 
   async readReport(tx: Prisma.TransactionClient, context: ProblemDomainReadContext, instance: WorkflowInstance) {
@@ -73,10 +74,10 @@ export class ProcessEightDReadAdapter implements ProblemDomainReadAdapter, OnMod
     const document = normalizeProcessEightDDocument(body.document);
     return { revisionId: revision?.id ?? `problem:${record.problem.id}:v${record.report.version}`, instanceId: String(workflow.id), instanceVersion: Number(workflow.version),
       recordedAt: revision?.recordedAt.toISOString() ?? record.report.updatedAt.toISOString(),
-      summary: this.summary(String(problem.reportNumber), document.description),
+      summary: this.summary(processEightDDisplayTitle(record, document), document.description),
       snapshot: { problemType: String(problem.problemType), severity: String(problem.severity), status: String(problem.status),
         responsibleParty: problem.responsibleParty as string | null, ownerId: problem.ownerId as string | null, dueAt: problem.dueAt as string | null },
-      sections: internalEightDSections(document) };
+      sections: internalEightDSections(document, 'process') };
   }
 
   async listRevisionIds(tx: Prisma.TransactionClient, context: ProblemDomainReadContext): Promise<readonly string[]> {
@@ -103,5 +104,5 @@ export class ProcessEightDReadAdapter implements ProblemDomainReadAdapter, OnMod
 
   private readActor(actor: WorkflowActor, problem: ProblemIndex) { return actor.organizationId === problem.organizationId ? actor : { ...actor, scopeOrganizationId: problem.organizationId }; }
   private eightD(tx: Prisma.TransactionClient, problem: ProblemIndex) { return this.service.hasReport(tx, problem.organizationId, problem.id); }
-  private summary(reportNumber: string, description: string): ProblemDomainSummary { return { title: reportNumber, description, domainUiKey: 'process-eight-d' }; }
+  private summary(title: string, description: string): ProblemDomainSummary { return { title, description, domainUiKey: 'process-eight-d' }; }
 }

@@ -49,7 +49,7 @@ type ReassignmentAccess = { kind: 'OWNER' | 'MANAGEMENT' | 'CROSS_DEPARTMENT'; s
 const bindingColumns = Prisma.sql`organization_id AS "organizationId", workflow_definition_id AS "workflowDefinitionId", workflow_version_id AS "workflowVersionId", enabled, version`;
 const iso = (date: Date | null) => date?.toISOString() ?? null;
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
-const flowTransitions: Record<string, string> = { START: '发起制程 8D', SUBMIT: '提交关闭审核', RETURN: '退回处理', CLOSE: '关闭制程 8D' };
+const flowTransitions: Record<string, string> = { START: '发起制程 8D', SUBMIT: '提交关闭审核', RETURN: '退回处理', CLOSE: '关闭制程 8D', UPGRADE: '升级为制程 8D' };
 const deadlineLabels: Record<WorkflowDeadlineStage, string> = { ANALYSIS: '分析', SUBMISSION: '完整提交', CLOSURE: '关闭' };
 const deadlineFlowActions: Record<string, string> = { REQUESTED: '申请延期', LEADER_SKIPPED_SAME_PERSON: '同人跳过管理审核',
   'LEADER_PENDING:QUALITY_PENDING': '管理审核通过', 'QUALITY_PENDING:APPROVED': '专业审核通过，延期生效',
@@ -114,7 +114,8 @@ export class ProcessEightDService {
     if (!problem?.workflowInstanceId) workflowError('PROBLEM_NOT_FOUND', 404);
     await tx.$queryRaw`SELECT id FROM workflow_instances WHERE organization_id = ${organizationId}::uuid AND id = ${problem.workflowInstanceId}::uuid ${readOnly ? Prisma.sql`FOR SHARE` : Prisma.sql`FOR UPDATE`}`;
     const instance = await tx.workflowInstance.findFirst({ where: { id: problem.workflowInstanceId, organizationId, problemIndexId: problem.id }, include: { currentNode: true, workflowVersion: true } });
-    const [report] = await tx.$queryRaw<ProcessEightDReport[]>(Prisma.sql`SELECT ${reportColumns} FROM ${this.tables.reports}
+    const issueTitle = this.domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS ? Prisma.sql`, issue_title AS "issueTitle"` : Prisma.empty;
+    const [report] = await tx.$queryRaw<ProcessEightDReport[]>(Prisma.sql`SELECT ${reportColumns}${issueTitle} FROM ${this.tables.reports}
       WHERE organization_id = ${organizationId}::uuid AND problem_id = ${problemId}::uuid ${readOnly ? Prisma.sql`FOR SHARE` : Prisma.sql`FOR UPDATE`}`);
     if (!report) workflowError('PROCESS_EIGHT_D_NOT_FOUND', 404);
     if (!instance?.currentNode || instance.workflowVersion.status !== 'PUBLISHED' || instance.workflowVersion.organizationId !== organizationId
@@ -285,10 +286,16 @@ export class ProcessEightDService {
       const rounds = await this.rounds.readHistoryProjection(tx, organizationId, problemId);
       const extensions = await this.extensions.readProjection(tx, organizationId, problemId);
       const events: { occurredAt: string; userId: string | null; content: string; order: number }[] = [];
+      const returnsWithRound = new Set(rounds.flatMap(round => {
+        const hasDecision = round.duties.some(duty => duty.status !== 'APPROVED' && duty.decidedAt && duty.decidedBy);
+        return round.status === 'CANCELLED' || (round.status === 'RETURNED' && hasDecision)
+          ? [`${round.instanceId}:${round.context.instanceVersion + 1}`] : [];
+      }));
       for (const transition of transitions) {
+        if (transition.action === 'RETURN' && returnsWithRound.has(`${transition.instanceId}:${transition.instanceVersion}`)) continue;
         const content = flowTransitions[transition.action];
         if (content) events.push({ occurredAt: transition.occurredAt.toISOString(), userId: transition.actorUserId,
-          order: transition.action === 'START' || transition.action === 'SUBMIT' ? 0 : 3, content });
+          order: ['START', 'SUBMIT', 'UPGRADE'].includes(transition.action) ? 0 : 3, content });
       }
       for (const round of rounds.reverse()) {
         for (const duty of round.duties) {
@@ -958,6 +965,7 @@ export class ProcessEightDService {
     return { problemId: problem.id, reportNumber: problem.reportNumber, organizationId: problem.organizationId, instanceId: instance.id, workflowVersionId: instance.workflowVersionId,
       instanceVersion: instance.version, problemVersion: problem.version, version: report.version, contentVersion: report.contentVersion,
       status: report.closedRevisionId ? 'CLOSED' : isClosureReviewNode(record.node) ? 'IN_REVIEW' : 'PROCESSING', severity: problem.severity,
+      ...(this.domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS ? { ...await this.reportNames(tx, record), currentNodeName: record.node.name } : {}),
       ownerUserId: problem.ownerId!, professionalUserId: report.professionalUserId, responsibleSectionDepartmentId: report.responsibleSectionDepartmentId,
       collaboratorUserIds: record.collaboratorUserIds, document: report.document, analysisCompletedAt: iso(report.analysisCompletedAt), analysisDueAt: iso(report.analysisDueAt),
       submissionDueAt: iso(report.submissionDueAt), closureDueAt: iso(report.closureDueAt), submittedAt: iso(report.submittedAt), closedRevisionId: report.closedRevisionId,
@@ -971,6 +979,7 @@ export class ProcessEightDService {
       actor_user_id AS "actorUserId", recorded_at AS "recordedAt" FROM ${this.tables.sourceConfirmations}
       WHERE organization_id = ${record.problem.organizationId}::uuid AND problem_id = ${record.problem.id}::uuid ORDER BY recorded_at, id`;
     return { ...await this.contentSnapshot(tx, record), problem: json(record.problem), instance: json(record.instance),
+      ...(this.domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS ? await this.reportNames(tx, record) : {}),
       deadlines: { analysisDueAt: iso(record.report.analysisDueAt), submissionDueAt: iso(record.report.submissionDueAt), closureDueAt: iso(record.report.closureDueAt) },
       analysisCompletedAt: iso(record.report.analysisCompletedAt), submittedAt: iso(record.report.submittedAt),
       sourceConfirmations: json(sourceConfirmations), approvalRounds: json(await this.rounds.readHistoryProjection(tx, record.problem.organizationId, record.problem.id)),
@@ -983,6 +992,15 @@ export class ProcessEightDService {
       professionalUserId: record.report.professionalUserId, responsibleSectionDepartmentId: record.report.responsibleSectionDepartmentId,
       collaboratorUserIds: record.collaboratorUserIds, primarySourceId: record.problem.sourceId,
       sources: sources.map(s => ({ sourceDomain: s.sourceDomain, sourceType: s.sourceType, sourceId: s.sourceId, sourceVersion: s.sourceVersion, sourceSnapshot: s.sourceSnapshot })) };
+  }
+
+  private async reportNames(tx: Prisma.TransactionClient, record: ProcessEightDRecord) {
+    const organizationId = record.problem.organizationId;
+    const [owner, section] = await Promise.all([
+      record.problem.ownerId ? tx.user.findFirst({ where: { id: record.problem.ownerId, organizationId }, select: { fullName: true, username: true } }) : null,
+      tx.department.findFirst({ where: { id: record.report.responsibleSectionDepartmentId, organizationId }, select: { name: true } }),
+    ]);
+    return { ownerName: owner ? owner.fullName || owner.username : null, responsibleSectionName: section?.name ?? null };
   }
 
   private async contextFromRecord(tx: Prisma.TransactionClient, record: ProcessEightDRecord): Promise<WorkflowClosureContext> {
