@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiForbiddenResponse, ApiHeader, ApiOkResponse, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
@@ -7,7 +7,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AdminMutationService, adminError } from '../../common/security/admin-mutation.service.js';
 import { RequireAccess, RequireAuthenticated } from '../authorization/access.decorator.js';
 import { OrganizationService } from './organization.service.js';
-import { CreateDepartmentDto, CreateOrganizationDto, CreatePositionDto, DeleteStructureDto, DeleteStructureResultDto, DepartmentDto, OrganizationDto, OrganizationLifecycleDto, OrganizationListQueryDto, PositionDto, PositionPermissionsDto, PositionRolesDto, ReplacePositionRolesDto, ReplaceUserPositionsWithPreviewDto, UpdateDepartmentDto, UpdateOrganizationDto, UpdatePositionDto, UpdatePositionPermissionsDto, UserPositionDto } from './organization.dto.js';
+import { AppendUserPositionsDto, CreateDepartmentDto, CreateOrganizationDto, CreatePositionDto, DeleteStructureDto, DeleteStructureResultDto, DepartmentDto, OrganizationDto, OrganizationLifecycleDto, OrganizationListQueryDto, PositionDto, PositionPermissionsDto, PositionRolesDto, ReplacePositionRolesDto, ReplaceUserPositionsWithPreviewDto, UpdateDepartmentDto, UpdateOrganizationDto, UpdatePositionDto, UpdatePositionPermissionsDto, UserPositionDto } from './organization.dto.js';
 
 const scope = { source: 'params' as const, field: 'organizationId', optional: false };
 
@@ -184,6 +184,16 @@ export class OrganizationGovernanceController {
   @RequireAccess({ featurePermission: 'organization:positions:assign', organizationScope: scope })
   replaceUserPositions(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('userId', ParseUUIDPipe) userId: string, @Body() dto: ReplaceUserPositionsWithPreviewDto, @Req() request: Request) {
     return this.organizations.replaceUserPositions(this.actor(request), organizationId, userId, dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
+
+  @Post(':organizationId/users/:userId/positions')
+  @HttpCode(200)
+  @ApiOkResponse({ type: UserPositionDto, isArray: true })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'organization:positions:assign', featurePermissions: () => ['organization:positions:assign', 'account:users:read'], organizationScope: scope })
+  appendUserPositions(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('userId', ParseUUIDPipe) userId: string, @Body() dto: AppendUserPositionsDto, @Req() request: Request) {
+    return this.organizations.appendUserPositions(this.actor(request), organizationId, userId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   private actor(request: Request) {

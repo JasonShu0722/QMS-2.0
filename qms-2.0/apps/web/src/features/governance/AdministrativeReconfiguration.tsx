@@ -17,6 +17,7 @@ type Body = components['schemas']['AdministrativeReconfigurationDto'];
 type Result = components['schemas']['AdministrativeReconfigurationResultDto'];
 type Props = {
   organization: AdminOrganization;
+  initialKind?: Item['kind'];
   onChanged?: () => void;
   onDenied?: (error: ApiError) => void;
   renderAdditionalActions?: (item: Item, onCompleted: () => void) => ReactNode;
@@ -28,12 +29,12 @@ export function AdministrativeReconfiguration(props: Props) {
   return <ReconfigurationScope key={JSON.stringify([principal, props.organization.id, [...props.organization.permissions].sort()])} {...props} />;
 }
 
-function ReconfigurationScope({ organization, onChanged, onDenied, renderAdditionalActions }: Props) {
+function ReconfigurationScope({ organization, initialKind = 'ORGANIZATION', onChanged, onDenied, renderAdditionalActions }: Props) {
   const [pageSize, setPageSize] = useLedgerPageSize('admin-reconfiguration', organization.id);
   const { t } = useLanguage();
   const requestLeave = useNavigationGuard();
   const [principal] = useState(() => useWorkTabsStore.getState().sessionScope);
-  const [kind, setKind] = useState<Item['kind']>('ORGANIZATION');
+  const [kind, setKind] = useState(initialKind);
   const [offset, setOffset] = useState(0);
   const [revision, setRevision] = useState(0);
   const [page, setPage] = useState<Page>();

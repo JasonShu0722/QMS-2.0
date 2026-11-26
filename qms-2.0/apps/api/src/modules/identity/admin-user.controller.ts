@@ -11,7 +11,7 @@ import { AdminMfaPolicyDto, AdminMfaPolicyInputDto, AdminUserDto, AdminUserListQ
 import { clearSessionCookieOptions, SESSION_COOKIE } from './session.service.js';
 import { ResetTemporaryPasswordDto, TemporaryPasswordDto } from './dto/password-change-challenge.dto.js';
 import { AdminUserBatchService } from './admin-user-batch.service.js';
-import { AdminUserBatchResultDto, CreateAdminUserBatchDto } from './dto/admin-user-batch.dto.js';
+import { AdminUserBatchConfirmDto, AdminUserBatchConfirmResultDto, AdminUserBatchPreviewResultDto, AdminUserBatchResultDto, CreateAdminUserBatchDto, CreateAdminUserBatchPreviewDto } from './dto/admin-user-batch.dto.js';
 
 @Controller('api/v1/admin/users')
 @ApiCookieAuth('qms_session')
@@ -27,6 +27,26 @@ export class AdminUserController {
   createBatch(@Body() dto: CreateAdminUserBatchDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
     response.set('Cache-Control', 'no-store');
     return this.batches.create(this.actor(request), dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
+
+  @Post('batch/preview')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiCreatedResponse({ type: AdminUserBatchPreviewResultDto })
+  @RequireAccess({ featurePermission: 'account:users:create', organizationScope: { source: 'body', field: 'organizationId', optional: false } })
+  previewBatch(@Body() dto: CreateAdminUserBatchPreviewDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    response.set('Cache-Control', 'no-store');
+    return this.batches.preview(this.actor(request), dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
+
+  @Post('batch/confirm')
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @ApiCreatedResponse({ type: AdminUserBatchConfirmResultDto })
+  @RequireAccess({ featurePermission: 'account:users:create', organizationScope: { source: 'body', field: 'organizationId', optional: false } })
+  confirmBatch(@Body() dto: AdminUserBatchConfirmDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+    response.set('Cache-Control', 'no-store');
+    return this.batches.confirm(this.actor(request), dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   @Get()

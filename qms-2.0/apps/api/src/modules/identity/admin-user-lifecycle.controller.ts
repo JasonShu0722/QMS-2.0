@@ -6,7 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAuthenticated } from '../authorization/access.decorator.js';
 import { AdminUserLifecycleService } from './admin-user-lifecycle.service.js';
-import { AdminUserForceDeleteResultDto, AdminUserLifecycleQueryDto, DeleteAdminUserDto } from './admin-user-lifecycle.dto.js';
+import { AdminUserForceDeleteResultDto, AdminUserLifecycleQueryDto, DeleteInternalAdminUserDto } from './admin-user-lifecycle.dto.js';
 
 @Controller('api/v1/admin/users')
 @ApiCookieAuth('qms_session')
@@ -19,7 +19,7 @@ export class AdminUserLifecycleController {
   @ApiHeader({ name: 'x-csrf-token', required: true })
   @ApiOkResponse({ type: AdminUserForceDeleteResultDto })
   @RequireAuthenticated()
-  deleteUser(@Param('userId', ParseUUIDPipe) userId: string, @Query() query: AdminUserLifecycleQueryDto, @Body() dto: DeleteAdminUserDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
+  deleteUser(@Param('userId', ParseUUIDPipe) userId: string, @Query() query: AdminUserLifecycleQueryDto, @Body() dto: DeleteInternalAdminUserDto, @Req() request: Request, @Res({ passthrough: true }) response: Response) {
     response.set('Cache-Control', 'no-store');
     const authorized = request as AuthorizedRequest;
     const session = authorized[AUTHENTICATED_SESSION];

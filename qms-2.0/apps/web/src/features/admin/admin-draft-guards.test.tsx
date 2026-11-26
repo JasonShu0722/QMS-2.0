@@ -1,5 +1,6 @@
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
+import type { components } from '@qms/contracts';
 import type { ReactNode } from 'react';
 import { act, fireEvent, render as testingRender, screen, waitFor, within } from '@testing-library/react';
 import baseUserEvent from '@testing-library/user-event';
@@ -24,26 +25,28 @@ beforeEach(() => { localStorage.clear(); // rc-component uses one shared test-id
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
 
 it.each(['role', 'user'] as const)('retains the %s editor draft on cancelled close and discards only after shared confirmation', async (kind) => {
-  const user = baseUserEvent.setup();
   const writes: RequestInit[] = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
     if (init.method && init.method !== 'GET') writes.push(init);
     return json(path.includes('/permission-catalog') ? [] : path.includes('/roles?') ? [role] : [account]);
   }));
   render(<MemoryRouter><UnsavedChangesProvider>{kind === 'role' ? <RoleAdministration organization={organization} /> : <UserAdministration organization={organization} organizations={[organization]} />}</UnsavedChangesProvider></MemoryRouter>);
-  await user.click(await screen.findByRole('button', { name: kind === 'role' ? '编辑角色' : '管理用户' }));
-  const editor = screen.getByRole('dialog');
+  const action = kind === 'role' ? '编辑角色' : '管理用户';
+  const openEditor = () => screen.findByText(action, { selector: 'button > span' }).then(label => fireEvent.click(label.closest('button')!));
+  await openEditor();
+  const editor = await screen.findByRole('dialog');
   const label = kind === 'role' ? '角色名称' : '姓名';
   fireEvent.change(within(editor).getByLabelText(label), { target: { value: 'Unsaved draft' } });
-  await user.click(within(editor).getByRole('button', { name: '关闭' }));
-  await screen.findByText('当前草稿尚未保存，继续将放弃修改。');
-  await user.click(screen.getByRole('button', { name: '继续编辑' }));
-  await waitFor(() => expect(screen.queryByRole('dialog', { name: '当前草稿尚未保存，继续将放弃修改。' })).not.toBeInTheDocument());
+  fireEvent.click(within(editor).getByRole('button', { name: '关闭' }));
+  const confirmationTitle = '当前草稿尚未保存，继续将放弃修改。';
+  const confirmation = () => screen.findByLabelText(confirmationTitle, { selector: '[role="dialog"]' });
+  fireEvent.click(within(await confirmation()).getByText('继续编辑', { selector: 'button > span' }).closest('button')!);
+  await waitFor(() => expect(screen.queryByRole('dialog', { name: confirmationTitle })).not.toBeInTheDocument());
   expect(within(editor).getByLabelText(label)).toHaveValue('Unsaved draft');
   fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape', keyCode: 27 });
-  await user.click(await screen.findByRole('button', { name: /^放弃修改(?:并关闭)?$/ }));
+  fireEvent.click(within(await confirmation()).getByText(/^放弃修改(?:并关闭)?$/, { selector: 'button > span' }).closest('button')!);
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  await user.click(screen.getByRole('button', { name: kind === 'role' ? '编辑角色' : '管理用户' }));
+  await openEditor();
   expect(screen.getByLabelText(label, { selector: 'input' })).toHaveValue(kind === 'role' ? role.name : account.fullName);
   expect(writes).toEqual([]);
 }, 30000);
@@ -70,37 +73,64 @@ it('opens legacy user authorization as read-only and closes without a draft or w
 }, 30000);
 
 it('keeps the batch account modal open while creation is pending and allows closing after settlement', async () => {
-  const user = baseUserEvent.setup();
-  vi.mocked(readXlsxFile).mockResolvedValue([['用户名', '邮箱', '账号类型', '岗位代码'], ['new.user', '', 'INTERNAL', 'QA']]);
+  const username = 'new.user';
+  const fullName = 'New User';
+  const modalTitle = '批量创建账号';
+  const modalSelector = '[role="dialog"]';
+  const preview = {
+    previewId: '9ce9604e-1df1-4569-aabd-6e3d0024bb57',
+    expiresAt: '2099-01-01T00:00:00Z',
+    rows: [{
+      rowNumber: 2, username, fullName, accountType: 'INTERNAL', organizationCode: organization.code,
+      organizationId: organization.id, organizationName: organization.name, status: 'READY',
+    }],
+  } satisfies components['schemas']['AdminUserBatchPreviewResultDto'];
+  const result = {
+    batchId: 'c1573c88-28cc-4704-854c-905648af8064',
+    rows: [{ rowNumber: 2, username, status: 'SUCCESS', userId: 'd5ef2be5-8302-484f-a3a6-72a4ad19ef51', configurationRequired: true }],
+  } satisfies components['schemas']['AdminUserBatchConfirmResultDto'];
+  vi.mocked(readXlsxFile).mockResolvedValue([
+    ['用户名', '姓名', '账号类型', '主组织', '密码'],
+    [username, fullName, 'INTERNAL', organization.code, 'Example!Password42'],
+  ]);
   let finish!: (response: Response) => void;
+  const confirmation = new Promise<Response>(resolve => { finish = resolve; });
   const writes: RequestInit[] = [];
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit) => {
     if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
-    if (path.includes('/departments?')) return json([{ id: 'd1', status: 'ACTIVE' }]);
-    if (path.includes('/positions?')) return json([{ id: 'p1', departmentId: 'd1', code: 'QA', status: 'ACTIVE' }]);
-    if (path.endsWith('/position-authorization/preview')) return json({ authorizationBaseline: 'baseline-1', positions: [], effectivePermissionCodes: [], effectiveMfaRequired: false });
-    if (path === '/api/v1/admin/users/batch') { writes.push(init); return new Promise<Response>(resolve => { finish = resolve; }); }
+    if (path === '/api/v1/admin/users/batch/preview') return json(preview);
+    if (path === '/api/v1/admin/users/batch/confirm') {
+      writes.push(init);
+      return confirmation;
+    }
     return json([account]);
   }));
   render(<MemoryRouter><UnsavedChangesProvider><UserAdministration organization={organization} organizations={[organization]} /></UnsavedChangesProvider></MemoryRouter>);
-  await user.click(await screen.findByRole('button', { name: '批量创建账号' }));
-  const editor = await screen.findByRole('dialog', { name: '批量创建账号' });
-  const fileInput = within(editor).getByLabelText('账号清单文件');
+  const open = (await screen.findByText(modalTitle, { selector: 'button > span' })).closest('button')!;
+  expect(open).toHaveAccessibleName(modalTitle);
+  fireEvent.click(open);
+  const editor = await screen.findByLabelText(modalTitle, { selector: modalSelector });
+  const dialog = within(editor);
+  const fileInput = dialog.getByLabelText('账号清单文件');
   await waitFor(() => expect(fileInput).toBeVisible());
-  await user.upload(fileInput, new File(['xlsx'], 'accounts.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
-  await waitFor(() => expect(within(editor).getByRole('button', { name: '创建账号' })).toBeEnabled());
-  await user.click(within(editor).getByRole('button', { name: '创建账号' }));
-  await waitFor(() => expect(writes).toHaveLength(1));
-  expect(within(editor).getByLabelText('账号清单文件')).toBeDisabled();
-  const close = within(editor).queryByRole('button', { name: '关闭' });
-  if (close) await user.click(close);
+  const file = new File(['xlsx'], 'accounts.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  await act(async () => { fireEvent.change(fileInput, { target: { files: [file] } }); });
+  const confirm = dialog.getByText('创建账号', { selector: 'button > span' }).closest('button')!;
+  expect(confirm).toHaveAccessibleName('创建账号');
+  expect(confirm).toBeEnabled();
+  await act(async () => { fireEvent.click(confirm); });
+  expect(writes).toHaveLength(1);
+  expect(JSON.parse(String(writes[0]?.body))).toEqual({ organizationId: organization.id, previewId: preview.previewId });
+  expect(fileInput).toBeDisabled();
+  const close = dialog.queryByLabelText('关闭', { selector: 'button' });
+  if (close) fireEvent.click(close);
   fireEvent.keyDown(editor, { key: 'Escape', code: 'Escape', keyCode: 27 });
   expect(editor).toBeInTheDocument();
   expect(editor).toBeVisible();
-  expect(screen.getByRole('dialog', { name: '批量创建账号' })).toBe(editor);
-  await act(async () => finish(json({ batchId: 'batch-a', rows: [{ rowNumber: 2, username: 'new.user', status: 'SUCCESS', userId: 'new-user' }] })));
-  expect(await within(editor).findByText('成功')).toBeVisible();
-  await user.click(within(editor).getByRole('button', { name: '关闭' }));
-  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.getByLabelText(modalTitle, { selector: modalSelector })).toBe(editor);
+  await act(async () => { finish(json(result)); });
+  expect(dialog.getByText('成功')).toBeVisible();
+  fireEvent.click(dialog.getByLabelText('关闭', { selector: 'button' }));
+  await waitFor(() => expect(editor).not.toBeInTheDocument());
   expect(writes).toHaveLength(1);
-}, 15000);
+});

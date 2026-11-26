@@ -51,6 +51,11 @@ function canonical(value: unknown): string {
   return JSON.stringify(value) ?? 'null';
 }
 
+function isSharedActorConflict(error: unknown): boolean {
+  const failure = error as { code?: string; cause?: { originalCode?: string } };
+  return isSecurityConcurrencyConflict(error) || failure.code === '40001' || failure.cause?.originalCode === '40001';
+}
+
 @Injectable()
 export class AdminMutationService {
   private readonly secret: string;
@@ -61,13 +66,14 @@ export class AdminMutationService {
     this.secret = configured ?? 'qms-development-rate-limit-secret-not-for-production';
   }
 
-  async run<Result>(input: { actor: AdminActor; organizationId: string; key: string | undefined; action: string; payload: unknown; permission: string | string[]; traceId: string; authentication?: 'active' | 'recent'; duplicateCode?: PlatformErrorCode; additionalAccess?: { organizationId: string; permission: string }[]; isolationLevel?: Prisma.TransactionIsolationLevel; archivedReceipt?: { organizationId: string; find: (transaction: AdminTransaction) => Promise<{ organizationId: string; action: string; requestDigest: string; response: Prisma.JsonValue } | undefined> } }, work: (transaction: AdminTransaction, granted: string[]) => Promise<Result>, authorizeResource?: (transaction: AdminTransaction) => Promise<void>, authorizeReplay?: (transaction: AdminTransaction, response: Result) => Promise<void>): Promise<Result> {
+  async run<Result>(input: { actor: AdminActor; organizationId: string; key: string | undefined; action: string; payload: unknown; permission: string | string[]; traceId: string; authentication?: 'active' | 'recent'; activeActorUserLock?: 'SHARE'; duplicateCode?: PlatformErrorCode; additionalAccess?: { organizationId: string; permission: string }[]; isolationLevel?: Prisma.TransactionIsolationLevel; archivedReceipt?: { organizationId: string; find: (transaction: AdminTransaction) => Promise<{ organizationId: string; action: string; requestDigest: string; response: Prisma.JsonValue } | undefined> } }, work: (transaction: AdminTransaction, granted: string[]) => Promise<Result>, authorizeResource?: (transaction: AdminTransaction) => Promise<void>, authorizeReplay?: (transaction: AdminTransaction, response: Result) => Promise<void>): Promise<Result> {
     try {
       if (!input.key || !/^[a-zA-Z0-9._:-]{8,128}$/.test(input.key)) adminError('IDEMPOTENCY_KEY_REQUIRED', 400);
       const key = input.key;
       const requestDigests = adminMutationDigests(canonical(input.payload), this.secret);
       const requestDigest = requestDigests[0]!;
-      return await this.prisma.$transaction(async (transaction) => {
+      let writingReceipt = false;
+      const execute = () => this.prisma.$transaction(async (transaction) => {
         if (input.isolationLevel === 'ReadCommitted') {
           const lock = `admin-mutation:${input.organizationId}:${input.actor.id}:${key}`;
           await transaction.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lock}, 0))::text`;
@@ -75,7 +81,7 @@ export class AdminMutationService {
         const permissions = [input.permission].flat().concat(input.additionalAccess?.map(access => access.permission) ?? []);
         const active = input.authentication === 'active' || (input.authentication === undefined
           && permissions.length > 0 && permissions.every(allowsActiveAuthentication));
-        if (active) await assertActiveAuthentication(transaction, input.actor);
+        if (active) await assertActiveAuthentication(transaction, input.actor, input.activeActorUserLock);
         else await assertRecentAuthentication(transaction, input.actor);
         const granted = await assertAdminAccess(transaction, input.actor, input.organizationId, input.permission);
         for (const access of input.additionalAccess ?? []) await assertAdminAccess(transaction, input.actor, access.organizationId, access.permission);
@@ -95,12 +101,20 @@ export class AdminMutationService {
         if (authorizeReplay) await authorizeResource?.(transaction);
         const result = await work(transaction, granted);
         const response = JSON.parse(JSON.stringify({ value: result ?? null })) as Prisma.InputJsonObject;
+        writingReceipt = true;
         await transaction.adminMutation.create({ data: { ...identity, action: input.action, requestDigest, response } });
         return (response as { value: Result }).value;
       }, { isolationLevel: input.isolationLevel ?? 'Serializable' });
+      try {
+        return await execute();
+      } catch (error) {
+        if (input.activeActorUserLock !== 'SHARE' || !writingReceipt || !isSharedActorConflict(error)) throw error;
+        return await execute();
+      }
     } catch (error) {
       const code = (error as { code?: string }).code;
-      const mappedCode = isSecurityConcurrencyConflict(error) ? 'CONCURRENCY_CONFLICT' : code === 'P2002' ? input.duplicateCode ?? 'CONCURRENCY_CONFLICT' : undefined;
+      const conflict = input.activeActorUserLock === 'SHARE' ? isSharedActorConflict(error) : isSecurityConcurrencyConflict(error);
+      const mappedCode = conflict ? 'CONCURRENCY_CONFLICT' : code === 'P2002' ? input.duplicateCode ?? 'CONCURRENCY_CONFLICT' : undefined;
       const rejection = mappedCode ? new HttpException({ code: mappedCode, message: PLATFORM_ERROR_MESSAGES[mappedCode] }, 409) : error;
       if (rejection instanceof HttpException && [400, 401, 403, 404, 409].includes(rejection.getStatus())) {
         const event = { actorUserId: input.actor.id, organizationId: input.organizationId, action: 'ACTION_REJECTED', resourceType: 'Administration', outcome: 'DENIED' as const, traceId: input.traceId, metadata: { permissionCode: Array.isArray(input.permission) ? input.permission.join(',') : input.permission, reasonCode: (rejection.getResponse() as { code: string }).code } };

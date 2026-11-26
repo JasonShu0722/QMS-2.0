@@ -207,7 +207,9 @@ export class AuditManagementService {
     return this.read(actor, async (tx, organizationId) => {
       const [execution] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id FROM audit_executions WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(executionId)}::uuid`);
       if (!execution) fail('AUDIT_EXECUTION_NOT_FOUND', 404);
-      return tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_ncs WHERE organization_id = ${organizationId}::uuid AND execution_id = ${uuid(executionId)}::uuid ORDER BY created_at, id`);
+      return tx.$queryRaw<Row[]>(Prisma.sql`SELECT nc.*, assignee.deleted_at IS NOT NULL AS assignee_deleted
+        FROM audit_ncs nc LEFT JOIN users assignee ON assignee.id = nc.assignee_user_id
+        WHERE nc.organization_id = ${organizationId}::uuid AND nc.execution_id = ${uuid(executionId)}::uuid ORDER BY nc.created_at, nc.id`);
     });
   }
 
@@ -307,14 +309,24 @@ export class AuditManagementService {
 
   private ncUpdate(actor: AdminActor, id: string, expectedVersion: number, status: string, changes: Record<string, string>, traceId: string, key?: string, requireVerified = false) {
     const organizationId = this.scope(actor);
-    return this.mutations.run({ actor, organizationId, key, traceId, action: `AUDIT_NC_${status}`, permission: WRITE, payload: { id, expectedVersion, status, changes } }, async (tx) => {
+    return this.mutations.run({
+      actor, organizationId, key, traceId, action: `AUDIT_NC_${status}`, permission: WRITE,
+      activeActorUserLock: 'SHARE',
+      payload: { id, expectedVersion, status, changes },
+    }, async (tx) => {
       const [current] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT * FROM audit_ncs WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(id)}::uuid FOR UPDATE`);
       if (!current) fail('AUDIT_NC_NOT_FOUND', 404);
       if (current.version !== expectedVersion) fail('CONCURRENCY_CONFLICT', 409);
-      if (status === 'ASSIGNED' && !['OPEN', 'REJECTED'].includes(current.status)) fail('AUDIT_NC_STATE_INVALID', 409);
+      let deletedAssigneeId: string | undefined;
       if (changes.assigneeUserId) {
-        const [assignee] = await tx.$queryRaw<Row[]>(Prisma.sql`SELECT id FROM users WHERE organization_id = ${organizationId}::uuid AND id = ${changes.assigneeUserId}::uuid AND account_type = 'INTERNAL' AND status = 'ACTIVE'`);
-        if (!assignee) fail('AUDIT_ASSIGNEE_SCOPE_DENIED', 403);
+        if (!['OPEN', 'REJECTED', 'ASSIGNED'].includes(current.status)) fail('AUDIT_NC_STATE_INVALID', 409);
+        const identities = await tx.$queryRaw<{ id: string; organization_id: string; account_type: string; status: string; deleted_at: Date | null }[]>`
+          SELECT id, organization_id, account_type, status, deleted_at FROM users
+          WHERE id IN (${changes.assigneeUserId}::uuid, ${current.assignee_user_id as string | null}::uuid) ORDER BY id FOR SHARE`;
+        deletedAssigneeId = identities.find(identity => identity.id === current.assignee_user_id && identity.deleted_at)?.id;
+        if (current.status === 'ASSIGNED' && !deletedAssigneeId) fail('AUDIT_NC_STATE_INVALID', 409);
+        if (!identities.some(identity => identity.id === changes.assigneeUserId.toLowerCase() && identity.organization_id === organizationId
+          && identity.account_type === 'INTERNAL' && identity.status === 'ACTIVE' && !identity.deleted_at)) fail('AUDIT_ASSIGNEE_SCOPE_DENIED', 403);
       }
       if (requireVerified && current.status !== 'VERIFIED') fail('AUDIT_NC_VERIFY_REQUIRED', 409);
       if (status === 'RESPONDED' && !['ASSIGNED', 'REJECTED'].includes(current.status)) fail('AUDIT_NC_STATE_INVALID', 409);
@@ -331,7 +343,13 @@ export class AuditManagementService {
       }
       const [row] = await tx.$queryRaw<Row[]>(Prisma.sql`UPDATE audit_ncs SET status = ${status}, assignee_user_id = COALESCE(${changes.assigneeUserId ?? null}::uuid, assignee_user_id), assigned_by_id = CASE WHEN ${status} = 'ASSIGNED' THEN ${actor.id}::uuid ELSE assigned_by_id END, response = COALESCE(${changes.response ?? null}, response), responded_by_id = CASE WHEN ${status} = 'RESPONDED' THEN ${actor.id}::uuid ELSE responded_by_id END, verification_note = COALESCE(${changes.verificationNote ?? null}, verification_note), verified_by_id = COALESCE(${changes.verifiedById ?? null}::uuid, verified_by_id), closed_by_id = COALESCE(${changes.closedById ?? null}::uuid, closed_by_id), version = version + 1, updated_at = CURRENT_TIMESTAMP WHERE organization_id = ${organizationId}::uuid AND id = ${uuid(id)}::uuid AND version = ${expectedVersion} RETURNING *`);
       if (!row) fail('CONCURRENCY_CONFLICT', 409);
-      await this.record(tx, actor, organizationId, `AUDIT_NC_${status}`, row.id, traceId);
+      if (deletedAssigneeId) {
+        await this.audit.record({ organizationId, actorUserId: actor.id, action: 'AUDIT_NC_ASSIGNED', resourceType: 'AuditManagement',
+          resourceId: row.id, outcome: 'SUCCESS', traceId, metadata: { targetUserId: deletedAssigneeId,
+            reasonCode: 'AUDIT_NC_HISTORICAL_ASSIGNEE_DELETED', resourceVersion: row.version } }, tx);
+      } else {
+        await this.record(tx, actor, organizationId, `AUDIT_NC_${status}`, row.id, traceId);
+      }
       return row;
     });
   }

@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
 import { AdminRoleDto } from '../authorization/admin-role.dto.js';
 
 export class OrganizationDto {
@@ -104,6 +104,13 @@ export class ReplaceUserPositionsWithPreviewDto extends ReplaceUserPositionsDto 
   @ApiProperty({ minLength: 1, maxLength: 256, description: '岗位授权预览返回的完整基线。' })
   @IsString() @Length(1, 256)
   authorizationBaseline!: string;
+}
+
+export class AppendUserPositionsDto {
+  @ApiProperty({ type: 'array', items: { type: 'string', format: 'uuid' }, minItems: 1, maxItems: 100, uniqueItems: true })
+  @Transform(({ value }) => Array.isArray(value) ? value.map((id: unknown) => typeof id === 'string' ? id.toLowerCase() : id) : value)
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(100) @ArrayUnique() @IsUUID('all', { each: true })
+  positionIds!: string[];
 }
 
 export class ReplacePositionRolesDto {

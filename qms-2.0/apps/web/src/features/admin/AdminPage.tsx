@@ -42,6 +42,7 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
   const requestLeave = useNavigationGuard();
   const [selectedId, setSelectedId] = useState<string>();
   const [activeTab, setActiveTab] = useState<string>();
+  const [pendingUsersFirst, setPendingUsersFirst] = useState(false);
   const [acceptedLocation, setAcceptedLocation] = useState(location);
   const [targetConsumed, setTargetConsumed] = useState(false);
   const query = new URLSearchParams(acceptedLocation?.search);
@@ -77,6 +78,7 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
       setSelectedId(undefined);
       setTargetConsumed(false);
       setActiveTab(undefined);
+      setPendingUsersFirst(false);
       setAcceptedLocation(location);
     }
   }, [location, acceptedLocation]);
@@ -86,6 +88,7 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
   if (targeting && (!validTarget || !organization || !(auditTarget ? organization.permissions.includes('audit:read') : allows(organization, 'users:read')))) return <Alert type="error" title={t(auditTarget ? '审计定位失败：链接无效或无权查看目标组织审计。' : '账号定位失败：链接无效或无权查看目标组织账号。')} role="alert" showIcon />;
   if (!organization) return <Alert type="warning" title={t('无系统管理访问权限')} showIcon />;
   const users = allows(organization, 'users:read') || allows(organization, 'users:create');
+  const canReconfigure = organization.permissions.includes('organization:reconfigure');
   const roles = allows(organization, 'roles:read');
   const customerMaster = organization.permissions.some((code) => ['customer-quality:complaints:read', 'customer-quality:complaints:write'].includes(code));
   const additionalTabs = [
@@ -97,7 +100,7 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
     ...(organization.permissions.includes('configuration:read') ? [{ key: 'configuration', label: t('平台配置'), children: <ConfigurationAdministration organization={organization} /> }] : []),
     ...(organization.permissions.includes('audit:read') ? [{ key: 'audit-log', label: t('管理审计'), children: <AuditAdministration organization={organization} target={targeting && auditTarget && resourceId ? { resourceType, resourceId } : undefined} /> }] : []),
     ...(organization.permissions.includes('outbox:read') ? [{ key: 'failures', label: t('失败队列'), children: <OutboxAdministration organization={organization} /> }] : []),
-    ...(organization.permissions.includes('organization:reconfigure') ? [{ key: 'reconfiguration', label: t('待配置'), children: <AdministrativeReconfiguration organization={organization}
+    ...(canReconfigure ? [{ key: 'reconfiguration', label: t('待配置'), children: <AdministrativeReconfiguration organization={organization} initialKind={pendingUsersFirst ? 'USER' : undefined}
       onChanged={onDirectoryChange} onDenied={management.invalidate} renderAdditionalActions={(item, onCompleted) => item.kind === 'USER' ? <UserForceDelete
         target={{ id: item.id, organizationId: item.originalOrganizationId, username: item.label, securityVersion: item.version }}
         canDelete={organization.permissions.includes('account:users:delete')} onRefresh={onCompleted} onDenied={management.invalidate}
@@ -125,8 +128,9 @@ function AdminPageContent({ organizations, error, traceId, onDirectoryChange, lo
       </>} />
       : <Alert showIcon type={managementDenied ? 'error' : 'warning'} title={t(managementDenied ? '管理身份已失效，请刷新权限后重试' : '管理身份暂未核实，强删与补配操作不可用')}
         action={<Button onClick={management.reload}>{t('重新核实')}</Button>} />}
-    {!managementDenied && <Tabs destroyOnHidden key={`${organization.id}:${targetUserId ?? ''}`} activeKey={activeTabAllowed ? activeTab : targeting && validTarget ? section! : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={(key) => changeScope(() => setActiveTab(key))} items={[
-      ...(users ? [{ key: 'users', label: t('用户'), children: <UserAdministration organization={organization} organizations={organizations} targetUserId={targetUserId} onDenied={management.invalidate} /> }] : []),
+    {!managementDenied && <Tabs destroyOnHidden key={`${organization.id}:${targetUserId ?? ''}`} activeKey={activeTabAllowed ? activeTab : targeting && validTarget ? section! : users ? 'users' : roles ? 'roles' : additionalTabs[0]?.key} onChange={(key) => changeScope(() => { setPendingUsersFirst(false); setActiveTab(key); })} items={[
+      ...(users ? [{ key: 'users', label: t('用户'), children: <UserAdministration organization={organization} organizations={organizations} targetUserId={targetUserId} onDenied={management.invalidate}
+        onOpenPendingUsers={canReconfigure ? () => { setPendingUsersFirst(true); setActiveTab('reconfiguration'); } : undefined} /> }] : []),
       ...(roles ? [{ key: 'roles', label: t('历史授权'), children: <RoleAdministration organization={organization} readOnly /> }] : []),
       ...additionalTabs,
     ]} />}

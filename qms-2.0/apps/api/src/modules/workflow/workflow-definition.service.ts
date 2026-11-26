@@ -2,11 +2,11 @@ import { BadRequestException, ConflictException, Injectable, Optional } from '@n
 import { randomUUID } from 'node:crypto';
 import { Prisma, type WorkflowDefinition, type WorkflowVersion } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
-import { assertActiveAuthentication } from '../../common/security/session-security.js';
+import { assertActiveAuthentication, isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { ACTIVE_PERMISSION_CODES } from '../authorization/permission-catalog.js';
 import { assertWorkflowFeature, type WorkflowActor } from './workflow-access-policy.js';
-import { workflowError } from './workflow-runtime-policy.js';
+import { jsonObject, workflowError } from './workflow-runtime-policy.js';
 import { WorkflowValidationService, type WorkflowDraft } from './workflow-validation.service.js';
 import { WorkflowClosureRegistry } from './workflow-closure-registry.js';
 import type { WorkflowDefinitionDetailDto, WorkflowDefinitionHeaderDto, WorkflowDefinitionResponseDto, WorkflowGraphResponseDto, WorkflowOptionsDto, WorkflowOptionsQueryDto, WorkflowPageDto, WorkflowQueryDto, WorkflowVersionResponseDto, WorkflowVersionSummaryDto } from './workflow.dto.js';
@@ -39,6 +39,7 @@ export class WorkflowDefinitionService {
         organizationId: input.organizationId, workflowDefinitionId: definition.id, version: 1, status: 'DRAFT',
         createdById: input.userId ?? null, updatedById: input.userId ?? null, structureSnapshot: this.json(graph),
       } });
+      await this.lockLiveDirectAssignees(tx, graph);
       await this.writeGraph(tx, input.organizationId, version.id, graph, input.userId);
       await this.record(tx, input, 'WORKFLOW_DRAFT_CREATED', 'WorkflowDefinition', definition.id, 'DRAFT', 1);
       return this.response(tx, definition, version.id);
@@ -57,6 +58,7 @@ export class WorkflowDefinitionService {
       if (version.status !== 'DRAFT') throw new ConflictException({ code: 'WORKFLOW_VERSION_IMMUTABLE' });
       await tx.workflowTransition.deleteMany({ where: { organizationId: input.organizationId, workflowVersionId: version.id } });
       await tx.workflowNode.deleteMany({ where: { organizationId: input.organizationId, workflowVersionId: version.id } });
+      await this.lockLiveDirectAssignees(tx, graph);
       await this.writeGraph(tx, input.organizationId, version.id, graph, input.userId);
       await tx.workflowVersion.update({ where: { id: version.id }, data: { structureSnapshot: this.json(graph), updatedById: input.userId ?? null } });
       const updated = await this.advanceDefinition(tx, definition, input);
@@ -85,6 +87,7 @@ export class WorkflowDefinitionService {
         if (!input.actor || input.actor.accountType !== 'INTERNAL' || organization?.type !== 'INTERNAL'
           || reviews.some(review => !this.closureRegistry?.hasDomain(review.domainCode))) workflowError('WORKFLOW_ACTION_INVALID', 409);
       }
+      await this.lockLiveDirectAssignees(tx, graph);
       await tx.workflowVersion.update({ where: { id: draft.id }, data: {
         status: 'PUBLISHED', publishedAt: new Date(), publishedById: input.userId ?? null,
         changeNote: input.changeNote?.trim() ?? null, structureSnapshot: this.json(graph), updatedById: input.userId ?? null,
@@ -236,6 +239,18 @@ export class WorkflowDefinitionService {
     return tx.workflowDefinition.findUniqueOrThrow({ where: { id: definition.id } });
   }
 
+  private async lockLiveDirectAssignees(tx: Prisma.TransactionClient, draft: WorkflowDraft) {
+    const assigneeIds = [...new Set(draft.nodes.flatMap(({ config }) => [config?.assignment, config?.escalation].flatMap(value => {
+      const id = jsonObject(value).assigneeUserId;
+      return typeof id === 'string' ? [id.toLowerCase()] : [];
+    })))];
+    if (assigneeIds.length) {
+      const users = await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM users WHERE id = ANY(${assigneeIds}::uuid[]) AND deleted_at IS NULL ORDER BY id FOR KEY SHARE`;
+      if (users.length !== assigneeIds.length) workflowError('WORKFLOW_DRAFT_INVALID', 409);
+    }
+  }
+
   private async writeGraph(tx: Prisma.TransactionClient, organizationId: string, versionId: string, draft: WorkflowDraft, userId?: string) {
     const nodeIds = new Map<string, string>();
     for (const node of draft.nodes) {
@@ -279,7 +294,7 @@ export class WorkflowDefinitionService {
   private async transaction<Result>(work: (tx: Prisma.TransactionClient) => Promise<Result>, isolationLevel: 'ReadCommitted' | 'RepeatableRead' = 'ReadCommitted'): Promise<Result> {
     try { return await this.prisma.$transaction(work, { isolationLevel }); }
     catch (error) {
-      if (['P2002', 'P2034'].includes(String((error as { code?: string }).code))) workflowError('CONCURRENCY_CONFLICT', 409);
+      if ((error as { code?: string }).code === 'P2002' || isSecurityConcurrencyConflict(error)) workflowError('CONCURRENCY_CONFLICT', 409);
       throw error;
     }
   }

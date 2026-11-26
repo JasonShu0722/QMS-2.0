@@ -76,6 +76,54 @@ it('mounts the global pending configuration entry only after actual platform aut
   expect(await screen.findByRole('region', { name: '待配置管理' })).toBeVisible();
 });
 
+it('opens pending users from the user list and saves through the formal reconfiguration command', async () => {
+  const org = { ...organization, permissions: [...organization.permissions, 'organization:reconfigure'] };
+  const userId = '33333333-3333-4333-8333-333333333333';
+  const command = `/api/v1/admin/reconfiguration/USER/${userId}`;
+  let configured = false;
+  const fetcher = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path.includes('/organizations/context?')) return json({ ...context(org.id, true), permissions: org.permissions });
+    if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
+    if (path === command && init?.method === 'POST') {
+      configured = true;
+      return json({ kind: 'USER', id: userId, originalOrganizationId: org.id, targetOrganizationId: org.id, version: 2, status: 'DISABLED', configurationRequired: false });
+    }
+    if (path.includes('/admin/reconfiguration?kind=USER&')) {
+      const items = configured ? [] : [{ kind: 'USER', id: userId, label: '新导入账号', originalOrganizationId: org.id, version: 1, requiredConfiguration: ['appointmentAfterReconfiguration'] }];
+      return json({ items, total: items.length, pageSize: 50, offset: 0 });
+    }
+    return json([]);
+  });
+  vi.stubGlobal('fetch', fetcher);
+  render(page([org]));
+  expect(screen.queryByText('待配置用户', { selector: 'button > span' })).not.toBeInTheDocument();
+  const shortcut = (await screen.findByText('待配置用户', { selector: 'button > span' })).closest('button')!;
+  expect(shortcut).toHaveAccessibleName('待配置用户');
+  expect(shortcut).toBeVisible();
+  fireEvent.click(shortcut);
+  const queue = within(await screen.findByLabelText('待配置管理', { selector: 'section' }));
+  fireEvent.click(await queue.findByLabelText('配置 · 新导入账号', { selector: 'button' }));
+  const editor = within(queue.getByLabelText('配置 · 新导入账号', { selector: 'section' }));
+  const confirm = editor.getByText('确认补配', { selector: 'button > span' }).closest('button')!;
+  expect(confirm).toHaveAccessibleName('确认补配');
+  expect(confirm).toBeEnabled();
+  fireEvent.click(confirm);
+  expect(await queue.findByText(/保持停用$/)).toBeVisible();
+  expect(fetcher.mock.calls.filter(([path, init]) => path === command && init?.method === 'POST').map(([, init]) => JSON.parse(String(init?.body))))
+    .toEqual([{ expectedVersion: 1 }]);
+  expect(fetcher.mock.calls.some(([path]) => path.includes('/admin/reconfiguration?kind=ORGANIZATION&'))).toBe(false);
+});
+
+it('does not show the pending users shortcut without verified platform reconfiguration authority', async () => {
+  const org = { ...organization, permissions: [...organization.permissions, 'organization:reconfigure'] };
+  const fetcher = vi.fn(async (path: string) => json(path.includes('/organizations/context?') ? { ...context(org.id, false), permissions: org.permissions } : []));
+  vi.stubGlobal('fetch', fetcher);
+  render(page([org]));
+  expect(await screen.findByText('组织管理：当前授权范围')).toBeVisible();
+  expect(screen.queryByRole('button', { name: '待配置用户' })).not.toBeInTheDocument();
+  expect(fetcher.mock.calls.some(([path]) => path.includes('/admin/reconfiguration?'))).toBe(false);
+});
+
 it('mounts the separate responsibility recovery view only under verified reconfiguration authority', async () => {
   const org = { ...organization, permissions: [...organization.permissions, 'organization:reconfigure'] };
   vi.stubGlobal('fetch', vi.fn(async (path: string) => json(path.includes('/organizations/context?')

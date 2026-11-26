@@ -867,6 +867,130 @@ describe('N1 organization lifecycle with real PostgreSQL', () => {
     throw new Error('Expected real PostgreSQL lock contention was not observed');
   }
 
+  async function appointmentFixture(codes: string[] = ['platform:admin']) {
+    const f = await fixture(codes);
+    const employee = await prisma.user.create({ data: { organizationId: f.root.id, username: randomUUID(), accountType: 'INTERNAL', passwordHash: 'test-only' } });
+    const position = (status: 'ACTIVE' | 'DISABLED' = 'ACTIVE') => prisma.position.create({ data: { organizationId: f.root.id, code: randomUUID(), name: 'Append appointment', status } });
+    const assign = (positionId: string, startedAt = new Date(Date.now() - 60_000)) => prisma.userPosition.create({ data: { organizationId: f.root.id, userId: employee.id, positionId, startedAt } });
+    const path = `/${f.root.id}/users/${employee.id}/positions`;
+    const append = (positionIds: string[], key = randomUUID()) => f.send('post', path, { positionIds }, key);
+    return { ...f, employee, position, assign, path, append };
+  }
+
+  it('appends only new appointments and leaves existing and scheduled appointments intact on retries', async () => {
+    const f = await appointmentFixture();
+    const [held, scheduled, added, unchanged] = await Promise.all([f.position(), f.position(), f.position(), f.position()]);
+    const existing = await Promise.all([f.assign(held.id), f.assign(scheduled.id, new Date(Date.now() + 3600_000)), f.assign(unchanged.id)]);
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'organization:structure:read' } });
+    const role = await prisma.role.create({ data: { organizationId: f.root.id, code: randomUUID(), name: 'Append role', permissions: { create: [{ permissionId: permission.id }] } } });
+    await prisma.positionRole.create({ data: { organizationId: f.root.id, roleId: role.id, positionId: added.id } });
+    const input = [held.id, scheduled.id, added.id];
+    const key = randomUUID();
+    const first = (await f.append(input, key).expect(200)).body;
+    expect(first.map(({ positionId }: { positionId: string }) => positionId).sort()).toEqual([held.id, added.id, unchanged.id].sort());
+    expect((await f.append(input, key).expect(200)).body).toEqual(first);
+    expect((await f.append(input).expect(200)).body).toEqual(first);
+    expect(await prisma.userPosition.findMany({ where: { id: { in: existing.map(({ id }) => id) } }, orderBy: { id: 'asc' } }))
+      .toEqual(existing.sort((first, second) => first.id.localeCompare(second.id)));
+    expect(await prisma.userPosition.count({ where: { userId: f.employee.id } })).toBe(4);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: f.employee.id } })).toMatchObject({ securityVersion: f.employee.securityVersion + 1 });
+    expect(await prisma.auditEvent.count({ where: { resourceId: f.employee.id, action: 'USER_POSITIONS_APPENDED' } })).toBe(1);
+  });
+
+  it('checks eligibility and role ceiling for added positions only and rolls back a rejected batch', async () => {
+    const f = await appointmentFixture(['account:users:read', 'organization:positions:assign', 'account:roles:read', 'account:roles:assign']);
+    const [held, disabled, granted, forbidden] = await Promise.all([f.position(), f.position('DISABLED'), f.position(), f.position()]);
+    const existing = await f.assign(held.id);
+    const inactive = await f.assign(disabled.id);
+    const permission = await prisma.permission.findUniqueOrThrow({ where: { code: 'organization:structure:read' } });
+    const role = await prisma.role.create({ data: { organizationId: f.root.id, code: randomUUID(), name: 'Above ceiling', permissions: { create: [{ permissionId: permission.id }] } } });
+    await prisma.positionRole.createMany({ data: [held.id, forbidden.id].map(positionId => ({ organizationId: f.root.id, positionId, roleId: role.id })) });
+    await f.append([held.id, disabled.id, granted.id, forbidden.id]).expect(403);
+    await f.append([granted.id, randomUUID()]).expect(409);
+    expect(await prisma.userPosition.count({ where: { userId: f.employee.id } })).toBe(2);
+    const result = (await f.append([held.id, disabled.id, granted.id]).expect(200)).body;
+    expect(result.map(({ positionId }: { positionId: string }) => positionId).sort()).toEqual([held.id, granted.id].sort());
+    expect(await prisma.userPosition.findUniqueOrThrow({ where: { id: existing.id } })).toEqual(existing);
+    expect(await prisma.userPosition.findUniqueOrThrow({ where: { id: inactive.id } })).toEqual(inactive);
+    await f.append([]).expect(400);
+    await f.append([granted.id, granted.id.toUpperCase()]).expect(400);
+  });
+
+  it('appends to a configured disabled internal account without enabling it or restoring sessions', async () => {
+    const f = await appointmentFixture(['account:users:read', 'organization:positions:assign', 'account:roles:read', 'account:roles:assign']);
+    const position = await f.position();
+    const revokedAt = new Date();
+    const session = await prisma.session.create({ data: { userId: f.employee.id, tokenHash: randomUUID(), expiresAt: new Date(Date.now() + 60_000), revokedAt } });
+    await prisma.user.update({ where: { id: f.employee.id }, data: { status: 'DISABLED', configurationRequired: true } });
+    await f.append([position.id]).expect(404);
+    expect(await prisma.userPosition.count({ where: { userId: f.employee.id } })).toBe(0);
+    await prisma.user.update({ where: { id: f.employee.id }, data: { configurationRequired: false } });
+    const key = randomUUID();
+    const first = (await f.append([position.id], key).expect(200)).body;
+    expect(first).toMatchObject([{ positionId: position.id }]);
+    expect((await f.append([position.id], key).expect(200)).body).toEqual(first);
+    expect(await prisma.user.findUniqueOrThrow({ where: { id: f.employee.id } })).toMatchObject({ status: 'DISABLED', configurationRequired: false });
+    expect(await prisma.session.findUniqueOrThrow({ where: { id: session.id } })).toMatchObject({ revokedAt });
+    expect(await prisma.session.count({ where: { userId: f.employee.id, revokedAt: null } })).toBe(0);
+    expect(await prisma.auditEvent.count({ where: { resourceId: f.employee.id, action: 'USER_POSITIONS_APPENDED' } })).toBe(1);
+  });
+
+  it('rejects unauthorized callers without writing appointments', async () => {
+    const f = await appointmentFixture(['account:users:read']);
+    const position = await f.position();
+    await f.append([position.id]).expect(403);
+    expect(await prisma.userPosition.count({ where: { userId: f.employee.id } })).toBe(0);
+  });
+
+  it('rechecks requested appointments after waiting for a concurrent insert to commit', async () => {
+    const f = await appointmentFixture();
+    const position = await f.position();
+    const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+    await blocker.connect();
+    let pending: Promise<request.Response> | undefined;
+    try {
+      await blocker.query('BEGIN');
+      const { rows: [{ pid }] } = await blocker.query('SELECT pg_backend_pid() AS pid');
+      await blocker.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [f.employee.id]);
+      const id = randomUUID();
+      await blocker.query('INSERT INTO user_positions (id, organization_id, user_id, position_id) VALUES ($1, $2, $3, $4)', [id, f.root.id, f.employee.id, position.id]);
+      pending = f.append([position.id]).then(response => response);
+      await waitBlocked(pid);
+      await blocker.query('COMMIT');
+      expect(await pending).toMatchObject({ status: 200, body: [expect.objectContaining({ id, positionId: position.id })] });
+      expect(await prisma.userPosition.count({ where: { userId: f.employee.id } })).toBe(1);
+      expect(await prisma.auditEvent.count({ where: { resourceId: f.employee.id, action: 'USER_POSITIONS_APPENDED' } })).toBe(0);
+    } finally {
+      await blocker.query('ROLLBACK');
+      await blocker.end();
+      await pending;
+    }
+  });
+
+  it('rechecks delegation after waiting for the target and preserves the previous appointments on denial', async () => {
+    const f = await appointmentFixture(['account:users:read', 'organization:positions:assign']);
+    const [held, added] = await Promise.all([f.position(), f.position()]);
+    const existing = await f.assign(held.id);
+    const blocker = new Client({ connectionString: process.env.DATABASE_URL });
+    await blocker.connect();
+    let pending: Promise<request.Response> | undefined;
+    try {
+      await blocker.query('BEGIN');
+      const { rows: [{ pid }] } = await blocker.query('SELECT pg_backend_pid() AS pid');
+      await blocker.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [f.employee.id]);
+      pending = f.append([held.id, added.id]).then(response => response);
+      await waitBlocked(pid);
+      await blocker.query('DELETE FROM user_roles WHERE user_id = $1', [f.actor.id]);
+      await blocker.query('COMMIT');
+      expect(await pending).toMatchObject({ status: 403, body: { code: 'FEATURE_PERMISSION_DENIED' } });
+      expect(await prisma.userPosition.findMany({ where: { userId: f.employee.id } })).toEqual([existing]);
+    } finally {
+      await blocker.query('ROLLBACK');
+      await blocker.end();
+      await pending;
+    }
+  });
+
   it('serializes delegated mapping reactivation against stopping its target organization', async () => {
     const f = await fixture([...ADMIN_PERMISSIONS, 'organization:read', 'component-project:read', 'component-project:manage']);
     const org = await f.child();

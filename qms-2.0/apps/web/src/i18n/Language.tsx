@@ -144,6 +144,7 @@ const translations: Record<string, string> = {
   "下载账号清单": "Download account list",
   "新增任职": "New appointments",
   "预览授权": "Preview authorization",
+  "权限明细": "Permission details",
   "账号清单文件": "Account list file",
   "重新预览授权": "Refresh authorization preview",
   "组织任职与权限": "Organization, positions and permissions",

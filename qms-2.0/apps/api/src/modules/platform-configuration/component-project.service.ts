@@ -64,6 +64,15 @@ export async function readComponentEngineerAssignment(transaction: AdminTransact
   return engineerIdentity(assignment, assignmentId, now);
 }
 
+export async function lockComponentEngineerUsers(transaction: AdminTransaction, organizationId: string, assignmentIds: (string | null | undefined)[]) {
+  const ids = assignmentIds.filter((id): id is string => id != null);
+  if (!ids.length) return;
+  await transaction.$queryRaw`SELECT target.id FROM users target WHERE EXISTS (
+    SELECT 1 FROM user_positions appointment WHERE appointment.user_id = target.id
+      AND appointment.organization_id = ${organizationId}::uuid AND appointment.id = ANY(${ids}::uuid[])
+  ) ORDER BY target.id FOR KEY SHARE OF target`;
+}
+
 export async function listComponentEngineerAssignments(transaction: AdminTransaction, organizationId: string, query: ComponentEngineerAssignmentsQueryDto, now: Date) {
   const where: Prisma.UserPositionWhereInput = {
     organizationId, ...effectivePositionAssignmentWhere(now), AND: { position: { departmentId: { not: null } } },
@@ -288,8 +297,10 @@ export class ComponentProjectService {
   }
 
   private async validateEngineers(transaction: AdminTransaction, organizationId: string, dto: { customerEngineerAssignmentId?: string | null; projectEngineerAssignmentId?: string | null }) {
+    const assignmentIds = [dto.customerEngineerAssignmentId, dto.projectEngineerAssignmentId];
+    await lockComponentEngineerUsers(transaction, organizationId, assignmentIds);
     const now = new Date();
-    for (const id of [dto.customerEngineerAssignmentId, dto.projectEngineerAssignmentId]) {
+    for (const id of assignmentIds) {
       if (id && !(await this.engineer(transaction, organizationId, id, now)).valid) adminError('STRUCTURE_REFERENCE_INVALID', 409);
     }
   }
@@ -310,7 +321,9 @@ export class ComponentProjectService {
 
   private mutate<T>(actor: AdminActor, organizationId: string, action: string, payload: object, traceId: string, key: string | undefined,
     work: (transaction: AdminTransaction) => Promise<T>, authorize?: (transaction: AdminTransaction) => Promise<void>) {
-    return this.mutations.run({ actor, organizationId, permission: 'component-project:manage', authentication: 'active', action, payload: { organizationId, ...payload }, traceId, key }, async (transaction) => {
+    const activeActorUserLock = action === 'COMPONENT_PROJECT_CREATED' || action === 'COMPONENT_PROJECT_UPDATED' ? 'SHARE' : undefined;
+    return this.mutations.run({ actor, organizationId, permission: 'component-project:manage', authentication: 'active', activeActorUserLock,
+      action, payload: { organizationId, ...payload }, traceId, key }, async (transaction) => {
       try { return await work(transaction); }
       catch (error) {
         // Migration-owned tables use raw SQL, whose constraint errors arrive as P2010 rather than P2002.

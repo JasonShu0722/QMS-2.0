@@ -24,9 +24,16 @@ export class TaskTransferService {
       for (const item of input.items) {
         const task = await tx.workflowTask.findFirst({ where: { id: item.id, organizationId }, include: { workflowNode: true } });
         if (!task || task.version !== item.expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
-        await tx.$queryRaw`SELECT id FROM workflow_tasks WHERE id = ${item.id}::uuid FOR UPDATE`;
-        const current = await tx.$queryRaw<{ id: string }[]>(Prisma.sql`SELECT task.id FROM workflow_tasks task JOIN workflow_instances instance ON instance.id = task.workflow_instance_id AND instance.organization_id = task.organization_id AND instance.workflow_version_id = task.workflow_version_id JOIN problem_indexes problem ON problem.id = instance.problem_index_id AND problem.organization_id = task.organization_id WHERE task.id = ${item.id}::uuid AND task.organization_id = ${organizationId}::uuid AND task.status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE') AND instance.status = 'RUNNING' AND instance.current_node_id = task.workflow_node_id AND instance.version = task.entry_instance_version AND problem.archived_at IS NULL AND problem.status NOT IN ('CLOSED', 'ARCHIVED')`);
-        if (!current.length) workflowError('TASK_NOT_FOUND', 404);
+        const currentTask = Prisma.sql`SELECT task.id FROM workflow_tasks task
+          JOIN workflow_instances instance ON instance.id = task.workflow_instance_id
+            AND instance.organization_id = task.organization_id AND instance.workflow_version_id = task.workflow_version_id
+          JOIN problem_indexes problem ON problem.id = instance.problem_index_id AND problem.organization_id = task.organization_id
+          WHERE task.id = ${item.id}::uuid AND task.organization_id = ${organizationId}::uuid
+            AND task.status IN ('PENDING', 'IN_PROGRESS', 'OVERDUE') AND instance.status = 'RUNNING'
+            AND instance.current_node_id = task.workflow_node_id AND instance.version = task.entry_instance_version
+            AND problem.archived_at IS NULL AND problem.status NOT IN ('CLOSED', 'ARCHIVED')`;
+        if (!(await tx.$queryRaw<{ id: string }[]>(Prisma.sql`${currentTask} FOR UPDATE OF task`)).length) workflowError('TASK_NOT_FOUND', 404);
+        if (!(await tx.$queryRaw<{ id: string }[]>(currentTask)).length) workflowError('TASK_NOT_FOUND', 404);
         if (!(await canProcessWorkflowNode(tx, input.assigneeUserId, organizationId, jsonObject(task.workflowNode.config).assignment))) adminError('TASK_ASSIGNEE_NOT_ELIGIBLE', 409);
         const status = task.dueAt && task.dueAt <= new Date() ? 'OVERDUE' : 'IN_PROGRESS';
         const updated = await tx.workflowTask.update({ where: { id: item.id }, data: { claimedByUserId: input.assigneeUserId, claimedAt: new Date(), status, version: { increment: 1 }, updatedById: actor.id } });

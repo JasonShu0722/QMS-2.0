@@ -31,6 +31,7 @@ type Management = components['schemas']['AdminOrganizationContextDto'];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const lifecycle = new Set(['organization:force-delete', 'organization:departments:force-delete', 'account:users:delete', 'organization:reconfigure']);
 const fixedHome = new Set(['reconfiguration', 'problem-reconfiguration', 'supplier-accounts']);
+const reconfigurationPath = '/console/reconfiguration';
 const required: Record<string, string[]> = {
   users: ['account:users:read', 'account:users:create'], organizations: ['organization:read', 'organization:structure:read', 'account:roles:read'],
   suppliers: ['supplier-quality:profiles:read', 'supplier-quality:profiles:write'], customers: ['customer-quality:complaints:read', 'customer-quality:complaints:write'],
@@ -43,12 +44,13 @@ const required: Record<string, string[]> = {
 
 function validLocation(search: string, section: string, context: ConsoleContext) {
   const query = new URLSearchParams(search);
-  const keys = ['organizationId', 'section', 'userId', 'resourceType', 'resourceId'];
+  const keys = ['organizationId', 'section', 'userId', 'resourceType', 'resourceId', 'kind'];
   if (/%(?![0-9a-f]{2})/i.test(search) || [...query.keys()].some(key => !keys.includes(key)) || keys.some(key => query.getAll(key).length > 1)) return false;
   const organizationId = query.get('organizationId');
   if (organizationId !== null && (!uuid.test(organizationId) || organizationId.toLowerCase() !== context.targetOrganization.id.toLowerCase())) return false;
   if (query.has('section') && query.get('section') !== section) return false;
   if (query.has('userId') && (section !== 'users' || !organizationId || !uuid.test(query.get('userId')!))) return false;
+  if (query.has('kind') && (section !== 'reconfiguration' || query.get('kind') !== 'USER')) return false;
   if (query.has('resourceType') || query.has('resourceId')) {
     const type = query.get('resourceType') ?? ''; const id = query.get('resourceId') ?? '';
     if (section !== 'audit-log' || !organizationId || !type.trim() || type.length > 100 || !id.trim() || id.length > 128 || /[\u0000-\u001f\u007f]/.test(type + id)) return false;
@@ -138,7 +140,18 @@ function ManagementScope({ context, sourceId, section, session, search, invalida
   const changed = () => { if (current()) onDirectoryChange(); };
   const completed = (onCompleted: () => void) => { if (current()) { onCompleted(); changed(); } };
   switch (section) {
-    case 'users': return <UserAdministration organization={organization} organizations={organizations} targetUserId={query.get('userId')?.toLowerCase()} onDenied={denied} />;
+    case 'users': {
+      const pendingModule = consoleRoute(reconfigurationPath, context).module;
+      const canOpenPendingUsers = context.hasPlatformAdministrator && management.hasPlatformAdministrator && pendingModule?.scope === 'SESSION_HOME'
+        && pendingModule.coverage === 'PLATFORM' && pendingModule.organizationId === context.actor.homeOrganization.id
+        && pendingModule.permissions.includes('organization:reconfigure');
+      return <UserAdministration organization={organization} organizations={organizations} targetUserId={query.get('userId')?.toLowerCase()} onDenied={denied}
+        onOpenPendingUsers={canOpenPendingUsers ? () => {
+          if (!current()) return;
+          const pendingQuery = new URLSearchParams({ organizationId: context.targetOrganization.id, kind: 'USER' });
+          navigate({ pathname: reconfigurationPath, search: pendingQuery.toString() });
+        } : undefined} />;
+    }
     case 'organizations': return <OrganizationWorkspace organization={organization} organizations={organizations} onChanged={changed} onDenied={denied} onSelectOrganization={id => {
       if (!current() || id === sourceId || !context.organizations.some(entry => entry.id === id) || !organizations.some(entry => entry.id === id)) return;
       const next = new URLSearchParams(location.search); next.set('organizationId', id); navigate({ pathname: location.pathname, search: next.toString(), hash: location.hash });
@@ -154,7 +167,7 @@ function ManagementScope({ context, sourceId, section, session, search, invalida
     case 'ai-applications': return <AiApplications organization={organization} />;
     case 'audit-log': return <AuditAdministration organization={organization} target={query.has('resourceId') ? { resourceType: query.get('resourceType')!, resourceId: query.get('resourceId')! } : undefined} />;
     case 'outbox': return <OutboxAdministration organization={organization} />;
-    case 'reconfiguration': return <AdministrativeReconfiguration organization={organization} onChanged={changed} onDenied={denied} renderAdditionalActions={(item, onCompleted) => item.kind === 'USER'
+    case 'reconfiguration': return <AdministrativeReconfiguration organization={organization} initialKind={query.get('kind') === 'USER' ? 'USER' : undefined} onChanged={changed} onDenied={denied} renderAdditionalActions={(item, onCompleted) => item.kind === 'USER'
       ? <UserForceDelete target={{ id: item.id, organizationId: item.originalOrganizationId, username: item.label, securityVersion: item.version }} canDelete={organization.permissions.includes('account:users:delete')} onRefresh={() => { if (current()) onCompleted(); }} onDenied={denied} onDeleted={() => completed(onCompleted)} />
       : (item.kind === 'ORGANIZATION' || item.kind === 'DEPARTMENT') && <AdministrativeForceDeleteDialog
         path={item.kind === 'ORGANIZATION' ? organizationPath(item.id, '/force-delete') : organizationPath(item.originalOrganizationId, `/departments/${encodeURIComponent(item.id)}/force-delete`)}
