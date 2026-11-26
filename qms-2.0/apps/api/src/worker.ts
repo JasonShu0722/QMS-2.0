@@ -84,7 +84,6 @@ async function bootstrap(): Promise<void> {
 }
 
 void bootstrap().catch((error: unknown) => {
-  console.error(error instanceof Error ? error.stack ?? error.message : error);
   console.error(error instanceof Error && error.message.startsWith('WORKER_') ? error.message : 'QMS_WORKER_FAILED');
   process.exitCode = 1;
 });
