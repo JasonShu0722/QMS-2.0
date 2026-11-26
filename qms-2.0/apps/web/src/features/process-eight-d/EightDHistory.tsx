@@ -4,12 +4,48 @@ import { Link } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { ClosureTaskInbox } from '../tasks/ClosureTaskInbox';
-import { aborted, extensionPath, roundPath, useEightDText, type EightDRead, type EightDReport } from './eight-d';
+import { aborted, eightDPath, extensionPath, roundPath, useEightDText, type EightDRead, type EightDReport } from './eight-d';
 import styles from './eight-d.module.css';
 
 type Round = components['schemas']['WorkflowClosureRoundDto'];
 type Extensions = components['schemas']['WorkflowDeadlineExtensionDto'][];
 type Audit = components['schemas']['ProblemAuditPageDto'];
+type FlowRecord = components['schemas']['ProcessEightDFlowRecordDto'];
+
+export function ProcessEightDFlowRecords({ report, read }: { report: EightDReport; read: EightDRead }) {
+  const text = useEightDText();
+  const [records, setRecords] = useState<FlowRecord[]>();
+  const [error, setError] = useState(false);
+  const [retry, setRetry] = useState(0);
+  const { problemId, organizationId, version } = report;
+
+  useEffect(() => {
+    let active = true;
+    setError(false);
+    setRecords(undefined);
+    const query = new URLSearchParams({ organizationId });
+    read<FlowRecord[]>(`${eightDPath(problemId)}/flow-records?${query}`).then(value => {
+      if (active) setRecords(value);
+    }).catch(cause => {
+      if (active && !aborted(cause)) setError(true);
+    });
+    return () => { active = false; };
+  }, [problemId, organizationId, version, read, retry]);
+
+  if (error) return <Alert type="error" title={text('流程记录加载失败', 'Flow records could not be loaded')}
+    action={<Button onClick={() => setRetry(value => value + 1)}>{text('重试', 'Retry')}</Button>} />;
+  if (!records) return <Spin />;
+  if (!records.length) return <p>{text('暂无流程记录', 'No flow records')}</p>;
+
+  return <div className={styles.scroll}><table className={`${styles.table} ${styles.flowRecords}`} aria-label={text('流程记录', 'Flow records')}>
+    <thead><tr><th scope="col">{text('时间', 'Time')}</th><th scope="col">{text('人员', 'Person')}</th><th scope="col">{text('内容', 'Content')}</th></tr></thead>
+    <tbody>{records.map((record, index) => <tr key={`${record.occurredAt}:${index}`}>
+      <td><time dateTime={record.occurredAt}>{new Date(record.occurredAt).toLocaleString(text('zh-CN', 'en-US'))}</time></td>
+      <td>{record.person}</td><td className={styles.pre}>{record.content}</td>
+    </tr>)}</tbody>
+  </table></div>;
+}
+
 export function EightDRounds({ problemId, read, revision, blocked, onInboxClosed }: { problemId: string; read: EightDRead; revision: number; blocked: boolean; onInboxClosed: () => void }) {
   const text = useEightDText();
   const [rounds, setRounds] = useState<Round[]>();

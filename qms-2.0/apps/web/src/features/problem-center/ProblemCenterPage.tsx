@@ -6,11 +6,12 @@ import { ApiError, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
-import { LedgerFilterHeader, LedgerFilterPanel, LedgerFilterPopover } from '../../ui/ledger/FilterPopover';
+import { LedgerFilterCondition, LedgerFilterHeader, LedgerFilterPanel, LedgerFilterPopover } from '../../ui/ledger/FilterPopover';
 import { normalizePreferences, preferenceKey } from '../../ui/ledger/model';
 import { useLedgerScope, usePreference } from '../../ui/ledger/preferences';
 import { ProcessProblemDeadlines, ProcessProblemTitle, processSummaryValue } from '../process-quality/ProcessProblemSummary';
 import { useEightDSeverityText } from '../process-eight-d/eight-d';
+import { emptyFollowupGroup, followupFields, followupFiltersTooLong, followupMaxItems, followupOperators, followupSeverities, followupStageLabels, normalizeFollowupFilters, withoutValue, type FollowupCondition, type FollowupField, type FollowupGroup } from './process-followup-filters';
 import {
   createProblemView,
   deleteProblemView,
@@ -41,13 +42,11 @@ const statuses: ProblemStatus[] = ['OPEN', 'IN_PROGRESS', 'PENDING', 'RESOLVED',
 const sortFields: ProblemSort['sortBy'][] = ['createdAt', 'updatedAt', 'dueAt', 'reportNumber', 'status', 'severity'];
 const allColumns: ColumnKey[] = ['reportNumber', 'title', 'domainCode', 'problemType', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt'];
 const processColumns: LayoutKey[] = ['reportNumber', 'title', 'processStage', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt'];
-const processHeaderFilters = { reportNumber: 'search', title: 'search', processStage: 'stage', status: 'status', severity: 'severity', responsibleParty: 'responsibleSectionName', ownerId: 'ownerName', dueAt: 'dueFrom' } as const;
-const stageLabels: Record<NonNullable<ProcessFollowupQuery['stage']>, string> = {
-  ANALYSIS: '分析阶段', SUBMISSION: '完整提交阶段', CLOSURE: '关闭阶段', CLOSURE_REVIEW: '关闭审批中', CLOSED: '已关闭', ARCHIVED: '已归档',
-  CANCELLED: '已取消', SUSPENDED: '已暂停', FAILED: '流程失败', COMPLETED: '流程已结束',
+const processHeaderFilters: Partial<Record<LayoutKey, FollowupField>> = {
+  processStage: 'stage', status: 'status', severity: 'severity', responsibleParty: 'responsibleSectionName', ownerId: 'ownerName', dueAt: 'dueAt',
 };
 function isFollowupStage(value: unknown): value is NonNullable<ProcessFollowupQuery['stage']> {
-  return typeof value === 'string' && Object.hasOwn(stageLabels, value);
+  return typeof value === 'string' && Object.hasOwn(followupStageLabels, value);
 }
 const followupPath = '/app/process-quality/problems';
 type FollowupSnapshot = { scope: string; page: number; filters: ProblemFilters; sort: ProblemSort; selectedViewId: string; layout: ColumnLayout };
@@ -84,7 +83,7 @@ function isForbidden(error?: ErrorState) {
   return error?.code === 'FEATURE_PERMISSION_DENIED' || error?.code === 'ORGANIZATION_SCOPE_DENIED' || error?.code === 'HTTP_403';
 }
 
-function normalizeFilters(filters: ProblemFilters, processOnly = false): ProblemFilters {
+function normalizeFilters(filters: ProblemFilters): ProblemFilters {
   const source = filters as Record<string, unknown>;
   const normalized: ProblemFilters = {};
   const stringKeys: Array<keyof Pick<ProblemFilters, 'domainCode' | 'problemType' | 'severity' | 'ownerId' | 'search' | 'dueFrom' | 'dueTo' | 'overdueAt'>> =
@@ -93,12 +92,6 @@ function normalizeFilters(filters: ProblemFilters, processOnly = false): Problem
     if (typeof source[key] === 'string' && source[key]) normalized[key] = source[key];
   });
   if (statuses.includes(source.status as ProblemStatus)) normalized.status = source.status as ProblemStatus;
-  if (processOnly) {
-    if (isFollowupStage(source.stage)) normalized.stage = source.stage;
-    for (const key of ['ownerName', 'responsibleSectionName'] as const) {
-      if (typeof source[key] === 'string') normalized[key] = source[key];
-    }
-  }
   return normalized;
 }
 
@@ -110,18 +103,11 @@ function normalizeConfiguration(configuration: ProblemViewConfiguration, process
   const processLayout = processOnly ? normalizeColumnLayout(configuration === defaultConfiguration ? undefined : { order: configuration.columnOrder, visible: configuration.visibleColumns }, true) : undefined;
   return {
     schemaVersion: 1,
-    filters: normalizeFilters(configuration.filters, processOnly),
+    filters: processOnly ? normalizeFollowupFilters(configuration.filters) : normalizeFilters(configuration.filters),
     sort: { sortBy, sortDirection: configuration.sort.sortDirection === 'asc' ? 'asc' : 'desc' },
     visibleColumns: processLayout?.visible ?? (visibleColumns.length ? visibleColumns : ['reportNumber']),
     columnOrder: processLayout?.order ?? columnOrder,
   };
-}
-
-function processFilters({ search, status, severity, ownerName, stage, responsibleSectionName, dueFrom, dueTo, overdueAt }: ProblemFilters): ProblemFilters {
-  return { ...(search?.trim() ? { search: search.trim() } : {}), ...(status ? { status } : {}),
-    ...(severity?.trim() ? { severity: severity.trim() } : {}), ...(ownerName?.trim() ? { ownerName: ownerName.trim() } : {}),
-    ...(stage ? { stage } : {}), ...(responsibleSectionName?.trim() ? { responsibleSectionName: responsibleSectionName.trim() } : {}),
-    ...(dueFrom ? { dueFrom } : {}), ...(dueTo ? { dueTo } : {}), ...(overdueAt ? { overdueAt } : {}) };
 }
 
 function localDateTime(iso?: string) {
@@ -170,10 +156,11 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   const [viewLayout, setViewLayout] = useState<ColumnLayout>(() => restored?.layout ?? normalizeColumnLayout(undefined, processOnly));
   const [page, setPage] = useState(restored?.page ?? 1);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [filterField, setFilterField] = useState<keyof ProblemFilters>('search');
+  const [filterRow, setFilterRow] = useState<number>();
   const filterAnchor = useRef<HTMLElement>(undefined);
   const filterTrigger = useRef<HTMLButtonElement>(null);
-  const filterPanel = useRef<HTMLDivElement>(null);
+  const filterControl = useRef<HTMLSelectElement>(null);
+  const filterRows = useRef<HTMLDivElement>(null);
   const ledgerId = eightDDomain ? `${eightDDomain}-problem-followup` : processOnly ? 'process-problem-followup' : 'problem-center';
   const [pageSize, setPageSize] = useLedgerPageSize(ledgerId, organizationId);
   const [result, setResult] = useState<ProblemPage | ProcessFollowupPage>();
@@ -294,7 +281,11 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
 
   const query = useMemo<ProblemQuery | ProcessFollowupQuery | undefined>(() => {
     if (!organizationId || accessLost) return undefined;
-    if (processOnly) return { organizationId, page, pageSize, ...processFilters(appliedFilters), ...sort };
+    if (processOnly) {
+      const { search, overdueAt, processFollowupFilters } = appliedFilters;
+      return { organizationId, page, pageSize, ...(search ? { search } : {}), ...(overdueAt ? { overdueAt } : {}),
+        ...(processFollowupFilters ? { filters: JSON.stringify(processFollowupFilters) } : {}), ...sort };
+    }
     const value: ProblemQuery = { organizationId, page, pageSize, ...normalizeFilters(appliedFilters), ...sort };
     if (processQuality) {
       value.domainCode = eightDDomain ?? 'process-quality';
@@ -344,7 +335,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   }
   const configuration = useMemo<ProblemViewConfiguration>(() => ({
     schemaVersion: 1,
-    filters: processOnly ? processFilters(filters) : { ...filters, ...(eightDDomain ? { domainCode: eightDDomain, problemType: undefined } : {}) },
+    filters: processOnly ? normalizeFollowupFilters(filters) : { ...filters, ...(eightDDomain ? { domainCode: eightDDomain, problemType: undefined } : {}) },
     sort: processOnly ? draftSort : sort,
     visibleColumns,
     columnOrder,
@@ -352,7 +343,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
 
   const applyConfiguration = (next: ProblemViewConfiguration, name?: string) => {
     const normalized = normalizeConfiguration(next, processOnly);
-    const nextFilters = processOnly ? processFilters(normalized.filters) : normalized.filters;
+    const nextFilters = normalized.filters;
     if (processOnly && nextFilters.overdueAt) nextFilters.overdueAt = new Date().toISOString();
     const nextSort = normalized.sort;
     setFilters(nextFilters);
@@ -385,33 +376,57 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     setMutationError(undefined);
   };
 
-  function focusFilter() {
-    filterPanel.current?.querySelector<HTMLElement>(`[data-followup-filter="${filterField}"]`)?.focus();
+  const draftGroup = filters.processFollowupFilters ?? emptyFollowupGroup;
+  const completeDraft = normalizeFollowupFilters(filters);
+  const draftTooLong = followupFiltersTooLong(completeDraft.processFollowupFilters);
+  function setDraftGroup(next: FollowupGroup) {
+    setFilters(current => ({ ...current, processFollowupFilters: next }));
   }
-
-  function openFilters(anchor: HTMLElement, field: keyof ProblemFilters = 'search') {
+  function updateCondition(index: number, next: FollowupCondition) {
+    setDraftGroup({ ...draftGroup, items: draftGroup.items.map((item, itemIndex) => itemIndex === index ? next : item) });
+  }
+  function newCondition(field: FollowupField): FollowupCondition {
+    return { field, operator: followupOperators(field)[0]![0] };
+  }
+  const focusFilter = useCallback(() => {
+    const control = filterControl.current;
+    control?.focus({ preventScroll: true });
+    const rows = filterRows.current;
+    const row = control?.parentElement;
+    if (!rows || !row || row.parentElement !== rows) return;
+    const bounds = row.getBoundingClientRect();
+    const top = rows.getBoundingClientRect().top + rows.clientTop;
+    const bottom = top + rows.clientHeight;
+    if (bounds.top < top) rows.scrollTop -= Math.ceil(top - bounds.top);
+    else if (bounds.bottom > bottom) rows.scrollTop += Math.ceil(bounds.bottom - bottom);
+  }, []);
+  function openFilters(anchor: HTMLElement, field?: FollowupField) {
     filterAnchor.current = anchor;
-    setFilterField(field);
-    if (!filterOpen) {
-      setFilters(appliedFilters);
-      setDraftSort(sort);
-    } else if (field === filterField) focusFilter();
+    const next = filterOpen ? filters : appliedFilters;
+    const group = next.processFollowupFilters ?? emptyFollowupGroup;
+    const found = field ? group.items.findIndex(item => item.field === field) : -1;
+    const append = !!field && found < 0 && group.items.length < followupMaxItems;
+    const row = found >= 0 ? found : append ? group.items.length : undefined;
+    setFilterRow(row);
+    setFilters(append ? { ...next, processFollowupFilters: { ...group, items: [...group.items, newCondition(field)] } } : next);
+    if (!filterOpen) setDraftSort(sort);
+    else if (row === filterRow) focusFilter();
     setFilterOpen(true);
   }
   useEffect(() => {
-    if (filterOpen) filterPanel.current?.querySelector<HTMLElement>(`[data-followup-filter="${filterField}"]`)?.focus();
-  }, [filterOpen, filterField]);
+    if (filterOpen) focusFilter();
+  }, [filterOpen, filterRow, focusFilter]);
 
-  function applyFilters(restoreFocus: boolean, nextFilters = filters) {
-    const next = processFilters(nextFilters);
-    const changed = JSON.stringify(next) !== JSON.stringify(appliedFilters) || draftSort.sortBy !== sort.sortBy || draftSort.sortDirection !== sort.sortDirection;
+  function applyFilters(restoreFocus: boolean, next = completeDraft, nextSort = draftSort, submittedSearch = false) {
+    if (followupFiltersTooLong(next.processFollowupFilters)) return;
+    const changed = JSON.stringify(next) !== JSON.stringify(appliedFilters) || nextSort.sortBy !== sort.sortBy || nextSort.sortDirection !== sort.sortDirection;
     if (changed) {
       setAppliedFilters(next);
-      setSort(draftSort);
+      setSort(nextSort);
       setPage(1);
     }
     setFilters(next);
-    setSearchInput(next.search ?? '');
+    if (submittedSearch) setSearchInput(next.search ?? '');
     setFilterOpen(false);
     if (restoreFocus) filterAnchor.current?.focus({ preventScroll: true });
   }
@@ -518,12 +533,12 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       const widths: Partial<Record<LayoutKey, number>> = { reportNumber: 138, title: 245, processStage: 126, status: 90, severity: 84, responsibleParty: 130, ownerId: 104, dueAt: 170 };
       return processColumns.map((key): TableColumnsType<ProblemItem>[number] => {
         const definition = key === 'processStage' ? { title: t('当前环节'), render: (_: unknown, item: ProblemItem) =>
-          t('stage' in item && isFollowupStage(item.stage) ? stageLabels[item.stage] : '—') } : definitions[key];
+          t('stage' in item && isFollowupStage(item.stage) ? followupStageLabels[item.stage] : '—') } : definitions[key];
         const label = String(definition.title);
-        const field = processHeaderFilters[key as keyof typeof processHeaderFilters];
+        const field = processHeaderFilters[key];
         const triggerLabel = locale === 'en-US' ? `Filter by ${label}` : `按${label}筛选`;
         return { ...definition, key, width: widths[key] ?? 150, onHeaderCell: () => ({ 'aria-label': label }),
-          title: field ? <LedgerFilterHeader aria-label={label} triggerLabel={triggerLabel} active={!!appliedFilters[field] || key === 'dueAt' && !!(appliedFilters.dueTo || appliedFilters.overdueAt)} expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === triggerLabel} disabled={!organizationId} onOpen={anchor => openFilters(anchor, field)} /> : label };
+          title: field ? <LedgerFilterHeader aria-label={label} triggerLabel={triggerLabel} active={!!appliedFilters.processFollowupFilters?.items.some(item => item.field === field) || key === 'dueAt' && !!appliedFilters.overdueAt} expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === triggerLabel} disabled={!organizationId} onOpen={anchor => openFilters(anchor, field)} /> : label };
       });
     }
     const selected: TableColumnsType<ProblemItem> = allColumns.map((column) => ({ ...definitions[column], key: column, width: column === 'title' ? 260 : 170 }));
@@ -549,8 +564,8 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
         <label>{t('视图名称')}<Input aria-label={t('视图名称')} value={viewName || (processOnly && restored?.selectedViewId === selectedViewId ? selectedView?.name : '')} maxLength={80} onChange={(event) => setViewName(event.target.value)} /></label>
         <Space wrap>
           <Button disabled={!selectedView} onClick={() => selectedView && applyConfiguration(selectedView.configuration, selectedView.name)}>{t('应用视图')}</Button>
-          <Button type="primary" disabled={disabledWrites} loading={mutating} onClick={saveView}>{t('保存新视图')}</Button>
-          <Button disabled={disabledWrites || !selectedView} loading={mutating} onClick={updateView}>{t('更新视图')}</Button>
+          <Button type="primary" disabled={disabledWrites || processOnly && draftTooLong} loading={mutating} onClick={saveView}>{t('保存新视图')}</Button>
+          <Button disabled={disabledWrites || !selectedView || processOnly && draftTooLong} loading={mutating} onClick={updateView}>{t('更新视图')}</Button>
           <Popconfirm
             title={selectedView ? `${locale === 'en-US' ? 'Delete personal view' : '删除个人视图'} · ${selectedView.name}` : undefined}
             description={locale === 'en-US' ? 'Only the view settings are removed. Problem records are retained.' : '仅移除视图配置，问题记录保留。'}
@@ -591,24 +606,50 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       <LedgerTable<ProblemItem> compactHeaders compactLayout pinnedHorizontalScroll className="process-quality-ledger"
         actionBar={<div className="process-quality-toolbar-main" role="group" aria-label={t('台账工具栏')}>
           <Input.Search aria-label={t('搜索报告编号或问题标题')} placeholder={t('搜索报告编号或问题标题')} allowClear maxLength={100} disabled={!organizationId} value={searchInput}
-            onChange={event => setSearchInput(event.target.value)} onSearch={search => applyFilters(false, { ...(filterOpen ? filters : appliedFilters), search })} />
-          <LedgerFilterPopover open={filterOpen} trigger={filterTrigger} label={t('筛选条件')} count={Object.keys(appliedFilters).length} disabled={!organizationId}
+            onChange={event => setSearchInput(event.target.value)} onSearch={search => applyFilters(false, normalizeFollowupFilters({ ...(filterOpen ? filters : appliedFilters), search }), filterOpen ? draftSort : sort, true)} />
+          <LedgerFilterPopover open={filterOpen} trigger={filterTrigger} label={t('筛选条件')} count={(appliedFilters.processFollowupFilters?.items.length ?? 0) + Number(!!appliedFilters.overdueAt)} disabled={!organizationId}
             onOpen={openFilters} onDismiss={applyFilters} onFocus={focusFilter}>
             <LedgerFilterPanel anchor={filterAnchor} trigger={filterTrigger} label={t('筛选面板')} title={t('筛选条件')} closeLabel={t('关闭筛选')} onDismiss={applyFilters}>
-              <div className="problem-center problem-center__popup" ref={filterPanel}>
+              <Checkbox checked={!!filters.overdueAt} onChange={event => setFilters(current => ({ ...current, overdueAt: event.target.checked ? new Date().toISOString() : undefined }))}>{t('仅看当前已逾期')}</Checkbox>
+              <div className="process-quality-filter-logic"><span>{t('满足条件')}</span>
+                <select ref={filterRow === undefined ? filterControl : undefined} aria-label={t('筛选逻辑')} value={draftGroup.logic} onChange={event => setDraftGroup({ ...draftGroup, logic: event.target.value === 'ANY' ? 'ANY' : 'ALL' })}>
+                  <option value="ALL">{t('全部条件')}</option><option value="ANY">{t('任一条件')}</option>
+                </select>
+              </div>
+              <div ref={filterRows} className="process-quality-filter-rows problem-center__popup-filter-rows">
+                {draftGroup.items.map((item, index) => {
+                  const { field, operator } = item;
+                  const valueLabel = `${t('筛选值')} ${index + 1}`;
+                  const choices = field === 'stage' ? Object.entries(followupStageLabels).map(([value, text]) => [value, t(text)])
+                    : field === 'status' ? statuses.map(value => [value, t(statusLabels[value])])
+                      : field === 'severity' ? followupSeverities.map(value => [value, severityText(value)]) : undefined;
+                  const updateValue = (value?: string) => updateCondition(index, { ...item, value });
+                  return <LedgerFilterCondition key={index} index={index} field={field} operator={operator} label={t}
+                    fieldRef={filterRow === index ? filterControl : undefined}
+                    fields={followupFields.map(([value, text]) => [value, t(text)])}
+                    operators={followupOperators(field).map(([value, text]) => [value, t(text)])}
+                    onFieldChange={value => { if (value !== field) updateCondition(index, newCondition(value as FollowupField)); }}
+                    onOperatorChange={value => updateCondition(index, { ...item, operator: value as FollowupCondition['operator'] })}
+                    onRemove={() => { setFilterRow(undefined); setDraftGroup({ ...draftGroup, items: draftGroup.items.filter((_, entry) => entry !== index) }); }}>
+                    {withoutValue(operator) ? <span /> : choices ? <select aria-label={valueLabel} value={item.value ?? ''} onChange={event => updateValue(event.target.value)}>
+                      <option value="">{t('请选择')}</option>{choices.map(([value, text]) => <option key={value} value={value}>{text}</option>)}
+                    </select> : field === 'dueAt' ? <input type="datetime-local" aria-label={valueLabel} value={localDateTime(item.value)} onChange={event => updateValue(isoDateTime(event.target.value))} />
+                      : <input type="text" aria-label={valueLabel} maxLength={100} value={item.value ?? ''} onChange={event => updateValue(event.target.value)} />}
+                  </LedgerFilterCondition>;
+                })}
+              </div>
+              {draftTooLong ? <Alert type="warning" showIcon title={t('筛选内容过长，请缩短文字或减少条件。')} /> : null}
+              <Space wrap>
+                <Button disabled={draftGroup.items.length >= followupMaxItems} onClick={() => { setFilterRow(draftGroup.items.length); setDraftGroup({ ...draftGroup, items: [...draftGroup.items, newCondition('stage')] }); }}>{t('添加筛选条件')}</Button>
+                <Button onClick={() => { applyFilters(true, {}, defaultConfiguration.sort, true); }}>{t('恢复系统默认筛选')}</Button>
+                <Button aria-label={t('清空')} onClick={() => { setFilterRow(undefined); setFilters(current => ({ search: current.search })); setDraftSort(defaultConfiguration.sort); }}>{t('清空')}</Button>
+                <Button type="primary" disabled={draftTooLong} onClick={() => applyFilters(true)}>{t('应用筛选')}</Button>
+              </Space>
+              <div className="problem-center problem-center__popup">
                 <div className="problem-center__filters">
-                  <label>{t('搜索报告编号或问题标题')}<Input data-followup-filter="search" aria-label={t('报告编号检索')} maxLength={100} value={filters.search ?? ''} onChange={event => setFilters(current => ({ ...current, search: event.target.value }))} /></label>
-                  <label>{t('当前环节')}<select data-followup-filter="stage" aria-label={t('当前环节')} value={filters.stage ?? ''} onChange={event => setFilters(current => ({ ...current, stage: (event.target.value || undefined) as ProblemFilters['stage'] }))}><option value="">{t('全部环节')}</option>{Object.entries(stageLabels).map(([value, label]) => <option key={value} value={value}>{t(label)}</option>)}</select></label>
-                  <label>{t('状态')}<select data-followup-filter="status" aria-label={t('状态筛选')} value={filters.status ?? ''} onChange={event => setFilters(current => ({ ...current, status: (event.target.value || undefined) as ProblemStatus | undefined }))}><option value="">{t('全部状态')}</option>{statuses.map(status => <option key={status} value={status}>{t(statusLabels[status])}</option>)}</select></label>
-                  <label>{t('风险')}<select data-followup-filter="severity" aria-label={t('严重度筛选')} value={filters.severity ?? ''} onChange={event => setFilters(current => ({ ...current, severity: event.target.value }))}><option value="">{t('全部风险')}</option>{['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map(value => <option key={value} value={value}>{severityText(value as 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL')}</option>)}</select></label>
-                  <label>{t('负责人')}<Input data-followup-filter="ownerName" aria-label={t('负责人')} maxLength={100} value={filters.ownerName ?? ''} onChange={event => setFilters(current => ({ ...current, ownerName: event.target.value }))} /></label>
-                  <label>{t('责任科室')}<Input data-followup-filter="responsibleSectionName" aria-label={t('责任科室')} maxLength={100} value={filters.responsibleSectionName ?? ''} onChange={event => setFilters(current => ({ ...current, responsibleSectionName: event.target.value }))} /></label>
-                  <label>{t('办理期限起始')}<input data-followup-filter="dueFrom" aria-label={t('办理期限起始')} type="datetime-local" value={localDateTime(filters.dueFrom)} onChange={event => setFilters(current => ({ ...current, dueFrom: isoDateTime(event.target.value) }))} /></label>
-                  <label>{t('办理期限结束')}<input aria-label={t('办理期限结束')} type="datetime-local" value={localDateTime(filters.dueTo)} onChange={event => setFilters(current => ({ ...current, dueTo: isoDateTime(event.target.value) }))} /></label>
                   <label>{t('排序字段')}<select aria-label={t('排序字段')} value={draftSort.sortBy} onChange={event => setDraftSort(current => ({ ...current, sortBy: event.target.value as ProblemSort['sortBy'] }))}>{sortFields.map(value => <option key={value} value={value}>{t(value === 'severity' ? '风险' : value === 'dueAt' ? '办理期限' : sortLabels[value])}</option>)}</select></label>
                   <label>{t('排序方向')}<select aria-label={t('排序方向')} value={draftSort.sortDirection} onChange={event => setDraftSort(current => ({ ...current, sortDirection: event.target.value === 'asc' ? 'asc' : 'desc' }))}><option value="desc">{t('降序')}</option><option value="asc">{t('升序')}</option></select></label>
                 </div>
-                <Space wrap><Checkbox checked={!!filters.overdueAt} onChange={event => setFilters(current => ({ ...current, overdueAt: event.target.checked ? new Date().toISOString() : undefined }))}>{t('仅看当前已逾期')}</Checkbox><Button onClick={() => { applyConfiguration(defaultConfiguration, ''); setFilterOpen(false); filterAnchor.current?.focus(); }}>{t('重置')}</Button><Button type="primary" onClick={() => applyFilters(true)}>{t('应用筛选')}</Button></Space>
                 {organizationControl}
                 {viewControls}
               </div>

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
@@ -8,7 +8,7 @@ import { RequireAccess } from '../authorization/access.decorator.js';
 import {
   CreateManagementBindingDto, CreateMinisterScopeDto, ManagementBindingDto,
   ManagementConfigurationQueryDto, ManagementResponsibilitiesDto, ManagementResponsibilitiesQueryDto,
-  MinisterScopeDto, ResponsibilityAssignmentsDto, ResponsibilityAssignmentsQueryDto,
+  MinisterScopeDto, ResponsibilityAssignmentsDto, ResponsibilityAssignmentsQueryDto, ResponsibleAppointmentsDto, UpdateResponsibleAppointmentsDto,
   UpdateManagementBindingDto, UpdateMinisterScopeDto,
 } from './organization-responsibility.dto.js';
 import { OrganizationResponsibilityService } from './organization-responsibility.service.js';
@@ -44,6 +44,22 @@ export class OrganizationResponsibilityController {
   @RequireAccess({ featurePermission: 'organization:structure:manage', organizationScope: scope })
   updateManagementBinding(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('bindingId', ParseUUIDPipe) bindingId: string, @Body() dto: UpdateManagementBindingDto, @Req() request: Request) {
     return this.responsibilities.updateManagementBinding(this.actor(request), organizationId, bindingId, dto, requestTraceId(request), request.get('Idempotency-Key'));
+  }
+
+  @Get('departments/:departmentId/responsible-appointments')
+  @ApiOkResponse({ type: ResponsibleAppointmentsDto })
+  @RequireAccess({ featurePermission: 'organization:structure:read', organizationScope: scope })
+  getResponsibleAppointments(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('departmentId', ParseUUIDPipe) departmentId: string) {
+    return this.responsibilities.getResponsibleAppointments(organizationId, departmentId);
+  }
+
+  @Put('departments/:departmentId/responsible-appointments')
+  @ApiOkResponse({ type: ResponsibleAppointmentsDto })
+  @ApiHeader({ name: 'Idempotency-Key', required: true })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'organization:structure:manage', organizationScope: scope })
+  updateResponsibleAppointments(@Param('organizationId', ParseUUIDPipe) organizationId: string, @Param('departmentId', ParseUUIDPipe) departmentId: string, @Body() dto: UpdateResponsibleAppointmentsDto, @Req() request: Request) {
+    return this.responsibilities.updateResponsibleAppointments(this.actor(request), organizationId, departmentId, dto, requestTraceId(request), request.get('Idempotency-Key'));
   }
 
   @Get('minister-scopes')

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDateString, IsIn, IsInt, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsBoolean, IsDateString, IsIn, IsInt, IsString, IsUUID, Length, Matches, Max, Min, ValidateIf } from 'class-validator';
 
 export const MANAGEMENT_RESPONSIBILITIES = ['SECTION_MANAGER', 'MINISTER'] as const;
 export type ManagementResponsibility = typeof MANAGEMENT_RESPONSIBILITIES[number];
@@ -31,10 +31,24 @@ export class CreateMinisterScopeDto {
   @ApiProperty({ format: 'uuid' }) @IsUUID() departmentId!: string;
   @ApiProperty({ format: 'uuid' }) @IsUUID() sectionDepartmentId!: string;
   @ApiProperty({ format: 'uuid' }) @IsUUID() ministerAssignmentId!: string;
+  @ApiPropertyOptional({ type: Boolean }) @ValidateIf((_object, value) => value !== undefined) @IsBoolean() departmentLeadership?: boolean;
   @ApiPropertyOptional({ format: 'date-time', type: String, description: 'Defaults to the transaction time; explicit bounds must fit the appointment.' })
   @ValidateIf((_object, value) => value !== undefined) @IsDateString({ strict: true }) @Matches(/T.*(?:Z|[+-]\d{2}:\d{2})$/) validFrom?: string;
   @ApiPropertyOptional({ format: 'date-time', type: String, nullable: true, description: 'Exclusive upper bound; null is unbounded.' })
   @ValidateIf((_object, value) => value !== undefined && value !== null) @IsDateString({ strict: true }) @Matches(/T.*(?:Z|[+-]\d{2}:\d{2})$/) validTo?: string | null;
+}
+
+export class UpdateResponsibleAppointmentsDto {
+  @ApiProperty({ minimum: 0, maximum: 2147483647 }) @IsInt() @Min(0) @Max(2147483647) expectedVersion!: number;
+  @ApiProperty({ type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: 100, uniqueItems: true })
+  @IsArray() @ArrayMaxSize(100) @ArrayUnique() @IsUUID(undefined, { each: true }) assignmentIds!: string[];
+  @ApiPropertyOptional({ format: 'uuid' }) @ValidateIf((_object, value) => value !== undefined) @IsUUID() primaryAssignmentId?: string;
+}
+
+export class ResponsibleAppointmentsDto {
+  @ApiProperty() version!: number;
+  @ApiProperty({ type: 'array', items: { type: 'string', format: 'uuid' } }) assignmentIds!: string[];
+  @ApiProperty({ type: String, format: 'uuid', nullable: true }) primaryAssignmentId!: string | null;
 }
 
 export class UpdateMinisterScopeDto {
@@ -75,6 +89,7 @@ export class MinisterScopeDto {
   @ApiProperty({ format: 'uuid' }) departmentId!: string;
   @ApiProperty({ format: 'uuid' }) sectionDepartmentId!: string;
   @ApiProperty({ format: 'uuid' }) ministerAssignmentId!: string;
+  @ApiPropertyOptional({ type: Boolean }) departmentLeadership?: boolean;
   @ApiProperty({ type: String, format: 'date-time' }) validFrom!: Date;
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) validTo!: Date | null;
   @ApiProperty({ enum: ['ACTIVE', 'DISABLED'] }) status!: ResponsibilityConfigurationStatus;

@@ -30,6 +30,7 @@ export class WorkflowClosureOptionsDto {
 
 export class WorkflowClosurePreviewInputDto {
   @ApiProperty({ enum: ['INTERNAL', 'SUPPLIER'] }) @IsIn(['INTERNAL', 'SUPPLIER']) policy!: WorkflowClosurePolicy;
+  @ApiPropertyOptional({ enum: ['process-quality'] }) @ValidateIf((_input, value) => value !== undefined) @IsIn(['process-quality']) domainCode?: 'process-quality';
   @ApiProperty({ enum: ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] }) @IsIn(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']) severity!: WorkflowClosureSeverity;
   @ApiProperty({ format: 'uuid' }) @IsUUID() responsibleSectionDepartmentId!: string;
   @ApiProperty({ format: 'uuid', description: 'Configuration test identity only, not the issuer of a running problem.' }) @IsUUID() professionalUserId!: string;
@@ -77,4 +78,5 @@ export class WorkflowClosurePreviewDto {
   @ApiProperty({ type: [WorkflowClosurePreviewDutyDto] }) duties!: WorkflowClosurePreviewDutyDto[];
   @ApiProperty({ type: [WorkflowClosureSamePersonGroupDto] }) samePersonGroups!: WorkflowClosureSamePersonGroupDto[];
   @ApiProperty({ type: [WorkflowClosurePreviewIssueDto] }) issues!: WorkflowClosurePreviewIssueDto[];
+  @ApiPropertyOptional() managementNote?: string;
 }

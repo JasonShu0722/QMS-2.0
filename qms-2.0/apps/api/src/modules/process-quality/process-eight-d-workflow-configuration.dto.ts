@@ -4,9 +4,6 @@ import { ArrayMaxSize, ArrayUnique, IsArray, IsEnum, IsInt, IsUUID, Max, Min, Va
 
 export const ProcessEightDWorkflowStage = {
   ISSUE: 'ISSUE',
-  ANALYSIS: 'ANALYSIS',
-  IMPLEMENTATION: 'IMPLEMENTATION',
-  CLOSURE: 'CLOSURE',
 } as const;
 export type ProcessEightDWorkflowStage = (typeof ProcessEightDWorkflowStage)[keyof typeof ProcessEightDWorkflowStage];
 export const PROCESS_EIGHT_D_WORKFLOW_STAGES = Object.values(ProcessEightDWorkflowStage);

@@ -43,13 +43,11 @@ describe('internal three-domain administrative recovery / actual App and Postgre
       const codes = ['read', 'work', 'issue'].map(action => `${domain.permissionPrefix}:${action}`);
       await db.rolePermission.createMany({ data: (await db.permission.findMany({ where: { code: { in: codes } } })).map(p => ({ roleId: f.role.id, permissionId: p.id })) });
       core = app.get(ProcessEightDService);
-      const workPositions = [f.owner.position.id, newOwner.position.id];
       await expect(app.get(ProcessEightDWorkflowConfigurationService).update(f.professional.actor, { expectedVersion: 0, stages: [
         { stage: 'ISSUE', positionIds: [f.professional.position.id] },
-        { stage: 'ANALYSIS', positionIds: workPositions },
-        { stage: 'IMPLEMENTATION', positionIds: workPositions },
-        { stage: 'CLOSURE', positionIds: [f.professional.position.id, newProfessional.position.id, f.manager.position.id] },
       ] }, randomUUID(), randomUUID())).resolves.toMatchObject({ version: 1, missingStages: [] });
+      await db.$executeRaw`INSERT INTO department_responsible_appointments (organization_id, department_id, assignment_ids, primary_assignment_id, version)
+        VALUES (${f.org.id}::uuid, ${f.section.id}::uuid, ARRAY[${f.manager.assignment.id}::uuid], ${f.manager.assignment.id}::uuid, 1)`;
       const source = await f.process.create(f.manager.actor, { description: 'Original actual process fact', productCode: f.productCode, traceCode: randomUUID(), factoryCode: 'FACTORY_1', occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
       id = String((await core.issue(f.professional.actor, { sources: [{ defectId: source.id, expectedVersion: source.version }], severity: 'LOW',
         processBoardCode: '0', sourceConfirmations: [{ defectId: source.id, recurrence: 'NOT_RECURRENCE', relatedProblemIds: [] }],

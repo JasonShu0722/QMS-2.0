@@ -506,7 +506,7 @@
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.test.tsx",
-            "sha256": "e959c4f443c1a3081de66ff3cd3d17a2d9b9457fc84978f930a5fe14a123e72d"
+            "sha256": "9be93e9098cd6871c9540ede9a881a7ae690a6bf9ab718e54b57d0d216607283"
           },
           {
             "path": "apps/web/src/features/governance/OrganizationWorkspace.css",
@@ -574,11 +574,11 @@
           },
           {
             "path": "apps/web/src/features/governance/DepartmentResponsibilities.tsx",
-            "sha256": "cb8c28adb4a6f99a4420bb911c2836d168084c688728a43bfecffe23c12d6d23"
+            "sha256": "39f7fc96d46cbf58966e91c8025e18576da387c059a0d8247dab63a4732b9db0"
           },
           {
             "path": "apps/web/src/features/governance/DepartmentResponsibilities.test.tsx",
-            "sha256": "231a461bcd52510a9ba9a824b081220056280f80257982e6be15be20104a11ff"
+            "sha256": "298714079de5c0f5d9fc7be825dbc946d663d08aa585cb12c63fa8548e0793ec"
           },
           {
             "path": "apps/web/src/features/imports/MasterDataImport.tsx",

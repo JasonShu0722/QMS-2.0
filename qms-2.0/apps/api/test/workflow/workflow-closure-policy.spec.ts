@@ -37,6 +37,24 @@ function input(
 }
 
 describe('planWorkflowClosure', () => {
+  it.each(severities)('keeps professional review mandatory when process %s has no management assignee', severity => {
+    const planned = planWorkflowClosure({ ...input('INTERNAL', severity), processManagement: { participant: null, invalidScope: false } });
+    expect(planned.duties).toEqual([{ duty: 'PROFESSIONAL', status: 'PENDING', participant: participant('professional') }]);
+    expect(planned.managementEvent).toEqual({ content: '未找到有效管理审核人，跳过管理审核' });
+  });
+
+  it('records fallback when the process management scope is invalid and retains high-risk owner review', () => {
+    const planned = planWorkflowClosure({ ...input('INTERNAL', 'HIGH'), processManagement: { participant: participant('owner'), invalidScope: true } });
+    expect(planned.duties[1]).toEqual({ duty: 'MINISTER', status: 'PENDING', participant: participant('owner') });
+    expect(planned.managementEvent).toEqual({ content: '原分管任职已失效，改派直属上级主负责人' });
+  });
+
+  it('uses the specific missing management reason and preserves mandatory professional review', () => {
+    const planned = planWorkflowClosure({ ...input('INTERNAL', 'HIGH'), processManagement: { participant: null, invalidScope: true,
+      unavailableReason: '直属上级未配置主负责人' } });
+    expect(planned.duties.map(duty => duty.duty)).toEqual(['PROFESSIONAL']);
+    expect(planned.managementEvent?.content).toBe('原分管任职已失效，直属上级未配置主负责人，跳过管理审核');
+  });
   it.each(severities)('plans INTERNAL %s as independent parallel duties', (severity) => {
     const request = input('INTERNAL', severity);
     const highRisk = severity === 'HIGH' || severity === 'CRITICAL';

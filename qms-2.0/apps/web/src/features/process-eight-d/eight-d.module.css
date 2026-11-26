@@ -16,6 +16,9 @@
 .table { border-collapse: collapse; width: 100%; min-width: 1000px; font-size: 13px; }
 .table th, .table td { border: 1px solid var(--ed-border); padding: var(--qms-table-cell-padding-block) var(--qms-card-padding); text-align: start; vertical-align: top; min-width: 120px; }
 .table th { background: var(--ed-fill); }
+.flowRecords { min-width: 0; }
+.flowRecords th, .flowRecords td { min-width: 0; }
+.flowRecords td:first-child, .flowRecords td:nth-child(2) { white-space: nowrap; }
 .table input[type='checkbox'] { width: auto; accent-color: var(--ed-primary); }
 .section:focus-visible, .row:focus-visible, .table tr:focus-visible { outline: 2px solid var(--ed-primary); outline-offset: 2px; }
 .row { border-block-start: 1px solid var(--ed-border); padding-block: var(--qms-card-padding); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--qms-section-gap); }

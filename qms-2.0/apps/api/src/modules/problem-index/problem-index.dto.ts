@@ -3,9 +3,10 @@ import { Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { PROBLEM_STATUSES, type ProblemStatus } from './problem.types.js';
 import { DOMAIN_SOURCE_RESPONSE_FORMS, type DomainSourceResponseForm } from './domain-source-issue.service.js';
+import { PROCESS_FOLLOWUP_FILTER_MAX_LENGTH, PROCESS_FOLLOWUP_STAGES } from './process-followup-filter.dto.js';
 
 export const PROBLEM_SORT_FIELDS = ['createdAt', 'updatedAt', 'dueAt', 'reportNumber', 'status', 'severity'] as const;
-export const PROCESS_FOLLOWUP_STAGES = ['ANALYSIS', 'SUBMISSION', 'CLOSURE', 'CLOSURE_REVIEW', 'CLOSED', 'ARCHIVED', 'CANCELLED', 'SUSPENDED', 'FAILED', 'COMPLETED'] as const;
+export { PROCESS_FOLLOWUP_STAGES };
 export type ProcessFollowupStage = typeof PROCESS_FOLLOWUP_STAGES[number];
 
 export class ProblemScopeQueryDto {
@@ -37,6 +38,8 @@ export class ProcessFollowupQueryDto extends PickType(ProblemIndexQueryDto, [
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() responsibleSectionDepartmentId?: string;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) responsibleSectionName?: string;
   @ApiPropertyOptional({ maxLength: 100 }) @IsOptional() @IsString() @MaxLength(100) ownerName?: string;
+  @ApiPropertyOptional({ type: String, maxLength: PROCESS_FOLLOWUP_FILTER_MAX_LENGTH, description: 'ProcessFollowupFiltersDto 的 JSON 字符串。', example: '{"logic":"ALL","items":[{"field":"stage","operator":"EQ","value":"ANALYSIS"}]}' })
+  @ValidateIf((_object, value) => value !== undefined) @IsString() @MaxLength(PROCESS_FOLLOWUP_FILTER_MAX_LENGTH) filters?: string;
 }
 
 export class ProblemFieldDto {

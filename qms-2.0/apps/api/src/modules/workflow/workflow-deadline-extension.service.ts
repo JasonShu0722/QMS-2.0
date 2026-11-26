@@ -4,6 +4,7 @@ import { isISO8601, isUUID } from 'class-validator';
 import { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { effectivePositionAssignmentWhere } from '../../common/security/effective-role-grants.js';
+import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import { isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { OrganizationResponsibilityService } from '../organization/organization-responsibility.service.js';
@@ -215,6 +216,13 @@ export class WorkflowDeadlineExtensionService {
       } };
   }
 
+  async canUseProcessProfessionalAdminFallback(tx: Prisma.TransactionClient, context: WorkflowDeadlineContext, userId: string, now = new Date()): Promise<boolean> {
+    if (context.processProfessionalAdminFallback !== true || userId !== context.professionalUserId) return false;
+    const user = await tx.user.findFirst({ where: { id: userId, organizationId: context.organizationId, accountType: 'INTERNAL', status: 'ACTIVE',
+      deletedAt: null, configurationRequired: false, organization: { status: 'ACTIVE', type: 'INTERNAL', deletedAt: null, configurationRequired: false } }, select: { id: true } });
+    return !!user && await hasPlatformAdministrator(tx, userId, now);
+  }
+
   private async participantsFromLockedSources(tx: Prisma.TransactionClient, c: WorkflowDeadlineContext, management: ManagementResponsibilitiesDto): Promise<WorkflowDeadlineParticipants | null> {
     const now = new Date();
     const valid = await this.responsibilities.revalidateLockedManagementResponsibilities(tx, management, now);
@@ -235,7 +243,7 @@ export class WorkflowDeadlineExtensionService {
     for (const userId of new Set([c.ownerUserId, c.professionalUserId, leader.userId])) {
       if (!await canProcessWorkflowNode(tx, userId, c.organizationId, { assigneeUserId: userId })) return null;
     }
-    if (!owner || !professional) return null;
+    if (!owner || (!professional && !await this.canUseProcessProfessionalAdminFallback(tx, c, c.professionalUserId, now))) return null;
     return { leader, professional: { userId: c.professionalUserId, assignmentId: null, positionId: null, departmentId: null, bindingId: null, scopeId: null, bindingVersion: null, scopeVersion: null }, leaderSkipped: leader.userId === c.ownerUserId };
   }
 

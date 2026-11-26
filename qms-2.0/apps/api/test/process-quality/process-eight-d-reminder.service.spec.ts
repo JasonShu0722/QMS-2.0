@@ -15,11 +15,12 @@ function fixture() {
   const tx = { $queryRaw: async () => [{ allowed: true }], $executeRaw: async (_strings: unknown, ...values: unknown[]) => { writes.push(values); return 1; },
     workflowInstance: { findFirst: async () => ({ currentNodeId: 'closure' }) }, problemIndex: { findFirstOrThrow: async () => ({ reportNumber: 'N3' }) } };
   const reports = { reminderCandidates: async () => [{ problemId: c.problemId, organizationId: c.organizationId }],
-    notificationContext: jest.fn(async () => c), canNotifyRecipient: async () => true };
+    notificationContext: jest.fn(async () => c), canNotifyRecipient: jest.fn(async () => true),
+    reconcileProcessManagementReview: jest.fn(async () => false) };
   const selection = { plan: {}, current: jest.fn(async () => true), currentParticipant: jest.fn(async (_participant: unknown) => true) };
   const extensions = { reconcile: async () => [request], readProjection: async () => [request], policyCurrent: async () => true,
     pendingUser: () => id(10), selectParticipants: jest.fn(async () => selection) };
-  const rounds = { readProjection: jest.fn(async (): Promise<unknown> => null), notificationRecipients: async () => [id(10)] };
+  const rounds = { readProjection: jest.fn(async (): Promise<unknown> => null), notificationRecipients: jest.fn(async () => [id(10)]) };
   const enqueue = jest.fn(async (_event: unknown, _tx: unknown) => {});
   const reminders = new ProcessEightDReminderService({ $transaction: async (work: (t: unknown) => Promise<unknown>) => work(tx) } as never,
     reports as never, extensions as never, rounds as never, { enqueue } as never);
@@ -75,5 +76,21 @@ describe('process reminder cadence and final qualification regressions (no datab
     await f.reminders.handle(f.tx as never, event as never);
     expect(f.selection.currentParticipant).toHaveBeenCalled();
     expect(f.writes).toHaveLength(0);
+  });
+
+  it('uses round eligibility for new Process closure reminders without requiring an independent appointment', async () => {
+    const f = fixture();
+    f.reports.canNotifyRecipient.mockResolvedValue(false);
+    f.rounds.readProjection.mockResolvedValue({ id: id(11), version: 1, status: 'PENDING', context: { processManagement: {} } });
+    expect(await f.reminders.poll(1, now)).toMatchObject({ enqueued: 1 });
+    const event = f.enqueue.mock.calls[0][0];
+    f.writes.length = 0;
+    await f.reminders.handle(f.tx as never, event as never);
+    expect(f.writes).toHaveLength(1);
+    const saved = JSON.parse(f.writes[0].at(-1) as string);
+    const visible = await f.reminders.notificationVisibility(f.tx as never, f.c as never, id(10));
+    expect(await visible(saved)).toBe(true);
+    f.rounds.notificationRecipients.mockResolvedValue([]);
+    expect(await visible(saved)).toBe(false);
   });
 });

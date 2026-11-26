@@ -41,6 +41,9 @@ export async function createProcessEightDTaskFixture(app: INestApplicationContex
       stage: 'ANALYSIS', requestedDueAt: new Date(Date.now() + 72 * 3600000).toISOString(), reason: 'Explicit process 8D request' }, randomUUID(), randomUUID());
   };
   const toClosure = async () => {
+    await prisma.$executeRaw`INSERT INTO department_responsible_appointments (organization_id, department_id, assignment_ids, primary_assignment_id, version)
+      VALUES (${f.org.id}::uuid, ${f.section.id}::uuid, ARRAY[${f.manager.assignment.id}::uuid], ${f.manager.assignment.id}::uuid, 1)
+      ON CONFLICT (organization_id, department_id) DO NOTHING`;
     await prisma.workflowInstance.update({ where: { id: f.instance.id }, data: { currentNodeId: f.node.id, version: { increment: 1 } } });
     await prisma.$executeRaw`UPDATE process_eight_d_reports SET submitted_at = CURRENT_TIMESTAMP, analysis_completed_at = CURRENT_TIMESTAMP,
       submission_due_at = ${dueAt}, version = version + 1 WHERE problem_id = ${f.problem.id}::uuid`;

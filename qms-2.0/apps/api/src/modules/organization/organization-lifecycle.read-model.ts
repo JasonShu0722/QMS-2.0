@@ -154,13 +154,19 @@ export async function lockPositionDeletionConfiguration(tx: AdminTransaction, or
 
 export async function positionClosureStageLosses(tx: AdminTransaction, organizationId: string, positionId: string, problemId?: string) {
   const scope = problemId ? Prisma.sql`AND r.problem_id = ${problemId}::uuid` : Prisma.empty;
-  const user = Prisma.sql`d.user_id`, organization = Prisma.sql`r.organization_id`, permission = Prisma.sql`'workflow:act'`;
-  const losesPermission = Prisma.sql`${featurePredicate(user, organization, permission)}
-    AND NOT ${featurePredicate(user, organization, permission, Prisma.sql`${positionId}::uuid`)}`;
-  const candidates = await tx.$queryRaw<{ roundId: string; userId: string; positions: string[]; professional: boolean; losesPermission: boolean }[]>(Prisma.sql`
-    SELECT DISTINCT r.id AS "roundId", d.user_id AS "userId", d.duty = 'PROFESSIONAL' AS professional,
+  const user = Prisma.sql`d.user_id`, organization = Prisma.sql`r.organization_id`;
+  const processManaged = Prisma.sql`(p.domain_code = 'process-quality' AND r.context->'processManagement' IS NOT DISTINCT FROM 'true'::jsonb)`;
+  const losesPermission = (code: string) => {
+    const permission = Prisma.sql`${code}`;
+    return Prisma.sql`(${featurePredicate(user, organization, permission)}
+      AND NOT ${featurePredicate(user, organization, permission, Prisma.sql`${positionId}::uuid`)})`;
+  };
+  const candidates = await tx.$queryRaw<{ roundId: string; userId: string; positions: string[]; requiresDepartment: boolean; losesPermission: boolean }[]>(Prisma.sql`
+    SELECT DISTINCT r.id AS "roundId", d.user_id AS "userId", (d.duty = 'PROFESSIONAL' AND NOT ${processManaged}) AS "requiresDepartment",
       ARRAY(SELECT jsonb_array_elements_text(config.positions)) AS positions,
-      CASE WHEN d.status IN ('PENDING', 'WAITING') THEN ${losesPermission} ELSE false END AS "losesPermission"
+      CASE WHEN d.status IN ('PENDING', 'WAITING') THEN
+        ${losesPermission('workflow:act')} OR (${processManaged} AND ${losesPermission('process-quality:issues:read')})
+        ELSE false END AS "losesPermission"
     FROM workflow_closure_rounds r
     JOIN problem_indexes p ON p.organization_id = r.organization_id AND p.id = r.problem_id
     JOIN workflow_closure_duties d ON d.organization_id = r.organization_id AND d.round_id = r.id
@@ -168,8 +174,10 @@ export async function positionClosureStageLosses(tx: AdminTransaction, organizat
       SELECT stages->'CLOSURE' AS positions FROM process_eight_d_workflow_configuration_revisions
       WHERE organization_id = r.organization_id AND workflow_version_id = r.workflow_version_id
       ORDER BY version DESC LIMIT 1
-    ) config ON p.domain_code = 'process-quality' AND d.status IN ('PENDING', 'WAITING') AND config.positions ? ${positionId}
+    ) config ON p.domain_code = 'process-quality' AND NOT ${processManaged}
+      AND d.status IN ('PENDING', 'WAITING') AND config.positions ? ${positionId}
     WHERE r.organization_id = ${organizationId}::uuid AND r.status = 'PENDING' ${scope}
+      AND (p.domain_code <> 'process-quality' OR (d.duty = 'PROFESSIONAL' AND d.status <> 'APPROVED'))
       AND EXISTS (SELECT 1 FROM user_positions appointment WHERE appointment.organization_id = r.organization_id
         AND appointment.user_id = d.user_id AND appointment.position_id = ${positionId}::uuid)`);
   if (!candidates.length) return [];
@@ -186,7 +194,7 @@ export async function positionClosureStageLosses(tx: AdminTransaction, organizat
     if (candidate.losesPermission) return true;
     const losesStage = candidate.positions.length > 0 && held.has(`${candidate.userId}:${positionId}`)
       && !candidate.positions.some(other => other !== positionId && held.has(`${candidate.userId}:${other}`));
-    const losesProfessional = candidate.professional && departmentHolders.has(candidate.userId) && !departmentSurvivors.has(candidate.userId);
+    const losesProfessional = candidate.requiresDepartment && departmentHolders.has(candidate.userId) && !departmentSurvivors.has(candidate.userId);
     return losesStage || losesProfessional;
   }).map(candidate => candidate.roundId))];
 }

@@ -12,6 +12,7 @@ import { assertWorkflowFeature, canProcessWorkflowNode } from './workflow-access
 import { assertActiveAuthentication, isSecurityConcurrencyConflict } from '../../common/security/session-security.js';
 import { createWorkflowStart, persistWorkflowMutation, workflowProblemStatus } from './workflow-start.js';
 import { administrativeReturn, type WorkflowAdministrativeReturnInput } from './workflow-administrative-return.js';
+import type { WorkflowClosureContext } from './workflow-closure-round.types.js';
 
 export interface WorkflowCommand {
   organizationId: string;
@@ -65,6 +66,43 @@ export class WorkflowRuntimeService {
 
   async administrativeReturn(tx: Prisma.TransactionClient, input: WorkflowAdministrativeReturnInput): Promise<number> {
     return administrativeReturn(tx, input, this.problems, this.audit);
+  }
+
+  async completeProcessAfterManagementSkip(tx: Prisma.TransactionClient, context: WorkflowClosureContext, traceId: string): Promise<void> {
+    const { organizationId, problemId, instanceId, workflowVersionId, currentNodeId, instanceVersion } = context;
+    const problem = await this.problems.lockForWorkflow(tx, organizationId, problemId);
+    await tx.$queryRaw`SELECT id FROM workflow_instances WHERE organization_id = ${organizationId}::uuid AND id = ${instanceId}::uuid FOR UPDATE`;
+    const instance = await tx.workflowInstance.findFirst({ where: { id: instanceId, organizationId, problemIndexId: problemId, workflowVersionId,
+      currentNodeId, version: instanceVersion, status: 'RUNNING' }, include: { currentNode: true } });
+    const gate = jsonObject(jsonObject(instance?.currentNode?.config).closureReview);
+    if (problem.domainCode !== 'process-quality' || problem.workflowInstanceId !== instanceId || problem.closedAt || ['CLOSED', 'ARCHIVED'].includes(problem.status)
+      || !instance || instance.currentNode?.type !== 'APPROVAL' || gate.domainCode !== 'process-quality' || gate.schemaVersion !== 1 || gate.policy !== 'INTERNAL') {
+      workflowError('WORKFLOW_ACTION_INVALID', 409);
+    }
+    const end = await tx.workflowNode.findMany({ where: { organizationId, workflowVersionId, type: 'CLOSE' } });
+    if (end.length !== 1 || jsonObject(end[0]!.config).isEnd !== true) workflowError('WORKFLOW_TRANSITION_AMBIGUOUS', 409);
+    const target = end[0]!;
+    const transitions = await tx.workflowTransition.findMany({ where: { organizationId, workflowVersionId, fromNodeId: currentNodeId,
+      toNodeId: target.id, action: 'APPROVE' } });
+    if (transitions.length !== 1 || !matchesCondition(transitions[0]!.condition, problem)) workflowError('WORKFLOW_TRANSITION_AMBIGUOUS', 409);
+    const version = instanceVersion + 1;
+    await tx.workflowInstance.update({ where: { id: instanceId }, data: { currentNodeId: target.id, status: 'COMPLETED', version,
+      taskProjectionVersion: version, updatedById: null } });
+    await tx.workflowTask.updateMany({ where: { organizationId, workflowInstanceId: instanceId, status: { in: ['PENDING', 'IN_PROGRESS', 'OVERDUE'] } },
+      data: { status: 'COMPLETED', completedAt: new Date(), version: { increment: 1 } } });
+    await this.problems.applyWorkflowState(tx, { organizationId, id: problemId, expectedVersion: problem.version, expectedInstanceId: instanceId,
+      instanceId, status: 'CLOSED', actorUserId: null });
+    await this.audit.record({ organizationId, actorUserId: null, action: 'WORKFLOW_ACTION_COMPLETED', resourceType: 'WorkflowInstance',
+      resourceId: instanceId, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: version, status: 'COMPLETED', reasonCode: 'CLOSE' } }, tx);
+  }
+
+  readTransitionProjection(tx: Prisma.TransactionClient, organizationId: string, problemIndexId: string) {
+    return tx.$queryRaw<{ actorUserId: string; action: string; occurredAt: Date }[]>`
+      SELECT mutation.actor_user_id AS "actorUserId", mutation.action, mutation.created_at AS "occurredAt"
+      FROM workflow_mutations mutation
+      JOIN workflow_instances instance ON instance.id = mutation.instance_id AND instance.organization_id = mutation.organization_id
+      WHERE instance.organization_id = ${organizationId}::uuid AND instance.problem_index_id = ${problemIndexId}::uuid
+      ORDER BY mutation.created_at, mutation.instance_version, mutation.id`;
   }
 
   async startInstance(input: StartWorkflowInstanceInput, transaction?: Prisma.TransactionClient, mutate?: WorkflowDomainMutation, domainAccess?: WorkflowDomainAccess): Promise<WorkflowActionResult> {

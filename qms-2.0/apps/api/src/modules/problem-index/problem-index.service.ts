@@ -122,7 +122,7 @@ export class ProblemIndexService {
 
   async applyWorkflowState(transaction: Prisma.TransactionClient, input: {
     organizationId: string; id: string; expectedVersion: number; expectedInstanceId: string | null;
-    instanceId: string; status: 'IN_PROGRESS' | 'PENDING' | 'RESOLVED' | 'CLOSED'; actorUserId: string;
+    instanceId: string; status: 'IN_PROGRESS' | 'PENDING' | 'RESOLVED' | 'CLOSED'; actorUserId: string | null;
     problemType?: string;
   }): Promise<number> {
     const updated = await transaction.problemIndex.updateMany({

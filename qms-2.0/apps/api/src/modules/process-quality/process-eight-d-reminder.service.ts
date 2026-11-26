@@ -17,7 +17,7 @@ import { ProcessEightDService } from './process-eight-d.service.js';
 import { handlingReminderStage, reminderSlot } from './process-eight-d-reminder.policy.js';
 
 export type ProcessEightDNotificationKind = 'HANDLING_REMINDER' | 'EXTENSION_PENDING' | 'EXTENSION_CANCELLED' | 'CLOSURE_REMINDER';
-type Notice = { kind: ProcessEightDNotificationKind; fingerprint: string; recipients: string[]; stage: WorkflowDeadlineStage; dueAt: string | null; slot: number | null; requestId?: string; requestVersion?: number; roundId?: string; roundVersion?: number; current?: (userId: string) => Promise<boolean> };
+type Notice = { kind: ProcessEightDNotificationKind; fingerprint: string; recipients: string[]; stage: WorkflowDeadlineStage; dueAt: string | null; slot: number | null; requestId?: string; requestVersion?: number; roundId?: string; roundVersion?: number; current: (userId: string) => Promise<boolean> };
 const ignored = (error: unknown) => error instanceof HttpException && [403, 404].includes(error.getStatus());
 
 @Injectable()
@@ -44,6 +44,8 @@ export class ProcessEightDReminderService implements AtomicOutboxHandler {
         enqueued += await this.prisma.$transaction(async tx => {
           const c = await this.reports.notificationContext(tx, candidate.organizationId, candidate.problemId);
           if (!c) return 0;
+          if (this.domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS && c.submittedAt
+            && await this.reports.reconcileProcessManagementReview(tx, candidate.organizationId, candidate.problemId)) return 0;
           const notices = await this.notices(tx, c, now);
           let count = 0;
           for (const notice of notices) {
@@ -89,7 +91,7 @@ export class ProcessEightDReminderService implements AtomicOutboxHandler {
     const subject = notice.kind === 'EXTENSION_CANCELLED' ? '延期申请失效，请重新申请' : notice.kind === 'EXTENSION_PENDING' ? '延期审批待办' : notice.kind === 'CLOSURE_REMINDER' ? '关闭审核催办' : this.configuration.handlingSubject;
     for (const recipient of notice.recipients) {
       // Recheck after resolver waits, immediately before atomic projection; never synthesize a user session.
-      if (!await this.recipient(tx, c, recipient) || (notice.current && !await notice.current(recipient))) continue;
+      if (!await notice.current(recipient)) continue;
       const { current: _current, ...saved } = notice;
       await tx.$executeRaw`INSERT INTO ${this.configuration.notifications} (id, organization_id, problem_id, recipient_user_id, event_key, kind, subject, body, context)
         VALUES (${randomUUID()}::uuid, ${c.organizationId}::uuid, ${c.problemId}::uuid, ${recipient}::uuid, ${event.eventKey}, ${notice.kind}, ${subject},
@@ -107,7 +109,7 @@ export class ProcessEightDReminderService implements AtomicOutboxHandler {
     return async raw => {
       const saved = jsonObject(raw);
       const notice = notices.find(n => n.kind === saved.kind && n.fingerprint === saved.fingerprint && n.recipients.includes(userId));
-      return !!notice && await this.recipient(tx, c, userId) && (!notice.current || await notice.current(userId));
+      return !!notice && await notice.current(userId);
     };
   }
 
@@ -118,11 +120,12 @@ export class ProcessEightDReminderService implements AtomicOutboxHandler {
     const notices: Notice[] = [];
     const stamp = { organizationId: c.organizationId, problemId: c.problemId, instanceId: c.instanceId, workflowVersionId: c.workflowVersionId,
       ownerUserId: c.ownerUserId, professionalUserId: c.professionalUserId, responsibleSectionDepartmentId: c.responsibleSectionDepartmentId, policy: c.policy };
-    const add = async (notice: Omit<Notice, 'fingerprint'>) => {
+    const add = async (notice: Omit<Notice, 'fingerprint' | 'current'> & Partial<Pick<Notice, 'current'>>, useRoundEligibility = false) => {
       const recipients: string[] = [];
-      for (const userId of new Set(notice.recipients)) if (await this.recipient(tx, c, userId)) recipients.push(userId);
-      const { slot: _slot, recipients: _recipients, current: _current, ...facts } = notice;
-      notices.push({ ...notice, recipients, fingerprint: createHash('sha256').update(canonical({ ...stamp, ...facts })).digest('hex') });
+      for (const userId of new Set(notice.recipients)) if (useRoundEligibility || await this.recipient(tx, c, userId)) recipients.push(userId);
+      const { slot: _slot, recipients: _recipients, current, ...facts } = notice;
+      notices.push({ ...notice, recipients, fingerprint: createHash('sha256').update(canonical({ ...stamp, ...facts })).digest('hex'),
+        current: async userId => (useRoundEligibility || await this.recipient(tx, c, userId)) && (!current || await current(userId)) });
     };
     const hours = c.policy?.reminderEveryHours ?? null;
     const stage = handlingReminderStage(c);
@@ -136,10 +139,11 @@ export class ProcessEightDReminderService implements AtomicOutboxHandler {
         const recipients = await this.rounds.notificationRecipients(tx, c.organizationId, c.problemId, round.id, round.version);
         await add({ kind: 'CLOSURE_REMINDER', recipients, stage: 'CLOSURE', dueAt: c.closureDueAt, slot: reminderSlot(c.closureDueAt, hours, now), roundId: round.id, roundVersion: round.version,
           current: async userId => {
-            const duties = round.duties.filter(d => d.userId === userId && d.status === 'PENDING');
+            if (round.context?.processManagement) return (await this.rounds.notificationRecipients(tx, c.organizationId, c.problemId, round.id, round.version)).includes(userId);
+            const duties = round.duties.filter(duty => duty.userId === userId && duty.status === 'PENDING');
             for (const duty of duties) if (await selection.currentParticipant(duty.participant)) return true;
             return false;
-          } });
+          } }, !!round.context?.processManagement);
       }
     }
     for (const r of validExtensions) {

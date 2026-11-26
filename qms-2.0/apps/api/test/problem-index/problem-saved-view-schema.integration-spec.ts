@@ -89,6 +89,24 @@ describe('personal problem views on PostgreSQL', () => {
     expect(audits.every((audit) => Object.keys(audit.metadata as object).every((key) => key === 'resourceVersion'))).toBe(true);
   });
 
+  it('round-trips the process filter group through create, update and list without exposing it to audit', async () => {
+    const context = await fixture();
+    const processFollowupFilters = { logic: 'ANY', items: [
+      { field: 'ownerName', operator: 'CONTAINS', value: 'private-owner-name' },
+      { field: 'dueAt', operator: 'EMPTY' },
+    ] };
+    const config = { ...configuration(), filters: { search: '8D', processFollowupFilters } };
+    const created = (await create(context, { name: 'Process filters', configuration: config }).expect(201)).body;
+    expect(created.configuration).toEqual(config);
+    const updated = { ...config, filters: { ...config.filters, processFollowupFilters: { ...processFollowupFilters, logic: 'ALL' } } };
+    await update(context, created.id, { expectedVersion: 1, configuration: updated }).expect(200);
+    const { body: listed } = await request(app.getHttpServer()).get('/api/v1/problem-views').set('Cookie', context.cookie).expect(200);
+    expect(listed).toMatchObject({ total: 1, items: [{ id: created.id, configuration: updated, version: 2 }] });
+    const audits = await prisma.auditEvent.findMany({ where: { resourceType: 'ProblemSavedView', resourceId: created.id } });
+    expect(audits).toHaveLength(2);
+    expect(JSON.stringify(audits)).not.toContain('private-owner-name');
+  });
+
   it('paginates only the owner and selected organization with a stable timestamp and ID order', async () => {
     const context = await fixture();
     const created = await Promise.all([create(context).expect(201), create(context).expect(201), create(context).expect(201)]);

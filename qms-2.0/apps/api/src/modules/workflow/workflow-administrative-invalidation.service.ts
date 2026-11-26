@@ -70,7 +70,7 @@ export class WorkflowAdministrativeInvalidationService implements Administrative
     const lostRounds = new Set(await lostClosureEligibility());
     const matches = (row: PendingRow, losses: Set<string>) => workflowInvalidationMatches(row, impact)
       || row.kind === 'closure' && losses.has(row.id);
-    const candidates = (await this.pending(tx)).filter(row => matches(row, lostRounds));
+    const candidates = (await this.pending(tx, impact.kind)).filter(row => matches(row, lostRounds));
     const supplier = this.registry.hasDomain('supplier-quality') ? this.registry.get('supplier-quality') : null;
     if (supplier && !supplier.administrativeInvalidationTargets) throw new HttpException({ code: 'WORKFLOW_ACTION_INVALID',
       reason: 'ADMINISTRATIVE_INVALIDATION_TARGETS_REQUIRED', domainCode: supplier.domainCode }, 409);
@@ -99,7 +99,7 @@ export class WorkflowAdministrativeInvalidationService implements Administrative
 
     const reason = `ADMINISTRATIVE_${impact.kind}_DELETED`, traceId = randomUUID();
     for (const target of targets) {
-      const pendingRows = await this.pending(tx, target, true);
+      const pendingRows = await this.pending(tx, impact.kind, target, true);
       const losses = new Set(await lostClosureEligibility(target.problemId));
       const rows = pendingRows.filter(row => matches(row, losses));
       if (!rows.length && !domainTargets.some(scope => scope.organizationId === target.organizationId && scope.problemId === target.problemId)) continue;
@@ -133,15 +133,22 @@ export class WorkflowAdministrativeInvalidationService implements Administrative
     return result;
   }
 
-  private async pending(tx: Prisma.TransactionClient, scope?: ProblemScope, lock = false): Promise<PendingRow[]> {
+  private async pending(tx: Prisma.TransactionClient, impactKind: AdministrativeLifecycleImpact['kind'], scope?: ProblemScope, lock = false): Promise<PendingRow[]> {
     const filter = scope ? Prisma.sql`AND r.organization_id = ${scope.organizationId}::uuid AND r.problem_id = ${scope.problemId}::uuid` : Prisma.empty;
     const locking = lock ? Prisma.sql`FOR UPDATE OF r` : Prisma.empty;
+    const processPosition = Prisma.sql`(${impactKind} = 'POSITION' AND p.domain_code = 'process-quality')`;
     // shortcut: scan pending workflow snapshots only; add targeted JSON indexes if pending volume requires it.
     const rounds = await tx.$queryRaw<PendingRow[]>(Prisma.sql`SELECT 'closure' AS kind, r.id, r.organization_id AS "organizationId",
-      r.problem_id AS "problemId", r.status, r.version, r.context, r.created_by AS "creatorUserId", r.creator_organization_id AS "creatorOrganizationId",
+      r.problem_id AS "problemId", r.status, r.version, r.created_by AS "creatorUserId", r.creator_organization_id AS "creatorOrganizationId",
+      CASE WHEN ${processPosition} AND EXISTS (SELECT 1 FROM workflow_closure_duties approved
+        WHERE approved.organization_id = r.organization_id AND approved.round_id = r.id AND approved.duty = 'PROFESSIONAL'
+          AND approved.status = 'APPROVED' AND approved.user_id::text = r.context->>'professionalUserId')
+        THEN r.context - 'professionalUserId' ELSE r.context END AS context,
       COALESCE((SELECT jsonb_agg(d.participant) FROM workflow_closure_duties d
-        WHERE d.organization_id = r.organization_id AND d.round_id = r.id), '[]'::jsonb) AS participants
-      FROM workflow_closure_rounds r WHERE r.status = 'PENDING' ${filter}
+        WHERE d.organization_id = r.organization_id AND d.round_id = r.id
+          AND (NOT ${processPosition} OR (d.duty = 'PROFESSIONAL' AND d.status <> 'APPROVED'))), '[]'::jsonb) AS participants
+      FROM workflow_closure_rounds r JOIN problem_indexes p ON p.organization_id = r.organization_id AND p.id = r.problem_id
+      WHERE r.status = 'PENDING' ${filter}
       ORDER BY r.organization_id, r.problem_id, r.id ${locking}`);
     const deadlines = await tx.$queryRaw<PendingRow[]>(Prisma.sql`SELECT 'deadline' AS kind, r.id, r.organization_id AS "organizationId",
       r.problem_id AS "problemId", r.status, r.version, r.context, r.participants, r.applicant_user_id AS "applicantUserId"

@@ -127,12 +127,9 @@ describe('source SQE collaboration public ports', () => {
   }
 
   async function configureProcessIssue(fixture: DomainFixture) {
-    const { professional, owner, manager } = fixture;
+    const { professional } = fixture;
     await expect(app.get(ProcessEightDWorkflowConfigurationService).update(professional.actor, { expectedVersion: 0, stages: [
       { stage: 'ISSUE', positionIds: [professional.position.id] },
-      { stage: 'ANALYSIS', positionIds: [owner.position.id] },
-      { stage: 'IMPLEMENTATION', positionIds: [owner.position.id] },
-      { stage: 'CLOSURE', positionIds: [professional.position.id, manager.position.id] },
     ] }, randomUUID(), randomUUID())).resolves.toMatchObject({ version: 1, missingStages: [] });
     const core = app.get(ProcessEightDService);
     return async (defectId: string, expectedVersion: number, reason?: string) => {

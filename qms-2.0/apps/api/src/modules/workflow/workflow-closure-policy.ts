@@ -20,6 +20,7 @@ export type WorkflowClosureInput = {
   professional: WorkflowClosureParticipant | null;
   sectionManager: WorkflowClosureParticipant | null;
   minister: WorkflowClosureParticipant | null;
+  processManagement?: { participant: WorkflowClosureParticipant | null; invalidScope: boolean; unavailableReason?: string };
 };
 
 export type WorkflowClosurePlan = {
@@ -30,6 +31,7 @@ export type WorkflowClosurePlan = {
     participant: WorkflowClosureParticipant | null;
   }>;
   samePersonGroups: Array<{ userId: string; duties: WorkflowClosureDuty[] }>;
+  managementEvent?: { content: string };
 };
 
 export function planWorkflowClosure(input: WorkflowClosureInput): WorkflowClosurePlan {
@@ -48,6 +50,14 @@ export function planWorkflowClosure(input: WorkflowClosureInput): WorkflowClosur
   ];
 
   if (policy === 'INTERNAL') {
+    if (input.processManagement) {
+      const { participant, invalidScope, unavailableReason } = input.processManagement;
+      if (participant) duties.push({ duty: highRisk ? 'MINISTER' : 'SECTION_MANAGER', participant,
+        status: !highRisk && participant.userId === ownerUserId ? 'SKIPPED_SAME_PERSON' : 'PENDING' });
+      const content = !participant ? `${invalidScope ? '原分管任职已失效，' : ''}${unavailableReason ?? '未找到有效管理审核人'}，跳过管理审核`
+        : invalidScope ? '原分管任职已失效，改派直属上级主负责人' : undefined;
+      return { executionMode: 'PARALLEL', duties, samePersonGroups: [], ...(content ? { managementEvent: { content } } : {}) };
+    }
     if (highRisk) {
       duties.push({ duty: 'MINISTER', status: 'PENDING', participant: minister });
     } else {

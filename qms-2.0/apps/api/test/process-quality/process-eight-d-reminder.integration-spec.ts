@@ -93,6 +93,124 @@ describe('process reminders through real atomic outbox worker and PostgreSQL', (
     expect(await recipients(f.problem.id, 'CLOSURE_REMINDER')).toEqual([f.professional.user.id]);
   }, 120000);
 
+  it('delivers closure reminders to the configured manager as well as the professional reviewer', async () => {
+    const f = await fixture(); await f.toClosure();
+    await pollCycle(); await deliver();
+    expect(await recipients(f.problem.id, 'CLOSURE_REMINDER')).toEqual([f.manager.user.id, f.professional.user.id].sort());
+    const inbox = await app.get(ProcessEightDTaskService).notifications(f.manager.actor, { problemId: f.problem.id });
+    expect(inbox).toMatchObject({ items: [{ kind: 'CLOSURE_REMINDER' }] });
+  }, 120000);
+
+  it('delivers a readable periodic closure reminder to the directly granted issuer after their final appointment ends', async () => {
+    const f = await fixture();
+    await f.toClosure();
+    await prisma.userPosition.update({ where: { id: f.professional.assignment.id }, data: { endedAt: new Date() } });
+    await pollCycle(); await deliver();
+    expect(await recipients(f.problem.id, 'CLOSURE_REMINDER')).toEqual([f.manager.user.id, f.professional.user.id].sort());
+    expect(await app.get(ProcessEightDTaskService).notifications(f.professional.actor, { problemId: f.problem.id })).toMatchObject({
+      items: [{ kind: 'CLOSURE_REMINDER' }],
+    });
+  }, 120000);
+
+  it('reconciles an invalid legacy reviewer in place but keeps a still-valid legacy reviewer', async () => {
+    const f = await fixture();
+    const round = await f.toClosure();
+    const previousPlan = await prisma.$transaction(tx => f.rounds.plan(tx, { ...round.context, processManagement: undefined }));
+    const legacy = previousPlan.duties.find(duty => duty.duty === 'SECTION_MANAGER')!.participant!;
+    await prisma.$executeRaw`UPDATE workflow_closure_rounds SET context = context - 'processManagement' - 'flowRecords' WHERE id = ${round.id}::uuid`;
+    await prisma.$executeRaw`UPDATE workflow_closure_duties SET participant = ${JSON.stringify(legacy)}::jsonb
+      WHERE round_id = ${round.id}::uuid AND duty = 'SECTION_MANAGER'`;
+    const replacement = await f.person(f.section.id);
+    await prisma.$executeRaw`UPDATE department_responsible_appointments
+      SET assignment_ids = ARRAY[${replacement.assignment.id}::uuid], primary_assignment_id = ${replacement.assignment.id}::uuid, version = version + 1
+      WHERE organization_id = ${f.org.id}::uuid AND department_id = ${f.section.id}::uuid`;
+    await pollCycle();
+    expect((await f.rounds.history(f.owner.actor, f.problem.id))[0]).toMatchObject({ id: round.id, version: round.version, duties: [
+      { duty: 'PROFESSIONAL', status: 'PENDING' }, { duty: 'SECTION_MANAGER', participant: legacy, status: 'PENDING' },
+    ] });
+
+    const decided = await f.decide(f.professional.actor, round, ['PROFESSIONAL']);
+    await prisma.user.update({ where: { id: f.professional.user.id }, data: { status: 'DISABLED' } });
+    await prisma.userPosition.update({ where: { id: f.manager.assignment.id }, data: { endedAt: new Date() } });
+    await pollCycle();
+    const [reconciled, ...older] = await f.rounds.history(f.owner.actor, f.problem.id);
+    expect(older).toHaveLength(0);
+    expect(reconciled).toMatchObject({ id: round.id, status: 'PENDING', version: decided.version + 1, context: { processManagement: true }, duties: [
+      decided.duties[0], { id: round.duties[1]!.id, duty: 'SECTION_MANAGER', userId: replacement.user.id, status: 'PENDING' },
+    ] });
+    expect(reconciled!.context.flowRecords?.[0]).toEqual({ occurredAt: round.createdAt, person: '系统',
+      content: `管理审核派给${f.manager.user.fullName?.trim() || f.manager.user.username}` });
+    expect(await f.rounds.eligibleDuties(replacement.actor)).toMatchObject([{ roundId: round.id, duty: 'SECTION_MANAGER' }]);
+  }, 120000);
+
+  it('records why a delegated review changes to the parent lead after its appointment is revoked', async () => {
+    const f = await fixture();
+    const parentLead = await f.person(f.dept.id);
+    await prisma.problemIndex.update({ where: { id: f.problem.id }, data: { severity: 'HIGH' } });
+    await prisma.$executeRaw`INSERT INTO department_responsible_appointments (organization_id, department_id, assignment_ids, primary_assignment_id, version)
+      VALUES (${f.org.id}::uuid, ${f.dept.id}::uuid,
+        ARRAY[${f.minister.assignment.id}::uuid, ${parentLead.assignment.id}::uuid], ${parentLead.assignment.id}::uuid, 1)`;
+    await prisma.$executeRaw`UPDATE department_minister_scopes SET department_leadership = true WHERE id = ${f.scopeId}::uuid`;
+    const round = await f.toClosure();
+    expect(round.duties).toContainEqual(expect.objectContaining({ duty: 'MINISTER', userId: f.minister.user.id }));
+    const revokedAt = new Date();
+    await prisma.$transaction(async tx => {
+      await tx.userPosition.update({ where: { id: f.minister.assignment.id }, data: { endedAt: revokedAt } });
+      await tx.$executeRaw`UPDATE department_minister_scopes SET status = 'DISABLED', version = version + 1, updated_at = ${revokedAt}
+        WHERE id = ${f.scopeId}::uuid`;
+      await tx.$executeRaw`INSERT INTO department_minister_scopes (id, organization_id, department_id, section_department_id,
+        minister_assignment_id, department_leadership, status, valid_from, valid_to, created_by, updated_by, updated_at)
+        VALUES (${randomUUID()}::uuid, ${f.org.id}::uuid, ${f.dept.id}::uuid, ${f.section.id}::uuid,
+          ${parentLead.assignment.id}::uuid, true, 'DISABLED', ${new Date(revokedAt.getTime() - 120000)},
+          ${new Date(revokedAt.getTime() - 90000)}, ${parentLead.user.id}::uuid, ${parentLead.user.id}::uuid,
+          ${new Date(revokedAt.getTime() + 1)})`;
+    });
+    await pollCycle();
+    const [updated] = await f.rounds.history(f.owner.actor, f.problem.id);
+    expect(updated?.duties).toContainEqual(expect.objectContaining({ duty: 'MINISTER', userId: parentLead.user.id, status: 'PENDING' }));
+    expect(updated?.context.flowRecords).toContainEqual(expect.objectContaining({ person: '系统', content: '原分管任职已失效，改派直属上级主负责人' }));
+  }, 120000);
+
+  it('rejects a stale management decision but accepts the professional decision before the worker reconciles', async () => {
+    const f = await fixture();
+    const round = await f.toClosure();
+    const replacement = await f.person(f.section.id);
+    await prisma.$executeRaw`UPDATE department_responsible_appointments
+      SET assignment_ids = ARRAY[${replacement.assignment.id}::uuid], primary_assignment_id = ${replacement.assignment.id}::uuid, version = version + 1
+      WHERE organization_id = ${f.org.id}::uuid AND department_id = ${f.section.id}::uuid`;
+    await prisma.workflowTransition.create({ data: { organizationId: f.org.id, workflowVersionId: round.workflowVersionId,
+      fromNodeId: f.node.id, toNodeId: f.ownerNode.id, transitionKey: 'return', action: 'RETURN' } });
+    expect(await f.rounds.eligibleDuties(f.professional.actor)).toMatchObject([{ roundId: round.id, duty: 'PROFESSIONAL' }]);
+    await expect(f.decide(f.manager.actor, round, ['SECTION_MANAGER'])).rejects.toMatchObject({ status: 403 });
+    const decided = await f.decide(f.professional.actor, round, ['PROFESSIONAL']);
+    expect(decided).toMatchObject({ id: round.id, status: 'PENDING', version: round.version + 1, duties: [
+      { duty: 'PROFESSIONAL', status: 'APPROVED', decidedBy: f.professional.user.id }, { duty: 'SECTION_MANAGER', status: 'PENDING' },
+    ] });
+  }, 120000);
+
+  it('automatically closes after management skip without a live actor or a human workflow mutation', async () => {
+    const f = await fixture();
+    const round = await f.toClosure();
+    const terminal = await prisma.workflowNode.create({ data: { organizationId: f.org.id, workflowVersionId: round.workflowVersionId,
+      nodeKey: 'end', type: 'CLOSE', name: 'Closed', config: { isEnd: true } } });
+    await prisma.workflowTransition.create({ data: { organizationId: f.org.id, workflowVersionId: round.workflowVersionId,
+      fromNodeId: f.node.id, toNodeId: terminal.id, transitionKey: 'close', action: 'APPROVE' } });
+    const decided = await f.decide(f.professional.actor, round, ['PROFESSIONAL']);
+    await prisma.user.update({ where: { id: f.professional.user.id }, data: { status: 'DISABLED' } });
+    await prisma.session.deleteMany({ where: { userId: f.professional.user.id } });
+    await prisma.userPosition.update({ where: { id: f.manager.assignment.id }, data: { endedAt: new Date() } });
+    await pollCycle();
+    await pollCycle();
+    expect((await f.rounds.history(f.owner.actor, f.problem.id))[0]).toMatchObject({ id: round.id, status: 'APPROVED', version: decided.version + 1,
+      context: { closedAfterManagementSkip: true }, duties: [decided.duties[0]] });
+    expect(await prisma.workflowInstance.findUniqueOrThrow({ where: { id: f.instance.id } })).toMatchObject({ status: 'COMPLETED',
+      currentNodeId: terminal.id, version: round.context.instanceVersion + 1, taskProjectionVersion: round.context.instanceVersion + 1, updatedById: null });
+    expect(await prisma.problemIndex.findUniqueOrThrow({ where: { id: f.problem.id } })).toMatchObject({ status: 'CLOSED', updatedById: null });
+    expect(await prisma.workflowMutation.count({ where: { instanceId: f.instance.id, action: 'CLOSE' } })).toBe(0);
+    expect(await prisma.auditEvent.findMany({ where: { organizationId: f.org.id, resourceType: 'WorkflowInstance',
+      resourceId: f.instance.id, action: 'WORKFLOW_ACTION_COMPLETED' } })).toMatchObject([{ actorUserId: null, metadata: { reasonCode: 'CLOSE' } }]);
+  }, 120000);
+
   it('records parse failure receipts and retries without a partial notification', async () => {
     const f = await fixture();
     const event = await prisma.outboxEvent.create({ data: { eventKey: `invalid-eight-d:${randomUUID()}`, aggregateType: 'ProcessEightDReminder', aggregateId: f.problem.id,

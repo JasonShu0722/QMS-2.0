@@ -12,6 +12,12 @@ export class ProcessEightDAssignmentOptionsQueryDto extends WorkflowClosureOptio
 }
 export class ProcessEightDAssignmentOptionsDto extends WorkflowClosureOptionsDto {}
 
+export class ProcessEightDFlowRecordDto {
+  @ApiProperty({ type: String, format: 'date-time' }) occurredAt!: string;
+  @ApiProperty() person!: string;
+  @ApiProperty() content!: string;
+}
+
 export class ProcessEightDScopeDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
 }

@@ -1027,6 +1027,22 @@ export interface paths {
         patch: operations["OrganizationResponsibilityController_updateManagementBinding"];
         trace?: never;
     };
+    "/api/v1/organizations/{organizationId}/departments/{departmentId}/responsible-appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OrganizationResponsibilityController_getResponsibleAppointments"];
+        put: operations["OrganizationResponsibilityController_updateResponsibleAppointments"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organizationId}/minister-scopes": {
         parameters: {
             query?: never;
@@ -5575,6 +5591,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/process-quality/eight-d/{id}/flow-records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessEightDController_flowRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/process-quality/eight-d/{id}/analysis-complete": {
         parameters: {
             query?: never;
@@ -9801,6 +9833,18 @@ export interface components {
             /** @enum {string} */
             status?: "ACTIVE" | "DISABLED";
         };
+        ResponsibleAppointmentsDto: {
+            version: number;
+            assignmentIds: string[];
+            /** Format: uuid */
+            primaryAssignmentId: string | null;
+        };
+        UpdateResponsibleAppointmentsDto: {
+            expectedVersion: number;
+            assignmentIds: string[];
+            /** Format: uuid */
+            primaryAssignmentId?: string;
+        };
         MinisterScopeDto: {
             /** Format: uuid */
             id: string;
@@ -9812,6 +9856,7 @@ export interface components {
             sectionDepartmentId: string;
             /** Format: uuid */
             ministerAssignmentId: string;
+            departmentLeadership?: boolean;
             /** Format: date-time */
             validFrom: string;
             /** Format: date-time */
@@ -9835,6 +9880,7 @@ export interface components {
             sectionDepartmentId: string;
             /** Format: uuid */
             ministerAssignmentId: string;
+            departmentLeadership?: boolean;
             /**
              * Format: date-time
              * @description Defaults to the transaction time; explicit bounds must fit the appointment.
@@ -12982,6 +13028,8 @@ export interface components {
             /** @enum {string} */
             policy: "INTERNAL" | "SUPPLIER";
             /** @enum {string} */
+            domainCode?: "process-quality";
+            /** @enum {string} */
             severity: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
             /** Format: uuid */
             responsibleSectionDepartmentId: string;
@@ -13050,6 +13098,7 @@ export interface components {
             duties: components["schemas"]["WorkflowClosurePreviewDutyDto"][];
             samePersonGroups: components["schemas"]["WorkflowClosureSamePersonGroupDto"][];
             issues: components["schemas"]["WorkflowClosurePreviewIssueDto"][];
+            managementNote?: string;
         };
         WorkflowClosureTemplateCandidateDto: {
             /** @enum {string} */
@@ -15535,7 +15584,7 @@ export interface components {
         };
         ProcessEightDStagePositionsDto: {
             /** @enum {string} */
-            stage: "ISSUE" | "ANALYSIS" | "IMPLEMENTATION" | "CLOSURE";
+            stage: "ISSUE";
             positionIds: string[];
         };
         ProcessEightDWorkflowPositionDto: {
@@ -15547,7 +15596,7 @@ export interface components {
             version: number;
             stages: components["schemas"]["ProcessEightDStagePositionsDto"][];
             positions: components["schemas"]["ProcessEightDWorkflowPositionDto"][];
-            missingStages: ("ISSUE" | "ANALYSIS" | "IMPLEMENTATION" | "CLOSURE")[];
+            missingStages: "ISSUE"[];
         };
         UpdateProcessEightDWorkflowConfigurationDto: {
             expectedVersion: number;
@@ -15688,6 +15737,12 @@ export interface components {
             allowedActions: string[];
             sources: components["schemas"]["ProcessEightDSourceSnapshotDto"][];
             revisions: components["schemas"]["ProcessEightDRevisionSummaryDto"][];
+        };
+        ProcessEightDFlowRecordDto: {
+            /** Format: date-time */
+            occurredAt: string;
+            person: string;
+            content: string;
         };
         SaveProcessEightDDto: {
             /** Format: uuid */
@@ -16013,6 +16068,19 @@ export interface components {
             nextCursor: string | null;
             domainRevisionTrailAvailable: boolean;
         };
+        ProcessFollowupFilterDto: {
+            /** @enum {string} */
+            field: "stage" | "status" | "severity" | "responsibleSectionName" | "ownerName" | "dueAt";
+            /** @enum {string} */
+            operator: "CONTAINS" | "NOT_CONTAINS" | "EQ" | "NE" | "EMPTY" | "NOT_EMPTY" | "GTE" | "LTE" | "AFTER" | "BEFORE";
+            /** @description 无值运算符省略；日期使用带时区的 ISO 8601 时间。 */
+            value?: string;
+        };
+        ProcessFollowupFiltersDto: {
+            /** @enum {string} */
+            logic: "ALL" | "ANY";
+            items: components["schemas"]["ProcessFollowupFilterDto"][];
+        };
         ProblemSavedViewFiltersDto: {
             domainCode?: string;
             problemType?: string;
@@ -16034,6 +16102,7 @@ export interface components {
             responsibleSectionDepartmentId?: string;
             responsibleSectionName?: string;
             ownerName?: string;
+            processFollowupFilters?: components["schemas"]["ProcessFollowupFiltersDto"];
         };
         ProblemSavedViewSortDto: {
             /** @enum {string} */
@@ -21538,6 +21607,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManagementBindingDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationResponsibilityController_getResponsibleAppointments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organizationId: string;
+                departmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponsibleAppointmentsDto"];
+                };
+            };
+            /** @description Controlled API error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    OrganizationResponsibilityController_updateResponsibleAppointments: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+                "Idempotency-Key": string;
+            };
+            path: {
+                organizationId: string;
+                departmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateResponsibleAppointmentsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponsibleAppointmentsDto"];
                 };
             };
             /** @description Controlled API error */
@@ -27880,6 +28018,8 @@ export interface operations {
                 responsibleSectionDepartmentId?: string;
                 responsibleSectionName?: string;
                 ownerName?: string;
+                /** @description ProcessFollowupFiltersDto 的 JSON 字符串。 */
+                filters?: string;
             };
             header?: never;
             path?: never;
@@ -33163,6 +33303,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessEightDController_flowRecords: {
+        parameters: {
+            query?: {
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDFlowRecordDto"][];
                 };
             };
             default: {

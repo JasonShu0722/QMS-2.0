@@ -10,15 +10,16 @@ import { featurePredicate } from '../workflow/workflow-access-policy.js';
 import type {
   CreateManagementBindingDto, CreateMinisterScopeDto, ManagementBindingDto,
   ManagementConfigurationQueryDto, ManagementResponsibilitiesDto, MinisterScopeDto,
-  ResponsibilityAssignmentsDto, ResponsibilityAssignmentsQueryDto,
+  ResponsibilityAssignmentsDto, ResponsibilityAssignmentsQueryDto, ResponsibleAppointmentsDto, UpdateResponsibleAppointmentsDto,
   UpdateManagementBindingDto, UpdateMinisterScopeDto, ResponsibilityAssignmentDto,
 } from './organization-responsibility.dto.js';
 
 const bindingColumns = Prisma.sql`id, organization_id AS "organizationId", department_id AS "departmentId", responsibility,
   position_id AS "positionId", status, version, created_by AS "createdBy", updated_by AS "updatedBy", created_at AS "createdAt", updated_at AS "updatedAt"`;
 const scopeColumns = Prisma.sql`id, organization_id AS "organizationId", department_id AS "departmentId", section_department_id AS "sectionDepartmentId",
-  minister_assignment_id AS "ministerAssignmentId", valid_from AS "validFrom", valid_to AS "validTo", status, version,
+  minister_assignment_id AS "ministerAssignmentId", department_leadership AS "departmentLeadership", valid_from AS "validFrom", valid_to AS "validTo", status, version,
   created_by AS "createdBy", updated_by AS "updatedBy", created_at AS "createdAt", updated_at AS "updatedAt"`;
+const responsibleAppointmentsColumns = Prisma.sql`version, assignment_ids AS "assignmentIds", primary_assignment_id AS "primaryAssignmentId"`;
 const assignmentInclude = {
   position: { select: { organizationId: true, departmentId: true, status: true, name: true, version: true, department: { select: { status: true } } } },
 } as const;
@@ -157,6 +158,115 @@ export class OrganizationResponsibilityService {
     });
   }
 
+  async readResponsibleAppointments(tx: AdminTransaction, organizationId: string, departmentId: string): Promise<ResponsibleAppointmentsDto> {
+    const [current] = await tx.$queryRaw<ResponsibleAppointmentsDto[]>(Prisma.sql`SELECT ${responsibleAppointmentsColumns}
+      FROM department_responsible_appointments WHERE organization_id = ${organizationId}::uuid AND department_id = ${departmentId}::uuid`);
+    return current ?? { version: 0, assignmentIds: [], primaryAssignmentId: null };
+  }
+
+  async getResponsibleAppointments(organizationId: string, departmentId: string): Promise<ResponsibleAppointmentsDto> {
+    await this.activeOrganization(this.prisma, organizationId);
+    if (!await this.prisma.department.findFirst({ where: { id: departmentId, organizationId, deletedAt: null }, select: { id: true } })) adminError('STRUCTURE_NOT_FOUND', 404);
+    return this.readResponsibleAppointments(this.prisma, organizationId, departmentId);
+  }
+
+  async resolveProcessClosureManagement(tx: AdminTransaction, organizationId: string, sectionDepartmentId: string, highRisk: boolean,
+    eligible: (userId: string) => Promise<boolean>, additionalUserIds: string[] = [], previousScopeId?: string | null) {
+    const read = async (at: Date) => {
+      const section = await tx.department.findFirst({ where: { id: sectionDepartmentId, organizationId, status: 'ACTIVE', deletedAt: null, configurationRequired: false }, select: { parentId: true } });
+      const primaryDepartmentId = highRisk ? section?.parentId : section && sectionDepartmentId;
+      const primary = primaryDepartmentId ? await this.readResponsibleAppointments(tx, organizationId, primaryDepartmentId) : null;
+      const scopes = section && highRisk ? await this.scopes(tx, organizationId, Prisma.sql`department_leadership AND section_department_id = ${sectionDepartmentId}::uuid
+        AND status = 'ACTIVE' AND valid_from <= ${at} AND (valid_to IS NULL OR valid_to > ${at})`) : [];
+      return { section, primaryDepartmentId, primary, scopes };
+    };
+    const initial = await read(new Date());
+    const ids = [initial.primary?.primaryAssignmentId, ...initial.scopes.map(scope => scope.ministerAssignmentId)]
+      .filter((id): id is string => !!id);
+    const appointments = await tx.userPosition.findMany({ where: { organizationId, id: { in: ids } }, select: { id: true, userId: true, positionId: true } });
+    await this.lockUsers(tx, organizationId, [...appointments.map(item => item.userId), ...additionalUserIds]);
+    await this.assertWorkflowOrganizationActive(tx, organizationId, true);
+    await this.lockDepartments(tx, organizationId, [sectionDepartmentId, ...initial.scopes.map(scope => scope.departmentId)], false);
+    await this.lockPositions(tx, organizationId, appointments.map(item => item.positionId), false);
+    await this.lockAssignmentRows(tx, organizationId, appointments, false);
+    const at = new Date();
+    const { section, primaryDepartmentId, primary, scopes } = await read(at);
+    if (primaryDepartmentId !== initial.primaryDepartmentId || primary?.version !== initial.primary?.version
+      || scopes.some(scope => !initial.scopes.some(before => before.id === scope.id && before.version === scope.version))) adminError('CONCURRENCY_CONFLICT', 409);
+    const candidate = async (id: string, departmentId: string, scope?: MinisterScopeDto) => {
+      const [assignment] = await tx.$queryRaw<Assignment[]>(Prisma.sql`${this.effectiveAssignments(organizationId, new Date())}
+        AND a.id = ${id}::uuid AND p.department_id = ${departmentId}::uuid`);
+      if (!assignment || !await eligible(assignment.userId)) return null;
+      return { userId: assignment.userId, assignmentId: assignment.id, positionId: assignment.positionId, departmentId,
+        bindingId: null, bindingVersion: null, scopeId: scope?.id ?? null, scopeVersion: scope?.version ?? null };
+    };
+    const scope = scopes.length === 1 ? scopes[0] : undefined;
+    if (scope && await this.isDescendant(tx, organizationId, scope.departmentId, sectionDepartmentId)) {
+      const scopedLeads = await this.readResponsibleAppointments(tx, organizationId, scope.departmentId);
+      if (scopedLeads.assignmentIds.includes(scope.ministerAssignmentId)) {
+        const participant = await candidate(scope.ministerAssignmentId, scope.departmentId, scope);
+        if (participant) return { participant, invalidScope: false };
+      }
+    }
+    const [lastScope] = highRisk && section && !scopes.length ? await tx.$queryRaw<{ assignmentExpired: boolean }[]>(Prisma.sql`
+      SELECT COALESCE(CASE WHEN coverage.status = 'DISABLED' THEN appointment.ended_at = coverage.updated_at
+        ELSE appointment.ended_at <= coverage.valid_to END, false) AS "assignmentExpired"
+      FROM department_minister_scopes coverage
+      JOIN user_positions appointment ON appointment.organization_id = coverage.organization_id AND appointment.id = coverage.minister_assignment_id
+      WHERE coverage.organization_id = ${organizationId}::uuid AND coverage.section_department_id = ${sectionDepartmentId}::uuid
+        AND ${previousScopeId ? Prisma.sql`coverage.id = ${previousScopeId}::uuid` : Prisma.sql`coverage.department_leadership`}
+        AND coverage.valid_from <= ${at}
+        AND ((coverage.status = 'ACTIVE' AND coverage.valid_to <= ${at}) OR coverage.status = 'DISABLED')
+      ORDER BY CASE WHEN coverage.status = 'DISABLED' THEN coverage.updated_at ELSE coverage.valid_to END DESC, coverage.id LIMIT 1`) : [];
+    const participant = primaryDepartmentId && primary?.primaryAssignmentId ? await candidate(primary.primaryAssignmentId, primaryDepartmentId) : null;
+    const label = highRisk ? '直属上级' : '责任部门';
+    const unavailableReason = participant ? undefined : !primaryDepartmentId ? (highRisk ? '责任部门无有效直属上级' : '责任部门已失效')
+      : !primary?.primaryAssignmentId
+        ? primary?.assignmentIds.length ? `${label}有多位负责人但未指定主负责人` : `${label}未配置负责人`
+        : `${label}主负责人任职失效或不具备审核权限`;
+    return { participant, unavailableReason, invalidScope: scopes.length > 0 || lastScope?.assignmentExpired === true };
+  }
+
+  updateResponsibleAppointments(actor: AdminActor, organizationId: string, departmentId: string, dto: UpdateResponsibleAppointmentsDto, traceId: string, key?: string) {
+    const action = 'DEPARTMENT_RESPONSIBLE_APPOINTMENTS_UPDATED';
+    return this.mutations.run({ actor, organizationId, key, action, payload: { departmentId, ...dto }, permission: 'organization:structure:manage', traceId }, async tx => {
+      const assignmentIds = dto.assignmentIds.map(id => id.toLowerCase()).sort();
+      const primaryAssignmentId = dto.primaryAssignmentId?.toLowerCase() ?? (assignmentIds.length === 1 ? assignmentIds[0]! : null);
+      if (new Set(assignmentIds).size !== assignmentIds.length || (primaryAssignmentId ? !assignmentIds.includes(primaryAssignmentId) : assignmentIds.length > 0)) {
+        adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      }
+      const assignments = await tx.userPosition.findMany({ where: { organizationId, id: { in: assignmentIds } }, select: { id: true, userId: true, positionId: true } });
+      if (assignments.length !== assignmentIds.length || new Set(assignments.map(item => item.userId)).size !== assignments.length) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      await this.lockUsers(tx, organizationId, assignments.map(item => item.userId));
+      await this.lockOrganization(tx, organizationId);
+      await this.lockDepartments(tx, organizationId, [departmentId]);
+      await this.lockPositions(tx, organizationId, [...new Set(assignments.map(item => item.positionId))], false);
+      await this.lockAssignmentRows(tx, organizationId, assignments, false);
+      await this.assertWorkflowOrganizationActive(tx, organizationId);
+      await this.refreshAccess(tx, actor, organizationId);
+      const department = await tx.department.findFirst({ where: { id: departmentId, organizationId, status: 'ACTIVE', deletedAt: null, configurationRequired: false }, select: { id: true } });
+      if (!department) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      const before = await this.readResponsibleAppointments(tx, organizationId, departmentId);
+      if (before.version !== dto.expectedVersion || before.version === 2147483647) adminError('CONCURRENCY_CONFLICT', 409);
+      if (assignmentIds.length) {
+        const effective = await tx.$queryRaw<Assignment[]>(Prisma.sql`${this.effectiveAssignments(organizationId, new Date())}
+          AND p.department_id = ${departmentId}::uuid AND a.id IN (${Prisma.join(assignmentIds.map(id => Prisma.sql`${id}::uuid`))})`);
+        if (effective.length !== assignmentIds.length) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      }
+      const [result] = await this.configurationQuery<ResponsibleAppointmentsDto>(tx, Prisma.sql`
+        INSERT INTO department_responsible_appointments (organization_id, department_id, assignment_ids, primary_assignment_id, version)
+        VALUES (${organizationId}::uuid, ${departmentId}::uuid, ${assignmentIds}::uuid[], ${primaryAssignmentId}::uuid, ${before.version + 1})
+        ON CONFLICT (organization_id, department_id) DO UPDATE SET assignment_ids = EXCLUDED.assignment_ids,
+          primary_assignment_id = EXCLUDED.primary_assignment_id, version = EXCLUDED.version
+        WHERE department_responsible_appointments.version = ${before.version}
+        RETURNING ${responsibleAppointmentsColumns}`);
+      if (!result) adminError('CONCURRENCY_CONFLICT', 409);
+      await this.audit.record({ actorUserId: actor.id, organizationId, action, resourceType: 'Department', resourceId: departmentId, outcome: 'SUCCESS', traceId,
+        metadata: { ...result, previousVersion: before.version, previousAssignmentIds: before.assignmentIds, previousPrimaryAssignmentId: before.primaryAssignmentId } }, tx);
+      return result;
+    });
+  }
+
   async listMinisterScopes(organizationId: string, query: ManagementConfigurationQueryDto): Promise<MinisterScopeDto[]> {
     await this.activeOrganization(this.prisma, organizationId);
     return this.scopes(this.prisma, organizationId, Prisma.sql`${query.departmentId ? Prisma.sql`department_id = ${query.departmentId}::uuid` : Prisma.sql`TRUE`}
@@ -169,13 +279,14 @@ export class OrganizationResponsibilityService {
       await this.lockDepartments(tx, organizationId, [dto.departmentId, dto.sectionDepartmentId]);
       const assignment = await this.lockAssignment(tx, organizationId, dto.ministerAssignmentId);
       await this.refreshAccess(tx, actor, organizationId);
-      const binding = await this.assertMinisterScope(tx, organizationId, dto.departmentId, dto.sectionDepartmentId, assignment);
+      const binding = await this.assertMinisterScope(tx, organizationId, dto.departmentId, dto.sectionDepartmentId, assignment, dto.departmentLeadership === true);
       const validFrom = dto.validFrom === undefined ? new Date() : new Date(dto.validFrom);
       const validTo = dto.validTo === undefined ? assignment.endedAt : dto.validTo === null ? null : new Date(dto.validTo);
       this.assertInterval(assignment, validFrom, validTo);
+      await this.retireStaleMinisterScopes(tx, actor, organizationId, dto.sectionDepartmentId, dto.departmentLeadership === true, validFrom, validTo, traceId);
       const rows = await this.configurationQuery<MinisterScopeDto>(tx, Prisma.sql`
-        INSERT INTO department_minister_scopes (id, organization_id, department_id, section_department_id, minister_assignment_id, valid_from, valid_to, created_by, updated_by)
-        VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${dto.departmentId}::uuid, ${dto.sectionDepartmentId}::uuid, ${dto.ministerAssignmentId}::uuid, ${validFrom}, ${validTo}, ${actor.id}::uuid, ${actor.id}::uuid)
+        INSERT INTO department_minister_scopes (id, organization_id, department_id, section_department_id, minister_assignment_id, department_leadership, valid_from, valid_to, created_by, updated_by)
+        VALUES (${randomUUID()}::uuid, ${organizationId}::uuid, ${dto.departmentId}::uuid, ${dto.sectionDepartmentId}::uuid, ${dto.ministerAssignmentId}::uuid, ${dto.departmentLeadership === true}, ${validFrom}, ${validTo}, ${actor.id}::uuid, ${actor.id}::uuid)
         RETURNING ${scopeColumns}`);
       const result = rows[0]!;
       await this.scopeAudit(tx, actor, result, binding, traceId);
@@ -196,13 +307,16 @@ export class OrganizationResponsibilityService {
       const status = dto.status ?? before.status;
       const validFrom = dto.validFrom === undefined ? before.validFrom : new Date(dto.validFrom);
       const validTo = dto.validTo === undefined ? before.validTo : dto.validTo === null ? null : new Date(dto.validTo);
-      let binding: ManagementBindingDto;
+      let binding: ManagementBindingDto | undefined;
       if (status === 'ACTIVE' || dto.sectionDepartmentId !== undefined || dto.ministerAssignmentId !== undefined || dto.validFrom !== undefined || dto.validTo !== undefined) {
-        binding = await this.assertMinisterScope(tx, organizationId, before.departmentId, sectionDepartmentId, assignment);
+        binding = await this.assertMinisterScope(tx, organizationId, before.departmentId, sectionDepartmentId, assignment, before.departmentLeadership === true);
         this.assertInterval(assignment, validFrom, validTo);
-      } else {
+      } else if (!before.departmentLeadership) {
         binding = (await this.bindings(tx, organizationId, Prisma.sql`department_id = ${before.departmentId}::uuid AND responsibility = 'MINISTER' AND position_id = ${assignment.positionId}::uuid ORDER BY created_at DESC, id DESC`))[0]!;
         if (!binding) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      }
+      if (status === 'ACTIVE') {
+        await this.retireStaleMinisterScopes(tx, actor, organizationId, sectionDepartmentId, before.departmentLeadership === true, validFrom, validTo, traceId);
       }
       const rows = await this.configurationQuery<MinisterScopeDto>(tx, Prisma.sql`
         UPDATE department_minister_scopes SET section_department_id = ${sectionDepartmentId}::uuid, minister_assignment_id = ${assignment.id}::uuid,
@@ -337,7 +451,7 @@ export class OrganizationResponsibilityService {
   }
 
   private async responsibilityConfiguration(tx: AdminTransaction, organizationId: string, sectionDepartmentId: string, at: Date) {
-    const scopes = await this.scopes(tx, organizationId, Prisma.sql`section_department_id = ${sectionDepartmentId}::uuid AND status = 'ACTIVE' AND valid_from <= ${at} AND (valid_to IS NULL OR valid_to > ${at})`);
+    const scopes = await this.scopes(tx, organizationId, Prisma.sql`section_department_id = ${sectionDepartmentId}::uuid AND NOT department_leadership AND status = 'ACTIVE' AND valid_from <= ${at} AND (valid_to IS NULL OR valid_to > ${at})`);
     const managers = await this.bindings(tx, organizationId, Prisma.sql`department_id = ${sectionDepartmentId}::uuid AND responsibility = 'SECTION_MANAGER' AND status = 'ACTIVE'`);
     const ministers = scopes.length === 1 ? await this.bindings(tx, organizationId, Prisma.sql`department_id = ${scopes[0]!.departmentId}::uuid AND responsibility = 'MINISTER' AND status = 'ACTIVE'`) : [];
     return { scopes, managers, ministers, positions: [...new Set([...managers, ...ministers].map(({ positionId }) => positionId))].sort() };
@@ -349,6 +463,29 @@ export class OrganizationResponsibilityService {
 
   private scopes(tx: AdminTransaction, organizationId: string, condition: Prisma.Sql) {
     return tx.$queryRaw<MinisterScopeDto[]>(Prisma.sql`SELECT ${scopeColumns} FROM department_minister_scopes WHERE organization_id = ${organizationId}::uuid AND ${condition}`);
+  }
+
+  private async retireStaleMinisterScopes(tx: AdminTransaction, actor: AdminActor, organizationId: string, sectionDepartmentId: string,
+    departmentLeadership: boolean, validFrom: Date, validTo: Date | null, traceId: string) {
+    const staleScopes = await this.scopes(tx, organizationId, Prisma.sql`
+      section_department_id = ${sectionDepartmentId}::uuid AND department_leadership::integer = ${Number(departmentLeadership)}::integer
+      AND status = 'ACTIVE' AND tstzrange(valid_from, valid_to, '[)') && tstzrange(${validFrom}::timestamptz, ${validTo}::timestamptz, '[)')
+      AND department_id NOT IN (
+        WITH RECURSIVE lineage AS (
+          SELECT id, parent_id FROM departments WHERE organization_id = ${organizationId}::uuid AND id = ${sectionDepartmentId}::uuid
+          UNION SELECT parent.id, parent.parent_id FROM departments parent JOIN lineage ON lineage.parent_id = parent.id
+          WHERE parent.organization_id = ${organizationId}::uuid
+        ) SELECT id FROM lineage WHERE id <> ${sectionDepartmentId}::uuid
+      ) ORDER BY id`);
+    for (const before of staleScopes) {
+      if (before.version === 2147483647) adminError('CONCURRENCY_CONFLICT', 409);
+      const [retired] = await this.configurationQuery<MinisterScopeDto>(tx, Prisma.sql`
+        UPDATE department_minister_scopes SET status = 'DISABLED', version = version + 1, updated_by = ${actor.id}::uuid, updated_at = CURRENT_TIMESTAMP
+        WHERE organization_id = ${organizationId}::uuid AND id = ${before.id}::uuid AND version = ${before.version} AND status = 'ACTIVE'
+        RETURNING ${scopeColumns}`);
+      if (!retired) adminError('CONCURRENCY_CONFLICT', 409);
+      await this.scopeAudit(tx, actor, retired, undefined, traceId, before, 'DEPARTMENT_NO_LONGER_ANCESTOR');
+    }
   }
 
   private async lockOrganization(tx: AdminTransaction, organizationId: string) {
@@ -413,8 +550,15 @@ export class OrganizationResponsibilityService {
     if (!position) adminError('STRUCTURE_REFERENCE_INVALID', 409);
   }
 
-  private async assertMinisterScope(tx: AdminTransaction, organizationId: string, departmentId: string, sectionDepartmentId: string, assignment: Assignment) {
+  private async assertMinisterScope(tx: AdminTransaction, organizationId: string, departmentId: string, sectionDepartmentId: string, assignment: Assignment, departmentLeadership: boolean) {
     if (!await this.isDescendant(tx, organizationId, departmentId, sectionDepartmentId)) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+    if (departmentLeadership) {
+      const configuration = await this.readResponsibleAppointments(tx, organizationId, departmentId);
+      const [effective] = await tx.$queryRaw<Assignment[]>(Prisma.sql`${this.effectiveAssignments(organizationId, new Date())}
+        AND a.id = ${assignment.id}::uuid AND p.department_id = ${departmentId}::uuid`);
+      if (!effective || !configuration.assignmentIds.includes(assignment.id)) adminError('STRUCTURE_REFERENCE_INVALID', 409);
+      return undefined;
+    }
     const bindings = await this.bindings(tx, organizationId, Prisma.sql`department_id = ${departmentId}::uuid AND responsibility = 'MINISTER' AND status = 'ACTIVE'`);
     if (bindings.length !== 1 || bindings[0]!.positionId !== assignment.positionId || assignment.position.departmentId !== departmentId
       || assignment.position.organizationId !== organizationId || assignment.position.status !== 'ACTIVE' || assignment.position.department?.status !== 'ACTIVE') adminError('STRUCTURE_REFERENCE_INVALID', 409);
@@ -487,11 +631,13 @@ export class OrganizationResponsibilityService {
     }, tx);
   }
 
-  private scopeAudit(tx: AdminTransaction, actor: AdminActor, row: MinisterScopeDto, binding: ManagementBindingDto, traceId: string, before?: MinisterScopeDto) {
+  private scopeAudit(tx: AdminTransaction, actor: AdminActor, row: MinisterScopeDto, binding: ManagementBindingDto | undefined, traceId: string,
+    before?: MinisterScopeDto, reasonCode?: 'DEPARTMENT_NO_LONGER_ANCESTOR') {
     return this.audit.record({ actorUserId: actor.id, organizationId: row.organizationId, action: before ? 'MINISTER_SCOPE_UPDATED' : 'MINISTER_SCOPE_CREATED',
       resourceType: 'DepartmentMinisterScope', resourceId: row.id, outcome: 'SUCCESS', traceId,
       metadata: { departmentId: row.departmentId, sectionDepartmentId: row.sectionDepartmentId, ministerAssignmentId: row.ministerAssignmentId,
-        bindingId: binding.id, bindingVersion: binding.version, validFrom: row.validFrom.toISOString(), validTo: row.validTo?.toISOString() ?? null,
+        ...(reasonCode ? { reasonCode } : binding ? { bindingId: binding.id, bindingVersion: binding.version } : { departmentLeadership: true }),
+        validFrom: row.validFrom.toISOString(), validTo: row.validTo?.toISOString() ?? null,
         status: row.status, resourceVersion: row.version,
         ...(before ? { previousSectionDepartmentId: before.sectionDepartmentId, previousMinisterAssignmentId: before.ministerAssignmentId,
           previousValidFrom: before.validFrom.toISOString(), previousValidTo: before.validTo?.toISOString() ?? null,
