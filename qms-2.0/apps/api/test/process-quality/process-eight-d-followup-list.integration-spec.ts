@@ -59,8 +59,18 @@ describe('process 8D follow-up list on PostgreSQL', () => {
     const otherSection = await prisma.department.create({ data: { organizationId: org.id, code: randomUUID(), name: 'Other section' } });
     const definition = await prisma.workflowDefinition.create({ data: { organizationId: org.id, code: randomUUID(), name: 'Read fixture' } });
     const version = await prisma.workflowVersion.create({ data: { organizationId: org.id, workflowDefinitionId: definition.id, version: 1, status: 'PUBLISHED' } });
-    const node = await prisma.workflowNode.create({ data: { organizationId: org.id, workflowVersionId: version.id, nodeKey: 'owner', name: 'Owner', type: 'ACTION' } });
-    const review = await prisma.workflowNode.create({ data: { organizationId: org.id, workflowVersionId: version.id, nodeKey: 'review', name: 'Review', type: 'APPROVAL', config: { closureReview: {} } } });
+    const workflowScope = { organizationId: org.id, workflowVersionId: version.id };
+    const node = await prisma.workflowNode.create({ data: { ...workflowScope, nodeKey: 'owner', name: 'Owner', type: 'ACTION',
+      config: { isStart: true, assignment: { permission: 'workflow:act' }, processEightD: { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null } } } });
+    const review = await prisma.workflowNode.create({ data: { ...workflowScope, nodeKey: 'review', name: 'Review', type: 'APPROVAL',
+      config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: 'process-quality' } } } });
+    const close = await prisma.workflowNode.create({ data: { ...workflowScope, nodeKey: 'close', name: 'Close', type: 'CLOSE',
+      config: { isEnd: true, assignment: { permission: 'workflow:act' } } } });
+    await prisma.workflowTransition.createMany({ data: [
+      { ...workflowScope, transitionKey: 'submit', action: 'SUBMIT', fromNodeId: node.id, toNodeId: review.id },
+      { ...workflowScope, transitionKey: 'approve', action: 'APPROVE', fromNodeId: review.id, toNodeId: close.id },
+      { ...workflowScope, transitionKey: 'return', action: 'RETURN', fromNodeId: review.id, toNodeId: node.id },
+    ] });
 
     const create = async (reportNumber: string, options: {
       title?: string; description?: string; sectionId?: string; stage?: 'SUBMISSION' | 'REVIEW' | 'CLOSED' | 'SUSPENDED';
@@ -73,7 +83,7 @@ describe('process 8D follow-up list on PostgreSQL', () => {
         closedAt: closed ? new Date(dates.original) : null, dueAt: new Date(dates.closure) } });
       if (options.legacy || options.customer || options.newProduct) return problem;
       const instance = await prisma.workflowInstance.create({ data: { organizationId: org.id, problemIndexId: problem.id, workflowDefinitionId: definition.id,
-        workflowVersionId: version.id, currentNodeId: options.stage === 'REVIEW' ? review.id : node.id, instanceKey: randomUUID(), status: options.stage === 'SUSPENDED' ? 'SUSPENDED' : closed ? 'COMPLETED' : 'RUNNING' } });
+        workflowVersionId: version.id, currentNodeId: closed ? close.id : options.stage === 'REVIEW' ? review.id : node.id, instanceKey: randomUUID(), status: options.stage === 'SUSPENDED' ? 'SUSPENDED' : closed ? 'COMPLETED' : 'RUNNING' } });
       await prisma.problemIndex.update({ where: { id: problem.id }, data: { workflowInstanceId: instance.id } });
       const document = { title: options.title ?? 'Unrelated title', description: options.description ?? 'Unrelated description' };
       await prisma.$executeRaw`INSERT INTO process_eight_d_reports
