@@ -212,7 +212,7 @@ export class ProcessEightDService {
   async reconcileProcessManagementReview(tx: Prisma.TransactionClient, organizationId: string, problemId: string) {
     if (this.domain !== INTERNAL_EIGHT_D_DOMAINS.PROCESS) return false;
     const record = await this.lockFacts(tx, organizationId, problemId);
-    if (!isClosureReviewNode(record.node) || record.instance.status !== 'RUNNING' || record.problem.closedAt || record.report.closedRevisionId) return false;
+    if (!await this.managedVersion(tx, record) || !isClosureReviewNode(record.node) || record.instance.status !== 'RUNNING' || record.problem.closedAt || record.report.closedRevisionId) return false;
     return this.rounds.reconcileProcessManagement(tx, await this.contextFromRecord(tx, record));
   }
 
