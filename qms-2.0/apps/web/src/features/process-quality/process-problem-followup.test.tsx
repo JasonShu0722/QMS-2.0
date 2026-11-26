@@ -7,6 +7,7 @@ import { LanguageProvider } from '../../i18n/Language';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProblemCenterPage } from '../problem-center/ProblemCenterPage';
 import * as api from '../problem-center/problem-center-api';
+import type { FollowupCondition, FollowupGroup } from '../problem-center/process-followup-filters';
 import { ProblemWorkspacePage } from '../problem-workspace/ProblemWorkspacePage';
 
 vi.mock('../problem-center/problem-center-api', () => ({
@@ -50,6 +51,14 @@ beforeEach(() => {
 });
 
 const openFilters = () => fireEvent.click(screen.getByRole('button', { name: '筛选条件' }));
+function addFilter(panel: ReturnType<typeof within>, index: number, field: FollowupCondition['field'], value: string, operator?: FollowupCondition['operator']) {
+  fireEvent.click(panel.getByRole('button', { name: '添加筛选条件' }));
+  fireEvent.change(panel.getByLabelText(`筛选字段 ${index}`), { target: { value: field } });
+  if (operator) fireEvent.change(panel.getByLabelText(`筛选运算符 ${index}`), { target: { value: operator } });
+  fireEvent.change(panel.getByLabelText(`筛选值 ${index}`), { target: { value } });
+}
+const group = (items: FollowupCondition[], logic: FollowupGroup['logic'] = 'ALL') => ({ logic, items });
+const openStatus = group([{ field: 'status', operator: 'EQ', value: 'OPEN' }]);
 afterEach(() => {
   vi.useRealTimers();
   useWorkTabsStore.getState().reset();
@@ -68,21 +77,24 @@ it('keeps the compact ledger mounted and edits the same filter from the header a
   const status = within(table).getByRole('button', { name: '按状态筛选' });
   fireEvent.click(status);
   const panel = await screen.findByRole('dialog', { name: '筛选面板' });
-  const field = within(panel).getByLabelText('状态筛选');
+  const field = within(panel).getByLabelText('筛选字段 1');
   await waitFor(() => expect(field).toHaveFocus());
+  expect(field).toHaveValue('status');
+  expect(field.closest('.process-quality-filter-row')).toContainElement(within(panel).getByLabelText('筛选运算符 1'));
   expect(within(panel).getByLabelText('组织上下文')).toBeInTheDocument();
   expect(within(panel).getByLabelText('保存视图')).toBeInTheDocument();
+  expect(within(field).queryByRole('option', { name: /报告编号|问题标题/ })).not.toBeInTheDocument();
   expect(within(toolbar).queryByRole('dialog')).not.toBeInTheDocument();
   expect(document.querySelector('.qms-ledger')).toBe(table);
-  fireEvent.change(field, { target: { value: 'OPEN' } });
+  fireEvent.change(within(panel).getByLabelText('筛选值 1'), { target: { value: 'OPEN' } });
   expect(api.getProcessFollowup).toHaveBeenCalledTimes(1);
   fireEvent.keyDown(field, { key: 'Escape' });
   await waitFor(() => expect(status).toHaveAttribute('aria-pressed', 'true'));
   expect(status).toHaveFocus();
-  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'OPEN', page: 1 }), expect.any(AbortSignal));
+  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ filters: JSON.stringify(openStatus), page: 1 }), expect.any(AbortSignal));
   openFilters();
-  expect(within(await screen.findByRole('dialog')).getByLabelText('状态筛选')).toHaveValue('OPEN');
-});
+  expect(within(await screen.findByRole('dialog')).getByLabelText('筛选值 1')).toHaveValue('OPEN');
+}, 30_000);
 
 it('restores the server page and applied filters on detail return, without carrying them to another organization', async () => {
   vi.mocked(api.getProcessFollowup).mockImplementation(async query => ({ ...result, items: [{ ...projectedProblem, organizationId: query.organizationId! }], page: query.page!, pageSize: query.pageSize!, total: 51 }));
@@ -97,23 +109,27 @@ it('restores the server page and applied filters on detail return, without carry
     <Route path="/app/problem-workspace/:problemId" element={<ProblemWorkspacePage problemId="problem-1" />} />
   </Routes></LanguageProvider></MemoryRouter>);
   await screen.findByRole('link', { name: '8D-001' });
+  fireEvent.change(screen.getByRole('searchbox', { name: '搜索报告编号或问题标题' }), { target: { value: '划伤' } });
+  fireEvent.click(screen.getByRole('button', { name: 'search' }));
   openFilters();
-  fireEvent.change(screen.getByLabelText('状态筛选'), { target: { value: 'OPEN' } });
+  addFilter(within(screen.getByRole('dialog')), 1, 'status', 'OPEN');
   fireEvent.click(screen.getByRole('button', { name: '应用筛选' }));
   await screen.findByTitle('2');
   fireEvent.click(screen.getByTitle('2'));
-  await waitFor(() => expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, status: 'OPEN' }), expect.any(AbortSignal)));
+  await waitFor(() => expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2, filters: JSON.stringify(openStatus) }), expect.any(AbortSignal)));
   fireEvent.click(await screen.findByRole('link', { name: '8D-001' }));
   const returnLink = await screen.findByRole('link', { name: '返回制程问题跟进' });
   expect(returnLink).toHaveAttribute('href', '/app/process-quality/problems?organizationId=org-other');
   fireEvent.click(returnLink);
   await screen.findByRole('link', { name: '8D-001' });
-  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ organizationId: 'org-other', page: 2, status: 'OPEN' }), expect.any(AbortSignal));
+  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ organizationId: 'org-other', page: 2, filters: JSON.stringify(openStatus), search: '划伤' }), expect.any(AbortSignal));
+  expect(screen.getByRole('searchbox', { name: '搜索报告编号或问题标题' })).toHaveValue('划伤');
   openFilters();
   fireEvent.change(screen.getByLabelText('组织上下文'), { target: { value: 'org-2' } });
   fireEvent.click(screen.getByRole('button', { name: '切换组织' }));
   await waitFor(() => expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ organizationId: 'org-2', page: 1 }), expect.any(AbortSignal)));
-  expect(vi.mocked(api.getProcessFollowup).mock.lastCall?.[0]).not.toHaveProperty('status');
+  expect(vi.mocked(api.getProcessFollowup).mock.lastCall?.[0]).not.toHaveProperty('filters');
+  expect(vi.mocked(api.getProcessFollowup).mock.lastCall?.[0]).not.toHaveProperty('search');
 }, 60_000);
 
 it('locks the process domain and formal response against a hostile URL and exposes no domain editor', async () => {
@@ -133,7 +149,7 @@ it('overrides saved-view domain and type while retaining its supported status fi
   openFilters();
   fireEvent.change(screen.getByLabelText('保存视图'), { target: { value: 'foreign' } });
   await act(async () => { fireEvent.click(screen.getByText('应用视图', { selector: 'button span' })); });
-  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ status: 'OPEN' }), expect.any(AbortSignal));
+  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ filters: JSON.stringify(openStatus) }), expect.any(AbortSignal));
   expect(vi.mocked(api.getProcessFollowup).mock.lastCall?.[0]).not.toHaveProperty('domainCode');
 });
 
@@ -145,14 +161,19 @@ it('round-trips process filters and a hidden phase column through a saved view',
   expect(screen.queryByRole('columnheader', { name: '当前环节' })).not.toBeInTheDocument();
   openFilters();
   const panel = within(await screen.findByRole('dialog'));
-  fireEvent.change(panel.getByLabelText('当前环节'), { target: { value: 'CLOSURE_REVIEW' } });
-  fireEvent.change(panel.getByRole('textbox', { name: '责任科室' }), { target: { value: ' 焊接质量 ' } });
-  fireEvent.change(panel.getByRole('textbox', { name: '负责人' }), { target: { value: ' 负责人甲 ' } });
+  addFilter(panel, 1, 'stage', 'CLOSURE_REVIEW');
+  addFilter(panel, 2, 'ownerName', ' 负责人甲 ', 'NE');
+  addFilter(panel, 3, 'responsibleSectionName', ' 焊接质量 ');
+  fireEvent.change(panel.getByLabelText('筛选逻辑'), { target: { value: 'ANY' } });
   fireEvent.change(panel.getByLabelText('视图名称'), { target: { value: '关闭审批关注' } });
   await act(async () => { fireEvent.click(panel.getByRole('button', { name: '保存新视图' })); });
-  const expectedFilters = { stage: 'CLOSURE_REVIEW', responsibleSectionName: '焊接质量', ownerName: '负责人甲' };
+  const expectedGroup = group([
+    { field: 'stage', operator: 'EQ', value: 'CLOSURE_REVIEW' },
+    { field: 'ownerName', operator: 'NE', value: '负责人甲' },
+    { field: 'responsibleSectionName', operator: 'CONTAINS', value: '焊接质量' },
+  ], 'ANY');
   expect(api.createProblemView).toHaveBeenCalledWith('org-1', expect.objectContaining({ configuration: expect.objectContaining({
-    filters: expectedFilters, columnOrder: expect.arrayContaining(['processStage']),
+    filters: { processFollowupFilters: expectedGroup }, columnOrder: expect.arrayContaining(['processStage']),
   }) }));
   expect(vi.mocked(api.createProblemView).mock.lastCall?.[1].configuration.visibleColumns).not.toContain('processStage');
   const saved = await vi.mocked(api.createProblemView).mock.results[0]!.value;
@@ -164,43 +185,122 @@ it('round-trips process filters and a hidden phase column through a saved view',
   const reloadedPanel = within(screen.getByRole('dialog'));
   fireEvent.change(reloadedPanel.getByLabelText('保存视图'), { target: { value: saved.id } });
   await act(async () => { fireEvent.click(reloadedPanel.getByRole('button', { name: '应用视图' })); });
-  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining(expectedFilters), expect.any(AbortSignal));
-  expect(reloadedPanel.getByRole('textbox', { name: '负责人' })).toHaveValue('负责人甲');
-  expect(reloadedPanel.getByRole('textbox', { name: '责任科室' })).toHaveValue('焊接质量');
+  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ filters: JSON.stringify(expectedGroup) }), expect.any(AbortSignal));
+  expect(reloadedPanel.getByLabelText('筛选逻辑')).toHaveValue('ANY');
+  expect(reloadedPanel.getByLabelText('筛选运算符 2')).toHaveValue('NE');
+  expect(reloadedPanel.getByLabelText('筛选值 2')).toHaveValue('负责人甲');
+  expect(reloadedPanel.getByLabelText('筛选值 3')).toHaveValue('焊接质量');
   expect(screen.queryByRole('columnheader', { name: '当前环节' })).not.toBeInTheDocument();
 }, 60_000);
 
-it('retains the fixed formal process scope through a supported search and reset', async () => {
+it('combines top search with filter rows and removes an unwanted condition', async () => {
   await mount();
+  const search = screen.getByRole('searchbox', { name: '搜索报告编号或问题标题' });
+  fireEvent.change(search, { target: { value: '8D-001' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'search' })); });
   openFilters();
   const panel = within(await screen.findByRole('dialog'));
-  fireEvent.change(panel.getByLabelText('报告编号检索'), { target: { value: '8D-001' } });
-  fireEvent.change(panel.getByLabelText('状态筛选'), { target: { value: 'OPEN' } });
+  expect(panel.queryByLabelText('报告编号检索')).not.toBeInTheDocument();
+  expect(panel.queryByLabelText('搜索报告编号或问题标题')).not.toBeInTheDocument();
+  addFilter(panel, 1, 'status', 'OPEN');
+  addFilter(panel, 2, 'severity', 'HIGH');
+  fireEvent.click(panel.getByRole('button', { name: '删除筛选条件 2' }));
   await act(async () => { fireEvent.click(panel.getByRole('button', { name: '应用筛选' })); });
-  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ search: '8D-001', status: 'OPEN' }), expect.any(AbortSignal));
+  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ search: '8D-001', filters: JSON.stringify(openStatus) }), expect.any(AbortSignal));
+  expect(screen.getByRole('button', { name: '筛选条件' })).toHaveTextContent('筛选条件 1');
+}, 60_000);
+
+it('reveals a focused condition inside the filter rows without changing draft conditions or search', async () => {
+  await mount();
+  const search = screen.getByRole('searchbox', { name: '搜索报告编号或问题标题' });
+  fireEvent.change(search, { target: { value: '8D-001' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'search' })); });
+  const reads = vi.mocked(api.getProcessFollowup).mock.calls.length;
   openFilters();
-  await act(async () => { fireEvent.click(screen.getByText(/重\s*置/, { selector: 'button span' })); });
-  expect(api.getProcessFollowup).toHaveBeenLastCalledWith({ organizationId: 'org-1', page: 1, pageSize: 20, sortBy: 'updatedAt', sortDirection: 'desc' }, expect.any(AbortSignal));
+  const dialog = await screen.findByRole('dialog');
+  const panel = within(dialog);
+  addFilter(panel, 1, 'status', 'OPEN');
+  addFilter(panel, 2, 'severity', 'HIGH');
+  const rows = dialog.querySelector<HTMLElement>('.problem-center__popup-filter-rows')!;
+  Object.defineProperty(rows, 'clientHeight', { value: 64 });
+  const measure = HTMLElement.prototype.getBoundingClientRect;
+  const geometry = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    if (this === rows) return new DOMRect(0, 100, 400, 64);
+    if (this.parentElement === rows) {
+      const index = Array.from(rows.children).indexOf(this);
+      return new DOMRect(0, 100 + index * 32 - rows.scrollTop, 400, 32);
+    }
+    return measure.call(this);
+  });
+  try {
+    fireEvent.click(panel.getByRole('button', { name: '添加筛选条件' }));
+    expect(panel.getByLabelText('筛选字段 3')).toHaveFocus();
+    expect(rows.scrollTop).toBe(32);
+    rows.scrollTop = 0;
+    fireEvent.click(screen.getByRole('button', { name: '按当前环节筛选' }));
+    expect(panel.getByLabelText('筛选字段 3')).toHaveFocus();
+    expect(rows.scrollTop).toBe(32);
+    fireEvent.click(screen.getByRole('button', { name: '按状态筛选' }));
+    expect(panel.getByLabelText('筛选字段 1')).toHaveFocus();
+    expect(rows.scrollTop).toBe(0);
+    expect(panel.getByLabelText('筛选值 1')).toHaveValue('OPEN');
+    expect(panel.getByLabelText('筛选值 2')).toHaveValue('HIGH');
+    expect(search).toHaveValue('8D-001');
+    expect(api.getProcessFollowup).toHaveBeenCalledTimes(reads);
+  } finally {
+    geometry.mockRestore();
+  }
 }, 30_000);
+
+it('preserves top search on clearing conditions but clears it when restoring defaults', async () => {
+  const saved = { ...view, configuration: { ...view.configuration, filters: { processFollowupFilters: openStatus } } };
+  vi.mocked(api.getProblemViews).mockResolvedValue({ items: [saved], total: 1 });
+  await mount();
+  openFilters();
+  fireEvent.change(screen.getByLabelText('保存视图'), { target: { value: saved.id } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: '应用视图' })); });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: '关闭筛选' })); });
+  const search = screen.getByRole('searchbox', { name: '搜索报告编号或问题标题' });
+  fireEvent.change(search, { target: { value: '划伤' } });
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'search' })); });
+  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ search: '划伤', filters: JSON.stringify(openStatus) }), expect.any(AbortSignal));
+  openFilters();
+  fireEvent.click(screen.getByRole('button', { name: '清空' }));
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: '应用筛选' })); });
+  expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({ search: '划伤' }), expect.any(AbortSignal));
+  expect(vi.mocked(api.getProcessFollowup).mock.lastCall?.[0]).not.toHaveProperty('filters');
+  openFilters();
+  await act(async () => { fireEvent.click(screen.getByRole('button', { name: '恢复系统默认筛选' })); });
+  expect(api.getProcessFollowup).toHaveBeenLastCalledWith({ organizationId: 'org-1', page: 1, pageSize: 20, sortBy: 'updatedAt', sortDirection: 'desc' }, expect.any(AbortSignal));
+}, 120_000);
 
 it('submits header phase and effective-deadline filters and deadline sort as one server query', async () => {
   await mount();
   fireEvent.click(screen.getByRole('button', { name: '按负责人筛选' }));
   const panel = within(await screen.findByRole('dialog'));
-  expect(panel.getByRole('textbox', { name: '负责人' })).toHaveFocus();
-  fireEvent.change(panel.getByRole('textbox', { name: '负责人' }), { target: { value: ' 负责人甲 ' } });
+  expect(panel.getByLabelText('筛选字段 1')).toHaveFocus();
+  expect(panel.getByLabelText('筛选字段 1')).toHaveValue('ownerName');
+  fireEvent.change(panel.getByLabelText('筛选值 1'), { target: { value: ' 负责人甲 ' } });
   fireEvent.click(screen.getByRole('button', { name: '按责任科室筛选' }));
-  expect(panel.getByRole('textbox', { name: '责任科室' })).toHaveFocus();
-  fireEvent.change(panel.getByRole('textbox', { name: '责任科室' }), { target: { value: ' 焊接质量 ' } });
-  fireEvent.change(panel.getByLabelText('当前环节'), { target: { value: 'CLOSURE_REVIEW' } });
-  fireEvent.change(panel.getByLabelText('办理期限起始'), { target: { value: '2026-09-25T09:00' } });
+  expect(panel.getByLabelText('筛选字段 2')).toHaveFocus();
+  expect(panel.getByLabelText('筛选字段 2')).toHaveValue('responsibleSectionName');
+  fireEvent.change(panel.getByLabelText('筛选值 2'), { target: { value: ' 焊接质量 ' } });
+  addFilter(panel, 3, 'stage', 'CLOSURE_REVIEW');
+  addFilter(panel, 4, 'dueAt', '2026-09-25T09:00', 'GTE');
+  addFilter(panel, 5, 'dueAt', '2026-09-30T09:00', 'LTE');
   fireEvent.click(panel.getByLabelText('仅看当前已逾期'));
   fireEvent.change(panel.getByLabelText('排序字段'), { target: { value: 'dueAt' } });
   fireEvent.change(panel.getByLabelText('排序方向'), { target: { value: 'asc' } });
   expect(api.getProcessFollowup).toHaveBeenCalledTimes(1);
   fireEvent.click(panel.getByRole('button', { name: '应用筛选' }));
   await waitFor(() => expect(api.getProcessFollowup).toHaveBeenLastCalledWith(expect.objectContaining({
-    stage: 'CLOSURE_REVIEW', ownerName: '负责人甲', responsibleSectionName: '焊接质量', dueFrom: new Date('2026-09-25T09:00').toISOString(), overdueAt: expect.any(String), sortBy: 'dueAt', sortDirection: 'asc', page: 1,
+    filters: JSON.stringify(group([
+      { field: 'ownerName', operator: 'CONTAINS', value: '负责人甲' },
+      { field: 'responsibleSectionName', operator: 'CONTAINS', value: '焊接质量' },
+      { field: 'stage', operator: 'EQ', value: 'CLOSURE_REVIEW' },
+      { field: 'dueAt', operator: 'GTE', value: new Date('2026-09-25T09:00').toISOString() },
+      { field: 'dueAt', operator: 'LTE', value: new Date('2026-09-30T09:00').toISOString() },
+    ])), overdueAt: expect.any(String), sortBy: 'dueAt', sortDirection: 'asc', page: 1,
   }), expect.any(AbortSignal)));
   expect(vi.mocked(api.getProcessFollowup).mock.lastCall?.[0]).not.toHaveProperty('ownerId');
   expect(vi.mocked(api.getProcessFollowup).mock.lastCall?.[0]).not.toHaveProperty('responsibleSectionDepartmentId');

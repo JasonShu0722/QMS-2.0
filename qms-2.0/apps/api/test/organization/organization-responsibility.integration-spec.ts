@@ -41,7 +41,7 @@ describe('organization management responsibilities PostgreSQL', () => {
   const start = new Date('2026-01-01T00:00:00.000Z');
   const at = new Date('2026-10-25T00:00:00.000Z');
   const end = new Date('2027-01-01T00:00:00.000Z');
-  const send = (method: 'post' | 'patch', suffix: string, body: object, key = randomUUID(), targetOrg = org) => request(app.getHttpServer())[method](`/api/v1/organizations/${targetOrg}/${suffix}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
+  const send = (method: 'post' | 'patch' | 'put', suffix: string, body: object, key = randomUUID(), targetOrg = org) => request(app.getHttpServer())[method](`/api/v1/organizations/${targetOrg}/${suffix}`).set('Cookie', cookie).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
   const get = (suffix: string, targetOrg = org) => request(app.getHttpServer()).get(`/api/v1/organizations/${targetOrg}/${suffix}`).set('Cookie', cookie);
   const createBinding = (responsibility: 'SECTION_MANAGER' | 'MINISTER', departmentId = responsibility === 'MINISTER' ? department : section, positionId = responsibility === 'MINISTER' ? ministerPosition : managerPosition) => service.createManagementBinding(actor, org, { departmentId, responsibility, positionId }, randomUUID(), randomUUID());
   const createScope = (sectionDepartmentId = section, ministerAssignmentId = ministerA, dates: { validFrom?: string; validTo?: string | null } = {}) => service.createMinisterScope(actor, org, { departmentId: department, sectionDepartmentId, ministerAssignmentId, ...dates }, randomUUID(), randomUUID());
@@ -79,6 +79,129 @@ describe('organization management responsibilities PostgreSQL', () => {
   });
 
   afterAll(async () => { await app?.close(); });
+
+  it('configures effective appointments without a role category; one defaults to primary, several require a selected primary', async () => {
+    const path = `departments/${department}/responsible-appointments`;
+    await get(path).then(result => expect(result.body).toMatchObject({ version: 0, assignmentIds: [], primaryAssignmentId: null }));
+    const first = await send('put', path, { expectedVersion: 0, assignmentIds: [ministerA] });
+    expect(first.status).toBe(200);
+    expect(first.body).toMatchObject({ version: 1, assignmentIds: [ministerA], primaryAssignmentId: ministerA });
+    for (const body of [
+      { assignmentIds: [ministerA, ministerB] },
+      { assignmentIds: [ministerA, ministerB], primaryAssignmentId: managerAssignment },
+      { assignmentIds: [ministerA, ministerA], primaryAssignmentId: ministerA },
+      { assignmentIds: [managerAssignment] },
+    ]) expect((await send('put', path, { expectedVersion: 1, ...body })).status).toBeGreaterThanOrEqual(400);
+    const update = await send('put', path, { expectedVersion: 1, assignmentIds: [ministerA, ministerB], primaryAssignmentId: ministerB });
+    expect(update.status).toBe(200);
+    expect(update.body).toMatchObject({ version: 2, primaryAssignmentId: ministerB });
+    expect(new Set(update.body.assignmentIds)).toEqual(new Set([ministerA, ministerB]));
+    expect((await send('put', path, { expectedVersion: 1, assignmentIds: [ministerA] })).status).toBe(409);
+    expect((await get(path)).body).toEqual(update.body);
+    expect((await resolve()).responsibilities).toEqual([]);
+  });
+
+  it('supports assigning a configured department leader to a descendant without a legacy minister binding', async () => {
+    const path = `departments/${department}/responsible-appointments`;
+    expect((await send('put', path, { expectedVersion: 0, assignmentIds: [ministerA] })).status).toBe(200);
+    const input = { departmentId: department, sectionDepartmentId: section, ministerAssignmentId: ministerA, departmentLeadership: true };
+    expect((await send('post', 'minister-scopes', { ...input, ministerAssignmentId: ministerB })).status).toBe(409);
+    expect((await send('post', 'minister-scopes', input)).status).toBe(201);
+  });
+
+  it.each([false, true])('replaces stale coverage after moving the last child (departmentLeadership=%s)', async (departmentLeadership) => {
+    const newParent = await prisma.department.create({ data: { organizationId: org, parentId: department, code: randomUUID(), name: 'New parent' } });
+    const oldParent = await prisma.department.create({ data: { organizationId: org, parentId: department, code: randomUUID(), name: 'Old parent' } });
+    await send('patch', `departments/${section}`, { expectedVersion: 1, parentId: oldParent.id }).expect(200);
+    const coverageInput = async (departmentId: string) => {
+      const position = await prisma.position.create({ data: { organizationId: org, departmentId, code: randomUUID(), name: 'Lead' } });
+      const assignment = await prisma.userPosition.create({ data: { organizationId: org, userId: dualUser, positionId: position.id, startedAt: start } });
+      if (departmentLeadership) {
+        await send('put', `departments/${departmentId}/responsible-appointments`, { expectedVersion: 0, assignmentIds: [assignment.id] }).expect(200);
+      } else {
+        await createBinding('MINISTER', departmentId, position.id);
+      }
+      return { departmentId, sectionDepartmentId: section, ministerAssignmentId: assignment.id, departmentLeadership, validFrom: start.toISOString(), validTo: end.toISOString() };
+    };
+    const oldInput = await coverageInput(oldParent.id);
+    const newInput = await coverageInput(newParent.id);
+    const old = (await send('post', 'minister-scopes', oldInput).expect(201)).body;
+    const untouched = (await send('post', 'minister-scopes', { ...oldInput, validFrom: end.toISOString(), validTo: null }).expect(201)).body;
+    await send('patch', `departments/${section}`, { expectedVersion: 2, parentId: newParent.id }).expect(200);
+    expect(await prisma.department.count({ where: { organizationId: org, parentId: oldParent.id } })).toBe(0);
+
+    const future = (await send('post', 'minister-scopes', { ...newInput, validFrom: at.toISOString() }).expect(201)).body;
+    const key = randomUUID();
+    const body = { ...newInput, validTo: at.toISOString() };
+    const newScope = (await send('post', 'minister-scopes', body, key).expect(201)).body;
+    expect((await send('post', 'minister-scopes', body, key).expect(201)).body).toEqual(newScope);
+    await send('patch', `minister-scopes/${old.id}`, { expectedVersion: 1, status: 'DISABLED' }).expect(409);
+
+    const rows = (await get('minister-scopes').expect(200)).body;
+    expect(rows).toEqual(expect.arrayContaining([{ ...old, status: 'DISABLED', version: 2, updatedAt: expect.any(String) }, untouched, future, newScope]));
+    const audit = await prisma.auditEvent.findMany({ where: { resourceId: old.id, action: 'MINISTER_SCOPE_UPDATED' } });
+    expect(audit).toEqual([expect.objectContaining({ actorUserId: actor.id, organizationId: org, metadata: expect.objectContaining({
+      departmentId: oldParent.id, sectionDepartmentId: section, previousStatus: 'ACTIVE', status: 'DISABLED',
+      previousResourceVersion: 1, resourceVersion: 2, reasonCode: 'DEPARTMENT_NO_LONGER_ANCESTOR',
+    }) })]);
+  });
+
+  it('rolls back stale coverage retirement if valid ancestor coverage blocks a scope update', async () => {
+    const newParent = await prisma.department.create({ data: { organizationId: org, parentId: department, code: randomUUID(), name: 'New parent' } });
+    const oldParent = await prisma.department.create({ data: { organizationId: org, parentId: department, code: randomUUID(), name: 'Old parent' } });
+    await send('patch', `departments/${section}`, { expectedVersion: 1, parentId: oldParent.id }).expect(200);
+    const position = await prisma.position.create({ data: { organizationId: org, departmentId: oldParent.id, code: randomUUID(), name: 'Old minister' } });
+    const assignment = await prisma.userPosition.create({ data: { organizationId: org, userId: dualUser, positionId: position.id, startedAt: start } });
+    await createBinding('MINISTER', oldParent.id, position.id);
+    await createBinding('MINISTER');
+    const old = (await send('post', 'minister-scopes', { departmentId: oldParent.id, sectionDepartmentId: section, ministerAssignmentId: assignment.id,
+      validFrom: start.toISOString(), validTo: at.toISOString() }).expect(201)).body;
+    const valid = await createScope(section, ministerA, { validFrom: at.toISOString(), validTo: end.toISOString() });
+    const other = await createScope(secondSection, ministerA, { validFrom: start.toISOString(), validTo: end.toISOString() });
+    await send('patch', `departments/${section}`, { expectedVersion: 2, parentId: newParent.id }).expect(200);
+
+    const key = randomUUID();
+    await send('patch', `minister-scopes/${other.id}`, { expectedVersion: 1, sectionDepartmentId: section }, key).expect(409);
+    expect(await prisma.adminMutation.count({ where: { actorUserId: actor.id, key } })).toBe(0);
+    expect((await get('minister-scopes').expect(200)).body).toEqual(expect.arrayContaining([old, valid, other]));
+    expect(await prisma.auditEvent.count({ where: { resourceId: { in: [old.id, other.id, valid.id] }, action: 'MINISTER_SCOPE_UPDATED' } })).toBe(0);
+
+    await send('patch', `minister-scopes/${other.id}`, { expectedVersion: 1, sectionDepartmentId: section, validTo: at.toISOString() }, key).expect(200);
+    expect((await get('minister-scopes').expect(200)).body).toEqual(expect.arrayContaining([
+      { ...old, status: 'DISABLED', version: 2, updatedAt: expect.any(String) }, valid,
+      { ...other, sectionDepartmentId: section, validTo: at.toISOString(), version: 2, updatedAt: expect.any(String) },
+    ]));
+  });
+
+  it('resolves process management from the current department primary or coverage and falls back only to the direct parent primary', async () => {
+    const selectProcess = (highRisk: boolean, eligible = async (_userId: string) => true) => prisma.$transaction(tx =>
+      service.resolveProcessClosureManagement(tx, org, section, highRisk, eligible));
+    await expect(selectProcess(true)).resolves.toMatchObject({ participant: null, invalidScope: false });
+    expect((await send('put', `departments/${section}/responsible-appointments`, { expectedVersion: 0, assignmentIds: [managerAssignment] })).status).toBe(200);
+    expect((await send('put', `departments/${department}/responsible-appointments`, { expectedVersion: 0, assignmentIds: [ministerA, ministerB], primaryAssignmentId: ministerB })).status).toBe(200);
+    await expect(selectProcess(false)).resolves.toMatchObject({ participant: { assignmentId: managerAssignment }, invalidScope: false });
+    await expect(selectProcess(true)).resolves.toMatchObject({ participant: { assignmentId: ministerB }, invalidScope: false });
+    const scopeResult = await send('post', 'minister-scopes', { departmentId: department, sectionDepartmentId: section, ministerAssignmentId: ministerA, departmentLeadership: true });
+    expect(scopeResult.status).toBe(201);
+    await expect(selectProcess(true)).resolves.toMatchObject({ participant: { assignmentId: ministerA, scopeId: scopeResult.body.id }, invalidScope: false });
+    await prisma.userPosition.update({ where: { id: ministerA }, data: { endedAt: new Date() } });
+    await expect(selectProcess(true)).resolves.toMatchObject({ participant: { assignmentId: ministerB }, invalidScope: true });
+    await expect(selectProcess(true, async () => false)).resolves.toMatchObject({ participant: null, invalidScope: true });
+  });
+
+  it('distinguishes coverage ending with an appointment from an explicitly shorter coverage period', async () => {
+    const expiredAt = new Date(Date.now() - 60_000);
+    const selectProcess = () => prisma.$transaction(tx => service.resolveProcessClosureManagement(tx, org, section, true, async () => true));
+    expect((await send('put', `departments/${department}/responsible-appointments`, { expectedVersion: 0, assignmentIds: [ministerA, ministerB], primaryAssignmentId: ministerB })).status).toBe(200);
+    await prisma.userPosition.update({ where: { id: ministerA }, data: { endedAt: expiredAt } });
+    const scopeId = randomUUID();
+    await prisma.$executeRaw`INSERT INTO department_minister_scopes (id, organization_id, department_id, section_department_id, minister_assignment_id,
+      department_leadership, valid_from, valid_to, created_by, updated_by) VALUES (${scopeId}::uuid, ${org}::uuid, ${department}::uuid, ${section}::uuid,
+      ${ministerA}::uuid, true, ${start}, ${expiredAt}, ${actor.id}::uuid, ${actor.id}::uuid)`;
+    await expect(selectProcess()).resolves.toMatchObject({ participant: { assignmentId: ministerB }, invalidScope: true });
+    await prisma.$executeRaw`UPDATE department_minister_scopes SET valid_to = ${new Date(expiredAt.getTime() - 60_000)} WHERE id = ${scopeId}::uuid`;
+    await expect(selectProcess()).resolves.toMatchObject({ participant: { assignmentId: ministerB }, invalidScope: false });
+  });
 
   it('returns missing issues without administrator fallback or preventing a caller from saving a draft', async () => {
     expect(await resolve()).toMatchObject({ responsibilities: [], issues: [

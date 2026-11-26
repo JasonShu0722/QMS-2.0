@@ -1,7 +1,8 @@
 import { ApiProperty, ApiPropertyOptional, IntersectionType, PartialType, PickType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, Equals, IsArray, IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, Validate, ValidateNested, ValidatorConstraint, type ValidationArguments, type ValidatorConstraintInterface } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, Equals, IsArray, IsDefined, IsIn, IsInt, IsObject, IsOptional, IsString, Matches, Max, MaxLength, Min, Validate, ValidateIf, ValidateNested, ValidatorConstraint, type ValidationArguments, type ValidatorConstraintInterface } from 'class-validator';
 import { ProblemIndexQueryDto, ProblemScopeQueryDto, ProcessFollowupQueryDto, PROBLEM_SORT_FIELDS } from './problem-index.dto.js';
+import { ProcessFollowupFiltersDto } from './process-followup-filter.dto.js';
 
 export const PROBLEM_VIEW_COLUMNS = ['reportNumber', 'title', 'domainCode', 'problemType', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt', 'processStage'] as const;
 type ProblemViewColumn = typeof PROBLEM_VIEW_COLUMNS[number];
@@ -9,7 +10,10 @@ type ProblemViewColumn = typeof PROBLEM_VIEW_COLUMNS[number];
 export class ProblemSavedViewFiltersDto extends IntersectionType(
   PickType(ProblemIndexQueryDto, ['domainCode', 'problemType', 'status', 'severity', 'ownerId', 'search', 'dueFrom', 'dueTo', 'overdueAt'] as const),
   PickType(ProcessFollowupQueryDto, ['stage', 'responsibleSectionDepartmentId', 'responsibleSectionName', 'ownerName'] as const),
-) {}
+) {
+  @ApiPropertyOptional({ type: ProcessFollowupFiltersDto }) @ValidateIf((_object, value) => value !== undefined) @IsObject() @ValidateNested() @Type(() => ProcessFollowupFiltersDto)
+  processFollowupFilters?: ProcessFollowupFiltersDto;
+}
 
 export class ProblemSavedViewSortDto {
   @ApiProperty({ enum: PROBLEM_SORT_FIELDS }) @IsIn(PROBLEM_SORT_FIELDS) sortBy!: typeof PROBLEM_SORT_FIELDS[number];

@@ -59,8 +59,18 @@ describe('process 8D follow-up list on PostgreSQL', () => {
     const otherSection = await prisma.department.create({ data: { organizationId: org.id, code: randomUUID(), name: 'Other section' } });
     const definition = await prisma.workflowDefinition.create({ data: { organizationId: org.id, code: randomUUID(), name: 'Read fixture' } });
     const version = await prisma.workflowVersion.create({ data: { organizationId: org.id, workflowDefinitionId: definition.id, version: 1, status: 'PUBLISHED' } });
-    const node = await prisma.workflowNode.create({ data: { organizationId: org.id, workflowVersionId: version.id, nodeKey: 'owner', name: 'Owner', type: 'ACTION' } });
-    const review = await prisma.workflowNode.create({ data: { organizationId: org.id, workflowVersionId: version.id, nodeKey: 'review', name: 'Review', type: 'APPROVAL', config: { closureReview: {} } } });
+    const workflowScope = { organizationId: org.id, workflowVersionId: version.id };
+    const node = await prisma.workflowNode.create({ data: { ...workflowScope, nodeKey: 'owner', name: 'Owner', type: 'ACTION',
+      config: { isStart: true, assignment: { permission: 'workflow:act' }, processEightD: { schemaVersion: 1, extensionPolicy: 'LEADER_THEN_PROFESSIONAL', reminderEveryHours: null } } } });
+    const review = await prisma.workflowNode.create({ data: { ...workflowScope, nodeKey: 'review', name: 'Review', type: 'APPROVAL',
+      config: { closureReview: { schemaVersion: 1, policy: 'INTERNAL', domainCode: 'process-quality' } } } });
+    const close = await prisma.workflowNode.create({ data: { ...workflowScope, nodeKey: 'close', name: 'Close', type: 'CLOSE',
+      config: { isEnd: true, assignment: { permission: 'workflow:act' } } } });
+    await prisma.workflowTransition.createMany({ data: [
+      { ...workflowScope, transitionKey: 'submit', action: 'SUBMIT', fromNodeId: node.id, toNodeId: review.id },
+      { ...workflowScope, transitionKey: 'approve', action: 'APPROVE', fromNodeId: review.id, toNodeId: close.id },
+      { ...workflowScope, transitionKey: 'return', action: 'RETURN', fromNodeId: review.id, toNodeId: node.id },
+    ] });
 
     const create = async (reportNumber: string, options: {
       title?: string; description?: string; sectionId?: string; stage?: 'SUBMISSION' | 'REVIEW' | 'CLOSED' | 'SUSPENDED';
@@ -73,7 +83,7 @@ describe('process 8D follow-up list on PostgreSQL', () => {
         closedAt: closed ? new Date(dates.original) : null, dueAt: new Date(dates.closure) } });
       if (options.legacy || options.customer || options.newProduct) return problem;
       const instance = await prisma.workflowInstance.create({ data: { organizationId: org.id, problemIndexId: problem.id, workflowDefinitionId: definition.id,
-        workflowVersionId: version.id, currentNodeId: options.stage === 'REVIEW' ? review.id : node.id, instanceKey: randomUUID(), status: options.stage === 'SUSPENDED' ? 'SUSPENDED' : closed ? 'COMPLETED' : 'RUNNING' } });
+        workflowVersionId: version.id, currentNodeId: closed ? close.id : options.stage === 'REVIEW' ? review.id : node.id, instanceKey: randomUUID(), status: options.stage === 'SUSPENDED' ? 'SUSPENDED' : closed ? 'COMPLETED' : 'RUNNING' } });
       await prisma.problemIndex.update({ where: { id: problem.id }, data: { workflowInstanceId: instance.id } });
       const document = { title: options.title ?? 'Unrelated title', description: options.description ?? 'Unrelated description' };
       await prisma.$executeRaw`INSERT INTO process_eight_d_reports
@@ -138,6 +148,47 @@ describe('process 8D follow-up list on PostgreSQL', () => {
     await followupRequest(local.owner, { responsibleSectionDepartmentId: 'name-not-id' }).expect(400);
     await followupRequest(local.owner, { dueFrom: dates.closure, dueTo: dates.original }).expect(400);
     await followupRequest(local.owner, { domainCode: 'customer-quality' }).expect(400);
+  });
+
+  it('matches an entire minute for deadline equality as displayed in the filter', async () => {
+    const local = await fixture();
+    await local.create('MINUTE-FIRST', { analysisDueAt: '2026-11-25T10:30:00.000Z' });
+    await local.create('MINUTE-LAST', { analysisDueAt: '2026-11-25T10:30:59.999Z' });
+    await local.create('MINUTE-NEXT', { analysisDueAt: '2026-11-25T10:31:00.000Z' });
+    await local.create('MINUTE-NONE', { analysisDueAt: null });
+    for (const [operator, numbers] of [['EQ', ['MINUTE-FIRST', 'MINUTE-LAST']], ['NE', ['MINUTE-NEXT']]] as const) {
+      const filters = JSON.stringify({ logic: 'ALL', items: [{ field: 'dueAt', operator, value: '2026-11-25T10:30:00.000Z' }] });
+      const response = await followupRequest(local.owner, { filters, sortBy: 'reportNumber', sortDirection: 'asc' }).expect(200);
+      expect(response.body.items.map((item: { reportNumber: string }) => item.reportNumber)).toEqual(numbers);
+    }
+  });
+
+  it('groups server-side ledger conditions before pagination and ANDs them with search and scope', async () => {
+    const local = await fixture();
+    const foreign = await fixture();
+    const analysis = await local.create('SCRATCH-01');
+    const review = await local.create('SCRATCH-02', { stage: 'REVIEW', sectionId: local.otherSection.id });
+    await local.create('OTHER-03', { stage: 'REVIEW', sectionId: local.otherSection.id });
+    await foreign.create('SCRATCH-04', { stage: 'REVIEW', sectionId: foreign.otherSection.id });
+    await local.create('SCRATCH-05', { stage: 'SUBMISSION' });
+    await local.create('SCRATCH-06', { legacy: true });
+    const items = [
+      { field: 'stage', operator: 'EQ', value: 'ANALYSIS' },
+      { field: 'responsibleSectionName', operator: 'CONTAINS', value: 'other sect' },
+    ];
+    const query = { search: 'SCRATCH', pageSize: 1, sortBy: 'reportNumber', sortDirection: 'asc' };
+    for (const [index, match] of [analysis, review].entries()) {
+      const response = await followupRequest(local.owner, { ...query, page: index + 1, filters: JSON.stringify({ logic: 'ANY', items }) }).expect(200);
+      expect(response.body).toMatchObject({ total: 2, items: [{ id: match.id }], statusCounts: [{ status: 'IN_PROGRESS', count: 1 }, { status: 'PENDING', count: 1 }] });
+    }
+    const all = await followupRequest(local.owner, { ...query, filters: JSON.stringify({ logic: 'ALL', items }) }).expect(200);
+    expect(all.body.total).toBe(0);
+    const due = await followupRequest(local.owner, { ...query, filters: JSON.stringify({ logic: 'ALL', items: [
+      { field: 'ownerName', operator: 'EQ', value: 'named OWNER' }, { field: 'dueAt', operator: 'LTE', value: dates.original },
+    ] }) }).expect(200);
+    expect(due.body).toMatchObject({ total: 1, items: [{ id: analysis.id }] });
+    await followupRequest(local.owner, { filters: JSON.stringify({ logic: 'ANY', items: [{ field: 'stage', operator: 'CONTAINS', value: 'ANALYSIS' }] }) }).expect(400);
+    await followupRequest(local.owner, { filters: 'invalid JSON' }).expect(400);
   });
 
   it('projects and orders the current due, counts an applied extension, and excludes rows without current due', async () => {

@@ -65,9 +65,14 @@ it('places management responsibilities inside the selected department workspace'
   stub();
   view([org]);
   await selectDepartment();
-  fireEvent.click(await screen.findByRole('tab', { name: '管理职责' }));
-  expect(await screen.findByRole('button', { name: '新增职责绑定' })).toBeVisible();
-  expect(screen.getByRole('button', { name: '职责预览' })).toBeVisible();
+  const tab = (await screen.findByText('管理职责')).closest('[role="tab"]')!;
+  fireEvent.click(tab);
+  const panel = within(screen.getByLabelText('管理职责', { selector: 'section' }));
+  expect((await panel.findByText('配置部门负责人')).closest('button')).toBeVisible();
+  const legacy = panel.getByText('其他流程职责（旧配置）').closest('[role="button"]')!;
+  expect(legacy).toHaveAttribute('aria-expanded', 'false');
+  fireEvent.click(legacy);
+  expect((await panel.findByText('旧职责预览')).closest('button')).toBeVisible();
 }, 30000);
 it('aborts management reads on leaving the tab and rejects a late preview', async () => {
   const { fetchMock } = stub();
@@ -78,18 +83,25 @@ it('aborts management reads on leaving the tab and rejects a late preview', asyn
     ? (signal = init?.signal, new Promise<Response>(resolve => { finishPreview = resolve; }))
     : original(input, init));
   view([org]); await selectDepartment();
-  fireEvent.click(await screen.findByRole('tab', { name: '管理职责' }));
-  fireEvent.click(await screen.findByRole('button', { name: '职责预览' }));
+  const tab = (await screen.findByText('管理职责')).closest('[role="tab"]')!;
+  fireEvent.click(tab);
+  const responsibilities = () => within(screen.getByLabelText('管理职责', { selector: 'section' }));
+  const openLegacy = () => fireEvent.click(responsibilities().getByText('其他流程职责（旧配置）').closest('[role="button"]')!);
+  openLegacy();
+  const firstPreview = (await responsibilities().findByText('旧职责预览')).closest('button')!;
+  await waitFor(() => expect(firstPreview).toBeEnabled());
+  fireEvent.click(firstPreview);
   await waitFor(() => expect(signal).toBeDefined());
-  fireEvent.click(screen.getByRole('tab', { name: '基本信息' }));
+  fireEvent.click(screen.getByText('基本信息').closest('[role="tab"]')!);
   expect(signal?.aborted).toBe(true);
   const late: components['schemas']['ManagementResponsibilitiesDto'] = {
     organizationId: org.id, sectionDepartmentId: department.id, at: '2026-10-25T00:00:00.000Z',
     responsibilities: [], issues: [{ responsibility: 'SECTION_MANAGER', code: 'ASSIGNMENT_AMBIGUOUS' }],
   };
   await act(async () => finishPreview(json(late)));
-  fireEvent.click(screen.getByRole('tab', { name: '管理职责' }));
-  const previewButton = await screen.findByRole('button', { name: '职责预览' });
+  fireEvent.click(tab);
+  openLegacy();
+  const previewButton = (await responsibilities().findByText('旧职责预览')).closest('button')!;
   await waitFor(() => expect(previewButton).toBeEnabled());
   expect(screen.queryByText('科室经理：存在多个有效任职候选')).not.toBeInTheDocument();
 }, 30000);
@@ -100,6 +112,7 @@ function stub() {
     if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
     if (path.endsWith('/lifecycle')) return json({ deleteBlockers: [], disableBlockers: [] });
     if (init?.method) return json({ id: 'saved', deleted: true });
+    if (path.endsWith('/responsible-appointments')) return json({ version: 0, assignmentIds: [], primaryAssignmentId: null });
     if (path.includes('/organizations/tree?')) return json([organization, { ...organization, ...other }]);
     if (path.includes('/org-a/departments?')) return json([department, child, sibling]);
     if (path.includes('/org-a/positions?')) return json([position, otherPosition]);
@@ -139,7 +152,7 @@ it('refreshes the parent department directory from the workspace context panel a
   const before = requests.filter(([path]) => path.includes('/org-a/departments?')).length;
   const refreshButton = within(screen.getByRole('region', { name: '部门岗位' })).getByRole('button', { name: /^刷\s*新$/ });
   await waitFor(() => expect(refreshButton).toBeEnabled());
-  await userEvent.click(refreshButton);
+  fireEvent.click(refreshButton);
   await waitFor(() => expect(requests.filter(([path]) => path.includes('/org-a/departments?')).length).toBeGreaterThan(before));
   expect(directoryChanged).not.toHaveBeenCalled();
   expect(await within(await screen.findByLabelText('可读组织与部门')).findByLabelText('质量部 · 部门/科室')).toHaveAttribute('aria-pressed', 'true');
@@ -288,8 +301,10 @@ it('synchronizes selecting a different readable organization with the management
 
 it('prefills new positions from the selected department', async () => {
   const { requests } = stub(); view(); await selectDepartment();
-  await userEvent.click(screen.getByRole('tab', { name: '岗位' }));
-  await userEvent.click(screen.getByRole('button', { name: '新增岗位' }));
+  fireEvent.click(screen.getByText('岗位', { selector: '[role="tab"]' }));
+  const addPosition = screen.getByText('新增岗位').closest('button')!;
+  expect(addPosition).toBeEnabled();
+  fireEvent.click(addPosition);
   const dialog = screen.getByRole('dialog');
   expect(within(dialog).getByLabelText('部门').closest('.ant-select')).toHaveTextContent('质量部');
   await userEvent.type(within(dialog).getByLabelText('代码'), 'NEW');
@@ -370,7 +385,10 @@ it('ignores a late lifecycle response after changing scope', async () => {
   view(); await selectDepartment(); await userEvent.click(screen.getByRole('button', { name: /^删\s*除$/ }));
   await waitFor(() => expect(resolve).toBeTypeOf('function'));
   await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: /^取\s*消$/ }));
-  await userEvent.click(screen.getByRole('button', { name: '乙公司 · 组织' }));
+  const navigation = screen.getByLabelText('可读组织与部门');
+  const otherOrganization = within(navigation).getByLabelText('乙公司 · 组织');
+  expect(otherOrganization).toHaveRole('button');
+  fireEvent.click(otherOrganization);
   await act(async () => resolve(json({ deleteBlockers: ['旧组织依赖'], disableBlockers: [] })));
   expect(screen.queryByText('旧组织依赖')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '确认删除' })).not.toBeInTheDocument();

@@ -76,6 +76,23 @@ it('loads the real report and renders content anchors, not eight approval steps'
   expect(fetcher).toHaveBeenCalledWith(expect.stringContaining('/api/v1/process-quality/eight-d/problem-1'), expect.objectContaining({ credentials: 'include' }));
 });
 
+it('shows the process record with time, person and content without requesting audit access', async () => {
+  const occurredAt = '2026-11-26T02:00:00.000Z';
+  intercept(path => path.endsWith('/flow-records?organizationId=org-1') ? response([
+    { occurredAt, person: '系统', content: '原分管任职已失效，改派直属上级主负责人' },
+    { occurredAt, person: '质量负责人', content: '管理审核通过' },
+  ]) : undefined);
+  mount();
+  fireEvent.click(await screen.findByRole('tab', { name: '流程记录' }));
+  const table = within(await screen.findByRole('table', { name: '流程记录' }));
+  expect(table.getAllByRole('columnheader').map(header => header.textContent)).toEqual(['时间', '人员', '内容']);
+  const fallback = await table.findByRole('row', { name: /原分管任职已失效，改派直属上级主负责人/ });
+  expect(within(fallback).getByText('系统')).toBeVisible();
+  expect(fallback.querySelector('time')).toHaveAttribute('datetime', occurredAt);
+  expect(table.getByRole('row', { name: /质量负责人.*管理审核通过/ })).toBeVisible();
+  expect(fetcher.mock.calls.some(([path]) => String(path).includes('/audit-trail'))).toBe(false);
+});
+
 it('shows CRITICAL as 重大风险 in the header and full risk options without changing payload codes', async () => {
   current.severity = 'CRITICAL';
   mount(); await screen.findByDisplayValue('真实过程问题');

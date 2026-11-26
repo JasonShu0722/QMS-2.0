@@ -14,7 +14,6 @@ import { assertActiveAuthentication, assertRecentAuthentication, isSecurityConcu
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { FileResourceAccess } from '../file-management/file-resource-access.js';
 import { OrganizationResponsibilityService } from '../organization/organization-responsibility.service.js';
-import { listEffectiveUserPositionIds } from '../organization/organization-runtime.read-model.js';
 import { DomainSourceIssueService, type DomainSourceRecord, type DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
 import { DomainSourceLinkService } from '../problem-index/domain-source-link.service.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
@@ -22,8 +21,7 @@ import { ProblemDomainRegistry } from '../problem-index/problem-domain-registry.
 import { OutboxService } from '../task-notification/outbox.service.js';
 import { assertWorkflowFeature, canProcessWorkflowNode, featurePredicate } from '../workflow/workflow-access-policy.js';
 import { WorkflowClosureRoundService } from '../workflow/workflow-closure-round.service.js';
-import type { WorkflowClosurePlan } from '../workflow/workflow-closure-policy.js';
-import type { WorkflowClosureContext, WorkflowClosureOperation } from '../workflow/workflow-closure-round.types.js';
+import type { WorkflowClosureContext, WorkflowClosureFlowRecord, WorkflowClosureOperation } from '../workflow/workflow-closure-round.types.js';
 import type { WorkflowAdministrativeInvalidationInput } from '../workflow/workflow-administrative-invalidation.types.js';
 import type { WorkflowDeadlineContext, WorkflowDeadlinePolicy, WorkflowDeadlineStage } from '../workflow/workflow-deadline-extension.types.js';
 import { deadlineDueAt, deadlineStageOpen, parseDeadlinePolicy } from '../workflow/workflow-deadline-extension.policy.js';
@@ -32,7 +30,7 @@ import { canonical, isClosureReviewNode, jsonObject, matchesCondition } from '..
 import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 import { persistWorkflowMutation } from '../workflow/workflow-start.js';
 import { ProcessDefectLedgerService } from './process-defect-ledger.service.js';
-import { ProcessEightDWorkflowConfigurationService, type ProcessEightDWorkflowStage } from './process-eight-d-workflow-configuration.service.js';
+import { ProcessEightDWorkflowConfigurationService } from './process-eight-d-workflow-configuration.service.js';
 import { assertInternalEightDDomain, INTERNAL_EIGHT_D_DOMAIN, INTERNAL_EIGHT_D_DOMAINS, internalEightDSql, type InternalEightDDomainDescriptor } from '../../common/eight-d/internal-eight-d-domain.js';
 import type { InternalEightDSourcePort } from './process-eight-d.types.js';
 import { analysisCompletionIssues, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from './process-eight-d-document.js';
@@ -48,13 +46,15 @@ const reportColumns = Prisma.sql`problem_id AS "problemId", organization_id AS "
   created_by AS "createdBy", updated_by AS "updatedBy", created_at AS "createdAt", updated_at AS "updatedAt"`;
 type Binding = { organizationId: string; workflowDefinitionId: string; workflowVersionId: string; enabled: boolean; version: number };
 type ReassignmentAccess = { kind: 'OWNER' | 'MANAGEMENT' | 'CROSS_DEPARTMENT'; sectionDepartmentId: string };
-type WorkStage = Extract<ProcessEightDWorkflowStage, 'ANALYSIS' | 'IMPLEMENTATION'>;
-type StagePositions = Partial<Record<ProcessEightDWorkflowStage, string[]>>;
-type ClosureStageContext = Pick<WorkflowClosureContext, 'organizationId' | 'workflowVersionId'>;
-const initialOwnerStages = ['ANALYSIS', 'IMPLEMENTATION'] as const;
 const bindingColumns = Prisma.sql`organization_id AS "organizationId", workflow_definition_id AS "workflowDefinitionId", workflow_version_id AS "workflowVersionId", enabled, version`;
 const iso = (date: Date | null) => date?.toISOString() ?? null;
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+const flowTransitions: Record<string, string> = { START: '发起制程 8D', SUBMIT: '提交关闭审核', RETURN: '退回处理', CLOSE: '关闭制程 8D' };
+const deadlineLabels: Record<WorkflowDeadlineStage, string> = { ANALYSIS: '分析', SUBMISSION: '完整提交', CLOSURE: '关闭' };
+const deadlineFlowActions: Record<string, string> = { REQUESTED: '申请延期', LEADER_SKIPPED_SAME_PERSON: '同人跳过管理审核',
+  'LEADER_PENDING:QUALITY_PENDING': '管理审核通过', 'QUALITY_PENDING:APPROVED': '专业审核通过，延期生效',
+  'LEADER_PENDING:RETURNED': '管理审核退回', 'QUALITY_PENDING:RETURNED': '专业审核退回',
+  'LEADER_PENDING:CANCELLED': '取消延期申请', 'QUALITY_PENDING:CANCELLED': '取消延期申请' };
 
 @Injectable()
 export class ProcessEightDService {
@@ -129,46 +129,16 @@ export class ProcessEightDService {
     await this.authorize(tx, actor, `${this.domain.permissionPrefix}:read`, record.problem.organizationId, 'READ');
   }
 
-  async authorizeEdit(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord, stage = this.editStage(record)): Promise<void> {
+  async authorizeEdit(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord): Promise<void> {
     await this.authorizeRead(tx, actor, record);
     await this.authorize(tx, actor, `${this.domain.permissionPrefix}:work`, record.problem.organizationId);
     this.editable(record);
     if (actor.id === record.problem.ownerId) await this.assertOwnerAssignment(tx, record.problem.organizationId, actor.id, record.report.responsibleSectionDepartmentId);
     else if (!record.collaboratorUserIds.includes(actor.id) || !await this.eligibleWorker(tx, record.problem.organizationId, actor.id)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
-    await this.assertManagedStage(tx, actor, record, stage);
-  }
-
-  private editStage(record: ProcessEightDRecord): WorkStage {
-    return record.report.analysisCompletedAt ? 'IMPLEMENTATION' : 'ANALYSIS';
   }
 
   private managedVersion(tx: Prisma.TransactionClient, record: ProcessEightDRecord) {
     return this.domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS && this.workflowConfiguration?.isManagedVersion(tx, record.problem.organizationId, record.instance.workflowVersionId);
-  }
-
-  private async assertManagedStage(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord, stage: ProcessEightDWorkflowStage) {
-    if (await this.managedVersion(tx, record)) await this.workflowConfiguration!.assertCanOperate(tx, actor, record.problem.organizationId, stage);
-  }
-
-  private async stagePositions(tx: Prisma.TransactionClient, organizationId: string, workflowVersionId?: string, lock = false): Promise<StagePositions> {
-    if (lock) await this.workflowConfiguration?.lockConfiguration(tx, organizationId);
-    const [configuration] = await tx.$queryRaw<{ stages: StagePositions }[]>(Prisma.sql`SELECT stages FROM process_eight_d_workflow_configuration_revisions
-      WHERE organization_id = ${organizationId}::uuid ${workflowVersionId ? Prisma.sql`AND workflow_version_id = ${workflowVersionId}::uuid` : Prisma.empty}
-      ORDER BY version DESC LIMIT 1`);
-    return configuration?.stages ?? {};
-  }
-
-  private async hasQualifiedStages(tx: Prisma.TransactionClient, organizationId: string, userId: string, positions: StagePositions, stages: readonly ProcessEightDWorkflowStage[]) {
-    const held = new Set(await listEffectiveUserPositionIds(tx, organizationId, userId, [...new Set(stages.flatMap(stage => positions[stage] ?? []))]));
-    return stages.every(stage => positions[stage]?.some(position => held.has(position)));
-  }
-
-  private async assertQualifiedStages(tx: Prisma.TransactionClient, organizationId: string, userId: string, positions: StagePositions, stages: readonly ProcessEightDWorkflowStage[]) {
-    if (!await this.hasQualifiedStages(tx, organizationId, userId, positions, stages)) workflowError('PROCESS_EIGHT_D_STAGE_UNAVAILABLE', 409);
-  }
-
-  private ownerStages(record: ProcessEightDRecord): readonly WorkStage[] {
-    return record.report.analysisCompletedAt ? ['IMPLEMENTATION'] : initialOwnerStages;
   }
 
   async authorizeDeadlineRequest(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord): Promise<void> {
@@ -187,7 +157,8 @@ export class ProcessEightDService {
       professionalUserId: record.report.professionalUserId, responsibleSectionDepartmentId: record.report.responsibleSectionDepartmentId,
       analysisDueAt: iso(record.report.analysisDueAt), submissionDueAt: iso(record.report.submissionDueAt), closureDueAt: iso(record.report.closureDueAt),
       analysisCompletedAt: iso(record.report.analysisCompletedAt), submittedAt: iso(record.report.submittedAt), closedAt: iso(record.problem.closedAt),
-      policy: this.deadlinePolicy(ownerNode.config) };
+      policy: this.deadlinePolicy(ownerNode.config),
+      ...(await this.managedVersion(tx, record) ? { processProfessionalAdminFallback: true } : {}) };
   }
 
   async deadlineRequestStages(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord): Promise<WorkflowDeadlineStage[]> {
@@ -238,6 +209,13 @@ export class ProcessEightDService {
     }
   }
 
+  async reconcileProcessManagementReview(tx: Prisma.TransactionClient, organizationId: string, problemId: string) {
+    if (this.domain !== INTERNAL_EIGHT_D_DOMAINS.PROCESS) return false;
+    const record = await this.lockFacts(tx, organizationId, problemId);
+    if (!isClosureReviewNode(record.node) || record.instance.status !== 'RUNNING' || record.problem.closedAt || record.report.closedRevisionId) return false;
+    return this.rounds.reconcileProcessManagement(tx, await this.contextFromRecord(tx, record));
+  }
+
   async canNotifyRecipient(tx: Prisma.TransactionClient, context: WorkflowDeadlineContext, userId: string): Promise<boolean> {
     const current = await this.notificationContext(tx, context.organizationId, context.problemId);
     if (!current || canonical(current) !== canonical(context)) return false;
@@ -250,7 +228,8 @@ export class ProcessEightDService {
     }
     // D/N2 selects and revalidates actual duties; this hook adds domain access without a second, late resolver lock.
     const appointment = await tx.userPosition.findFirst({ where: { organizationId: current.organizationId, userId, ...effectivePositionAssignmentWhere() } });
-    return !!appointment && this.feature(tx, current.organizationId, userId, 'workflow:act');
+    return (!!appointment || await this.extensions.canUseProcessProfessionalAdminFallback(tx, current, userId))
+      && this.feature(tx, current.organizationId, userId, 'workflow:act');
   }
 
   async applyApprovedDeadlineExtension(tx: Prisma.TransactionClient, context: WorkflowDeadlineContext, stage: ProcessEightDStage, dueAt: Date): Promise<void> {
@@ -294,6 +273,55 @@ export class ProcessEightDService {
       const record = await this.lockRecord(tx, actor, problemId, 'READ');
       await this.authorizeRead(tx, actor, record);
       return this.reportModel(tx, actor, record);
+    });
+  }
+
+  async flowRecords(actor: ProcessEightDActor, problemId: string): Promise<WorkflowClosureFlowRecord[]> {
+    return this.transaction(async tx => {
+      const record = await this.lockRecord(tx, actor, problemId, 'READ');
+      await this.authorizeRead(tx, actor, record);
+      const organizationId = record.problem.organizationId;
+      const transitions = await this.runtime.readTransitionProjection(tx, organizationId, problemId);
+      const rounds = await this.rounds.readHistoryProjection(tx, organizationId, problemId);
+      const extensions = await this.extensions.readProjection(tx, organizationId, problemId);
+      const events: { occurredAt: string; userId: string | null; content: string; order: number }[] = [];
+      for (const transition of transitions) {
+        const content = flowTransitions[transition.action];
+        if (content) events.push({ occurredAt: transition.occurredAt.toISOString(), userId: transition.actorUserId,
+          order: transition.action === 'START' || transition.action === 'SUBMIT' ? 0 : 3, content });
+      }
+      for (const round of rounds.reverse()) {
+        for (const duty of round.duties) {
+          if (!duty.decidedAt || !duty.decidedBy) continue;
+          const label = duty.duty === 'PROFESSIONAL' ? '专业审核' : '管理审核';
+          events.push({ occurredAt: duty.decidedAt, userId: duty.decidedBy, order: 2,
+            content: `${label}${duty.status === 'APPROVED' ? '通过' : '退回'}${duty.comment ? `：${duty.comment}` : ''}` });
+        }
+        if (round.status === 'CANCELLED') {
+          const context = jsonObject(round.context);
+          events.push({ occurredAt: round.updatedAt, userId: typeof context.endedBy === 'string' ? context.endedBy : null, order: 2,
+            content: context.endReason === 'SOURCE_CHANGED' ? '审核人或职责配置已变更，取消本轮关闭审核' : '取消本轮关闭审核' });
+        }
+        if (round.status === 'APPROVED' && round.context.closedAfterManagementSkip === true) {
+          events.push({ occurredAt: round.updatedAt, userId: null, order: 3, content: '跳过管理审核后自动关闭制程 8D' });
+        }
+      }
+      for (const extension of extensions) {
+        for (const entry of extension.history) {
+          const action = deadlineFlowActions[entry.action];
+          if (!action) continue;
+          const detail = entry.action === 'REQUESTED' ? `至 ${extension.requestedDueAt}：${entry.comment}`
+            : entry.action.endsWith('CANCELLED') || entry.action === 'LEADER_SKIPPED_SAME_PERSON' || !entry.comment ? '' : `：${entry.comment}`;
+          events.push({ occurredAt: entry.at, userId: entry.userId, order: 2, content: `${deadlineLabels[extension.stage]}期限：${action}${detail}` });
+        }
+      }
+      const ids = [...new Set(events.flatMap(event => event.userId ? [event.userId] : []))];
+      const people = await tx.user.findMany({ where: { organizationId, id: { in: ids } }, select: { id: true, fullName: true, username: true } });
+      const names = new Map(people.map(person => [person.id, person.fullName?.trim() || person.username]));
+      return [...events.map(({ occurredAt, content, userId, order }) => ({ occurredAt, content, order, person: userId ? names.get(userId) ?? '历史操作人' : '系统' })),
+        ...rounds.flatMap(round => (round.context.flowRecords ?? []).map(record => ({ ...record, order: 1 })))]
+        .sort((left, right) => left.occurredAt.localeCompare(right.occurredAt) || left.order - right.order)
+        .map(({ occurredAt, person, content }) => ({ occurredAt, person, content }));
     });
   }
 
@@ -365,13 +393,6 @@ export class ProcessEightDService {
       };
       await authorize();
       const search = query.search?.trim(), skip = (query.page - 1) * query.pageSize;
-      const ownerStages = query.action === 'ISSUE' && this.domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS ? initialOwnerStages
-        : query.action === 'REASSIGN' && await this.managedVersion(tx, record!) ? this.ownerStages(record!) : [];
-      const stages = ownerStages.length ? await this.stagePositions(tx, actor.organizationId, record?.instance.workflowVersionId) : {};
-      const candidateStages = ownerStages.map(stage => {
-        const ids = stages[stage] ?? [];
-        return ids.length ? Prisma.sql`AND bool_or(pos.id IN (${Prisma.join(ids.map(id => Prisma.sql`${id}::uuid`))}))` : Prisma.sql`AND FALSE`;
-      });
       const sectionAssignment = Prisma.sql`(${query.action === 'COLLABORATORS' ? Prisma.sql`TRUE` : Prisma.sql`pos.department_id IS NOT NULL`}
         ${sectionId ? Prisma.sql`AND pos.department_id = ${sectionId}::uuid` : Prisma.empty})`;
       const departments = await this.responsibilities.workflowDepartmentOptions(tx, actor.organizationId, search, query.pageSize, skip,
@@ -388,7 +409,7 @@ export class ProcessEightDService {
                 AND pos.organization_id = u.organization_id AND pos.status = 'ACTIVE' AND pos.deleted_at IS NULL AND NOT pos.configuration_required
                 AND (pos.department_id IS NULL OR (dept.organization_id = u.organization_id AND dept.status = 'ACTIVE' AND dept.deleted_at IS NULL AND NOT dept.configuration_required))
                 AND org.status = 'ACTIVE' AND org.type = 'INTERNAL' AND org.deleted_at IS NULL AND NOT org.configuration_required
-              HAVING count(*) FILTER (WHERE ${sectionAssignment}) > 0 ${candidateStages.length ? Prisma.join(candidateStages, ' ') : Prisma.empty}) identity ON TRUE
+              HAVING count(*) FILTER (WHERE ${sectionAssignment}) > 0) identity ON TRUE
           WHERE u.organization_id = ${actor.organizationId}::uuid AND u.account_type = 'INTERNAL' AND u.status = 'ACTIVE'
             AND u.deleted_at IS NULL AND NOT u.configuration_required
             AND ${work} AND ${read} ${search ? Prisma.sql`AND (u.username ILIKE ${pattern} OR u.full_name ILIKE ${pattern})` : Prisma.empty}
@@ -463,7 +484,7 @@ export class ProcessEightDService {
         if (replay) {
           if (processIssue) {
             if (!this.workflowConfiguration) return workflowError('PROCESS_EIGHT_D_WORKFLOW_NOT_READY', 409);
-            await this.workflowConfiguration.assertCanOperate(tx, actor, actor.organizationId, 'ISSUE');
+            await this.workflowConfiguration.assertIssueReplayAccess(tx, actor, actor.organizationId);
           }
           return;
         }
@@ -472,8 +493,6 @@ export class ProcessEightDService {
         await this.validateFlow(tx, actor.organizationId, workflowDefinitionId, workflowVersionId);
         await this.assertOwnerAssignment(tx, actor.organizationId, input.ownerUserId, input.responsibleSectionDepartmentId);
         if (!await this.eligibleWorker(tx, actor.organizationId, input.ownerUserId)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
-        if (processIssue) await this.assertQualifiedStages(tx, actor.organizationId, input.ownerUserId,
-          await this.stagePositions(tx, actor.organizationId, workflowVersionId), initialOwnerStages);
         if (this.ledger.prepareSourceLinks) {
           // DomainIssue already holds actor/session locks; bindWorkflow must not wait on owner after project locks.
           await this.lockUsers(tx, actor.organizationId, [input.ownerUserId]);
@@ -494,8 +513,6 @@ export class ProcessEightDService {
         await this.lockUsers(tx, actor.organizationId, [input.ownerUserId]);
         await this.assertOwnerAssignment(tx, actor.organizationId, input.ownerUserId, input.responsibleSectionDepartmentId);
         if (!await this.eligibleWorker(tx, actor.organizationId, input.ownerUserId)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
-        if (processIssue) await this.assertQualifiedStages(tx, actor.organizationId, input.ownerUserId,
-          await this.stagePositions(tx, actor.organizationId, workflowVersionId), initialOwnerStages);
         const issueTitle = processIssue ? resolveProcessIssueTitle(references.map(source => ({ description: source.sourceSnapshot?.description })), input.issueTitle) : null;
         const instance = await this.runtime.startInstance({ organizationId: binding.organizationId, actor,
           problemIndexId: binding.problemIndexId, expectedProblemVersion: binding.expectedProblemVersion, workflowDefinitionId, workflowVersionId,
@@ -525,25 +542,17 @@ export class ProcessEightDService {
       const plan = (d: typeof document) => ({ analysisProcess: d.analysisProcess, occurrenceCause: d.occurrenceCause, escapeCause: d.escapeCause, systemCause: d.systemCause,
         analysisFileIds: d.analysisFileIds, correctiveActions: d.correctiveActions.map(a => ({ id: a.id, causeKind: a.causeKind, action: a.action, owner: a.owner, plannedAt: a.plannedAt, verificationMethod: a.verificationMethod })) });
       const analysisChanged = canonical(plan(document)) !== canonical(plan(record.report.document));
-      if (analysisChanged && record.report.analysisCompletedAt) {
-        await this.assertManagedStage(tx, actor, record, 'ANALYSIS');
-        if (actor.id !== record.problem.ownerId && await this.managedVersion(tx, record)) await this.assertQualifiedStages(tx, actor.organizationId, record.problem.ownerId!,
-          await this.stagePositions(tx, actor.organizationId, record.instance.workflowVersionId), ['ANALYSIS']);
-      }
       await this.updateReport(tx, actor, record, Prisma.sql`document = ${JSON.stringify(document)}::jsonb,
         analysis_completed_at = ${analysisChanged ? null : record.report.analysisCompletedAt}::timestamptz`, true);
-      if (analysisChanged && record.report.analysisCompletedAt) return initialOwnerStages;
     }, [], tx => this.lockEvidence(tx, documentFileIds(document)));
   }
 
   async analysisComplete(actor: ProcessEightDActor, problemId: string, input: ProcessEightDAnalysisCompleteDto, traceId: string, key: string) {
     this.date(input.submissionDueAt);
     return this.command(actor, problemId, input, 'ANALYSIS_COMPLETE', key, traceId, async (tx, record) => {
-      await this.authorizeEdit(tx, actor, record, 'ANALYSIS'); this.owner(actor, record);
+      await this.authorizeEdit(tx, actor, record); this.owner(actor, record);
       if (record.report.submissionDueAt && record.report.submissionDueAt.getTime() !== input.submissionDueAt.getTime()) workflowError('PROCESS_EIGHT_D_EXTENSION_REQUIRED', 409);
       if (record.report.analysisCompletedAt) return;
-      if (await this.managedVersion(tx, record)) await this.assertQualifiedStages(tx, actor.organizationId, actor.id,
-        await this.stagePositions(tx, actor.organizationId, record.instance.workflowVersionId), ['IMPLEMENTATION']);
       const issues = analysisCompletionIssues(record.report.document);
       if (issues.length) throw new ControlledValidationException('PROCESS_EIGHT_D_ANALYSIS_INCOMPLETE', issues);
       await this.assertEvidence(tx, actor, record, documentFileIds(record.report.document), false);
@@ -571,8 +580,6 @@ export class ProcessEightDService {
       const access = await this.authorizeReassignment(tx, actor, record, input.responsibleSectionDepartmentId);
       await this.assertOwnerAssignment(tx, actor.organizationId, input.ownerUserId, input.responsibleSectionDepartmentId);
       if (!await this.eligibleWorker(tx, actor.organizationId, input.ownerUserId)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
-      if (await this.managedVersion(tx, record)) await this.assertQualifiedStages(tx, actor.organizationId, input.ownerUserId,
-        await this.stagePositions(tx, actor.organizationId, record.instance.workflowVersionId, true), this.ownerStages(record));
       await this.problems.updateDomainSummary(tx as never, { organizationId: actor.organizationId, id: problemId, expectedVersion: record.problem.version,
         ownerId: input.ownerUserId, updatedById: actor.id, traceId });
       await tx.$executeRaw`DELETE FROM ${this.tables.collaborators} WHERE organization_id = ${actor.organizationId}::uuid AND problem_id = ${problemId}::uuid AND user_id = ${input.ownerUserId}::uuid`;
@@ -656,7 +663,7 @@ export class ProcessEightDService {
 
   async submit(actor: ProcessEightDActor, problemId: string, input: ProcessEightDVersionInput, traceId: string, key: string) {
     return this.command(actor, problemId, input, 'SUBMIT', key, traceId, async (tx, record) => {
-      await this.authorizeEdit(tx, actor, record, 'IMPLEMENTATION'); this.owner(actor, record);
+      await this.authorizeEdit(tx, actor, record); this.owner(actor, record);
       await this.authorize(tx, actor, 'workflow:act');
       const issues = submissionIssues(record.report.document);
       if (!record.report.analysisCompletedAt || !record.report.submissionDueAt) issues.push({ path: 'analysisCompletedAt', message: '需由负责人先确认分析完成并明确完整提交计划' });
@@ -675,15 +682,9 @@ export class ProcessEightDService {
   async closureContext(tx: Prisma.TransactionClient, actor: ProcessEightDActor, problemId: string, operation: WorkflowClosureOperation): Promise<WorkflowClosureContext> {
     const record = await this.lockRecord(tx, actor, problemId, operation === 'READ' ? 'READ' : operation);
     await this.authorizeRead(tx, actor, record);
-    if (operation === 'DECIDE') {
-      await this.assertManagedStage(tx, actor, record, 'CLOSURE');
-      if (!await this.isClosureParticipantStageEligible(tx,
-        { organizationId: record.problem.organizationId, workflowVersionId: record.instance.workflowVersionId }, actor.id, true)) workflowError('FEATURE_PERMISSION_DENIED', 403);
-    }
     if (operation === 'SUBMIT') {
       this.owner(actor, record); await this.authorize(tx, actor, `${this.domain.permissionPrefix}:work`);
       await this.assertOwnerAssignment(tx, actor.organizationId, actor.id, record.report.responsibleSectionDepartmentId);
-      await this.assertManagedStage(tx, actor, record, 'IMPLEMENTATION');
     }
     if (operation === 'CANCEL') {
       const owner = actor.id === record.problem.ownerId && await this.feature(tx, actor.organizationId, actor.id, `${this.domain.permissionPrefix}:work`);
@@ -693,60 +694,43 @@ export class ProcessEightDService {
     return this.contextFromRecord(tx, record);
   }
 
-  async assertClosureParticipants(tx: Prisma.TransactionClient, context: ClosureStageContext, plan: WorkflowClosurePlan) {
-    const positions = await this.managedClosureStagePositions(tx, context);
-    if (!positions) return;
-    for (const duty of plan.duties) {
-      if (duty.status === 'SKIPPED_SAME_PERSON') continue;
-      if (!duty.participant) workflowError('PROCESS_EIGHT_D_STAGE_UNAVAILABLE', 409);
-      await this.assertQualifiedStages(tx, context.organizationId, duty.participant.userId, positions, ['CLOSURE']);
-    }
-  }
-
-  async isClosureParticipantStageEligible(tx: Prisma.TransactionClient, context: ClosureStageContext, userId: string, lock = false): Promise<boolean> {
-    const positions = await this.managedClosureStagePositions(tx, context, lock);
-    return !positions || await this.hasQualifiedStages(tx, context.organizationId, userId, positions, ['CLOSURE']);
-  }
-
-  async lockClosureStageConfiguration(tx: Prisma.TransactionClient, context: ClosureStageContext) {
-    await this.workflowConfiguration?.lockConfiguration(tx, context.organizationId);
-  }
-
-  private async managedClosureStagePositions(tx: Prisma.TransactionClient, context: ClosureStageContext, lock = false) {
-    if (this.domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS && await this.workflowConfiguration?.isManagedVersion(tx, context.organizationId, context.workflowVersionId)) {
-      return this.stagePositions(tx, context.organizationId, context.workflowVersionId, lock);
-    }
-  }
-
   async complete(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor?: ProcessEightDActor): Promise<void> {
     const record = await this.lockFacts(tx, context.organizationId, context.problemId);
     await this.assertContext(tx, record, context);
-    if (!actor) workflowError('PROCESS_EIGHT_D_TRANSITION_ACTOR_REQUIRED', 409);
-    await this.authorizeRead(tx, actor, record); await this.authorize(tx, actor, 'workflow:act');
     const round = await this.rounds.readProjection(tx, context.organizationId, context.problemId);
     if (!round || round.status !== 'APPROVED' || round.contentVersion !== context.contentVersion || canonical(round.contentSnapshot) !== canonical(context.content)
       || !round.duties.some(d => d.duty === 'PROFESSIONAL' && d.status === 'APPROVED') || !round.duties.every(d => ['APPROVED', 'SKIPPED_SAME_PERSON'].includes(d.status))) workflowError('WORKFLOW_ACTION_INVALID', 409);
+    const professional = round.duties.find(duty => duty.duty === 'PROFESSIONAL');
+    if (actor) { await this.authorizeRead(tx, actor, record); await this.authorize(tx, actor, 'workflow:act'); }
+    else if (this.domain !== INTERNAL_EIGHT_D_DOMAINS.PROCESS || !context.processManagement || !round.context.closedAfterManagementSkip
+      || round.duties.some(duty => duty.duty !== 'PROFESSIONAL' && duty.status === 'APPROVED') || !professional?.decidedBy) {
+      workflowError('PROCESS_EIGHT_D_TRANSITION_ACTOR_REQUIRED', 409);
+    }
     this.notClosed(record);
     const fileIds = documentFileIds(record.report.document);
     if (fileIds.length > PROCESS_EIGHT_D_MAX_FILES) throw new ControlledValidationException('PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE',
       [{ path: 'fileIds', message: `正文最多关联 ${PROCESS_EIGHT_D_MAX_FILES} 个不同附件` }]);
-    const end = await tx.workflowNode.findMany({ where: { organizationId: context.organizationId, workflowVersionId: context.workflowVersionId, type: 'CLOSE' } });
-    if (end.length !== 1 || jsonObject(end[0]!.config).isEnd !== true) workflowError('WORKFLOW_TRANSITION_AMBIGUOUS', 409);
-    const actorId = actor.id;
-    if (!round.duties.some(d => d.decidedBy === actorId && d.status === 'APPROVED')) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
+    if (actor && !round.duties.some(d => d.decidedBy === actor.id && d.status === 'APPROVED')) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
     const id = randomUUID();
     const evidence = await this.evidenceSnapshot(tx, record, fileIds);
-    await this.move(tx, record, end[0]!, 'CLOSE', actorId, randomUUID(), true);
+    const traceId = randomUUID();
+    if (actor) {
+      const end = await tx.workflowNode.findMany({ where: { organizationId: context.organizationId, workflowVersionId: context.workflowVersionId, type: 'CLOSE' } });
+      if (end.length !== 1 || jsonObject(end[0]!.config).isEnd !== true) workflowError('WORKFLOW_TRANSITION_AMBIGUOUS', 409);
+      await this.move(tx, record, end[0]!, 'CLOSE', actor.id, traceId, true);
+    } else {
+      await this.runtime.completeProcessAfterManagementSkip(tx, context, traceId);
+    }
     const closedRecord = await this.lockFacts(tx, context.organizationId, context.problemId);
     const snapshot = { ...await this.fullSnapshot(tx, closedRecord), rowVersion: record.report.version + 1, closedRevisionId: id, approval: round, evidence };
     await tx.$executeRaw`INSERT INTO ${this.tables.revisions} (id, organization_id, problem_id, content_version, snapshot)
       VALUES (${id}::uuid, ${context.organizationId}::uuid, ${context.problemId}::uuid, ${context.contentVersion}, ${JSON.stringify(snapshot)}::jsonb)`;
     const changed = await tx.$executeRaw`UPDATE ${this.tables.reports} SET closed_revision_id = ${id}::uuid, version = version + 1,
-      updated_by = ${actorId}::uuid, updated_at = CURRENT_TIMESTAMP WHERE organization_id = ${context.organizationId}::uuid
+      updated_by = COALESCE(${actor?.id ?? null}::uuid, updated_by), updated_at = CURRENT_TIMESTAMP WHERE organization_id = ${context.organizationId}::uuid
       AND problem_id = ${context.problemId}::uuid AND version = ${record.report.version} AND closed_revision_id IS NULL`;
     if (changed !== 1) workflowError('CONCURRENCY_CONFLICT', 409);
-    await this.audit.record({ organizationId: context.organizationId, actorUserId: actorId, action: this.auditEvent('CLOSED'), resourceType: this.auditType('Revision'), resourceId: id,
-      outcome: 'SUCCESS', traceId: randomUUID(), metadata: { problemId: context.problemId, resourceVersion: context.contentVersion } }, tx);
+    await this.audit.record({ organizationId: context.organizationId, actorUserId: actor?.id ?? null, action: this.auditEvent('CLOSED'), resourceType: this.auditType('Revision'), resourceId: id,
+      outcome: 'SUCCESS', traceId, metadata: { problemId: context.problemId, resourceVersion: context.contentVersion } }, tx);
   }
 
   async returnForChanges(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor?: ProcessEightDActor): Promise<void> {
@@ -931,7 +915,7 @@ export class ProcessEightDService {
           actions.push('save');
           if (actor.id === record.problem.ownerId) {
             actions.push('collaborators');
-            if (!await this.managedVersion(tx, record)) {
+            if (this.domain !== INTERNAL_EIGHT_D_DOMAINS.PROCESS) {
               actions.push('analysis-complete', 'submit');
               if (this.domain !== INTERNAL_EIGHT_D_DOMAINS.PROCESS) actions.push('reassign');
             }
@@ -939,13 +923,11 @@ export class ProcessEightDService {
               if (await this.feature(tx, actor.organizationId, actor.id, 'workflow:act')) {
                 const organizationId = record.problem.organizationId;
                 const plan = await this.rounds.plan(tx, { organizationId, policy: 'INTERNAL', severity: record.problem.severity as WorkflowClosureContext['severity'],
-                  ownerUserId: actor.id, professionalUserId: record.report.professionalUserId, responsibleSectionDepartmentId: record.report.responsibleSectionDepartmentId });
-                await this.assertClosureParticipants(tx, { organizationId, workflowVersionId: record.instance.workflowVersionId }, plan);
-                actions.push('submit');
+                  ownerUserId: actor.id, professionalUserId: record.report.professionalUserId, responsibleSectionDepartmentId: record.report.responsibleSectionDepartmentId,
+                  processManagement: true });
+                if (plan.duties.some(duty => duty.duty === 'PROFESSIONAL' && duty.participant)) actions.push('submit');
               }
             } else {
-              await this.assertQualifiedStages(tx, actor.organizationId, actor.id,
-                await this.stagePositions(tx, actor.organizationId, record.instance.workflowVersionId), ['IMPLEMENTATION']);
               actions.push('analysis-complete');
             }
           }
@@ -1005,10 +987,14 @@ export class ProcessEightDService {
 
   private async contextFromRecord(tx: Prisma.TransactionClient, record: ProcessEightDRecord): Promise<WorkflowClosureContext> {
     if (!record.problem.ownerId || !['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(record.problem.severity)) workflowError('WORKFLOW_ACTION_INVALID', 409);
+    const process = this.domain === INTERNAL_EIGHT_D_DOMAINS.PROCESS;
+    const round = process && isClosureReviewNode(record.node) ? await this.rounds.readProjection(tx, record.problem.organizationId, record.problem.id) : null;
+    const legacy = round && !round.context.processManagement && round.instanceId === record.instance.id && round.context.instanceVersion === record.instance.version;
     return { organizationId: record.problem.organizationId, problemId: record.problem.id, instanceId: record.instance.id, workflowVersionId: record.instance.workflowVersionId,
       currentNodeId: record.node.id, instanceVersion: record.instance.version, contentVersion: record.report.contentVersion,
       content: json(await this.contentSnapshot(tx, record)), policy: 'INTERNAL', severity: record.problem.severity as WorkflowClosureContext['severity'],
-      ownerUserId: record.problem.ownerId, professionalUserId: record.report.professionalUserId, responsibleSectionDepartmentId: record.report.responsibleSectionDepartmentId };
+      ownerUserId: record.problem.ownerId, professionalUserId: record.report.professionalUserId, responsibleSectionDepartmentId: record.report.responsibleSectionDepartmentId,
+      ...(process && !legacy ? { processManagement: true } : {}) };
   }
 
   private async assertContext(tx: Prisma.TransactionClient, record: ProcessEightDRecord, context: WorkflowClosureContext) {
@@ -1025,7 +1011,7 @@ export class ProcessEightDService {
   }
 
   private async command(actor: ProcessEightDActor, problemId: string, input: ProcessEightDVersionInput, action: string, key: string, traceId: string,
-    work: (tx: Prisma.TransactionClient, record: ProcessEightDRecord) => Promise<void | ReassignmentAccess | readonly WorkStage[]>, additionalUserIds: string[] = [],
+    work: (tx: Prisma.TransactionClient, record: ProcessEightDRecord) => Promise<void | ReassignmentAccess>, additionalUserIds: string[] = [],
     lockDomain?: (tx: Prisma.TransactionClient, record: ProcessEightDRecord) => Promise<void>) {
     this.key(key); this.scope(actor);
     if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) workflowError('CONCURRENCY_CONFLICT', 400);
@@ -1040,12 +1026,11 @@ export class ProcessEightDService {
       if (replay) {
         const stored = jsonObject(replay) as Prisma.JsonObject;
         await this.replayAccess(tx, actor, record, action, stored.reassignmentAccess);
-        await this.replayManagedStages(tx, actor, record, action, stored);
+        if (action === 'SUBMIT' && await this.managedVersion(tx, record)) await this.authorize(tx, actor, 'workflow:act');
         return action === 'REASSIGN' || Array.isArray(stored.workStages) ? stored.response! : replay;
       }
       if (record.report.version !== input.expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
       const workAccess = await work(tx, record);
-      const workStages = await this.managedVersion(tx, record) ? this.reportWriteStages(action, record) : [];
       const current = await this.lockRecord(tx, actor, problemId, 'READ');
       await this.authorizeRead(tx, actor, current);
       const response = await this.reportModel(tx, actor, current);
@@ -1057,19 +1042,9 @@ export class ProcessEightDService {
           ...(action === 'RISK' ? { riskChange: { actorUserId: actor.id, previousSeverity: record.problem.severity, severity: current.problem.severity,
             reason: (input as ProcessEightDRiskDto).reason ?? null } } : {}) } }, tx);
       // Keep the original authorization route private; never replace it with a different grant on replay.
-      await this.storeReceipt(tx, actor, key, digest, action === 'REASSIGN' ? { response, reassignmentAccess: workAccess }
-        : workStages.length ? { response, workStages: Array.isArray(workAccess) ? workAccess : workStages } : response);
+      await this.storeReceipt(tx, actor, key, digest, action === 'REASSIGN' ? { response, reassignmentAccess: workAccess } : response);
       return response;
     });
-  }
-
-  private reportWriteStages(action: string, record: ProcessEightDRecord): WorkStage[] {
-    switch (action) {
-      case 'ANALYSIS_COMPLETE': return ['ANALYSIS', ...(!record.report.analysisCompletedAt ? ['IMPLEMENTATION' as const] : [])];
-      case 'SUBMIT': return ['IMPLEMENTATION'];
-      case 'SAVE': case 'COLLABORATORS': return [this.editStage(record)];
-      default: return [];
-    }
   }
 
   private async replayAccess(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord, action: string, reassignmentAccess?: Prisma.JsonValue) {
@@ -1088,20 +1063,6 @@ export class ProcessEightDService {
         if (!record.collaboratorUserIds.includes(actor.id) || !await this.eligibleWorker(tx, actor.organizationId, actor.id)) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
       } else { this.owner(actor, record); await this.assertOwnerAssignment(tx, actor.organizationId, actor.id, record.report.responsibleSectionDepartmentId); }
     }
-  }
-
-  private async replayManagedStages(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord, action: string, stored: Prisma.JsonObject) {
-    if (!['SAVE', 'COLLABORATORS', 'ANALYSIS_COMPLETE', 'SUBMIT'].includes(action) || !await this.managedVersion(tx, record)) return;
-    if (action === 'SUBMIT') await this.authorize(tx, actor, 'workflow:act');
-    let stages: readonly WorkStage[];
-    if (Array.isArray(stored.workStages)) {
-      if (!stored.workStages.length || !stored.workStages.every(stage => stage === 'ANALYSIS' || stage === 'IMPLEMENTATION')) workflowError('PROCESS_EIGHT_D_STAGE_UNAVAILABLE', 409);
-      stages = stored.workStages as WorkStage[];
-    } else if (action === 'ANALYSIS_COMPLETE') stages = ['ANALYSIS'];
-    else if (action === 'SUBMIT' || typeof stored.analysisCompletedAt === 'string') stages = ['IMPLEMENTATION'];
-    else if (action === 'COLLABORATORS' && stored.analysisCompletedAt === null) stages = ['ANALYSIS'];
-    else stages = initialOwnerStages;
-    for (const stage of stages) await this.assertManagedStage(tx, actor, record, stage);
   }
 
   private async updateReport(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord, fields: Prisma.Sql, content: boolean) {

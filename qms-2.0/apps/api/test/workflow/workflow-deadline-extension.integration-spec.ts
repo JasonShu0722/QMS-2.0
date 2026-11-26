@@ -50,6 +50,43 @@ describe('bounded deadline extensions real PostgreSQL', () => {
     expect((await prisma.problemIndex.findUniqueOrThrow({ where: { id: f.problem.id } })).closedAt).toBeNull();
   }, 120000);
 
+  it.each(['PROCESS', 'LEGACY'] as const)('requires an appointment or a live process-only administrator grant (%s)', async mode => {
+    const f = await fixture();
+    await prisma.userPosition.delete({ where: { id: f.professional.assignment.id } });
+    const marker = await prisma.permission.findUniqueOrThrow({ where: { code: 'platform:admin' } });
+    const role = await prisma.role.create({ data: { organizationId: f.org.id, code: randomUUID(), name: 'Platform Administrator',
+      permissions: { create: { permissionId: marker.id } } } });
+    const deadlineContext = deadlineFixtureAdapter.deadlineContext!;
+    const adapter = jest.spyOn(deadlineFixtureAdapter, 'deadlineContext').mockImplementation(async (...args) => ({
+      ...await deadlineContext(...args), ...(mode === 'PROCESS' ? { processProfessionalAdminFallback: true as const } : {}),
+    }));
+    try {
+      await expect(request(f.owner.actor, f.problem.id)).rejects.toMatchObject({ response: { code: 'STRUCTURE_REFERENCE_INVALID' } });
+      await prisma.userRole.create({ data: { organizationId: f.org.id, userId: f.professional.user.id, roleId: role.id } });
+      if (mode === 'LEGACY') {
+        await expect(request(f.owner.actor, f.problem.id)).rejects.toMatchObject({ response: { code: 'STRUCTURE_REFERENCE_INVALID' } });
+        return;
+      }
+      const pending = await request(f.owner.actor, f.problem.id);
+      expect(pending.participants.leader.userId).toBe(f.manager.user.id);
+      const quality = await decide(f.manager.actor, pending);
+      expect(quality.status).toBe('QUALITY_PENDING');
+      expect(await f.due()).toBe(pending.originalDueAt);
+      const eligible = () => prisma.$transaction(tx => service.eligible(tx, f.professional.actor, f.problem.id));
+      expect(await eligible()).toMatchObject([{ id: pending.id }]);
+      await prisma.role.update({ where: { id: role.id }, data: { archivedAt: new Date() } });
+      expect(await eligible()).toEqual([]);
+      expect((await decide(f.professional.actor, quality)).status).toBe('CANCELLED');
+      expect(await f.due()).toBe(pending.originalDueAt);
+
+      await prisma.role.update({ where: { id: role.id }, data: { archivedAt: null } });
+      const reapply = await request(f.owner.actor, f.problem.id);
+      const nextQuality = await decide(f.manager.actor, reapply);
+      expect((await decide(f.professional.actor, nextQuality)).status).toBe('APPROVED');
+      expect(await f.due()).toBe(reapply.requestedDueAt);
+    } finally { adapter.mockRestore(); }
+  }, 120000);
+
   it.each(['LEADER', 'QUALITY'] as const)('returns from %s and never changes the original deadline', async side => {
     const f = await fixture(); let r = await request(f.owner.actor, f.problem.id);
     if (side === 'QUALITY') r = await decide(f.manager.actor, r);

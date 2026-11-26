@@ -8,7 +8,7 @@ import { EightDDocumentEditor } from './EightDDocumentEditor';
 import { EightDActionDialog, type EightDAction } from './EightDActionDialog';
 import { EightDControlledReport } from './EightDControlledReport';
 import { EightDEvidenceScopeContext } from './EightDEvidenceScope';
-import { EightDHistory, EightDRounds } from './EightDHistory';
+import { EightDHistory, EightDRounds, ProcessEightDFlowRecords } from './EightDHistory';
 import { aborted, eightDFieldLocation, eightDPath, useEightDSeverityText, useEightDStyle, useEightDText, type EightDDocument, type EightDFields, type EightDRead, type EightDReport, type EightDWriteBody } from './eight-d';
 import styles from './eight-d.module.css';
 import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/domain';
@@ -226,6 +226,7 @@ function Workspace({ problemId, domain = 'process', renderSourcePicker, session,
       <Tabs activeKey={tab} onChange={value => { if (!locked && !action) { if (pendingPanels.current.size) requestLeave(() => setTab(value)); else setTab(value); } }} items={[
         { key: 'workspace', label: text('工作区', 'Workspace'), children: tab === 'workspace' ? <EightDDocumentEditor domain={domain} problemId={problemId} document={draft} removalBlocked={evidencePending > 0} disabled={!can('save') || locked || !!action && actionVisible} read={read} onChange={change => { if (!writing.current && !attempt.current && can('save')) { setDraft(current => current ? change(current) : current); setDirty(true); setReceipt(false); } }} /> : null },
         { key: 'report', label: text('报告', 'Report'), children: tab === 'report' ? <EightDControlledReport domain={domain} report={report} read={read} download={download} /> : null },
+        ...(domain === 'process' ? [{ key: 'flow-records', label: text('流程记录', 'Flow records'), children: tab === 'flow-records' ? <ProcessEightDFlowRecords report={report} read={read} /> : null }] : []),
         { key: 'history', label: text('轨迹', 'History'), children: tab === 'history' ? <EightDHistory report={report} read={read} /> : null },
       ]} />
       <EightDRounds problemId={problemId} read={read} revision={report.version} blocked={locked || dirty || !!action} onInboxClosed={() => void load()} />

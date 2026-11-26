@@ -28,6 +28,7 @@
 .problem-center__popup .ant-space-compact { max-width: 100%; }
 .problem-center__popup .problem-center__view-row label { min-width: min(220px, 100%); }
 .problem-center__popup .problem-center__filters { grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); }
+.problem-center__popup-filter-rows { max-height: min(28dvh, 270px); overflow: auto; padding: 3px; margin: -3px; }
 @media (max-width: 760px) {
   .problem-center__heading { align-items: stretch; flex-direction: column; gap: var(--qms-section-gap); }
   .problem-center__heading .ant-input { min-width: 0; }

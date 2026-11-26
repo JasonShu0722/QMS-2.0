@@ -17,7 +17,7 @@ if (!connection || process.env.QMS_DISPOSABLE_TEST_DB !== 'true' || connection.p
 }
 
 const path = '/api/v1/process-quality/eight-d-workflow-configuration';
-const stageNames = ['ISSUE', 'ANALYSIS', 'IMPLEMENTATION', 'CLOSURE'];
+const stageNames = ['ISSUE'];
 
 describe('process 8D managed workflow configuration', () => {
   let app: INestApplication;
@@ -79,11 +79,14 @@ describe('process 8D managed workflow configuration', () => {
     await save(ordinary, { expectedVersion: 0, stages }).expect(403);
     await save(administrator, { expectedVersion: 0, stages, organizationId: foreign.organizationId }).expect(400);
     await save(administrator, { expectedVersion: 0, stages: [{ stage: 'ISSUE', positionIds: [foreign.id] }] }).expect(400);
+    await save(administrator, { expectedVersion: 0, stages: [{ stage: 'ANALYSIS', positionIds: [local.id] }] }).expect(400);
     await request(app.getHttpServer()).put(path).set('Cookie', administrator.cookie).set('Idempotency-Key', randomUUID())
       .send({ expectedVersion: 0, stages }).expect(403);
     await save(administrator, { expectedVersion: 0, stages }).expect(200, {
       version: 1, stages, positions: [{ id: local.id, name: local.name }], missingStages: stageNames,
     });
+    await expect(prisma.$transaction(tx => app.get(ProcessEightDWorkflowConfigurationService).assertCanIssue(tx, administrator.actor, org.id)))
+      .resolves.toEqual({ workflowDefinitionId: expect.any(String), workflowVersionId: expect.any(String) });
   });
 
   it('pins one published native closure template and never selects a legacy version', async () => {
@@ -101,8 +104,7 @@ describe('process 8D managed workflow configuration', () => {
     await app.get(WorkflowDefinitionService).publishDefinition({ organizationId: org.id, actor: manager.actor, userId: manager.user.id,
       definitionId: legacy.id, expectedRevision: legacy.revision, draftVersionId: legacy.version.id, traceId });
     await expect(issueBinding()).rejects.toMatchObject({ response: { code: 'PROCESS_EIGHT_D_WORKFLOW_NOT_READY' }, fields: {
-      'stages.ISSUE': expect.any(Array), 'stages.ANALYSIS': expect.any(Array),
-      'stages.IMPLEMENTATION': expect.any(Array), 'stages.CLOSURE': expect.any(Array),
+      'stages.ISSUE': expect.any(Array),
     } });
     const stages = stageNames.map(stage => ({ stage, positionIds: [stage === 'ISSUE' ? issuePosition.id : workPosition.id] }));
     const body = { expectedVersion: 0, stages };
@@ -124,19 +126,17 @@ describe('process 8D managed workflow configuration', () => {
     await prisma.$transaction(async tx => {
       await expect(configuration.isManagedVersion(tx, org.id, legacy.version.id)).resolves.toBe(false);
       await expect(configuration.isManagedVersion(tx, org.id, binding.workflowVersionId)).resolves.toBe(true);
-      await expect(configuration.allowedStages(tx, issuer.actor, org.id, ['ISSUE', 'ANALYSIS', 'CLOSURE'])).resolves.toEqual(['ISSUE']);
     });
-    await expect(prisma.$transaction(tx => configuration.assertCanOperate(tx, issuer.actor, org.id, 'ANALYSIS'))).rejects.toMatchObject({ status: 403 });
     await save(manager, { expectedVersion: 1, stages }).expect(200);
     await expect(issueBinding()).resolves.toEqual(binding);
     expect(await prisma.workflowVersion.count({ where: { organizationId: org.id } })).toBe(2);
 
     await prisma.userPosition.update({ where: { id: appointment.id }, data: { endedAt: new Date() } });
     await expect(issueBinding()).rejects.toMatchObject({ status: 403 });
-    await prisma.position.update({ where: { id: workPosition.id }, data: { status: 'DISABLED', deletedAt: new Date() } });
+    await prisma.position.update({ where: { id: issuePosition.id }, data: { status: 'DISABLED', deletedAt: new Date() } });
     await get(manager).expect(200).expect(({ body: current }) => {
-      expect(current).toMatchObject({ version: 2, stages, missingStages: ['ANALYSIS', 'IMPLEMENTATION', 'CLOSURE'] });
-      expect(current.positions).not.toContainEqual(expect.objectContaining({ id: workPosition.id }));
+      expect(current).toMatchObject({ version: 2, stages, missingStages: ['ISSUE'] });
+      expect(current.positions).not.toContainEqual(expect.objectContaining({ id: issuePosition.id }));
     });
     await expect(issueBinding()).rejects.toMatchObject({ response: { code: 'PROCESS_EIGHT_D_WORKFLOW_NOT_READY' } });
     await prisma.rolePermission.deleteMany({ where: { roleId: manager.role.id } });

@@ -7,6 +7,7 @@ import type { AdministrativeLifecycleImpact } from '../../common/security/admini
 
 export type { WorkflowClosureDuty } from './workflow-closure-policy.js';
 export type WorkflowClosureOperation = 'READ' | 'SUBMIT' | 'DECIDE' | 'CANCEL';
+export type WorkflowClosureFlowRecord = { occurredAt: string; person: string; content: string };
 export type WorkflowSupplierSubmissionInput = {
   supplierProblemId: string;
   responseRevisionId: string;
@@ -27,6 +28,7 @@ export type WorkflowClosureContext = {
   responsibleSectionDepartmentId: string;
   ownerUserId: string;
   professionalUserId: string;
+  processManagement?: true;
 };
 
 // Server-owned implementations enforce domain scope and lock problem -> instance -> domain content.
@@ -38,6 +40,7 @@ export interface WorkflowClosureAdapter {
   isParticipantStageEligible?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string): Promise<boolean>;
   lockSupplierSubmission?(tx: Prisma.TransactionClient, actor: WorkflowActor, problemId: string, input: WorkflowSupplierSubmissionInput): Promise<WorkflowClosureContext>;
   complete(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor): Promise<void>;
+  completeProcessAfterManagementSkip?(tx: Prisma.TransactionClient, context: WorkflowClosureContext): Promise<void>;
   returnForChanges(tx: Prisma.TransactionClient, context: WorkflowClosureContext, actor: WorkflowActor): Promise<void>;
   // Session-independent READ scope: also reject stale domain content/person/section facts in context.
   canNotifyRecipient?(tx: Prisma.TransactionClient, context: WorkflowClosureContext, userId: string): Promise<boolean>;
@@ -81,7 +84,7 @@ export type WorkflowClosureRound = {
   nodeId: string;
   contentVersion: number;
   contentSnapshot: Prisma.JsonValue;
-  context: WorkflowClosureContext;
+  context: WorkflowClosureContext & { flowRecords?: WorkflowClosureFlowRecord[]; closedAfterManagementSkip?: true };
   roundNumber: number;
   status: WorkflowClosureRoundStatus;
   version: number;

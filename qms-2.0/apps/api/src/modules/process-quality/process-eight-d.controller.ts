@@ -8,7 +8,7 @@ import { RequireAccess } from '../authorization/access.decorator.js';
 import { ProcessIssueResultDto } from './process-quality.dto.js';
 import { ProcessEightDService } from './process-eight-d.service.js';
 import { IssueProcessEightDDto, ProcessEightDActivationDto, ProcessEightDAnalysisCompleteDto, ProcessEightDAssignmentOptionsDto, ProcessEightDAssignmentOptionsQueryDto, ProcessEightDBindingDto, ProcessEightDBindingResultDto,
-  ProcessEightDCollaboratorsDto, ProcessEightDDeadlinesDto, ProcessEightDReportDto, ProcessEightDRiskDto, ProcessEightDScopeDto,
+  ProcessEightDCollaboratorsDto, ProcessEightDDeadlinesDto, ProcessEightDFlowRecordDto, ProcessEightDReportDto, ProcessEightDRiskDto, ProcessEightDScopeDto,
   ProcessEightDSourcesDto, ProcessEightDSourcePreviewDto, ProcessEightDSourcePreviewInputDto, ProcessEightDVersionDto, ReassignProcessEightDDto, SaveProcessEightDDto } from './process-eight-d.dto.js';
 
 function actor(request: Request) {
@@ -58,6 +58,10 @@ export class ProcessEightDController {
   @Get(':id') @ApiOkResponse({ type: ProcessEightDReportDto })
   @RequireAccess({ featurePermission: 'process-quality:issues:read', organizationScope: queryScope })
   read(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() _query: ProcessEightDScopeDto) { return this.service.read(actor(request), id); }
+
+  @Get(':id/flow-records') @ApiOkResponse({ type: [ProcessEightDFlowRecordDto] })
+  @RequireAccess({ featurePermission: 'process-quality:issues:read', organizationScope: queryScope })
+  flowRecords(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() _query: ProcessEightDScopeDto) { return this.service.flowRecords(actor(request), id); }
 
   @Put(':id') @ApiOkResponse({ type: ProcessEightDReportDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })

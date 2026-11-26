@@ -90,9 +90,17 @@ describe('actual administrative domain hooks and original Worker handlers / real
     await db.$executeRaw`INSERT INTO ${tables.reports} (problem_id,organization_id,responsible_section_department_id,professional_user_id,document,submitted_at,created_by,updated_by)
       VALUES (${f.problem.id}::uuid,${f.org.id}::uuid,${f.section.id}::uuid,${f.professional.user.id}::uuid,
         ${JSON.stringify(emptyProcessEightDDocument())}::jsonb,CURRENT_TIMESTAMP,${f.professional.user.id}::uuid,${f.professional.user.id}::uuid)`;
+    if (domain.domainCode === 'process-quality') {
+      await db.$executeRaw`INSERT INTO department_responsible_appointments (organization_id, department_id, assignment_ids, primary_assignment_id, version)
+        VALUES (${f.org.id}::uuid, ${f.section.id}::uuid, ARRAY[${f.manager.assignment.id}::uuid], ${f.manager.assignment.id}::uuid, 1)`;
+    }
     const initial = await rounds.start(f.owner.actor, f.problem.id, { expectedContentVersion: 1, expectedInstanceVersion: 1 }, randomUUID(), randomUUID());
     const round = await rounds.decide(f.professional.actor, initial.id, { expectedRoundVersion: initial.version,
       duties: ['PROFESSIONAL'], decision: 'APPROVE', comment: 'Keep this real professional approval' }, randomUUID(), randomUUID());
+    expect(round.duties).toMatchObject([
+      { duty: 'PROFESSIONAL', status: 'APPROVED', decidedBy: f.professional.user.id },
+      { duty: 'SECTION_MANAGER', status: 'PENDING', userId: f.manager.user.id },
+    ]);
     const approved = await db.$queryRaw`SELECT * FROM workflow_closure_duties WHERE round_id=${round.id}::uuid AND status='APPROVED'`;
     await historicalSignature(f.org.id, f.professional.user.id, f.problem.id);
     const signatures = await db.$queryRaw`SELECT * FROM approval_signatures ORDER BY id`;

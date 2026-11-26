@@ -9,7 +9,7 @@ import './process-quality.css';
 import { useCompletedSessionNavigation, useNavigationGuard } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
-import { LedgerFilterHeader, LedgerFilterPanel, LedgerFilterPopover } from '../../ui/ledger/FilterPopover';
+import { LedgerFilterCondition, LedgerFilterHeader, LedgerFilterPanel, LedgerFilterPopover } from '../../ui/ledger/FilterPopover';
 import { RecordList } from '../../ui/list/RecordList';
 import { preferenceKey } from '../../ui/ledger/model';
 import { useLedgerScope, usePreference } from '../../ui/ledger/preferences';
@@ -445,12 +445,15 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
       <select ref={filterRow === undefined ? filterControl : undefined} aria-label="筛选逻辑" value={draftFilters.logic} onChange={event => setDraftFilters(current => ({ ...current, logic: event.target.value as FilterLogic }))}><option value="ALL">全部条件</option><option value="ANY">任一条件</option></select>
     </div>
     <div className="process-quality-filter-rows">
-      {draftFilters.items.map((item, index) => <div className="process-quality-filter-row" key={index}>
-        <select ref={filterRow === index ? filterControl : undefined} aria-label={`筛选字段 ${index + 1}`} value={item.field} onChange={event => updateFilterItem(index, filterItem(event.target.value as FilterField))}>{filterFields.map(([field, label]) => <option key={field} value={field}>{field === 'factoryCode' ? factoryTitle : label}</option>)}</select>
-        <select aria-label={`筛选运算符 ${index + 1}`} value={item.operator} onChange={event => updateFilterItem(index, { ...item, operator: event.target.value })}>{operatorsFor(item.field).map(([operator, zh, en]) => <option key={operator} value={operator}>{english && item.field === 'factoryCode' ? en : zh}</option>)}</select>
+      {draftFilters.items.map((item, index) => <LedgerFilterCondition key={index} index={index} field={item.field} operator={item.operator}
+        fieldRef={filterRow === index ? filterControl : undefined}
+        fields={filterFields.map(([field, label]) => [field, field === 'factoryCode' ? factoryTitle : label])}
+        operators={operatorsFor(item.field).map(([operator, zh, en]) => [operator, english && item.field === 'factoryCode' ? en : zh])}
+        onFieldChange={field => updateFilterItem(index, filterItem(field as FilterField))}
+        onOperatorChange={operator => updateFilterItem(index, { ...item, operator })}
+        onRemove={() => { setFilterRow(undefined); setDraftFilters(current => ({ ...current, items: current.items.filter((_, entryIndex) => entryIndex !== index) })); }}>
         {emptyOperator(item.operator) ? <span /> : filterChoices[item.field] ? <select aria-label={`筛选值 ${index + 1}`} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })}><option value="">{english && item.field === 'factoryCode' ? 'Select' : '请选择'}</option>{filterChoices[item.field]!.map(([value, zh, en]) => <option key={value} value={value}>{english && item.field === 'factoryCode' ? en : zh}</option>)}</select> : <input aria-label={`筛选值 ${index + 1}`} type={dateField(item.field) ? 'date' : item.field === 'defectQuantity' ? 'number' : 'text'} maxLength={200} value={item.value ?? ''} onChange={event => updateFilterItem(index, { ...item, value: event.target.value })} />}
-        <Button type="text" aria-label={`删除筛选条件 ${index + 1}`} icon={<X size={13} />} onClick={() => { setFilterRow(undefined); setDraftFilters(current => ({ ...current, items: current.items.filter((_, entryIndex) => entryIndex !== index) })); }} />
-      </div>)}
+      </LedgerFilterCondition>)}
     </div>
     {draftTooLong ? <Alert type="warning" showIcon title="筛选内容过长，请缩短文字或减少条件。" /> : null}
     <Space wrap>

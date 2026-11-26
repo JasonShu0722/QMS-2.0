@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { ControlledValidationException } from '../../common/contracts/controlled-validation.exception.js';
 import { AdminMutationService, adminError, assertAdminAccess, type AdminActor, type AdminTransaction } from '../../common/security/admin-mutation.service.js';
 import { assertActiveAuthentication } from '../../common/security/session-security.js';
+import { hasPlatformAdministrator } from '../../common/security/platform-administrator.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { listEffectiveOrganizationPositions, listEffectiveUserPositionIds, readOrganizationRuntime } from '../organization/organization-runtime.read-model.js';
@@ -49,7 +50,7 @@ export class ProcessEightDWorkflowConfigurationService {
 
       const version = previous.version + 1;
       const projected = this.projection({ version, stages, workflowVersionId: previous.workflowVersionId }, positions);
-      const workflowVersionId = previous.workflowVersionId ?? (projected.missingStages.length ? null : await this.templates.publishManagedProcessEightD(tx, actor, traceId));
+      const workflowVersionId = previous.workflowVersionId ?? await this.templates.publishManagedProcessEightD(tx, actor, traceId);
       await tx.$executeRaw`INSERT INTO process_eight_d_workflow_configuration_revisions (organization_id, version, stages, workflow_version_id, updated_by_id)
         VALUES (${organizationId}::uuid, ${version}, ${JSON.stringify(stages)}::jsonb, ${workflowVersionId}::uuid, ${actor.id}::uuid)`;
       await this.audit.record({ organizationId, actorUserId: actor.id, action: ACTION, resourceType: 'ProcessEightDWorkflowConfiguration',
@@ -69,14 +70,16 @@ export class ProcessEightDWorkflowConfigurationService {
     await this.assertInternalScope(tx, actor, organizationId);
     await assertAdminAccess(tx, actor, organizationId, ISSUE);
     const configuration = await this.read(tx, organizationId);
-    const { missingStages } = this.projection(configuration, await listEffectiveOrganizationPositions(tx, organizationId));
-    if (missingStages.length) throw new ControlledValidationException('PROCESS_EIGHT_D_WORKFLOW_NOT_READY',
-      missingStages.map(stage => ({ path: `stages.${stage}`, message: '' })));
+    if (!await hasPlatformAdministrator(tx, actor.id)) {
+      const { missingStages } = this.projection(configuration, await listEffectiveOrganizationPositions(tx, organizationId));
+      if (missingStages.length) throw new ControlledValidationException('PROCESS_EIGHT_D_WORKFLOW_NOT_READY',
+        missingStages.map(stage => ({ path: `stages.${stage}`, message: '' })));
+      await this.assertIssuePosition(tx, actor, organizationId, configuration);
+    }
     const { workflowVersionId } = configuration;
     if (!workflowVersionId) adminError('PROCESS_EIGHT_D_WORKFLOW_NOT_READY', 409);
     const binding = await this.templates.publishedVersionBinding(tx, organizationId, workflowVersionId);
     if (!binding) adminError('PROCESS_EIGHT_D_WORKFLOW_NOT_READY', 409);
-    if (!(await this.eligibleStages(tx, actor, organizationId, configuration, ['ISSUE'])).length) adminError('FEATURE_PERMISSION_DENIED', 403);
     return { ...binding, workflowVersionId };
   }
 
@@ -88,14 +91,10 @@ export class ProcessEightDWorkflowConfigurationService {
     return result?.managed ?? false;
   }
 
-  async allowedStages(tx: AdminTransaction, actor: AdminActor, organizationId: string, requested: readonly ProcessEightDWorkflowStage[]): Promise<ProcessEightDWorkflowStage[]> {
-    await this.assertInternalScope(tx, actor, organizationId);
-    return this.eligibleStages(tx, actor, organizationId, await this.read(tx, organizationId), requested);
-  }
-
-  async assertCanOperate(tx: AdminTransaction, actor: AdminActor, organizationId: string, stage: ProcessEightDWorkflowStage): Promise<void> {
+  async assertIssueReplayAccess(tx: AdminTransaction, actor: AdminActor, organizationId: string): Promise<void> {
     await this.lockConfiguration(tx, organizationId);
-    if (!(await this.allowedStages(tx, actor, organizationId, [stage])).length) adminError('FEATURE_PERMISSION_DENIED', 403);
+    await this.assertInternalScope(tx, actor, organizationId);
+    if (!await hasPlatformAdministrator(tx, actor.id)) await this.assertIssuePosition(tx, actor, organizationId, await this.read(tx, organizationId));
   }
 
   async lockConfiguration(tx: AdminTransaction, organizationId: string) {
@@ -126,10 +125,8 @@ export class ProcessEightDWorkflowConfigurationService {
       missingStages: stages.filter(item => !item.positionIds.some(id => available.has(id))).map(item => item.stage) };
   }
 
-  private async eligibleStages(tx: AdminTransaction, actor: AdminActor, organizationId: string, configuration: Configuration, requested: readonly ProcessEightDWorkflowStage[]): Promise<ProcessEightDWorkflowStage[]> {
-    const selected = [...new Set(requested.flatMap(stage => configuration.stages[stage] ?? []))];
-    if (!selected.length) return [];
-    const held = new Set(await listEffectiveUserPositionIds(tx, organizationId, actor.id, selected));
-    return requested.filter(stage => configuration.stages[stage]?.some(id => held.has(id)));
+  private async assertIssuePosition(tx: AdminTransaction, actor: AdminActor, organizationId: string, configuration: Configuration) {
+    const held = await listEffectiveUserPositionIds(tx, organizationId, actor.id, configuration.stages.ISSUE ?? []);
+    if (!held.length) adminError('FEATURE_PERMISSION_DENIED', 403);
   }
 }

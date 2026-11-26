@@ -43,6 +43,7 @@ function fixture(domain: Domain, explicit = true) {
   const prisma = { $transaction: async (work: (t: typeof tx) => unknown) => work({ ...tx }) };
   const reports = { domain, reminderCandidates: async () => [{ organizationId: c.organizationId, problemId: c.problemId }],
     notificationContext: jest.fn(async () => c), canNotifyRecipient: jest.fn(async () => true),
+    reconcileProcessManagementReview: jest.fn(async () => false),
     taskCandidates: async () => [id(2), id(12)].map(problemId => ({ problemId })),
     lockRecord: jest.fn(async (tx: object, actor: unknown, problemId: string) => { locks.push({ tx, actor, problemId });
       return { problem: { id: problemId, reportNumber: '8D-N4' }, instance: { status: 'RUNNING', currentNodeId: c.ownerNodeId } }; }),

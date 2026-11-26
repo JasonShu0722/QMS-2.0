@@ -84,7 +84,7 @@ it('denies users without the workflow management capability before requesting co
   expect(apiRequest).not.toHaveBeenCalled();
 });
 
-it('edits the four process 8D stages independently and shows missing positions', async () => {
+it('only edits issue positions and ignores inactive positions from former stages', async () => {
   const stages = ['ISSUE', 'ANALYSIS', 'IMPLEMENTATION', 'CLOSURE'].map(stage => ({ stage, positionIds: stage === 'ANALYSIS' ? ['removed-position'] : [] }));
   const eightD = { version: 2, positions: configuration.positions, stages, missingStages: stages.map(({ stage }) => stage) };
   vi.mocked(apiRequest).mockResolvedValueOnce(eightD).mockImplementationOnce(async (_path, init) => ({ ...eightD,
@@ -92,23 +92,21 @@ it('edits the four process 8D stages independently and shows missing positions',
   }));
   view();
   fireEvent.click(screen.getByRole('button', { name: '制程内部 8D' }));
-  const analysis = await screen.findByRole('combobox', { name: '分析与对策' });
-  const form = within(analysis.closest('form')!);
-  expect(form.getAllByRole('combobox').map(control => control.getAttribute('aria-label'))).toEqual(['发单', '分析与对策', '实施与验证', '关闭审核']);
-  expect(form.getByText(/缺少有效岗位.*分析与对策/)).toBeVisible();
-  expect(form.getByText(/已失效岗位.*removed-position/)).toBeVisible();
+  const issue = await screen.findByRole('combobox', { name: '发单' });
+  const form = within(issue.closest('form')!);
+  expect(form.getAllByRole('combobox')).toEqual([issue]);
+  expect(form.getByText(/缺少有效岗位.*发单/)).toBeVisible();
+  expect(form.queryByText(/已失效岗位.*removed-position/)).not.toBeInTheDocument();
   const save = form.getByRole('button', { name: '保存配置' });
   expect(save).toBeDisabled();
-  fireEvent.keyDown(analysis, { key: 'Backspace', code: 'Backspace' });
-  fireEvent.mouseDown(analysis);
+  fireEvent.mouseDown(issue);
   fireEvent.click(await screen.findByText('分析员'));
   fireEvent.click(save);
   await waitFor(() => expect(apiRequest).toHaveBeenCalledTimes(2));
   expect(vi.mocked(apiRequest).mock.calls.map(([path]) => path)).toEqual([eightDEndpoint, eightDEndpoint]);
   expect(JSON.parse(String(vi.mocked(apiRequest).mock.calls[1][1]?.body))).toEqual({ expectedVersion: 2,
-    stages: stages.map(({ stage }) => ({ stage, positionIds: stage === 'ANALYSIS' ? ['analyst'] : [] })),
+    stages: [{ stage: 'ISSUE', positionIds: ['analyst'] }],
   });
-  await waitFor(() => expect(form.getByText(/缺少有效岗位/)).not.toHaveTextContent('分析与对策'));
 });
 
 it('keeps edits on a version conflict and requires a reload before saving again', async () => {

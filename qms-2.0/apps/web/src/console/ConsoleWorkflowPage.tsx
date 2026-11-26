@@ -49,12 +49,7 @@ const ledgerEditor: WorkflowEditor<LedgerUpdate['boards'][number]['board']> = {
 
 const eightDEditor: WorkflowEditor<EightDUpdate['stages'][number]['stage']> = {
   endpoint: eightDEndpoint,
-  labels: [
-    ['ISSUE', '发单', 'Issue'],
-    ['ANALYSIS', '分析与对策', 'Analysis and countermeasures'],
-    ['IMPLEMENTATION', '实施与验证', 'Implementation and verification'],
-    ['CLOSURE', '关闭审核', 'Closure review'],
-  ],
+  labels: [['ISSUE', '发单', 'Issue']],
   async read(init) {
     const { version, positions, stages, missingStages } = await apiRequest<EightDConfiguration>(eightDEndpoint, init, init.method === 'PUT' ? { replayAfterReauthentication: false } : undefined);
     return { version, positions, selections: stages.map(({ stage, positionIds }) => ({ key: stage, positionIds })), missing: missingStages };
@@ -208,7 +203,7 @@ function WorkflowPositionConfiguration<Key extends string>({ session, editor }: 
         {text('可为每个板块选择多个岗位。保存后，未选择岗位的板块无法维护。', 'Select multiple positions per board. After saving, boards with no positions cannot be maintained.')}
       </Typography.Paragraph>}
       {missing.length > 0 && <Alert type="warning" showIcon style={{ marginBottom: 16 }}
-        title={text(`缺少有效岗位，无法发单：${missing.join('、')}`, `Issue is unavailable until active positions are configured for: ${missing.join(', ')}`)} />}
+        title={text('缺少有效岗位，普通用户无法发单。', 'Standard users need an active position to issue a report.')} />}
       {hasInactivePositions && <Alert type="warning" showIcon style={{ marginBottom: 16 }} title={text('请移除已失效的岗位后再保存。', 'Remove inactive positions before saving.')} />}
       {editor.labels.map(([board, zh, en]) => {
         const label = text(zh, en);

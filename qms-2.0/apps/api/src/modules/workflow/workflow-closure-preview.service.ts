@@ -10,11 +10,12 @@ import type { ResolvedManagementResponsibilityDto } from '../organization/organi
 import { assertWorkflowFeature, canProcessWorkflowNode, type WorkflowActor } from './workflow-access-policy.js';
 import { workflowError } from './workflow-runtime-policy.js';
 import { planWorkflowClosure, type WorkflowClosureDuty } from './workflow-closure-policy.js';
+import { WorkflowClosureRoundService } from './workflow-closure-round.service.js';
 import { WorkflowClosurePreviewInputDto, WorkflowClosureOptionsQueryDto, type WorkflowClosureOptionsDto, type WorkflowClosureParticipantDto, type WorkflowClosurePreviewDto, type WorkflowClosurePreviewIssueDto } from './workflow-closure-preview.dto.js';
 
 @Injectable()
 export class WorkflowClosurePreviewService {
-  constructor(private readonly prisma: PrismaService, private readonly responsibilities: OrganizationResponsibilityService) {}
+  constructor(private readonly prisma: PrismaService, private readonly responsibilities: OrganizationResponsibilityService, private readonly rounds: WorkflowClosureRoundService) {}
 
   async options(actor: WorkflowActor, input: WorkflowClosureOptionsQueryDto): Promise<WorkflowClosureOptionsDto> {
     const query = plainToInstance(WorkflowClosureOptionsQueryDto, input);
@@ -40,13 +41,29 @@ export class WorkflowClosurePreviewService {
   async resolve(actor: WorkflowActor, input: WorkflowClosurePreviewInputDto): Promise<WorkflowClosurePreviewDto> {
     const body = plainToInstance(WorkflowClosurePreviewInputDto, input);
     if ((await validate(body, { whitelist: true, forbidNonWhitelisted: true })).length
-      || body.policy === 'SUPPLIER' && body.ownerUserId !== undefined) throw new BadRequestException();
+      || body.policy === 'SUPPLIER' && (body.ownerUserId !== undefined || body.domainCode !== undefined)) throw new BadRequestException();
     if (actor.accountType !== 'INTERNAL') workflowError('ORGANIZATION_SCOPE_DENIED', 403);
     try {
       return await this.prisma.$transaction(async tx => {
         await this.authorize(tx, actor);
         const section = await tx.department.findFirst({ where: { id: body.responsibleSectionDepartmentId, organizationId: actor.organizationId } });
         if (!section) workflowError('STRUCTURE_REFERENCE_INVALID', 409);
+        if (body.domainCode === 'process-quality') {
+          const organizationId = actor.organizationId;
+          const plan = await this.rounds.plan(tx, { ...body, organizationId, ownerUserId: body.ownerUserId!, processManagement: true });
+          const at = new Date();
+          const issues: WorkflowClosurePreviewIssueDto[] = [];
+          if (!await this.owner(tx, organizationId, body.ownerUserId!, section.id, at)) issues.push({ duty: 'OWNER', code: 'PARTICIPANT_NOT_ELIGIBLE' });
+          if (!plan.duties[0]?.participant) issues.push({ duty: 'PROFESSIONAL', code: 'PARTICIPANT_NOT_ELIGIBLE' });
+          const duties = await Promise.all(plan.duties.map(async ({ duty, status, participant }) => {
+            const identity = participant && await tx.user.findFirst({ where: { id: participant.userId, organizationId }, select: { username: true, fullName: true } });
+            return { duty, status, participant: identity && participant ? { ...participant, ...identity } : null };
+          }));
+          await this.authorize(tx, actor);
+          return { duties, executionMode: plan.executionMode, samePersonGroups: plan.samePersonGroups, issues,
+            previewOnly: true, configurationReady: issues.length === 0, organizationId, sectionDepartmentId: section.id, at: at.toISOString(),
+            ...(plan.managementEvent ? { managementNote: plan.managementEvent.content } : {}) };
+        }
         // Resolve before acquiring any authentication/structure locks; this endpoint creates no execution authority.
         const management = await this.responsibilities.resolveManagementResponsibilities(tx, actor.organizationId, section.id);
         const at = management.at;

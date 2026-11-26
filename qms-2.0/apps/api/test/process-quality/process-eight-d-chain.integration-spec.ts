@@ -30,14 +30,10 @@ describe('complete managed process 8D HTTP chain with actual versioned storage a
   }, 120_000);
   afterAll(async () => { await app?.close(); });
 
-  async function configureWorkflow(fixture: Awaited<ReturnType<typeof createWorkflowClosureFixture>>, additionalWorkPositions: string[] = []) {
-    const { professional, owner, manager, minister } = fixture;
-    const work = [owner.position.id, manager.position.id, minister.position.id, ...additionalWorkPositions];
+  async function configureWorkflow(fixture: Awaited<ReturnType<typeof createWorkflowClosureFixture>>) {
+    const { professional } = fixture;
     return app.get(ProcessEightDWorkflowConfigurationService).update(professional.actor, { expectedVersion: 0, stages: [
       { stage: 'ISSUE', positionIds: [professional.position.id] },
-      { stage: 'ANALYSIS', positionIds: work },
-      { stage: 'IMPLEMENTATION', positionIds: work },
-      { stage: 'CLOSURE', positionIds: [professional.position.id, manager.position.id, minister.position.id] },
     ] }, randomUUID(), randomUUID());
   }
 
@@ -58,6 +54,8 @@ describe('complete managed process 8D HTTP chain with actual versioned storage a
       return `qms_session=${token}; qms_csrf=${csrf}`;
     };
     const issuerCookie = await cookie(f.professional), ownerCookie = await cookie(f.owner), managerCookie = await cookie(f.manager);
+    await prisma.$executeRaw`INSERT INTO department_responsible_appointments (organization_id, department_id, assignment_ids, primary_assignment_id, version)
+      VALUES (${f.org.id}::uuid, ${f.section.id}::uuid, ARRAY[${f.manager.assignment.id}::uuid], ${f.manager.assignment.id}::uuid, 1)`;
     const send = (who: string, method: 'post' | 'put', path: string, body: object) => request(app.getHttpServer())[method](`/api/v1/${path}`)
       .set('Cookie', who).set('x-csrf-token', csrf).set('Idempotency-Key', randomUUID()).send(body);
     const get = (who: string, path: string) => request(app.getHttpServer()).get(`/api/v1/${path}`).set('Cookie', who);
@@ -152,7 +150,7 @@ describe('complete managed process 8D HTTP chain with actual versioned storage a
       .set('Cookie', who).set('x-csrf-token', csrf).set('Idempotency-Key', key).send(body);
     const get = (who: string, path: string) => request(app.getHttpServer()).get(`/api/v1/${path}`).set('Cookie', who);
     await app.get(NumberingService).publishRuleVersion({ organizationId: f.org.id, ruleCode: 'PROBLEM', pattern: '{CODE}-{YYMM}-{SEQ3}' });
-    await expect(configureWorkflow(f, [crossOwner.position.id])).resolves.toMatchObject({ version: 1, missingStages: [] });
+    await expect(configureWorkflow(f)).resolves.toMatchObject({ version: 1, missingStages: [] });
     const source = (await send(issuerCookie, 'post', 'process-quality/defects', {
       occurredAt: '2026-10-20T08:30:00+08:00', factoryCode: 'FACTORY_1', productCode: `HTTP-${randomUUID()}`, traceCode: `TRACE-${randomUUID()}`,
       description: 'Missing fields and exact reassignment seam',

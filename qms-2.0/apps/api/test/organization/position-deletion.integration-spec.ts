@@ -11,7 +11,9 @@ import { INTERNAL_EIGHT_D_DOMAINS, internalEightDSql } from '../../src/common/ei
 import { PrismaService } from '../../src/database/prisma.service.js';
 import { SessionService } from '../../src/modules/identity/session.service.js';
 import { NumberingService } from '../../src/modules/problem-index/numbering.service.js';
+import { ProcessEightDClosureAdapter } from '../../src/modules/process-quality/process-eight-d-closure.adapter.js';
 import { emptyProcessEightDDocument } from '../../src/modules/process-quality/process-eight-d-document.js';
+import { ProcessEightDReminderService } from '../../src/modules/process-quality/process-eight-d-reminder.service.js';
 import { WorkflowClosureRoundService } from '../../src/modules/workflow/workflow-closure-round.service.js';
 import { isDisposableLoopbackPostgres } from '../disposable-postgres.js';
 import { createWorkflowClosureFixture } from '../workflow/workflow-closure-round.fixture.js';
@@ -123,7 +125,7 @@ describe('REQ-0045 position deletion through the actual app and PostgreSQL', () 
     expect(context.body.permissions).toContain(permission);
     expect(first).toMatchObject({ kind: 'POSITION', counts: { users: 2, assignments: 2, positions: 1, departments: 0 } });
     const boards = { REGISTRATION: [removed.id] };
-    const stages = { CLOSURE: [removed.id] };
+    const stages = { ISSUE: [removed.id] };
     await db.$executeRaw`INSERT INTO process_ledger_workflow_configuration_revisions (organization_id, version, boards, updated_by_id)
       VALUES (${target.id}::uuid, 1, ${JSON.stringify(boards)}::jsonb, ${actor.id}::uuid)`;
     await db.$executeRaw`INSERT INTO process_eight_d_workflow_configuration_revisions (organization_id, version, stages, updated_by_id)
@@ -218,31 +220,27 @@ describe('REQ-0045 position deletion through the actual app and PostgreSQL', () 
     }
   });
 
-  it('blocks new process 8D issuance after deleting the only closure position and recovers by appending a configuration revision', async () => {
+  it('blocks ordinary process 8D issuance after deleting the only issuance position and recovers with a new configuration revision', async () => {
     const { org, professional, owner, manager, section, role: workflowRole } = await createWorkflowClosureFixture(db, app.get(WorkflowClosureRoundService));
     const marker = await role(org.id, 'platform:admin');
     await db.userRole.create({ data: { organizationId: org.id, userId: professional.user.id, roleId: marker.id } });
-    for (const code of ['process-quality:issues:read', 'process-quality:issues:work']) {
+    for (const code of ['process-quality:defects:read', 'process-quality:issues:read', 'process-quality:issues:work', 'process-quality:issues:issue', 'workflow:start']) {
       const entry = await db.permission.findUniqueOrThrow({ where: { code } });
       await db.rolePermission.create({ data: { roleId: workflowRole.id, permissionId: entry.id } });
     }
     const admin = cookie(await sessions.create(professional.user.id, db, { mfaVerified: true, reauthenticated: true }));
     await app.get(NumberingService).publishRuleVersion({ organizationId: org.id, ruleCode: 'PROBLEM', pattern: '{CODE}-{YYMM}-{SEQ3}' });
-    const removed = await position(org.id, 'Only configured closure position');
+    const removed = await position(org.id, 'Only configured issuance position');
+    await appoint(org.id, manager.user.id, removed.id);
     const base = '/api/v1/process-quality';
     const configuration = `${base}/eight-d-workflow-configuration`;
-    const workStages = [
-      { stage: 'ISSUE', positionIds: [professional.position.id] },
-      { stage: 'ANALYSIS', positionIds: [owner.position.id] },
-      { stage: 'IMPLEMENTATION', positionIds: [owner.position.id] },
-    ];
-    const initial = [...workStages, { stage: 'CLOSURE', positionIds: [removed.id] }];
+    const initial = [{ stage: 'ISSUE', positionIds: [removed.id] }];
     expect((await write(admin, 'put', configuration, { expectedVersion: 0, stages: initial }).expect(200)).body)
       .toMatchObject({ version: 1, missingStages: [], stages: initial });
     const revisions = () => db.$queryRaw<{ version: number; stages: Record<string, string[]> }[]>`
       SELECT * FROM process_eight_d_workflow_configuration_revisions WHERE organization_id = ${org.id}::uuid ORDER BY version`;
     const history = await revisions();
-    expect(history).toEqual([expect.objectContaining({ version: 1, stages: expect.objectContaining({ CLOSURE: [removed.id] }) })]);
+    expect(history).toEqual([expect.objectContaining({ version: 1, stages: { ISSUE: [removed.id] } })]);
     const source = (await write(admin, 'post', `${base}/defects`, {
       occurredAt: '2026-10-20T08:30:00+08:00', factoryCode: 'FACTORY_1', productCode: `HTTP-${randomUUID()}`,
       traceCode: `TRACE-${randomUUID()}`, description: '岗位删除后制程 8D 发单回归',
@@ -259,29 +257,50 @@ describe('REQ-0045 position deletion through the actual app and PostgreSQL', () 
     expect(preview.positionImpact.configurations).toContainEqual({ source: 'PROCESS_EIGHT_D', count: 1 });
     await write(admin, 'post', route, confirmation(preview)).expect(201);
     const missing = (await get(admin, configuration).expect(200)).body;
-    expect(missing).toMatchObject({ version: 1, missingStages: ['CLOSURE'] });
+    expect(missing).toMatchObject({ version: 1, missingStages: ['ISSUE'] });
     expect(missing.positions).not.toContainEqual(expect.objectContaining({ id: removed.id }));
     expect(await revisions()).toEqual(history);
+    const issuer = cookie(await sessions.create(manager.user.id, db, { mfaVerified: true, reauthenticated: true }));
     const key = randomUUID();
-    const blocked = await write(admin, 'post', `${base}/eight-d`, issue, key).expect(400);
-    expect(blocked.body).toMatchObject({ code: 'PROCESS_EIGHT_D_WORKFLOW_NOT_READY', fields: { 'stages.CLOSURE': expect.any(Array) } });
+    const blocked = await write(issuer, 'post', `${base}/eight-d`, issue, key).expect(400);
+    expect(blocked.body).toMatchObject({ code: 'PROCESS_EIGHT_D_WORKFLOW_NOT_READY', fields: { 'stages.ISSUE': expect.any(Array) } });
 
-    const replacement = [...workStages, { stage: 'CLOSURE', positionIds: [manager.position.id] }];
+    const replacement = [{ stage: 'ISSUE', positionIds: [manager.position.id] }];
     expect((await write(admin, 'put', configuration, { expectedVersion: 1, stages: replacement }).expect(200)).body)
       .toMatchObject({ version: 2, missingStages: [], stages: replacement });
-    const issued = await write(admin, 'post', `${base}/eight-d`, issue, key);
+    const issued = await write(issuer, 'post', `${base}/eight-d`, issue, key);
     expect(issued).toMatchObject({ status: 201, body: { problem: { id: expect.any(String) }, replayed: false } });
     expect(await revisions()).toEqual([...history, expect.objectContaining({ version: 2,
-      stages: expect.objectContaining({ CLOSURE: [manager.position.id] }) })]);
+      stages: { ISSUE: [manager.position.id] } })]);
   });
 
-  it.each(['LEGACY', 'LOSES_CLOSURE', 'LOSES_DEPARTMENT', 'KEEPS_CLOSURE', 'LOSES_WORKFLOW_PERMISSION'] as const)('handles %s review eligibility and preserves the existing approval', async eligibility => {
+  it.each([
+    ['LEGACY', 'PENDING_CONFIGURATION', true],
+    ['LEGACY', 'LOSES_CLOSURE', true],
+    ['LEGACY', 'LOSES_DEPARTMENT', true],
+    ['LEGACY', 'KEEPS_CLOSURE', false],
+    ['LEGACY', 'LOSES_MANAGEMENT_APPOINTMENT', false],
+    ['PROCESS_MANAGED', 'LOSES_CLOSURE', false],
+    ['PROCESS_MANAGED', 'LOSES_DEPARTMENT', false],
+    ['PROCESS_MANAGED', 'LOSES_WORKFLOW_PERMISSION', true],
+    ['PROCESS_MANAGED', 'LOSES_ISSUE_READ_PERMISSION', true],
+    ['PROCESS_MANAGED', 'PENDING_CONFIGURATION', true],
+    ['PROCESS_MANAGED', 'LOSES_MANAGEMENT_APPOINTMENT', false],
+    ['PROCESS_MANAGED', 'ISSUER_LOSES_LAST_MANAGEMENT_APPOINTMENT', false],
+  ] as const)('handles %s %s review eligibility and preserves the existing approval', async (mode, eligibility, invalidates) => {
     const { admin } = await fixture();
     const rounds = app.get(WorkflowClosureRoundService);
-    const flow = await createWorkflowClosureFixture(db, rounds);
+    const issuerLosesLastPosition = eligibility === 'ISSUER_LOSES_LAST_MANAGEMENT_APPOINTMENT';
+    const losesManagement = eligibility === 'LOSES_MANAGEMENT_APPOINTMENT' || issuerLosesLastPosition;
+    const fallsBack = losesManagement && mode === 'PROCESS_MANAGED';
+    const flow = await createWorkflowClosureFixture(db, rounds, 'INTERNAL', fallsBack ? 'HIGH' : 'LOW');
+    const affected = issuerLosesLastPosition ? flow.professional : fallsBack ? flow.minister : losesManagement ? flow.manager : flow.professional;
+    const fallback = fallsBack ? await flow.person(flow.dept.id) : null;
     const domain = INTERNAL_EIGHT_D_DOMAINS.PROCESS;
     const { reports } = internalEightDSql(domain);
-    for (const code of [`${domain.permissionPrefix}:read`, `${domain.permissionPrefix}:work`]) {
+    const readPermission = `${domain.permissionPrefix}:read`;
+    const workPermission = `${domain.permissionPrefix}:work`;
+    for (const code of [readPermission, workPermission]) {
       await db.rolePermission.create({ data: { roleId: flow.role.id, permissionId: (await db.permission.findUniqueOrThrow({ where: { code } })).id } });
     }
     await db.problemIndex.update({ where: { id: flow.problem.id }, data: { domainCode: domain.domainCode, sourceType: domain.sourceType, problemType: 'EIGHT_D' } });
@@ -293,25 +312,88 @@ describe('REQ-0045 position deletion through the actual app and PostgreSQL', () 
     await db.$executeRaw`INSERT INTO ${reports} (problem_id,organization_id,responsible_section_department_id,professional_user_id,document,submitted_at,created_by,updated_by)
       VALUES (${flow.problem.id}::uuid,${flow.org.id}::uuid,${flow.section.id}::uuid,${flow.professional.user.id}::uuid,
         ${JSON.stringify(emptyProcessEightDDocument())}::jsonb,CURRENT_TIMESTAMP,${flow.professional.user.id}::uuid,${flow.professional.user.id}::uuid)`;
-    if (eligibility !== 'LEGACY') {
+    if (mode === 'PROCESS_MANAGED') {
+      await db.$executeRaw`INSERT INTO department_responsible_appointments (organization_id, department_id, assignment_ids, primary_assignment_id, version)
+        VALUES (${flow.org.id}::uuid, ${flow.section.id}::uuid, ARRAY[${flow.manager.assignment.id}::uuid], ${flow.manager.assignment.id}::uuid, 1)`;
+    }
+    if (losesManagement) {
+      if (fallback) {
+        if (!issuerLosesLastPosition) {
+          const survivor = await position(flow.org.id, 'Unlisted management appointment');
+          await appoint(flow.org.id, affected.user.id, survivor.id);
+        }
+        const workflowAction = await role(flow.org.id, 'workflow:act');
+        const reportRead = await role(flow.org.id, readPermission);
+        await db.userRole.deleteMany({ where: { userId: affected.user.id } });
+        await db.positionRole.create({ data: { organizationId: flow.org.id, positionId: affected.position.id, roleId: workflowAction.id } });
+        await db.userRole.create({ data: { organizationId: flow.org.id, userId: affected.user.id, roleId: reportRead.id } });
+        await db.$executeRaw`INSERT INTO department_responsible_appointments (organization_id, department_id, assignment_ids, primary_assignment_id, version)
+          VALUES (${flow.org.id}::uuid, ${flow.dept.id}::uuid, ${[affected.assignment.id, fallback.assignment.id]}::uuid[], ${fallback.assignment.id}::uuid, 1)`;
+        await db.$executeRaw`UPDATE department_minister_scopes SET department_leadership = true,
+          minister_assignment_id = ${affected.assignment.id}::uuid WHERE id = ${flow.scopeId}::uuid`;
+      } else {
+        const end = await db.workflowNode.create({ data: { organizationId: flow.org.id, workflowVersionId: flow.instance.workflowVersionId,
+          nodeKey: 'end', name: 'Closed', type: 'CLOSE', config: { isEnd: true } } });
+        await db.workflowTransition.create({ data: { organizationId: flow.org.id, workflowVersionId: flow.instance.workflowVersionId,
+          fromNodeId: flow.node.id, toNodeId: end.id, action: 'APPROVE', transitionKey: 'close-report' } });
+      }
+    } else if (eligibility !== 'PENDING_CONFIGURATION') {
       const survivor = await db.position.create({ data: { organizationId: flow.org.id, code: randomUUID(), name: 'Second professional appointment',
         departmentId: eligibility === 'LOSES_DEPARTMENT' ? null : flow.dept.id } });
       await appoint(flow.org.id, flow.professional.user.id, survivor.id);
-      if (eligibility === 'KEEPS_CLOSURE' || eligibility === 'LOSES_WORKFLOW_PERMISSION') {
-        const permissionPosition = eligibility === 'KEEPS_CLOSURE' ? survivor.id : flow.professional.position.id;
-        await db.positionRole.create({ data: { organizationId: flow.org.id, positionId: permissionPosition, roleId: flow.role.id } });
+      const lostPermission = eligibility === 'LOSES_WORKFLOW_PERMISSION' ? 'workflow:act'
+        : eligibility === 'LOSES_ISSUE_READ_PERMISSION' ? readPermission : undefined;
+      if (lostPermission || eligibility === 'KEEPS_CLOSURE') {
         await db.userRole.delete({ where: { userId_roleId_organizationId: { userId: flow.professional.user.id, roleId: flow.role.id, organizationId: flow.org.id } } });
+        if (lostPermission) {
+          for (const code of ['workflow:act', readPermission, workPermission]) {
+            const grant = await role(flow.org.id, code);
+            if (code === lostPermission) await db.positionRole.create({ data: { organizationId: flow.org.id, positionId: flow.professional.position.id, roleId: grant.id } });
+            else await db.userRole.create({ data: { organizationId: flow.org.id, userId: flow.professional.user.id, roleId: grant.id } });
+          }
+        } else await db.positionRole.create({ data: { organizationId: flow.org.id, positionId: survivor.id, roleId: flow.role.id } });
       }
       const stages = { IMPLEMENTATION: [flow.owner.position.id], CLOSURE: [flow.professional.position.id, flow.manager.position.id] };
-      if (eligibility === 'KEEPS_CLOSURE' || eligibility === 'LOSES_WORKFLOW_PERMISSION') stages.CLOSURE.push(survivor.id);
+      if (eligibility === 'KEEPS_CLOSURE' || lostPermission) stages.CLOSURE.push(survivor.id);
       if (eligibility === 'LOSES_DEPARTMENT') stages.CLOSURE[0] = survivor.id;
       await db.$executeRaw`INSERT INTO process_eight_d_workflow_configuration_revisions (organization_id,version,stages,workflow_version_id,updated_by_id)
         VALUES (${flow.org.id}::uuid,1,${JSON.stringify(stages)}::jsonb,${flow.instance.workflowVersionId}::uuid,${flow.professional.user.id}::uuid)`;
     }
-    const round = await flow.start();
-    const before = await flow.decide(flow.manager.actor, round, ['SECTION_MANAGER']);
-    const approved = before.duties.find(duty => duty.duty === 'SECTION_MANAGER');
+    const round = mode === 'LEGACY' ? await db.$transaction(async tx => {
+      const context = await app.get(ProcessEightDClosureAdapter).lockAndRead(tx, flow.owner.actor, flow.problem.id, 'SUBMIT');
+      expect(context.processManagement).toBe(true);
+      delete context.processManagement;
+      const legacyPlan = await rounds.plan(tx, context);
+      const roundId = randomUUID();
+      await tx.$executeRaw`INSERT INTO workflow_closure_rounds
+        (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, created_by, creator_organization_id)
+        VALUES (${roundId}::uuid, ${context.organizationId}::uuid, ${context.problemId}::uuid, ${context.instanceId}::uuid,
+          ${context.workflowVersionId}::uuid, ${context.currentNodeId}::uuid, ${context.contentVersion}, ${JSON.stringify(context.content)}::jsonb,
+          ${JSON.stringify(context)}::jsonb, 1, ${flow.owner.user.id}::uuid, ${context.organizationId}::uuid)`;
+      for (const { duty, status, participant } of legacyPlan.duties) {
+        if (!participant) throw new Error(`Missing legacy closure participant for ${duty}`);
+        await tx.$executeRaw`INSERT INTO workflow_closure_duties (id, organization_id, round_id, duty, status, user_id, participant)
+          VALUES (${randomUUID()}::uuid, ${context.organizationId}::uuid, ${roundId}::uuid, ${duty}, ${status},
+            ${participant.userId}::uuid, ${JSON.stringify(participant)}::jsonb)`;
+      }
+      return (await rounds.readProjection(tx, context.organizationId, context.problemId))!;
+    }) : await flow.start();
+    if (mode === 'LEGACY') {
+      expect(round.context).not.toHaveProperty('processManagement');
+      expect(round.duties).toEqual([
+        expect.objectContaining({ duty: 'PROFESSIONAL', status: 'PENDING', userId: flow.professional.user.id }),
+        expect.objectContaining({ duty: 'SECTION_MANAGER', status: 'PENDING', userId: flow.manager.user.id,
+          participant: expect.objectContaining({ bindingId: flow.managerBinding }) }),
+      ]);
+      await expect(flow.decide(flow.owner.actor, round, ['SECTION_MANAGER'])).rejects.toMatchObject({
+        status: 403, response: { code: 'WORKFLOW_NODE_FORBIDDEN' },
+      });
+    } else expect(round.context.processManagement).toBe(true);
+    const approvedDuty = losesManagement ? 'PROFESSIONAL' : 'SECTION_MANAGER';
+    const before = await flow.decide(losesManagement ? flow.professional.actor : flow.manager.actor, round, [approvedDuty]);
+    const approved = before.duties.find(duty => duty.duty === approvedDuty);
     expect(approved).toMatchObject({ status: 'APPROVED', comment: 'Verified' });
+    if (losesManagement) expect(before.duties[1]).toMatchObject({ status: 'PENDING', userId: affected.user.id });
     const signatureId = randomUUID(), approvalId = randomUUID();
     const fingerprint = createHash('sha256').update(signatureId).digest('hex');
     const signedDigest = createHash('sha256').update(flow.problem.id).digest('hex');
@@ -323,19 +405,46 @@ describe('REQ-0045 position deletion through the actual app and PostgreSQL', () 
         'EIGHT_D_REPORT',${flow.problem.id},1,${fingerprint},${signedDigest})`;
     const historicalApproval = await db.$queryRaw`SELECT * FROM approval_signatures WHERE id = ${approvalId}::uuid`;
     const unrelated = await position(flow.org.id, 'Unrelated appointment of the same reviewer');
-    await appoint(flow.org.id, flow.manager.user.id, unrelated.id);
+    await appoint(flow.org.id, losesManagement ? affected.user.id : flow.manager.user.id, unrelated.id);
     const unrelatedRoute = `${path(flow.org.id, unrelated.id)}/force-delete`;
     const unrelatedPreview = (await get(admin, unrelatedRoute).expect(200)).body;
     expect(unrelatedPreview.positionImpact.responsibilities).toEqual([]);
     const unrelatedDelete = await write(admin, 'post', unrelatedRoute, confirmation(unrelatedPreview)).expect(201);
     expect(unrelatedDelete.body.effects).toContainEqual({ module: 'workflow', changed: 0, pendingConfiguration: 0 });
     expect(await rounds.readProjection(db, flow.org.id, flow.problem.id)).toEqual(before);
-    const route = `${path(flow.org.id, flow.professional.position.id)}/force-delete`;
+    const route = `${path(flow.org.id, affected.position.id)}/force-delete`;
+    const submission = () => db.$queryRaw`SELECT submitted_at, professional_user_id FROM ${reports} WHERE problem_id = ${flow.problem.id}::uuid`;
     const preview = (await get(admin, route).expect(200)).body;
-    if (eligibility !== 'LEGACY') expect(preview.positionImpact.users).toEqual([
-      expect.objectContaining({ id: flow.professional.user.id, pendingConfiguration: false }),
+    expect(preview.positionImpact.users).toEqual([
+      expect.objectContaining({ id: affected.user.id, pendingConfiguration: eligibility === 'PENDING_CONFIGURATION'
+        || issuerLosesLastPosition || (losesManagement && !fallback) }),
     ]);
-    if (eligibility === 'KEEPS_CLOSURE') {
+    if (losesManagement) {
+      expect(preview.positionImpact.responsibilities).toEqual([{ source: 'WORKFLOW_CLOSURE', count: 1 }]);
+      const submitted = await submission();
+      expect(submitted).toEqual([{ submitted_at: expect.any(Date), professional_user_id: flow.professional.user.id }]);
+      const result = await write(admin, 'post', route, confirmation(preview)).expect(201);
+      if (issuerLosesLastPosition) {
+        expect(await db.user.findUniqueOrThrow({ where: { id: affected.user.id } })).toMatchObject({ status: 'DISABLED', configurationRequired: true });
+      }
+      expect(await rounds.readProjection(db, flow.org.id, flow.problem.id)).toEqual(before);
+      expect(await submission()).toEqual(submitted);
+      expect(result.body.effects).toContainEqual({ module: 'workflow', changed: 0, pendingConfiguration: 0 });
+      const reminder = app.get(ProcessEightDReminderService);
+      const [{ total }] = await db.$queryRaw<{ total: number }[]>`SELECT count(*)::int AS total FROM ${reports}`;
+      for (let page = 0; page <= Math.ceil(total / 100); page++) await reminder.poll(100);
+      const after = await rounds.readProjection(db, flow.org.id, flow.problem.id);
+      expect(after).toMatchObject({ id: before.id, version: before.version + 1, status: fallback ? 'PENDING' : 'APPROVED',
+        duties: fallback ? [approved, { id: before.duties[1]!.id, duty: 'MINISTER', status: 'PENDING', userId: fallback.user.id }] : [approved] });
+      expect(after?.duties[0]).toEqual(approved);
+      expect(await submission()).toEqual(submitted);
+      expect(await db.problemIndex.findUniqueOrThrow({ where: { id: flow.problem.id } })).toMatchObject({
+        status: mode === 'LEGACY' ? 'CLOSED' : flow.problem.status,
+      });
+      expect(await db.$queryRaw`SELECT * FROM approval_signatures WHERE id = ${approvalId}::uuid`).toEqual(historicalApproval);
+      return;
+    }
+    if (!invalidates) {
       expect(preview.positionImpact.responsibilities).toEqual([]);
       const result = await write(admin, 'post', route, confirmation(preview)).expect(201);
       expect(result.body.effects).toContainEqual({ module: 'workflow', changed: 0, pendingConfiguration: 0 });
@@ -349,8 +458,7 @@ describe('REQ-0045 position deletion through the actual app and PostgreSQL', () 
     const after = await rounds.readProjection(db, flow.org.id, flow.problem.id);
     expect(after).toMatchObject({ status: 'CANCELLED', duties: expect.arrayContaining([approved]) });
     expect(await db.workflowInstance.findUniqueOrThrow({ where: { id: flow.instance.id } })).toMatchObject({ currentNodeId: handling.id });
-    expect(await db.$queryRaw`SELECT submitted_at, professional_user_id FROM ${reports} WHERE problem_id = ${flow.problem.id}::uuid`)
-      .toEqual([{ submitted_at: null, professional_user_id: flow.professional.user.id }]);
+    expect(await submission()).toEqual([{ submitted_at: null, professional_user_id: flow.professional.user.id }]);
     expect(await db.$queryRaw`SELECT * FROM approval_signatures WHERE id = ${approvalId}::uuid`).toEqual(historicalApproval);
   }, 30_000);
 

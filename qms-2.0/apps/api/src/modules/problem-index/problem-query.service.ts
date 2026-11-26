@@ -8,6 +8,7 @@ import { workflowError } from '../workflow/workflow-runtime-policy.js';
 import { ProblemDomainRegistry, type ProblemDomainSummary, type ProblemFollowupFacts, type ProblemReadPurpose } from './problem-domain-registry.js';
 import { ProblemIndexQueryDto, ProcessFollowupQueryDto, type ProblemIndexPageResponseDto, type ProblemIndexResponseDto, type ProblemStatusCountDto, type ProcessFollowupPageResponseDto, type ProcessFollowupStage } from './problem-index.dto.js';
 import { summaryProjection } from './problem-domain-projection.js';
+import { parseProcessFollowupFilters, type ProcessFollowupFilterDto } from './process-followup-filter.dto.js';
 
 const indexColumns = Prisma.sql`p.id, p.organization_id AS "organizationId", p.report_number AS "reportNumber", p.domain_code AS "domainCode", p.problem_type AS "problemType", p.source_type AS "sourceType", p.source_id AS "sourceId", p.status, p.severity, p.responsible_party AS "responsibleParty", p.owner_id AS "ownerId", p.workflow_instance_id AS "workflowInstanceId", p.closed_at AS "closedAt", p.archived_at AS "archivedAt", p.version, p.created_by_id AS "createdById", p.updated_by_id AS "updatedById", p.created_at AS "createdAt", p.updated_at AS "updatedAt"`;
 const columns = Prisma.sql`${indexColumns}, p.due_at AS "dueAt"`;
@@ -17,6 +18,33 @@ type FollowupRow = ProblemIndex & ProblemFollowupFacts & { stage: ProcessFollowu
 function searchPattern(search?: string): string | undefined {
   const value = search?.trim();
   return value ? `%${value.replace(/[\\%_]/g, '\\$&')}%` : undefined;
+}
+
+function followupCondition(column: Prisma.Sql, { field, operator, value }: ProcessFollowupFilterDto): Prisma.Sql {
+  const isName = field === 'ownerName' || field === 'responsibleSectionName';
+  const filtered = isName ? Prisma.sql`NULLIF(BTRIM(${column}), '')` : column;
+  if (operator === 'EMPTY') return Prisma.sql`${filtered} IS NULL`;
+  if (operator === 'NOT_EMPTY') return Prisma.sql`${filtered} IS NOT NULL`;
+  const operand = value!.trim();
+  switch (operator) {
+    case 'CONTAINS': return Prisma.sql`${filtered} ILIKE ${searchPattern(operand)}`;
+    case 'NOT_CONTAINS': return Prisma.sql`${filtered} NOT ILIKE ${searchPattern(operand)}`;
+    case 'GTE': return Prisma.sql`${filtered} >= ${new Date(operand)}`;
+    case 'LTE': return Prisma.sql`${filtered} <= ${new Date(operand)}`;
+    case 'AFTER': return Prisma.sql`${filtered} > ${new Date(operand)}`;
+    case 'BEFORE': return Prisma.sql`${filtered} < ${new Date(operand)}`;
+    case 'EQ':
+    case 'NE': {
+      if (field === 'dueAt') {
+        const minute = Math.floor(Date.parse(operand) / 60_000) * 60_000;
+        const matches = Prisma.sql`${filtered} >= ${new Date(minute)} AND ${filtered} < ${new Date(minute + 60_000)}`;
+        return operator === 'EQ' ? Prisma.sql`(${matches})` : Prisma.sql`NOT (${matches})`;
+      }
+      const left = isName ? Prisma.sql`LOWER(${filtered})` : filtered;
+      const right = isName ? Prisma.sql`LOWER(${operand})` : Prisma.sql`${operand}`;
+      return operator === 'EQ' ? Prisma.sql`${left} = ${right}` : Prisma.sql`${left} <> ${right}`;
+    }
+  }
 }
 
 async function readPage<Row>(tx: Prisma.TransactionClient, eligible: Prisma.Sql, query: Pick<ProblemIndexQueryDto, 'page' | 'pageSize' | 'sortBy' | 'sortDirection'>) {
@@ -101,6 +129,7 @@ export class ProblemQueryService {
   async listProcessFollowup(actor: WorkflowActor, query: ProcessFollowupQueryDto): Promise<ProcessFollowupPageResponseDto> {
     const checked = Object.assign(new ProcessFollowupQueryDto(), query);
     if (validateSync(checked, { whitelist: true, forbidNonWhitelisted: true }).length || (query.dueFrom && query.dueTo && new Date(query.dueFrom) > new Date(query.dueTo))) throw new BadRequestException();
+    const filterGroup = parseProcessFollowupFilters(checked.filters);
     const organizationId = query.organizationId ?? actor.organizationId;
     const { sql, predicate } = this.registry.followup('process-quality', 'process-defect', actor, organizationId);
     const conditions = [Prisma.sql`p.organization_id = ${organizationId}::uuid`, predicate];
@@ -118,6 +147,12 @@ export class ProblemQueryService {
     if (query.dueFrom) conditions.push(Prisma.sql`${sql.dueAt} >= ${new Date(query.dueFrom)}`);
     if (query.dueTo) conditions.push(Prisma.sql`${sql.dueAt} <= ${new Date(query.dueTo)}`);
     if (query.overdueAt) conditions.push(Prisma.sql`${sql.dueAt} < ${new Date(query.overdueAt)}`);
+    if (filterGroup) {
+      const filterColumns = { stage: sql.stage, status: Prisma.sql`p.status::text`, severity: Prisma.sql`p.severity`,
+        responsibleSectionName: sql.sectionName, ownerName: sql.ownerName, dueAt: sql.dueAt };
+      const grouped = filterGroup.items.map(item => followupCondition(filterColumns[item.field], item));
+      conditions.push(Prisma.sql`(${Prisma.join(grouped, filterGroup.logic === 'ANY' ? ' OR ' : ' AND ')})`);
+    }
     return this.prisma.$transaction(async (tx) => {
       await this.authenticate(tx, actor, organizationId);
       await sql.authorize(tx);

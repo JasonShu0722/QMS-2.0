@@ -12,7 +12,7 @@ import { assertWorkflowFeature, canProcessWorkflowNode, featurePredicate, type W
 import { WorkflowClosureRegistry } from './workflow-closure-registry.js';
 import { planWorkflowClosure, type WorkflowClosureParticipant, type WorkflowClosurePlan } from './workflow-closure-policy.js';
 import { canonical, jsonObject, workflowError } from './workflow-runtime-policy.js';
-import type { WorkflowClosureAdapter, WorkflowClosureCancelInput, WorkflowClosureContext, WorkflowClosureDecideInput, WorkflowClosureDuty, WorkflowClosureDutyProjection, WorkflowClosureDutyRecord, WorkflowClosureOperation, WorkflowClosureRound, WorkflowClosureSnapshot, WorkflowClosureStartInput, WorkflowSupplierSubmissionInput } from './workflow-closure-round.types.js';
+import type { WorkflowClosureAdapter, WorkflowClosureCancelInput, WorkflowClosureContext, WorkflowClosureDecideInput, WorkflowClosureDuty, WorkflowClosureDutyProjection, WorkflowClosureDutyRecord, WorkflowClosureFlowRecord, WorkflowClosureOperation, WorkflowClosureRound, WorkflowClosureSnapshot, WorkflowClosureStartInput, WorkflowSupplierSubmissionInput } from './workflow-closure-round.types.js';
 
 const roundColumns = Prisma.sql`id, organization_id AS "organizationId", problem_id AS "problemId", instance_id AS "instanceId",
   workflow_version_id AS "workflowVersionId", node_id AS "nodeId", content_version AS "contentVersion", content_snapshot AS "contentSnapshot",
@@ -107,7 +107,7 @@ export class WorkflowClosureRoundService {
     const plan = await this.plan(tx, context);
     const current = await this.readProjection(tx, context.organizationId, problemId);
     await this.authorize(tx, actor);
-    return { adapter, snapshot: { context, plan, current, sourcesCurrent: active && !!current && this.sameSources(current, context, plan) } };
+    return { adapter, active, snapshot: { context, plan, current, sourcesCurrent: active && !!current && this.sameSources(current, context, plan) } };
   }
 
   // Server-side facts only: callers must authorize their own reader and recheck eligibility before delivery.
@@ -126,11 +126,60 @@ export class WorkflowClosureRoundService {
     return Promise.all(rows.map(row => this.hydrate(tx, row)));
   }
 
+  async reconcileProcessManagement(tx: Prisma.TransactionClient, context: WorkflowClosureContext): Promise<boolean> {
+    const adapter = this.registry.get('process-quality');
+    if (!adapter.completeProcessAfterManagementSkip) return false;
+    const { active } = await this.validateContext(tx, context.organizationId, context.problemId, context, adapter, true);
+    if (!active) return false;
+    const saved = await this.readProjection(tx, context.organizationId, context.problemId);
+    if (!saved || saved.status !== 'PENDING' || !this.sameRoundFacts(saved, context)) return false;
+    const management = saved.duties.find(duty => duty.duty !== 'PROFESSIONAL' && duty.status === 'PENDING');
+    const professional = saved.duties.find(duty => duty.duty === 'PROFESSIONAL');
+    if (!management || !professional) return false;
+    if (!saved.context.processManagement) {
+      const legacy = await this.plan(tx, { ...context, processManagement: undefined });
+      if (this.samePendingSource(management, legacy) && await this.processParticipantEligible(tx, context.organizationId, management.userId)) return false;
+    }
+    const processContext: WorkflowClosureContext = { ...context, processManagement: true };
+    const plan = await this.planProcessClosure(tx, processContext, management.participant?.scopeId);
+    const replacement = plan.duties.find(duty => duty.duty === management.duty);
+    if (replacement?.participant && canonical(replacement.participant) === canonical(management.participant) && replacement.status === 'PENDING') return false;
+    const current = await this.round(tx, context.organizationId, saved.id, true);
+    if (current?.version !== saved.version || current.status !== 'PENDING') workflowError('CONCURRENCY_CONFLICT', 409);
+    const updated = replacement?.participant
+      ? await tx.$executeRaw`UPDATE workflow_closure_duties SET user_id = ${replacement.participant.userId}::uuid,
+          participant = ${JSON.stringify(replacement.participant)}::jsonb, status = ${replacement.status}, version = version + 1
+          WHERE id = ${management.id}::uuid AND round_id = ${current.id}::uuid AND status = 'PENDING'`
+      : await tx.$executeRaw`DELETE FROM workflow_closure_duties WHERE id = ${management.id}::uuid AND round_id = ${current.id}::uuid AND status = 'PENDING'`;
+    if (updated !== 1) workflowError('CONCURRENCY_CONFLICT', 409);
+    const records = await this.recordProcessDispatch(tx, context.organizationId, { ...plan,
+      duties: replacement ? [replacement] : [], managementEvent: plan.managementEvent ?? (replacement?.status === 'PENDING' ? { content: '审核职责已变更，重新分配管理审核' } : undefined) });
+    const history = current.context.flowRecords ?? [];
+    if (!current.context.processManagement) {
+      const priorReviewer = await this.processDisplayName(tx, context.organizationId, management.userId);
+      history.push({ occurredAt: current.createdAt, person: '系统', content: `管理审核派给${priorReviewer}` });
+    }
+    const complete = professional.status === 'APPROVED' && replacement?.status !== 'PENDING';
+    await tx.$executeRaw`UPDATE workflow_closure_rounds SET context = context || ${JSON.stringify({
+      processManagement: true, flowRecords: [...history, ...records], ...(complete ? { closedAfterManagementSkip: true } : {}),
+    })}::jsonb WHERE id = ${current.id}::uuid`;
+    await this.bump(tx, current, complete ? 'APPROVED' : 'PENDING');
+    if (complete) await adapter.completeProcessAfterManagementSkip(tx, processContext);
+    const version = current.version + 1;
+    await this.audit.record({ organizationId: context.organizationId, action: 'WORKFLOW_CLOSURE_CHANGED', resourceType: 'WorkflowClosureRound',
+      resourceId: current.id, outcome: 'SUCCESS', traceId: randomUUID(), metadata: { status: complete ? 'APPROVED' : 'PENDING', resourceVersion: version } }, tx);
+    await this.outbox.enqueue({ eventKey: `closure:${current.id}:${version}`, eventType: 'WORKFLOW_CLOSURE_CHANGED',
+      aggregateType: 'WorkflowClosureRound', aggregateId: current.id, payload: { schemaVersion: 1,
+        organizationId: current.organizationId, problemId: current.problemId, roundId: current.id, roundVersion: version } }, tx);
+    return true;
+  }
+
   async eligible(tx: Prisma.TransactionClient, actor: WorkflowActor, snapshot: WorkflowClosureSnapshot, duty: WorkflowClosureDuty): Promise<boolean> {
     try {
-      const { snapshot: fresh, adapter } = await this.snapshotWithAdapter(tx, actor, snapshot.context.problemId);
-      if (!fresh.sourcesCurrent || fresh.current?.id !== snapshot.current?.id || fresh.current?.version !== snapshot.current?.version) return false;
-      return this.pendingFor(fresh.current!, actor, duty)
+      const { snapshot: fresh, adapter, active } = await this.snapshotWithAdapter(tx, actor, snapshot.context.problemId);
+      if (!active || !fresh.current || fresh.current.id !== snapshot.current?.id || fresh.current.version !== snapshot.current.version) return false;
+      return this.pendingFor(fresh.current, actor, duty)
+        && this.dutySourceCurrent(adapter, fresh, duty)
         && (!adapter.isParticipantStageEligible || await adapter.isParticipantStageEligible(tx, fresh.context, actor.id));
     } catch (error) {
       if (error instanceof HttpException && [401, 403, 404, 409].includes(error.getStatus())) return false;
@@ -147,11 +196,11 @@ export class WorkflowClosureRoundService {
       const results: WorkflowClosureDutyProjection[] = [];
       for (const candidate of candidates) {
         try {
-          const { snapshot, adapter } = await this.snapshotWithAdapter(tx, actor, candidate.problemId);
-          if (!snapshot.sourcesCurrent || !snapshot.current) continue;
+          const { snapshot, adapter, active } = await this.snapshotWithAdapter(tx, actor, candidate.problemId);
+          if (!active || !snapshot.current) continue;
           if (adapter.isParticipantStageEligible && !await adapter.isParticipantStageEligible(tx, snapshot.context, actor.id)) continue;
           const r = snapshot.current;
-          for (const duty of r.duties.filter(d => this.pendingFor(r, actor, d.duty))) {
+          for (const duty of r.duties.filter(d => this.pendingFor(r, actor, d.duty) && this.dutySourceCurrent(adapter, snapshot, d.duty))) {
             results.push({ organizationId: r.organizationId, problemId: r.problemId, roundId: r.id, roundVersion: r.version, roundNumber: r.roundNumber,
               duty: duty.duty, participant: duty.participant,
               samePersonDuties: snapshot.plan.samePersonGroups.find(group => group.userId === actor.id)?.duties ?? [] });
@@ -176,7 +225,7 @@ export class WorkflowClosureRoundService {
     if (!adapter.canNotifyRecipient) return [];
     const current = await this.readProjection(tx, organizationId, problemId);
     if (!current || current.id !== roundId || current.version !== roundVersion || current.status !== 'PENDING') return [];
-    const c = current.context;
+    const { flowRecords: _flowRecords, closedAfterManagementSkip: _closedAfterManagementSkip, ...c } = current.context;
     if (c.organizationId !== organizationId || c.problemId !== problemId || problem.workflowInstanceId !== current.instanceId) return [];
     await tx.$queryRaw`SELECT id FROM workflow_instances WHERE organization_id = ${organizationId}::uuid AND id = ${current.instanceId}::uuid FOR SHARE`;
     const instance = await tx.workflowInstance.findFirst({ where: { id: current.instanceId, organizationId }, include: { currentNode: true, workflowVersion: true } });
@@ -191,9 +240,9 @@ export class WorkflowClosureRoundService {
       || gate.schemaVersion !== 1 || gate.policy !== c.policy || gate.domainCode !== adapter.domainCode) return [];
     await adapter.lockParticipantStageConfiguration?.(tx, c);
     const plan = await this.plan(tx, c);
-    if (!this.sameSources(current, c, plan)) return [];
+    const snapshot = { context: c, current, plan, sourcesCurrent: this.sameSources(current, c, plan) };
     const recipients: string[] = [];
-    for (const userId of new Set(current.duties.filter(d => d.status === 'PENDING').map(d => d.userId))) {
+    for (const userId of new Set(current.duties.filter(d => d.status === 'PENDING' && this.dutySourceCurrent(adapter, snapshot, d.duty)).map(d => d.userId))) {
       const user = await tx.user.findFirst({ where: { id: userId, organizationId, accountType: 'INTERNAL', status: 'ACTIVE', organization: { status: 'ACTIVE', type: 'INTERNAL' } }, select: { id: true } });
       if (!user || !await canProcessWorkflowNode(tx, userId, organizationId, { assigneeUserId: userId })) continue;
       if (adapter.isParticipantStageEligible && !await adapter.isParticipantStageEligible(tx, c, userId)) continue;
@@ -223,7 +272,8 @@ export class WorkflowClosureRoundService {
       // The adapter locks problem -> instance -> domain content. Resolver then locks users -> structure.
       // All subsequent identity checks are reads, never a late actor FOR UPDATE.
       const { context, adapter, active } = await this.context(tx, actor, problemId, operation, !receipt);
-      const plan = await this.plan(tx, context);
+      const plan = await this.plan(tx, receipt && adapter.domainCode === 'process-quality'
+        ? { ...context, processManagement: receipt.response.context.processManagement } : context);
       await this.authorize(tx, actor);
       if (operation === 'SUBMIT') await this.assertOwner(tx, actor, context);
       if (receipt) {
@@ -238,7 +288,8 @@ export class WorkflowClosureRoundService {
         if (body.expectedContentVersion !== context.contentVersion || body.expectedInstanceVersion !== context.instanceVersion) workflowError('CONCURRENCY_CONFLICT', 409);
         const current = await this.readProjection(tx, context.organizationId, problemId);
         if (current?.status === 'PENDING') {
-          if (this.sameSources(current, context, plan)) workflowError('CONCURRENCY_CONFLICT', 409);
+          if (this.sameSources(current, context, plan)
+            || adapter.domainCode === 'process-quality' && this.sameRoundFacts(current, context)) workflowError('CONCURRENCY_CONFLICT', 409);
           result = await this.endRound(tx, actor, current, context, adapter, 'CANCELLED', 'SOURCE_CHANGED');
         } else {
           await adapter.assertStartParticipants?.(tx, context, plan);
@@ -256,9 +307,13 @@ export class WorkflowClosureRoundService {
             const stored = current.duties.find(d => d.duty === duty);
             if (stored?.userId !== actor.id) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
             if (stored.status !== 'PENDING') workflowError('WORKFLOW_ACTION_INVALID', 409);
+            if (adapter.domainCode === 'process-quality' && this.sameRoundFacts(current, context)
+              && (!this.samePendingSource(stored, plan) || !await this.processParticipantEligible(tx, context.organizationId, actor.id))) {
+              workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
+            }
           }
         }
-        if (!this.sameSources(current, context, plan)) {
+        if (!(adapter.domainCode === 'process-quality' ? this.sameRoundFacts(current, context) : this.sameSources(current, context, plan))) {
           result = await this.endRound(tx, actor, current, context, adapter, 'CANCELLED', 'SOURCE_CHANGED');
         } else if (operation === 'CANCEL') {
           result = await this.endRound(tx, actor, current, context, adapter, 'CANCELLED', (input as WorkflowClosureCancelInput).reason);
@@ -309,7 +364,8 @@ export class WorkflowClosureRoundService {
     return { context, adapter, active };
   }
 
-  async plan(tx: Prisma.TransactionClient, c: Pick<WorkflowClosureContext, 'organizationId' | 'responsibleSectionDepartmentId' | 'professionalUserId' | 'ownerUserId' | 'policy' | 'severity'>): Promise<WorkflowClosurePlan> {
+  async plan(tx: Prisma.TransactionClient, c: Pick<WorkflowClosureContext, 'organizationId' | 'responsibleSectionDepartmentId' | 'professionalUserId' | 'ownerUserId' | 'policy' | 'severity' | 'processManagement'>): Promise<WorkflowClosurePlan> {
+    if (c.processManagement) return this.planProcessClosure(tx, c);
     const management = await this.responsibilities.resolveManagementResponsibilities(tx, c.organizationId, c.responsibleSectionDepartmentId);
     // Resolver time precedes lock waits. Revalidate only its locked identities, never resolve new users after structure locks.
     const now = new Date();
@@ -325,6 +381,24 @@ export class WorkflowClosureRoundService {
         bindingId: source.bindingId, bindingVersion: source.bindingVersion, scopeId: source.scopeId, scopeVersion: source.scopeVersion } : null;
     };
     return planWorkflowClosure({ policy: c.policy, severity: c.severity, ownerUserId: c.ownerUserId, professional, sectionManager: participant('SECTION_MANAGER'), minister: participant('MINISTER') });
+  }
+
+  private async planProcessClosure(tx: Prisma.TransactionClient, c: Pick<WorkflowClosureContext, 'organizationId' | 'responsibleSectionDepartmentId' | 'professionalUserId' | 'ownerUserId' | 'severity'>,
+    previousScopeId?: string | null) {
+    const eligible = (userId: string) => this.processParticipantEligible(tx, c.organizationId, userId);
+    const highRisk = ['HIGH', 'CRITICAL'].includes(c.severity);
+    const processManagement = await this.responsibilities.resolveProcessClosureManagement(tx, c.organizationId, c.responsibleSectionDepartmentId, highRisk, eligible, [c.professionalUserId], previousScopeId);
+    const professionalActive = await tx.user.findFirst({ where: { id: c.professionalUserId, organizationId: c.organizationId, status: 'ACTIVE', accountType: 'INTERNAL',
+      deletedAt: null, configurationRequired: false }, select: { id: true } });
+    const professional: WorkflowClosureParticipant | null = professionalActive && await eligible(c.professionalUserId)
+      ? { userId: c.professionalUserId, assignmentId: null, positionId: null, departmentId: null, bindingId: null, scopeId: null, bindingVersion: null, scopeVersion: null } : null;
+    return planWorkflowClosure({ ...c, policy: 'INTERNAL', professional, sectionManager: null, minister: null, processManagement });
+  }
+
+  private async processParticipantEligible(tx: Prisma.TransactionClient, organizationId: string, userId: string): Promise<boolean> {
+    if (!await canProcessWorkflowNode(tx, userId, organizationId, { assigneeUserId: userId })) return false;
+    const [result] = await tx.$queryRaw<{ allowed: boolean }[]>(Prisma.sql`SELECT ${featurePredicate(Prisma.sql`${userId}::uuid`, Prisma.sql`${organizationId}::uuid`, Prisma.sql`'process-quality:issues:read'`)} AS allowed`);
+    return result?.allowed === true;
   }
 
   async assertActor(tx: Prisma.TransactionClient, actor: WorkflowActor): Promise<void> {
@@ -350,16 +424,35 @@ export class WorkflowClosureRoundService {
     if (!assignment) workflowError('WORKFLOW_NODE_FORBIDDEN', 403);
   }
 
-  private sameSources(round: WorkflowClosureRound, c: WorkflowClosureContext, plan: WorkflowClosurePlan): boolean {
+  private sameRoundFacts(round: WorkflowClosureRound, c: WorkflowClosureContext): boolean {
     const previous = round.context;
     return round.instanceId === c.instanceId && round.workflowVersionId === c.workflowVersionId && round.nodeId === c.currentNodeId
       && round.contentVersion === c.contentVersion && previous.instanceVersion === c.instanceVersion
       && canonical(round.contentSnapshot) === canonical(c.content)
       && previous.ownerUserId === c.ownerUserId && previous.professionalUserId === c.professionalUserId
-      && previous.responsibleSectionDepartmentId === c.responsibleSectionDepartmentId && previous.policy === c.policy
-      && round.duties.length === plan.duties.length && plan.duties.every(d => d.participant !== null
+      && previous.responsibleSectionDepartmentId === c.responsibleSectionDepartmentId && previous.policy === c.policy && previous.severity === c.severity;
+  }
+
+  private sameSources(round: WorkflowClosureRound, c: WorkflowClosureContext, plan: WorkflowClosurePlan): boolean {
+    if (!this.sameRoundFacts(round, c)) return false;
+    if (round.context.processManagement && c.processManagement) {
+      return round.duties.filter(duty => duty.status === 'PENDING' || duty.status === 'WAITING').every(duty => this.samePendingSource(duty, plan));
+    }
+    return round.duties.length === plan.duties.length && plan.duties.every(d => d.participant !== null
         && canonical(d.participant) === canonical(round.duties.find(old => old.duty === d.duty)?.participant)
         && (d.status === 'SKIPPED_SAME_PERSON') === (round.duties.find(old => old.duty === d.duty)?.status === 'SKIPPED_SAME_PERSON'));
+  }
+
+  private samePendingSource(duty: WorkflowClosureDutyRecord, plan: WorkflowClosurePlan): boolean {
+    const live = plan.duties.find(candidate => candidate.duty === duty.duty);
+    return live?.status === duty.status && canonical(live.participant) === canonical(duty.participant);
+  }
+
+  private dutySourceCurrent(adapter: WorkflowClosureAdapter, snapshot: WorkflowClosureSnapshot, duty: WorkflowClosureDuty): boolean {
+    if (adapter.domainCode !== 'process-quality') return snapshot.sourcesCurrent;
+    const { current, context, plan } = snapshot;
+    const stored = current?.duties.find(candidate => candidate.duty === duty);
+    return !!current && !!stored && this.sameRoundFacts(current, context) && this.samePendingSource(stored, plan);
   }
 
   private pendingFor(round: WorkflowClosureRound, actor: WorkflowActor, duty: WorkflowClosureDuty): boolean {
@@ -377,14 +470,36 @@ export class WorkflowClosureRoundService {
 
   private async createRound(tx: Prisma.TransactionClient, actor: WorkflowActor, c: WorkflowClosureContext, plan: WorkflowClosurePlan, roundNumber: number, supplierResponseRevisionId: string | null = null) {
     const id = randomUUID();
+    const context = c.processManagement ? { ...c, flowRecords: await this.recordProcessDispatch(tx, c.organizationId, plan) } : c;
     await tx.$executeRaw`INSERT INTO workflow_closure_rounds (id, organization_id, problem_id, instance_id, workflow_version_id, node_id, content_version, content_snapshot, context, round_number, created_by, creator_organization_id, supplier_response_revision_id)
       VALUES (${id}::uuid, ${c.organizationId}::uuid, ${c.problemId}::uuid, ${c.instanceId}::uuid, ${c.workflowVersionId}::uuid, ${c.currentNodeId}::uuid,
-        ${c.contentVersion}, ${JSON.stringify(c.content)}::jsonb, ${JSON.stringify(c)}::jsonb, ${roundNumber}, ${actor.id}::uuid, ${actor.organizationId}::uuid, ${supplierResponseRevisionId}::uuid)`;
+        ${c.contentVersion}, ${JSON.stringify(c.content)}::jsonb, ${JSON.stringify(context)}::jsonb, ${roundNumber}, ${actor.id}::uuid, ${actor.organizationId}::uuid, ${supplierResponseRevisionId}::uuid)`;
     for (const d of plan.duties) {
       await tx.$executeRaw`INSERT INTO workflow_closure_duties (id, organization_id, round_id, duty, status, user_id, participant)
         VALUES (${randomUUID()}::uuid, ${c.organizationId}::uuid, ${id}::uuid, ${d.duty}, ${d.status}, ${d.participant!.userId}::uuid, ${JSON.stringify(d.participant)}::jsonb)`;
     }
     return (await this.round(tx, c.organizationId, id))!;
+  }
+
+  private async processDisplayName(tx: Prisma.TransactionClient, organizationId: string, userId: string) {
+    const user = await tx.user.findFirst({ where: { id: userId, organizationId }, select: { fullName: true, username: true } });
+    return user?.fullName?.trim() || user?.username || userId;
+  }
+
+  private async recordProcessDispatch(tx: Prisma.TransactionClient, organizationId: string, plan: WorkflowClosurePlan): Promise<WorkflowClosureFlowRecord[]> {
+    const [time] = await tx.$queryRaw<{ now: Date }[]>`SELECT CURRENT_TIMESTAMP AS now`;
+    const occurredAt = time!.now.toISOString();
+    const records: WorkflowClosureFlowRecord[] = [];
+    for (const duty of plan.duties) {
+      if (!duty.participant) continue;
+      const name = await this.processDisplayName(tx, organizationId, duty.participant.userId);
+      const label = duty.duty === 'PROFESSIONAL' ? '专业审核' : '管理审核';
+      if (duty.duty !== 'PROFESSIONAL' && plan.managementEvent) records.push({ occurredAt, person: '系统', content: plan.managementEvent.content });
+      records.push({ occurredAt, person: '系统', content: duty.status === 'SKIPPED_SAME_PERSON'
+        ? `${name}为问题负责人，跳过管理审核` : `${label}派给${name}` });
+    }
+    if (!plan.duties.some(duty => duty.duty !== 'PROFESSIONAL') && plan.managementEvent) records.push({ occurredAt, person: '系统', content: plan.managementEvent.content });
+    return records;
   }
 
   private async applyDecision(tx: Prisma.TransactionClient, actor: WorkflowActor, r: WorkflowClosureRound, c: WorkflowClosureContext, plan: WorkflowClosurePlan, adapter: WorkflowClosureAdapter, body: WorkflowClosureDecideInput) {

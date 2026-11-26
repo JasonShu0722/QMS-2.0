@@ -17,6 +17,7 @@ export type WorkflowDeadlineContext = {
   ownerNodeId: string;
   ownerUserId: string;
   professionalUserId: string;
+  processProfessionalAdminFallback?: true;
   responsibleSectionDepartmentId: string;
   analysisDueAt: string | null;
   submissionDueAt: string | null;
