@@ -2,6 +2,7 @@ import type { OnModuleInit } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import { Prisma, type ProblemIndex, type WorkflowInstance } from '../../generated/prisma/client.js';
 import type { FileActor, FileResourceAccess, FileResourceAccessAdapter, FileResourceAction, FileResourceRef } from '../../modules/file-management/file-resource-access.js';
+import { completedD7EvidenceRows } from '../../modules/process-quality/process-eight-d-document.js';
 import { DomainProblemReadAdapter } from '../../modules/problem-index/domain-problem-read.adapter.js';
 import type { DomainSourceResponseForm } from '../../modules/problem-index/domain-source-issue.service.js';
 import type { ProblemDomainRegistry, ProblemDomainReadAdapter, ProblemDomainReadContext, ProblemDomainSummary } from '../../modules/problem-index/problem-domain-registry.js';
@@ -68,7 +69,8 @@ export class InternalEightDFileAdapter implements FileResourceAccessAdapter, OnM
     const record = await this.service.lockRecord(tx, reader, resource.resourceId, action === 'read' ? 'READ' : 'EDIT');
     if (action === 'read') await this.service.authorizeRead(tx, reader, record);
     else await this.service.authorizeEdit(tx, actor, record);
-    return { organizationId: record.problem.organizationId, version: record.report.version };
+    return { organizationId: record.problem.organizationId, version: record.report.version,
+      ...(action === 'delete' ? { requiredEvidenceRows: completedD7EvidenceRows(record.report.document) } : {}) };
   }
 }
 

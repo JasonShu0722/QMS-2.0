@@ -2,7 +2,7 @@ import { HttpException, Inject, Injectable, Optional } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { isUUID, validateSync } from 'class-validator';
 import { plainToInstance } from 'class-transformer';
-import { Prisma, type WorkflowNode } from '../../generated/prisma/client.js';
+import { Prisma, type FileObject, type WorkflowNode } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { ControlledValidationException } from '../../common/contracts/controlled-validation.exception.js';
 import { adminPermissions, assertAdminAccess } from '../../common/security/admin-mutation.service.js';
@@ -14,6 +14,7 @@ import { assertActiveAuthentication, assertRecentAuthentication, isSecurityConcu
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { FileResourceAccess } from '../file-management/file-resource-access.js';
 import { OrganizationResponsibilityService } from '../organization/organization-responsibility.service.js';
+import { readOrganizationMemberOptions, resolveOrganizationMemberSnapshots } from '../organization/organization-member-directory.read-model.js';
 import { DomainSourceIssueService, type DomainSourceRecord, type DomainSourceReference } from '../problem-index/domain-source-issue.service.js';
 import { DomainSourceLinkService } from '../problem-index/domain-source-link.service.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
@@ -33,7 +34,8 @@ import { ProcessDefectLedgerService } from './process-defect-ledger.service.js';
 import { ProcessEightDWorkflowConfigurationService } from './process-eight-d-workflow-configuration.service.js';
 import { assertInternalEightDDomain, INTERNAL_EIGHT_D_DOMAIN, INTERNAL_EIGHT_D_DOMAINS, internalEightDSql, type InternalEightDDomainDescriptor } from '../../common/eight-d/internal-eight-d-domain.js';
 import type { InternalEightDSourcePort } from './process-eight-d.types.js';
-import { analysisCompletionIssues, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from './process-eight-d-document.js';
+import { analysisCompletionIssues, completedD7EvidenceIssues, completedD7EvidenceRows, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from './process-eight-d-document.js';
+import type { InternalEightDTeamOptionsQueryDto } from './process-eight-d-document-team.dto.js';
 import { PROCESS_EIGHT_D_MAX_FILES } from './process-eight-d-document.dto.js';
 import { assertEightDSources, assertProcessIssueRecurrence, assertSourceConfirmation, eightDError as workflowError, eightDRequestDigest, resolveProcessIssueBoard, resolveProcessIssueTitle } from './process-eight-d-policy.js';
 import type { IssueProcessEightDInput, ProcessEightDActor, ProcessEightDPurpose, ProcessEightDRecord, ProcessEightDReport, ProcessEightDRevision, ProcessEightDSourceConfirmation, ProcessEightDStage, ProcessEightDVersionInput, SaveProcessEightDInput } from './process-eight-d.types.js';
@@ -274,6 +276,15 @@ export class ProcessEightDService {
       const record = await this.lockRecord(tx, actor, problemId, 'READ');
       await this.authorizeRead(tx, actor, record);
       return this.reportModel(tx, actor, record);
+    });
+  }
+
+  async teamOptions(actor: ProcessEightDActor, problemId: string, query: InternalEightDTeamOptionsQueryDto) {
+    this.scope(actor);
+    return this.transaction(async tx => {
+      const record = await this.lockRecord(tx, actor, problemId, 'READ');
+      await this.authorizeEdit(tx, actor, record);
+      return readOrganizationMemberOptions(tx, record.problem.organizationId, 'INTERNAL', query);
     });
   }
 
@@ -544,6 +555,12 @@ export class ProcessEightDService {
     catch (error) { if (error instanceof ProcessEightDDocumentError) throw new ControlledValidationException('PROCESS_EIGHT_D_DOCUMENT_INVALID', error.issues); throw error; }
     return this.command(actor, problemId, input, 'SAVE', key, traceId, async (tx, record) => {
       await this.authorizeEdit(tx, actor, record);
+      const teamIssues = await resolveOrganizationMemberSnapshots(tx, record.problem.organizationId, 'INTERNAL', document.team, record.report.document.team);
+      if (teamIssues.length) throw new ControlledValidationException('PROCESS_EIGHT_D_DOCUMENT_INVALID', teamIssues);
+      const changedEvidence = completedD7EvidenceRows(document, record.report.document).flatMap(row => row.fileIds);
+      const available = (await this.evidenceRows(tx, record, changedEvidence, true)).filter(this.verifiedEvidence);
+      const issues = completedD7EvidenceIssues(document, new Set(available.map(file => file.id)), record.report.document);
+      if (issues.length) throw new ControlledValidationException('PROCESS_EIGHT_D_DOCUMENT_INVALID', issues);
       await this.assertEvidence(tx, actor, record, documentFileIds(document), false);
       if (canonical(document) === canonical(record.report.document)) return;
       const plan = (d: typeof document) => ({ analysisProcess: d.analysisProcess, occurrenceCause: d.occurrenceCause, escapeCause: d.escapeCause, systemCause: d.systemCause,
@@ -672,10 +689,9 @@ export class ProcessEightDService {
     return this.command(actor, problemId, input, 'SUBMIT', key, traceId, async (tx, record) => {
       await this.authorizeEdit(tx, actor, record); this.owner(actor, record);
       await this.authorize(tx, actor, 'workflow:act');
-      const issues = submissionIssues(record.report.document);
-      if (!record.report.analysisCompletedAt || !record.report.submissionDueAt) issues.push({ path: 'analysisCompletedAt', message: '需由负责人先确认分析完成并明确完整提交计划' });
+      const issues = submissionIssues(record.report.document, record.report);
       if (issues.length) throw new ControlledValidationException('PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE', issues);
-      await this.assertEvidence(tx, actor, record, documentFileIds(record.report.document));
+      await this.assertEvidence(tx, actor, record, documentFileIds(record.report.document), true, true);
       const edges = await tx.workflowTransition.findMany({ where: { organizationId: actor.organizationId, workflowVersionId: record.instance.workflowVersionId, fromNodeId: record.node.id, action: 'SUBMIT' }, include: { toNode: true } });
       if (edges.length !== 1 || !isClosureReviewNode(edges[0]!.toNode) || !matchesCondition(edges[0]!.condition, record.problem)) workflowError('WORKFLOW_TRANSITION_AMBIGUOUS', 409);
       await this.updateReport(tx, actor, record, Prisma.sql`submitted_at = CURRENT_TIMESTAMP`, false);
@@ -962,6 +978,9 @@ export class ProcessEightDService {
   async reportModel(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord) {
     const { problem, instance, report } = record;
     const sources = await tx.domainSourceIssueLink.findMany({ where: { organizationId: problem.organizationId, problemIndexId: problem.id, removedAt: null }, orderBy: { sourceId: 'asc' } });
+    const allowedActions = await this.allowedActions(tx, actor, record);
+    const issues = allowedActions.includes('save') ? submissionIssues(report.document, report,
+      new Set((await this.evidenceRows(tx, record, documentFileIds(report.document), true)).filter(this.verifiedEvidence).map(file => file.id))) : undefined;
     return { problemId: problem.id, reportNumber: problem.reportNumber, organizationId: problem.organizationId, instanceId: instance.id, workflowVersionId: instance.workflowVersionId,
       instanceVersion: instance.version, problemVersion: problem.version, version: report.version, contentVersion: report.contentVersion,
       status: report.closedRevisionId ? 'CLOSED' : isClosureReviewNode(record.node) ? 'IN_REVIEW' : 'PROCESSING', severity: problem.severity,
@@ -971,7 +990,7 @@ export class ProcessEightDService {
       submissionDueAt: iso(report.submissionDueAt), closureDueAt: iso(report.closureDueAt), submittedAt: iso(report.submittedAt), closedRevisionId: report.closedRevisionId,
       sources: sources.map(s => ({ defectId: s.sourceId, sourceVersion: s.sourceVersion, snapshot: s.sourceSnapshot, primary: s.sourceId === problem.sourceId })),
       revisions: (await this.revisions(tx, record)).map(r => ({ id: r.id, contentVersion: r.contentVersion, recordedAt: r.recordedAt.toISOString() })),
-      allowedActions: await this.allowedActions(tx, actor, record) };
+      allowedActions, ...(issues ? { submissionIssues: issues } : {}) };
   }
 
   private async fullSnapshot(tx: Prisma.TransactionClient, record: ProcessEightDRecord) {
@@ -1111,23 +1130,36 @@ export class ProcessEightDService {
       version: record.instance.version + 1, problemVersion, status: closing ? 'COMPLETED' : 'RUNNING' }, { audit: this.audit, outbox: this.outbox });
   }
 
-  private async assertEvidence(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord, ids: string[], clean = true) {
+  private async assertEvidence(tx: Prisma.TransactionClient, actor: ProcessEightDActor, record: ProcessEightDRecord, ids: string[], clean = true, validateD7 = false) {
     if (!ids.length) return;
     await this.resources.authorizeAndLock(tx, actor, { resourceType: this.domain.resourceType, resourceId: record.problem.id }, 'read');
-    await this.evidenceSnapshot(tx, record, ids, clean);
+    await this.evidenceSnapshot(tx, record, ids, clean, validateD7);
   }
 
-  private async evidenceSnapshot(tx: Prisma.TransactionClient, record: ProcessEightDRecord, ids: string[], clean = true) {
+  private async evidenceSnapshot(tx: Prisma.TransactionClient, record: ProcessEightDRecord, ids: string[], clean = true, validateD7 = false) {
     const unique = [...new Set(ids)].sort();
     if (!unique.length) return [];
     await this.lockEvidence(tx, unique);
-    const files = await tx.fileObject.findMany({ where: { id: { in: unique }, organizationId: record.problem.organizationId, resourceType: this.domain.resourceType, resourceId: record.problem.id,
+    const files = await this.evidenceRows(tx, record, unique, clean);
+    const available = clean ? files.filter(this.verifiedEvidence) : files;
+    if (validateD7) {
+      const issues = completedD7EvidenceIssues(record.report.document, new Set(available.map(file => file.id)));
+      if (issues.length) throw new ControlledValidationException('PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE', issues);
+    }
+    if (available.length !== unique.length) workflowError('PROCESS_EIGHT_D_EVIDENCE_NOT_CLEAN', 409);
+    return available.map(f => ({ id: f.id, objectVersionId: f.objectVersionId, sha256: f.sha256, version: f.version, scanStatus: f.scanStatus, scannedAt: iso(f.scannedAt) }));
+  }
+
+  private evidenceRows(tx: Prisma.TransactionClient, record: ProcessEightDRecord, ids: string[], clean: boolean) {
+    if (!ids.length) return [];
+    return tx.fileObject.findMany({ where: { id: { in: ids }, organizationId: record.problem.organizationId, resourceType: this.domain.resourceType, resourceId: record.problem.id,
       ...(clean ? { status: 'AVAILABLE' as const, scanStatus: 'CLEAN' } : { status: { not: 'DELETED' as const } }),
       deletedAt: null, objectVersionId: { not: null }, uploadCompletedAt: { not: null } }, orderBy: { id: 'asc' } });
-    if (files.length !== unique.length) workflowError('PROCESS_EIGHT_D_EVIDENCE_NOT_CLEAN', 409);
-    if (clean && files.some(f => !f.scannedAt || !f.scannerEngine || f.verifiedSha256 !== f.sha256
-      || f.verifiedContentType !== f.contentType || f.verifiedSizeBytes !== f.sizeBytes)) workflowError('PROCESS_EIGHT_D_EVIDENCE_NOT_CLEAN', 409);
-    return files.map(f => ({ id: f.id, objectVersionId: f.objectVersionId, sha256: f.sha256, version: f.version, scanStatus: f.scanStatus, scannedAt: iso(f.scannedAt) }));
+  }
+
+  private verifiedEvidence(file: FileObject): boolean {
+    return !!file.scannedAt && !!file.scannerEngine && file.verifiedSha256 === file.sha256
+      && file.verifiedContentType === file.contentType && file.verifiedSizeBytes === file.sizeBytes;
   }
 
   private async lockEvidence(tx: Prisma.TransactionClient, ids: string[]) {

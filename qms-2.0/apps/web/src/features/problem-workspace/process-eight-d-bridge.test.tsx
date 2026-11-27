@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
@@ -92,12 +92,14 @@ it.each([401, 403])('clears the real parent projection and aborts its in-flight 
   mount(); await screen.findByDisplayValue('内嵌敏感正文');
   expect(screen.getByRole('heading', { name: '问题' })).toBeVisible();
   expect(screen.getByText('8D-inner')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: /^D4 ·/ }));
   refreshing = true;
   fireEvent.click(screen.getByRole('button', { name: '刷新工作区' }));
   await waitFor(() => expect(release).toBeTypeOf('function'));
-  fireEvent.click(screen.getByText('D4 分析过程附件 (1)'));
+  expect(parentSignal.aborted).toBe(false);
+  const directory = within(screen.getByRole('navigation', { name: '8D 内容分区' }));
+  fireEvent.click(directory.getByRole('button', { name: 'D4 · 根因分析' }));
   await screen.findByText(/当前会话失效或无权访问/);
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/files/inner-file', expect.anything());
   expect(parentSignal.aborted).toBe(true);
   await act(async () => release(response(workspace)));
   expect(screen.queryByRole('heading', { name: '问题' })).not.toBeInTheDocument();
@@ -107,22 +109,28 @@ it.each([401, 403])('clears the real parent projection and aborts its in-flight 
   expect(screen.queryByRole('combobox', { name: '流程实例' })).not.toBeInTheDocument();
   expect(screen.queryByRole('tab')).not.toBeInTheDocument();
   expect(screen.getByRole('button', { name: '刷新工作空间' })).toBeDisabled();
-  expect(fetcher.mock.calls.some(([path]) => path === '/api/v1/files/inner-file')).toBe(true);
 });
 
 it('ignores a real SharedPanel late denial after the formal parent session remounts', async () => {
   let release!: (value: Response) => void;
+  let attachmentSignal!: AbortSignal;
   const previous = fetcher.getMockImplementation()!;
-  fetcher.mockImplementation((path: string, init: RequestInit = {}) => path === '/api/v1/files/inner-file'
-    ? new Promise<Response>(resolve => { release = resolve; }) : previous(path, init));
+  fetcher.mockImplementation((path: string, init: RequestInit = {}) => {
+    if (path !== '/api/v1/files/inner-file') return previous(path, init);
+    attachmentSignal = init.signal!;
+    return new Promise<Response>(resolve => { release = resolve; });
+  });
   mount(); await screen.findByDisplayValue('内嵌敏感正文');
-  fireEvent.click(screen.getByRole('button', { name: /^D4 ·/ }));
-  fireEvent.click(screen.getByText('D4 分析过程附件 (1)'));
+  const directory = within(screen.getByRole('navigation', { name: '8D 内容分区' }));
+  fireEvent.click(directory.getByRole('button', { name: 'D4 · 根因分析' }));
   await waitFor(() => expect(release).toBeTypeOf('function'));
+  expect(attachmentSignal.aborted).toBe(false);
   act(() => useWorkTabsStore.getState().bindSession('INTERNAL:new-owner:org'));
   await screen.findByDisplayValue('内嵌敏感正文');
+  expect(attachmentSignal.aborted).toBe(true);
   await act(async () => release(response({ code: 'FILE_RESOURCE_DENIED' }, 403)));
   expect(screen.getByRole('heading', { name: '问题' })).toBeVisible();
   expect(screen.getByText('8D-inner')).toBeVisible();
+  expect(screen.getByDisplayValue('内嵌敏感正文')).toBeVisible();
   expect(screen.queryByText(/当前会话失效或无权访问/)).not.toBeInTheDocument();
 });

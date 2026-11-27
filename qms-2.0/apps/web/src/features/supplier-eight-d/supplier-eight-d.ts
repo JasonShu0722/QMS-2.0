@@ -9,3 +9,6 @@ export type SupplierWriteBody = components['schemas']['SaveSupplierEightDDto']
 export type SupplierCommand = (path: string, method: 'POST' | 'PUT', body: SupplierWriteBody,
   options?: { receive?: (result: unknown) => void; keepOpen?: boolean; refresh?: boolean }) => Promise<boolean>;
 export const supplierEightDPath = (id: string, portal: boolean) => `/api/v1/${portal ? 'supplier-portal' : 'supplier-quality'}/eight-d/${encodeURIComponent(id)}`;
+import { ApiError } from '../../api/client';
+export const isSupplierRecordAccessDenied = (cause: unknown) => cause instanceof ApiError &&
+  (cause.status === 401 || cause.status === 403 || cause.status === 404 && cause.code === 'SUPPLIER_RECORD_NOT_FOUND');

@@ -12,6 +12,7 @@ import { SupplierEightDWorkspace } from './SupplierEightDWorkspace';
 import { SupplierControlledReport } from './SupplierControlledReport';
 
 type Report = components['schemas']['SupplierEightDReportDto'];
+const previewFingerprint = 'd'.repeat(64);
 const report: Report = {
   supplierProblemId: 'supplier-1', problemId: 'problem-1', organizationId: 'org-1', instanceId: 'instance-1', workflowVersionId: 'flow-1',
   title: '供应商正式整改', reportNumber: 'SQ-001', severity: 'HIGH', status: 'PROCESSING', rowVersion: 4, contentVersion: 6, instanceVersion: 2,
@@ -31,6 +32,30 @@ function mount(portal = false, id = 'supplier-1', onDenied = vi.fn()) {
   useWorkTabsStore.getState().bindSession(`${actor.accountType}:${actor.organizationId}:${actor.id}`);
   return render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MemoryRouter><UnsavedChangesProvider><SupplierEightDWorkspace supplierProblemId={id} portal={portal} onDenied={onDenied} /></UnsavedChangesProvider></MemoryRouter></LanguageProvider></ConfigProvider>);
 }
+function openChapter(chapter: string) {
+  const directory = within(screen.getByRole('navigation', { name: '8D 内容分区' }));
+  const name = new RegExp(`^${chapter} ·`);
+  const entry = directory.getByRole('button', { name });
+  fireEvent.click(entry);
+  expect(entry).toHaveAttribute('aria-current', 'step');
+  return within(screen.getByRole('heading', { name, level: 3 }).closest('section')!);
+}
+async function visibleDialog(name: string) {
+  const title = await screen.findByText(name, { selector: '.ant-modal-title' });
+  const dialog = title.closest<HTMLElement>('[role="dialog"]')!;
+  expect(dialog).toHaveAccessibleName(name);
+  await waitFor(() => expect(dialog).toBeVisible());
+  return within(dialog);
+}
+function openFlowLog() {
+  fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
+  return visibleDialog('流程日志');
+}
+function openReportPreview() {
+  const preview = screen.getByRole('tab', { name: '报告预览' });
+  fireEvent.click(preview);
+  expect(preview).toHaveAttribute('aria-selected', 'true');
+}
 beforeEach(() => {
   vi.stubEnv('NODE_ENV', 'development');
   vi.unstubAllGlobals();
@@ -48,31 +73,78 @@ beforeEach(() => {
       return json(current);
     }
     if (path.includes('/revisions?')) return json({ items: [...new Set([current.submittedRevisionId, current.approvedRevisionId].filter(Boolean))].map((id, index) => ({ id, revision: index + 1, createdAt: '2026-10-28T00:00:00Z', approved: id === current.approvedRevisionId })), nextBefore: null });
-    if (path.includes('deadline-extensions') || path.includes('/rounds')) return json([]);
+    if (path.includes('deadline-extensions') || path.includes('/rounds') || path.endsWith('/approval-history')) return json([]);
     return json(current);
   });
   vi.stubGlobal('fetch', fetcher);
 });
 afterEach(() => vi.unstubAllEnvs());
 
-it.each([false, true])('C SPEC review copy preserves actual lock round and duties (portal=%s)', async portal => {
-  current.status = 'IN_REVIEW'; current.allowedActions = ['read'];
-  current.closure = { id: 'round-1', problemId: 'problem-1', instanceId: 'instance-1', workflowVersionId: 'flow-1', contentVersion: 6, roundNumber: 3, version: 1, status: 'PENDING', createdAt: '', updatedAt: '', duties: [{ id: 'duty-1', duty: 'PROFESSIONAL', userId: 'sqe-1', status: 'PENDING', version: 1, decidedBy: null, comment: '当前对象的审核意见', decidedAt: null }] };
+it.each([false, true])('shows authorized approval history and preserves the current review lock (portal=%s)', async portal => {
+  current.status = 'IN_REVIEW'; current.allowedActions = ['read', 'report'];
+  const timestamp = '2026-10-28T00:00:00Z';
+  const activeRound: NonNullable<Report['closure']> = { id: 'round-3', problemId: 'problem-1', instanceId: 'instance-1', workflowVersionId: 'flow-1', contentVersion: 6, roundNumber: 3, version: 1, status: 'PENDING', createdAt: timestamp, updatedAt: timestamp, duties: [{ id: 'duty-3', duty: 'PROFESSIONAL', userId: 'sqe-1', status: 'PENDING', version: 1, decidedBy: null, comment: null, decidedAt: null }] };
+  const previousRound = { ...activeRound, id: 'round-2', contentVersion: 5, roundNumber: 2, status: 'RETURNED', duties: [{ ...activeRound.duties[0], id: 'duty-2', status: 'RETURNED', userDisplayName: '内部审核人', comment: '历史轮次审核意见', decidedAt: timestamp }] };
+  current.closure = portal ? { ...activeRound, duties: [] } : activeRound;
+  const internalHistory = '/api/v1/workflow-closure/problems/problem-1/rounds';
+  const portalHistory = '/api/v1/supplier-portal/eight-d/supplier-1/approval-history';
+  const original = fetcher.getMockImplementation()!;
+  fetcher.mockImplementation(async (path: string, init: RequestInit = {}) => {
+    if (path === internalHistory || path === portalHistory) return json([activeRound, previousRound]);
+    return original(path, init);
+  });
   mount(portal); await screen.findByDisplayValue('供应商实际问题');
   expect(screen.getByDisplayValue('供应商实际问题')).toBeDisabled();
-  expect(screen.getByRole('heading', { name: '当前关闭轮次 3' })).toBeVisible();
-  expect(screen.getByText('固定内容版本 6 · PENDING')).toBeVisible();
+  expect(screen.queryByRole('heading', { name: '审批历史' })).not.toBeInTheDocument();
+  expect(fetcher.mock.calls.map(([path]) => path)).not.toContain(portal ? portalHistory : internalHistory);
+  const log = await openFlowLog();
+  expect(await log.findByRole('heading', { name: '轮次 3 待处理' })).toBeVisible();
+  expect(log.getByRole('heading', { name: '轮次 2 已退回' })).toBeVisible();
+  expect(log.getByText(/内容版本 5/)).toBeVisible();
+  const requestedPaths = fetcher.mock.calls.map(([path]) => path);
+  expect(requestedPaths).toContain(portal ? portalHistory : internalHistory);
+  expect(requestedPaths).not.toContain(portal ? internalHistory : portalHistory);
   if (portal) {
-    expect(screen.getByText(/在审锁版：SQE先审/)).toBeVisible();
-    expect(screen.getByText(/先SQE后管理，高/)).toBeVisible();
-    expect(screen.queryByText(/当前对象的审核意见/)).not.toBeInTheDocument();
+    expect(log.queryByText(/历史轮次审核意见|内部审核人|sqe-1/)).not.toBeInTheDocument();
+    expect(log.queryByRole('button', { name: '打开关闭职责待办' })).not.toBeInTheDocument();
   } else {
-    expect(screen.getByText('在审锁版')).toBeVisible();
-    expect(screen.queryByText(/在审锁版：SQE先审/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/先SQE后管理，高/)).not.toBeInTheDocument();
-    expect(screen.getByText(/当前对象的审核意见/)).toBeVisible();
+    expect(log.getByText('历史轮次审核意见')).toBeVisible();
+    expect(log.getByText(/内部审核人/)).toBeVisible();
   }
   expect(writes).toHaveLength(0);
+});
+
+it.each([false, true])('preserves the draft only when optional internal approval history is denied (portal=%s)', async portal => {
+  const original = fetcher.getMockImplementation()!;
+  const denied = vi.fn();
+  fetcher.mockImplementation(async (path: string, init: RequestInit = {}) => {
+    if (path.endsWith('/rounds') || path.endsWith('/approval-history')) return json({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }, 403);
+    return original(path, init);
+  });
+  mount(portal, 'supplier-1', denied); await screen.findByDisplayValue('供应商实际问题');
+  fireEvent.change(screen.getByLabelText('D2 问题描述'), { target: { value: '未保存正文' } });
+  fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
+  if (portal) {
+    await waitFor(() => expect(denied).toHaveBeenCalledOnce());
+    expect(screen.queryByDisplayValue('未保存正文')).not.toBeInTheDocument();
+  } else {
+    await waitFor(() => expect(screen.getByText('审批历史加载失败')).toBeVisible());
+    expect(screen.getByLabelText('D2 问题描述')).toHaveValue('未保存正文');
+    expect(denied).not.toHaveBeenCalled();
+    expect(fetcher.mock.calls.filter(([path]) => path === '/api/v1/supplier-quality/eight-d/supplier-1')).toHaveLength(2);
+  }
+});
+
+it('clears supplier portal content when its live approval history reports lost disclosure', async () => {
+  const original = fetcher.getMockImplementation()!;
+  const denied = vi.fn();
+  fetcher.mockImplementation((path: string, init: RequestInit = {}) => path.endsWith('/approval-history')
+    ? json({ code: 'SUPPLIER_RECORD_NOT_FOUND', message: 'not found' }, 404) : original(path, init));
+  mount(true, 'supplier-1', denied);
+  fireEvent.change(await screen.findByDisplayValue('供应商实际问题'), { target: { value: '未保存正文' } });
+  fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
+  await waitFor(() => expect(denied).toHaveBeenCalledOnce());
+  expect(screen.queryByDisplayValue('未保存正文')).not.toBeInTheDocument();
 });
 
 it.each([false, true])('C SPEC idle extension copy excludes internal process introductions (portal=%s)', async portal => {
@@ -114,22 +186,31 @@ it.each([[false, null], [false, '2026-10-28T00:00:00Z'], [true, null]] as const)
 it.each([false, true])('loads the issued document and saves all D2-D8 to the correct portal=%s endpoint', async portal => {
   mount(portal);
   expect(await screen.findByDisplayValue('供应商实际问题')).toBeVisible();
-  expect(screen.getByLabelText('D4 分析过程')).toBeVisible();
-  expect(screen.getByLabelText('D8 结案总结')).toBeVisible();
-  fireEvent.click(screen.getByRole('button', { name: '增加永久措施' }));
-  fireEvent.change(screen.getByLabelText('措施 1 对策'), { target: { value: '真实对策' } });
+  fireEvent.change(openChapter('D4').getByLabelText('分析过程描述'), { target: { value: '现场分析' } });
+  const planning = openChapter('D5');
+  fireEvent.click(planning.getByRole('button', { name: '增加永久措施' }));
+  fireEvent.change(planning.getByLabelText('措施 1 对策'), { target: { value: '真实对策' } });
+  const verification = openChapter('D6');
+  expect(verification.getByRole('heading', { name: '措施 1 · 真实对策' })).toBeVisible();
+  expect(verification.getByLabelText('开始日期')).toHaveValue('');
+  expect(verification.getByLabelText('跟踪批次或单号')).toHaveValue('');
+  fireEvent.change(verification.getByLabelText('跟踪批次或单号'), { target: { value: 'ORDER-1' } });
+  fireEvent.change(openChapter('D8').getByLabelText('D8 结案总结'), { target: { value: '结案总结草稿' } });
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(writes[0].path).toBe(`/api/v1/${portal ? 'supplier-portal' : 'supplier-quality'}/eight-d/supplier-1`);
-  expect(writes[0].body).toMatchObject({ expectedRowVersion: 4, expectedInstanceVersion: 2, document: { correctiveActions: [{ action: '真实对策' }] } });
+  expect(writes[0].body).toMatchObject({ expectedRowVersion: 4, expectedInstanceVersion: 2, document: {
+    description: '供应商实际问题', analysisProcess: '现场分析', correctiveActions: [{ action: '真实对策' }],
+    effectTracking: { startOrderNumber: 'ORDER-1', startDate: null }, closureSummary: '结案总结草稿',
+  } });
 });
 
 it('requires explicit submission plan on analysis-complete and never invents a deadline', async () => {
   mount(); await screen.findByDisplayValue('供应商实际问题');
-  fireEvent.click(screen.getByRole('button', { name: '分析完成并设提交计划' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认分析完成并设置正式提交期限' }));
   const form = within(screen.getByRole('region', { name: '操作表单' }));
   expect(form.getByRole('button', { name: '确认提交' })).toBeDisabled();
-  fireEvent.change(form.getByLabelText('完整提交计划'), { target: { value: '2026-11-10T12:00' } });
+  fireEvent.change(form.getByLabelText('正式提交期限'), { target: { value: '2026-11-10T12:00' } });
   fireEvent.click(form.getByRole('button', { name: '确认提交' }));
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(writes[0].path).toMatch(/\/analysis-complete$/);
@@ -188,6 +269,33 @@ it('protects unsaved edits on refresh and can keep editing', async () => {
   expect(screen.getByLabelText('D2 问题描述')).toHaveValue('未保存正文');
 });
 
+it('guards unsaved edits when switching to report preview and restores the saved workspace after discard', async () => {
+  current.allowedActions.push('report');
+  const original = fetcher.getMockImplementation()!;
+  fetcher.mockImplementation(async (path: string, init: RequestInit = {}) => path.endsWith('/report?view=CURRENT') ? json(savedReport()) : original(path, init));
+  mount(); await screen.findByDisplayValue('供应商实际问题');
+  const workspace = screen.getByRole('tab', { name: '工作区' });
+  const preview = screen.getByRole('tab', { name: '报告预览' });
+  expect(workspace).toHaveAttribute('aria-selected', 'true');
+  fireEvent.change(screen.getByRole('textbox', { name: 'D2 问题描述' }), { target: { value: '切换前未保存正文' } });
+  fireEvent.click(preview);
+  const guardName = '当前草稿尚未保存，继续将放弃修改。';
+  fireEvent.click((await visibleDialog(guardName)).getByRole('button', { name: '继续编辑' }));
+  expect(workspace).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('textbox', { name: 'D2 问题描述' })).toHaveValue('切换前未保存正文');
+  expect(fetcher.mock.calls.some(([path]) => String(path).includes('/report?'))).toBe(false);
+
+  fireEvent.click(preview);
+  fireEvent.click((await visibleDialog(guardName)).getByRole('button', { name: '放弃修改' }));
+  expect(await screen.findByRole('article', { name: 'SQ-001' })).toBeVisible();
+  expect(preview).toHaveAttribute('aria-selected', 'true');
+  expect(screen.queryByDisplayValue('切换前未保存正文')).not.toBeInTheDocument();
+  fireEvent.click(workspace);
+  expect(workspace).toHaveAttribute('aria-selected', 'true');
+  expect(screen.getByRole('textbox', { name: 'D2 问题描述' })).toHaveValue('供应商实际问题');
+  expect(writes).toHaveLength(0);
+});
+
 it('aborts old identity reads on session replacement', async () => {
   mount(); await screen.findByDisplayValue('供应商实际问题');
   const signal = fetcher.mock.calls.find(([path]) => String(path).includes('/eight-d/supplier-1'))![1].signal as AbortSignal;
@@ -207,8 +315,11 @@ it('resubmits the entire saved version after a returned closure round', async ()
 
 it('saves closed internal supplements only when explicitly allowed', async () => {
   current.closedAt = '2026-10-28T00:00:00Z'; current.allowedActions = ['read', 'supplement'];
-  mount(); expect(await screen.findByLabelText('D8 结案总结')).toBeEnabled();
-  fireEvent.change(screen.getByLabelText('D8 结案总结'), { target: { value: '闭后内部补充' } });
+  mount(); await screen.findByDisplayValue('供应商实际问题');
+  const summary = openChapter('D8').getByLabelText('D8 结案总结');
+  expect(summary).toBeVisible();
+  expect(summary).toBeEnabled();
+  fireEvent.change(summary, { target: { value: '闭后内部补充' } });
   fireEvent.click(screen.getByRole('button', { name: '保存内部补充' }));
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(writes[0].body).toMatchObject({ document: { closureSummary: '闭后内部补充' } });
@@ -216,10 +327,12 @@ it('saves closed internal supplements only when explicitly allowed', async () =>
 
 it('never enables private supplement, disclosure or internal approval in portal even with stray actions', async () => {
   current.closedAt = '2026-10-28T00:00:00Z'; current.allowedActions = ['read', 'supplement', 'disclosure-preview', 'release'];
-  mount(true); expect(await screen.findByLabelText('D8 结案总结')).toBeDisabled();
+  mount(true); await screen.findByDisplayValue('供应商实际问题');
+  expect(openChapter('D8').getByLabelText('D8 结案总结')).toBeDisabled();
   expect(screen.queryByRole('button', { name: '保存内部补充' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '披露预览与释放' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '打开关闭职责待办' })).not.toBeInTheDocument();
+  const log = await openFlowLog();
+  expect(log.queryByRole('button', { name: '打开关闭职责待办' })).not.toBeInTheDocument();
 });
 
 it('requires disclosure preview then explicit confirmation, releasing the original selected list', async () => {
@@ -263,12 +376,20 @@ it('reads server-saved controlled reports and switches current, approved and kno
   current.allowedActions.push('report'); current.approvedRevisionId = 'approved-1'; current.submittedRevisionId = 'submitted-2';
   const original = fetcher.getMockImplementation()!;
   fetcher.mockImplementation(async (path: string, init: RequestInit = {}) => {
-    if (path.includes('/report?')) return json({ supplierProblemId: 'supplier-1', problemId: 'problem-1', reportNumber: 'SQ-001', view: 'CURRENT', revisionId: null, status: 'DRAFT', label: '服务端受控报告', contentVersion: 6, rowVersion: 4, generatedAt: '', attachments: [], snapshot: { document: { ...current.document, description: '服务端保存的报告正文' }, sources: [], problem: {}, instance: {}, deadlines: {}, contentVersion: 6, rowVersion: 4, ownerUserId: null, professionalUserId: 'sqe-1', responsibleSectionDepartmentId: 'section-1', collaboratorUserIds: [], analysisCompletedAt: null, submittedAt: null } });
+    if (path.includes('/report?')) {
+      const selected = new URL(path, 'http://localhost').searchParams;
+      const revisionId = selected.get('revisionId');
+      const view = revisionId ? 'HISTORICAL' : selected.get('view');
+      const saved = savedReport();
+      return json({ ...saved, view, revisionId: revisionId ?? (view === 'APPROVED' ? current.approvedRevisionId : null), status: view === 'APPROVED' ? 'APPROVED' : saved.status, snapshot: { ...saved.snapshot, document: { ...current.document, description: '服务端保存的报告正文' } } });
+    }
     return original(path, init);
   });
   mount(); await screen.findByDisplayValue('供应商实际问题');
-  fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
-  expect(await screen.findByDisplayValue('服务端保存的报告正文')).toBeDisabled();
+  openReportPreview();
+  const preview = within(await screen.findByRole('article', { name: 'SQ-001' }));
+  expect(preview.getByText('服务端保存的报告正文')).toBeVisible();
+  expect(preview.queryByRole('textbox')).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('报告版本'), { target: { value: 'APPROVED' } });
   await waitFor(() => expect(fetcher.mock.calls.some(([path]) => String(path).includes('view=APPROVED'))).toBe(true));
   await waitFor(() => expect(within(screen.getByLabelText('报告版本')).getAllByRole('option').some(option => (option as HTMLOptionElement).value === 'submitted-2')).toBe(true));
@@ -291,8 +412,9 @@ it.each([
     return original(path, init);
   });
   mount(portal); await screen.findByDisplayValue('供应商实际问题');
-  const summary = screen.getByText('D4 分析过程附件 (0)'); fireEvent.click(summary);
-  const panel = within(summary.closest('details')!);
+  const panel = openChapter('D4');
+  expect(panel.getByRole('button', { name: '选择附件' })).toBeEnabled();
+  expect(panel.getByRole('button', { name: '拍照上传' })).toBeEnabled();
   const selected = new File(['sample'], 'evidence.txt', { type: 'text/plain' });
   Object.defineProperty(selected, 'arrayBuffer', { value: async () => new TextEncoder().encode('sample').buffer });
   fireEvent.change(await panel.findByLabelText('选择附件'), { target: { files: [selected] } });
@@ -303,7 +425,7 @@ it.each([
   await waitFor(() => expect(panel.getByRole('button', { name: '刷新附件' })).toBeEnabled());
   file = { ...file, version: 3, status: 'AVAILABLE', scanStatus: 'CLEAN' };
   fireEvent.click(panel.getByRole('button', { name: '刷新附件' }));
-  await screen.findByText('D4 分析过程附件 (1)');
+  expect(await panel.findByRole('button', { name: '下载附件' })).toBeEnabled();
   await waitFor(() => expect(screen.getByRole('button', { name: closed ? '保存内部补充' : '保存草稿' })).toBeEnabled());
   fireEvent.click(screen.getByRole('button', { name: closed ? '保存内部补充' : '保存草稿' }));
   await waitFor(() => expect(writes).toHaveLength(1));
@@ -387,14 +509,28 @@ it.each([
 });
 
 it.each([1440, 375])('keeps the complete editable document reachable at simulated %spx (not browser geometry)', async width => {
-  Object.defineProperty(window, 'innerWidth', { value: width, configurable: true });
+  vi.stubGlobal('innerWidth', width);
   mount(); await screen.findByDisplayValue('供应商实际问题');
-  for (const name of ['D2 问题描述', 'D4 分析过程', '发生因', '流出因', 'D8 结案总结']) expect(screen.getByLabelText(name)).toBeEnabled();
-  for (const name of ['增加临时措施', '增加永久措施', '增加横向展开', '增加标准化文件']) expect(screen.getByRole('button', { name })).toBeEnabled();
+  expect(openChapter('D1').getByRole('button', { name: '增加团队成员' })).toBeEnabled();
+  const problem = openChapter('D2');
+  expect(problem.getByRole('textbox', { name: 'D2 问题描述' })).toBeEnabled();
+  for (const name of ['OK 图片说明', 'NG 图片说明']) expect(problem.getByRole('textbox', { name })).toBeEnabled();
+  expect(openChapter('D3').getByRole('button', { name: '增加临时措施' })).toBeEnabled();
+  const analysis = openChapter('D4');
+  for (const name of ['分析过程描述', '发生因', '流出因']) expect(analysis.getByRole('textbox', { name })).toBeEnabled();
+  expect(openChapter('D5').getByRole('button', { name: '增加永久措施' })).toBeEnabled();
+  expect(openChapter('D6').getByRole('textbox', { name: '确认结果' })).toBeEnabled();
+  const deployment = openChapter('D7');
+  for (const name of ['增加横向展开', '增加标准化文件']) expect(deployment.getByRole('button', { name })).toBeEnabled();
+  expect(openChapter('D8').getByRole('textbox', { name: 'D8 结案总结' })).toBeEnabled();
 });
 
 function savedReport(): components['schemas']['SupplierEightDControlledReportDto'] {
-  return { supplierProblemId: 'supplier-1', problemId: 'problem-1', reportNumber: 'SQ-001', view: 'CURRENT', revisionId: null, status: 'DRAFT', label: '受控保存版', contentVersion: 6, rowVersion: 4, generatedAt: '', attachments: [], snapshot: { document: current.document, sources: [], problem: {}, instance: {}, deadlines: {}, contentVersion: 6, rowVersion: 4, ownerUserId: null, professionalUserId: 'sqe-1', responsibleSectionDepartmentId: 'section-1', collaboratorUserIds: [], analysisCompletedAt: null, submittedAt: null } };
+  return {
+    supplierProblemId: 'supplier-1', problemId: 'problem-1', reportNumber: 'SQ-001', view: 'CURRENT', revisionId: null,
+    status: 'DRAFT', label: '受控保存版', contentVersion: 6, rowVersion: 4, generatedAt: '', attachments: [], previewFingerprint,
+    snapshot: { document: current.document, sources: [], problem: {}, instance: {}, deadlines: {}, contentVersion: 6, rowVersion: 4, ownerUserId: null, professionalUserId: 'sqe-1', responsibleSectionDepartmentId: 'section-1', collaboratorUserIds: [], analysisCompletedAt: null, submittedAt: null },
+  };
 }
 
 it.each([false, true])('enumerates and keyset-pages real historical revisions for portal=%s without guessing IDs', async portal => {
@@ -409,7 +545,7 @@ it.each([false, true])('enumerates and keyset-pages real historical revisions fo
     if (path.includes('/report?')) return json(savedReport());
     return original(path, init);
   });
-  mount(portal); await screen.findByDisplayValue('供应商实际问题'); fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
+  mount(portal); await screen.findByDisplayValue('供应商实际问题'); openReportPreview();
   const selector = screen.getByLabelText('报告版本');
   await waitFor(() => expect(within(selector).getByRole('option', { name: /历史修订.*21/ })).toHaveValue('historical-21'));
   fireEvent.click(screen.getByRole('button', { name: '加载更多历史版本' }));
@@ -429,7 +565,7 @@ it('preserves already enumerated history on a failed next page and retries the s
     if (path.includes('/report?')) return json(savedReport());
     return original(path, init);
   });
-  mount(); await screen.findByDisplayValue('供应商实际问题'); fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
+  mount(); await screen.findByDisplayValue('供应商实际问题'); openReportPreview();
   fireEvent.click(await screen.findByRole('button', { name: '加载更多历史版本' }));
   const retry = await screen.findByRole('button', { name: '重试历史版本' });
   expect(within(screen.getByLabelText('报告版本')).getByRole('option', { name: /历史修订.*21/ })).toHaveValue('recent-21');
@@ -446,7 +582,7 @@ it('clears all sensitive content when permission is revoked while paging histori
     if (path.includes('/report?')) return json(savedReport());
     return original(path, init);
   });
-  mount(); await screen.findByDisplayValue('供应商实际问题'); fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
+  mount(); await screen.findByDisplayValue('供应商实际问题'); openReportPreview();
   fireEvent.click(await screen.findByRole('button', { name: '加载更多历史版本' }));
   await screen.findByText(/敏感内容已清除/); expect(screen.queryByRole('option', { name: /历史修订/ })).not.toBeInTheDocument();
 });
@@ -462,10 +598,10 @@ it('aborts a dismissed history page and ignores its late response after reopenin
     if (path.includes('/report?')) return json(savedReport());
     return original(path, init);
   });
-  mount(); await screen.findByDisplayValue('供应商实际问题'); fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
+  mount(); await screen.findByDisplayValue('供应商实际问题'); openReportPreview();
   fireEvent.click(await screen.findByRole('button', { name: '加载更多历史版本' })); await waitFor(() => expect(release).toBeTypeOf('function'));
-  fireEvent.click(screen.getByRole('button', { name: '取消操作' })); expect(signal.aborted).toBe(true);
-  fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
+  fireEvent.click(screen.getByRole('tab', { name: '工作区' })); expect(signal.aborted).toBe(true);
+  openReportPreview();
   await waitFor(() => expect(within(screen.getByLabelText('报告版本')).getByRole('option', { name: /历史修订.*21/ })).toHaveValue('recent-21'));
   await act(async () => release(json({ items: [{ id: 'late-private', revision: 1, createdAt: '不应回填', approved: false }], nextBefore: null })));
   expect(screen.queryByRole('option', { name: /不应回填/ })).not.toBeInTheDocument();
@@ -505,13 +641,14 @@ it('omits the internal owner organization from portal report and PDF queries for
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   try {
     mount(true); expect(actor.organizationId).not.toBe(current.organizationId);
-    await screen.findByDisplayValue('供应商实际问题'); fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
+    await screen.findByDisplayValue('供应商实际问题'); openReportPreview();
     await screen.findByText('受控保存版');
     fireEvent.click(screen.getByRole('button', { name: '授权下载 PDF' }));
     await waitFor(() => expect(click).toHaveBeenCalledTimes(1));
     const paths = fetcher.mock.calls.map(([path]) => String(path)).filter(path => path.includes('/report?') || path.includes('/report/pdf?'));
     expect(paths).toHaveLength(2);
     paths.forEach(path => { expect(path).toContain('/supplier-portal/eight-d/supplier-1/report'); expect(new URL(path, 'http://localhost').searchParams.has('organizationId')).toBe(false); });
+    expect(new URL(paths[1], 'http://localhost').searchParams.get('previewFingerprint')).toBe(previewFingerprint);
   } finally { URL.createObjectURL = oldCreate; URL.revokeObjectURL = oldRevoke; click.mockRestore(); }
 });
 
@@ -528,7 +665,7 @@ it.each([200, 401, 403, 500])('authorizes and validates binary PDF downloads (HT
   URL.createObjectURL = create; URL.revokeObjectURL = revoke;
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
   try {
-    mount(); await screen.findByDisplayValue('供应商实际问题'); fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
+    mount(); await screen.findByDisplayValue('供应商实际问题'); openReportPreview();
     const button = await screen.findByRole('button', { name: '授权下载 PDF' });
     await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button);
     await waitFor(() => expect(fetcher.mock.calls.some(([path]) => String(path).includes('/report/pdf?'))).toBe(true));
@@ -546,7 +683,7 @@ it('does not publish a fake PDF when the response is JSON or has invalid bytes',
     if (path.includes('/report/pdf?')) return new Response('not pdf', { headers: { 'content-type': 'application/pdf' } });
     return original(path, init);
   });
-  mount(); await screen.findByDisplayValue('供应商实际问题'); fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
+  mount(); await screen.findByDisplayValue('供应商实际问题'); openReportPreview();
   const button = await screen.findByRole('button', { name: '授权下载 PDF' }); await waitFor(() => expect(button).toBeEnabled()); fireEvent.click(button);
   await screen.findByText(/报告读取或下载失败/);
 });
@@ -569,8 +706,8 @@ it('never renders a portal private supplement even if a report response is accid
   current.allowedActions.push('report');
   const original = fetcher.getMockImplementation()!;
   fetcher.mockImplementation(async (path: string, init: RequestInit = {}) => path.includes('/report?') ? json({ ...savedReport(), status: 'CLOSED_SUPPLEMENT', snapshot: { ...savedReport().snapshot, document: { ...current.document, description: '不应对外的补充' } } }) : original(path, init));
-  mount(true); await screen.findByDisplayValue('供应商实际问题'); fireEvent.click(screen.getByRole('button', { name: '受控报告与历史' }));
-  await screen.findByText(/敏感内容已清除/); expect(screen.queryByDisplayValue('不应对外的补充')).not.toBeInTheDocument();
+  mount(true); await screen.findByDisplayValue('供应商实际问题'); openReportPreview();
+  await screen.findByText(/敏感内容已清除/); expect(screen.queryByText('不应对外的补充')).not.toBeInTheDocument();
 });
 
 it('checks the actual portal account type before dispatching and does not impersonate INTERNAL', async () => {
@@ -589,7 +726,8 @@ it('clears the whole workspace and aborts sensitive requests when the shared clo
   });
   const denied = vi.fn(); mount(false, 'supplier-1', denied); await screen.findByDisplayValue('供应商实际问题');
   const signal = fetcher.mock.calls.find(([path]) => path === '/api/v1/supplier-quality/eight-d/supplier-1')![1].signal as AbortSignal;
-  fireEvent.click(screen.getByRole('button', { name: '打开关闭职责待办' }));
+  expect(screen.queryByRole('button', { name: '打开关闭职责待办' })).not.toBeInTheDocument();
+  fireEvent.click((await openFlowLog()).getByRole('button', { name: '打开关闭职责待办' }));
   await screen.findByText(/敏感内容已清除/);
   expect(screen.queryByDisplayValue('供应商实际问题')).not.toBeInTheDocument();
   expect(denied).toHaveBeenCalledTimes(1); expect(signal.aborted).toBe(true);
@@ -626,14 +764,19 @@ it.each(['PROFESSIONAL', 'JOINT'] as const)('reuses the real closure inbox with 
     return original(path, init);
   });
   mount(); await screen.findByDisplayValue('供应商实际问题');
-  fireEvent.click(screen.getByRole('button', { name: '打开关闭职责待办' }));
-  const inbox = within(screen.getByRole('region', { name: '关闭职责待办' }));
-  const review = await inbox.findByRole('button', { name: '审核关闭职责' }); await waitFor(() => expect(review).toBeEnabled()); fireEvent.click(review);
-  const dialog = within(await screen.findByRole('dialog', { name: '关闭职责审核' }));
+  const log = await openFlowLog();
+  fireEvent.click(log.getByRole('button', { name: '打开关闭职责待办' }));
+  const inbox = within((await log.findByText('关闭职责待办', { selector: 'h4' })).closest('section')!);
+  const review = (await inbox.findByText('审核关闭职责', { selector: 'button span' })).closest('button')!;
+  expect(review).toHaveAccessibleName('审核关闭职责');
+  await waitFor(() => expect(review).toBeEnabled());
+  fireEvent.click(review);
+  const dialog = await visibleDialog('关闭职责审核');
   await dialog.findByText('固定内容版本：6');
   fireEvent.change(dialog.getByLabelText('审核意见'), { target: { value: '核对完整受控版本后同意' } });
   const submit = dialog.getByText('提交审核', { selector: 'button span' }).closest('button')!;
   if (kind === 'JOINT') { expect(submit).toBeDisabled(); fireEvent.click(dialog.getByLabelText('我确认同时审核科室经理与部长两份职责')); }
+  expect(submit).toBeEnabled();
   fireEvent.click(submit); await waitFor(() => expect(writes).toHaveLength(1));
   expect(writes[0].body).toEqual({ expectedRoundVersion: 3, duties: duties.map(item => item.duty), decision: 'APPROVE', comment: '核对完整受控版本后同意' });
-});
+}, 35_000);

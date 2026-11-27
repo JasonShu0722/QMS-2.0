@@ -12,6 +12,7 @@ import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { FileLifecycleService } from '../file-management/file-lifecycle.service.js';
 import type { FileResourceAction } from '../file-management/file-resource-access.js';
 import { OrganizationResponsibilityService } from '../organization/organization-responsibility.service.js';
+import { readOrganizationMemberOptions, resolveOrganizationMemberSnapshots } from '../organization/organization-member-directory.read-model.js';
 import { organizationAdministrativeAffectedAssignments } from '../organization/organization-administrative-impact.read-model.js';
 import { ProblemIndexService } from '../problem-index/problem-index.service.js';
 import { OutboxService } from '../task-notification/outbox.service.js';
@@ -22,10 +23,11 @@ import type { WorkflowAdministrativeInvalidationInput, WorkflowAdministrativeTar
 import { canonical, isClosureReviewNode, jsonObject, matchesCondition } from '../workflow/workflow-runtime-policy.js';
 import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 import { createWorkflowStart, persistWorkflowMutation } from '../workflow/workflow-start.js';
-import { analysisCompletionIssues, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from '../process-quality/process-eight-d-document.js';
+import { analysisCompletionIssues, completedD7EvidenceIssues, completedD7EvidenceRows, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from '../process-quality/process-eight-d-document.js';
+import type { EightDTeamOptionsQueryDto } from '../process-quality/process-eight-d-document-team.dto.js';
 import { eightDError as fail, eightDRequestDigest } from '../process-quality/process-eight-d-policy.js';
 import { SupplierWorkflowBindingService } from './supplier-workflow-binding.service.js';
-import type { IssueSupplierEightDDto, SaveSupplierEightDDto, SupplierEightDAnalysisCompleteDto, SupplierEightDDeadlinesDto, SupplierEightDReportDto, SupplierEightDVersionDto } from './supplier-eight-d.dto.js';
+import type { IssueSupplierEightDDto, SaveSupplierEightDDto, SupplierEightDAnalysisCompleteDto, SupplierEightDDeadlinesDto, SupplierEightDReportDto, SupplierEightDVersionDto, SupplierPortalEightDApprovalRoundDto } from './supplier-eight-d.dto.js';
 import type { SupplierEightDActor, SupplierEightDControl, SupplierEightDDeadlineContext, SupplierEightDDisclosureContext, SupplierEightDRecord } from './supplier-eight-d.types.js';
 import type { SupplierEightDReportRead } from './supplier-eight-d-report.model.js';
 import type { SupplierDeadlineStage } from './supplier-eight-d-deadline.policy.js';
@@ -55,6 +57,29 @@ export class SupplierEightDService {
       const record = await this.lockRecord(tx, actor, id, true);
       await this.authorizeRead(tx, actor, record);
       return this.model(tx, actor, record);
+    });
+  }
+
+  async portalApprovalHistory(actor: SupplierEightDActor, id: string): Promise<SupplierPortalEightDApprovalRoundDto[]> {
+    if (actor.accountType !== 'SUPPLIER') fail('SUPPLIER_RECORD_NOT_FOUND', 404);
+    return this.transaction(async tx => {
+      const record = await this.lockRecord(tx, actor, id, true);
+      await this.authorizeRead(tx, actor, record);
+      const rounds = await this.rounds.readHistoryProjection(tx, record.control.organizationId, record.problem.id);
+      return rounds.map(round => ({
+        id: round.id, roundNumber: round.roundNumber, contentVersion: round.contentVersion,
+        status: round.status, createdAt: round.createdAt, updatedAt: round.updatedAt,
+        duties: round.duties.map(duty => ({ id: duty.id, duty: duty.duty, status: duty.status, decidedAt: duty.decidedAt })),
+      }));
+    });
+  }
+
+  async teamOptions(actor: SupplierEightDActor, id: string, query: EightDTeamOptionsQueryDto) {
+    return this.transaction(async tx => {
+      const record = await this.lockRecord(tx, actor, id, true);
+      await this.authorizeSave(tx, actor, record);
+      if (!record.control.closedAt) this.editable(record);
+      return readOrganizationMemberOptions(tx, actor.organizationId, actor.accountType, query);
     });
   }
 
@@ -374,8 +399,13 @@ export class SupplierEightDService {
     return this.command(actor, id, input, 'SAVE', traceId, key, async (tx, record) => {
       await this.authorizeSave(tx, actor, record);
       if (!record.control.closedAt) this.editable(record);
-      const evidence = await this.evidence(tx, actor, record, documentFileIds(document));
       const previous = this.document(record);
+      const teamIssues = await resolveOrganizationMemberSnapshots(tx, actor.organizationId, actor.accountType, document.team, previous.team);
+      if (teamIssues.length) throw new ControlledValidationException('SUPPLIER_EIGHT_D_DOCUMENT_INVALID', teamIssues);
+      const evidence = await this.evidence(tx, actor, record, documentFileIds(document), availableIds => {
+        const issues = completedD7EvidenceIssues(document, availableIds, previous);
+        if (issues.length) throw new ControlledValidationException('SUPPLIER_EIGHT_D_DOCUMENT_INVALID', issues);
+      });
       if (canonical(previous) === canonical(document)) return;
       const plan = (d: typeof document) => ({ analysisProcess: d.analysisProcess, occurrenceCause: d.occurrenceCause, escapeCause: d.escapeCause, systemCause: d.systemCause,
         analysisFileIds: d.analysisFileIds, correctiveActions: d.correctiveActions.map(a => ({ id: a.id, causeKind: a.causeKind, action: a.action, owner: a.owner, plannedAt: a.plannedAt, verificationMethod: a.verificationMethod })) });
@@ -420,10 +450,12 @@ export class SupplierEightDService {
   async submit(actor: SupplierEightDActor, id: string, input: SupplierEightDVersionDto, traceId: string, key: string) {
     return this.command(actor, id, input, 'SUBMIT', traceId, key, async (tx, record) => {
       await this.authorizeReply(tx, actor, record); this.editable(record);
-      const document = this.document(record), issues = submissionIssues(document);
-      if (!record.control.analysisCompletedAt || !record.control.submissionDueAt) issues.push({ path: 'analysisCompletedAt', message: '需由负责人先确认分析完成并明确完整提交计划' });
+      const document = this.document(record), issues = submissionIssues(document, record.control);
       if (issues.length) throw new ControlledValidationException('SUPPLIER_EIGHT_D_SUBMISSION_INCOMPLETE', issues);
-      const evidence = await this.evidence(tx, actor, record, documentFileIds(document));
+      const evidence = await this.evidence(tx, actor, record, documentFileIds(document), availableIds => {
+        const missing = completedD7EvidenceIssues(document, availableIds);
+        if (missing.length) throw new ControlledValidationException('SUPPLIER_EIGHT_D_SUBMISSION_INCOMPLETE', missing);
+      });
       const revision = await tx.supplierResponseRevision.create({ data: { problemId: id, revision: (await tx.supplierResponseRevision.count({ where: { problemId: id } })) + 1,
         content: json(document), submittedById: actor.id, workflowInstanceId: record.instance.id, workflowVersion: record.instance.version + 1 } });
       const snapshot = { ...this.reportFacts(record), rowVersion: record.control.rowVersion + 1,
@@ -526,11 +558,14 @@ export class SupplierEightDService {
         await tx.$queryRaw`SELECT id FROM users WHERE id = ${actor.id}::uuid FOR NO KEY UPDATE`;
         await this.authorizeSave(tx, actor, record);
       }
-      return { organizationId: record.control.organizationId, version: record.control.rowVersion };
+      return { organizationId: record.control.organizationId, version: record.control.rowVersion,
+        ...(action === 'delete' ? { requiredEvidenceRows: completedD7EvidenceRows(this.document(record)),
+          relatedEvidenceScope: { organizationId: record.supplier.supplierOrganizationId ?? record.control.organizationId, resourceType: 'supplier-quality' } } : {}) };
     }
     if (kind !== 'response') fail('FILE_RESOURCE_DENIED', 403);
     if (action !== 'read') { await this.authorizeReply(tx, actor, record); this.editable(record); }
-    return { organizationId: record.supplier.supplierOrganizationId ?? record.control.organizationId, version: record.supplier.version };
+    return { organizationId: record.supplier.supplierOrganizationId ?? record.control.organizationId, version: record.supplier.version,
+      ...(action === 'delete' ? { requiredEvidenceRows: completedD7EvidenceRows(this.document(record)) } : {}) };
   }
 
   private async authorizeSqe(tx: Prisma.TransactionClient, actor: SupplierEightDActor, record: SupplierEightDRecord, permission: string) {
@@ -912,15 +947,20 @@ export class SupplierEightDService {
       version: record.instance.version + 1, problemVersion, status: closing ? 'COMPLETED' : 'RUNNING' }, { audit: this.audit, outbox: this.outbox });
   }
 
-  private async evidence(tx: Prisma.TransactionClient, actor: SupplierEightDActor, record: SupplierEightDRecord, ids: string[]) {
-    if (!ids.length) return [];
+  private async evidence(tx: Prisma.TransactionClient, actor: SupplierEightDActor, record: SupplierEightDRecord, ids: string[],
+    validateAvailability?: (availableIds: ReadonlySet<string>) => void) {
+    if (!ids.length) {
+      validateAvailability?.(new Set());
+      return [];
+    }
     const approvedIds = record.control.closedAt ? new Set(documentFileIds(normalizeProcessEightDDocument(jsonObject(record.control.approvedSnapshot).document))) : null;
     const responseIds = ids.filter(id => !approvedIds || approvedIds.has(id)), supplementIds = ids.filter(id => approvedIds && !approvedIds.has(id));
     const groups = [
       ...(responseIds.length ? [{ resource: { resourceType: 'supplier-quality', resourceId: record.supplier.id }, fileIds: responseIds }] : []),
       ...(supplementIds.length ? [{ resource: { resourceType: 'supplier-eight-d-supplement', resourceId: record.supplier.id }, fileIds: supplementIds }] : []),
     ];
-    const files = await this.files.readReportEvidence(tx, actor, groups);
+    const files = validateAvailability ? await this.files.readReportEvidence(tx, actor, groups, undefined, validateAvailability)
+      : await this.files.readReportEvidence(tx, actor, groups);
     return files.map(f => ({ id: f.id, objectVersionId: f.objectVersionId, sha256: f.sha256, version: f.version, scanStatus: f.scanStatus, scannedAt: f.scannedAt })).sort((a, b) => a.id.localeCompare(b.id));
   }
 
@@ -985,12 +1025,16 @@ export class SupplierEightDService {
     }
     // The portal sees the approved basis, never an internal post-close supplement.
     const document = actor.accountType === 'SUPPLIER' && c.approvedSnapshot ? normalizeProcessEightDDocument(jsonObject(c.approvedSnapshot).document) : this.document(record);
+    const ids = documentFileIds(document);
+    const issues = actions.includes('submit') ? submissionIssues(document, c, ids.length
+      ? await this.files.reportEvidenceAvailableIds(tx, actor, { resourceType: 'supplier-quality', resourceId: record.supplier.id }, ids) : new Set()) : undefined;
     return { supplierProblemId: record.supplier.id, problemId: record.problem.id, organizationId: c.organizationId, instanceId: record.instance.id,
       workflowVersionId: record.instance.workflowVersionId, reportNumber: record.problem.reportNumber, title: record.supplier.title, severity: record.problem.severity,
       status: record.problem.status, rowVersion: c.rowVersion, contentVersion: record.supplier.version, instanceVersion: record.instance.version,
       sqeUserId: c.sqeUserId, sqeAssignmentId: c.sqeAssignmentId, responsibleSectionDepartmentId: c.responsibleSectionDepartmentId, document,
       submittedRevisionId: c.submittedRevisionId, approvedRevisionId: c.approvedRevisionId, analysisDueAt: iso(c.analysisDueAt), analysisCompletedAt: iso(c.analysisCompletedAt),
       submissionDueAt: iso(c.submissionDueAt), submittedAt: submitted?.createdAt.toISOString() ?? null, closureDueAt: iso(c.closureDueAt), closedAt: iso(c.closedAt), releasedToSupplierAt: iso(record.supplier.releasedToSupplierAt), allowedActions: actions,
+      ...(issues ? { submissionIssues: issues } : {}),
       closure: round ? { id: round.id, problemId: round.problemId, instanceId: round.instanceId, workflowVersionId: round.workflowVersionId, contentVersion: round.contentVersion,
         roundNumber: round.roundNumber, status: round.status, version: round.version, createdAt: round.createdAt, updatedAt: round.updatedAt,
         duties: round.duties.map(({ id, duty, status, userId, decidedBy, comment, decidedAt, version }) => ({ id, duty, status, userId, decidedBy, comment, decidedAt, version })) } : null };

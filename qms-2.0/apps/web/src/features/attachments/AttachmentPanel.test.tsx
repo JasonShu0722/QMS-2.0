@@ -6,6 +6,8 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../i18n/Language';
 import { AttachmentPanel } from './AttachmentPanel';
 import { CustomerComplaintEightDPanel } from '../customer-quality/CustomerComplaintEightDPanel';
+import { EightDAnalysisAttachments } from '../process-eight-d/EightDAnalysisAttachments';
+import type { EightDRead } from '../process-eight-d/eight-d';
 
 const resource = { resourceType: 'test-evidence', resourceId: 'resource-id' };
 const file = { ...resource, id: 'file-id', originalName: 'evidence.txt', contentType: 'text/plain', sizeBytes: 12, sha256: 'a'.repeat(64), version: 2, status: 'QUARANTINED', scanStatus: 'PENDING', scanReason: null, uploadExpiresAt: '2026-09-20T12:00:00Z', scannedAt: null, deletedAt: null, retainUntil: '2026-09-27T12:00:00Z' };
@@ -123,7 +125,8 @@ it('keeps camera capture local until confirmed and releases the stream', async (
   const capture = camera.getByRole('button', { name: /^拍\s*照$/ });
   await waitFor(() => expect(capture).toBeEnabled());
   fireEvent.click(capture);
-  expect(await camera.findByRole('img', { name: '待上传照片' })).toBeVisible();
+  const capturedPhoto = await camera.findByRole('img', { name: '待上传照片' });
+  await waitFor(() => expect(capturedPhoto).toBeVisible());
   expect(stop).toHaveBeenCalledTimes(1);
   expect(fetchMock.mock.calls.some(([path]) => path.endsWith('/uploads'))).toBe(false);
   fireEvent.click(camera.getByRole('button', { name: '确认上传' }));
@@ -230,6 +233,53 @@ it('never reads object bytes after the live preview authorization is denied', as
   fireEvent.click(await screen.findByRole('button', { name: file.originalName }));
   await waitFor(() => expect(denied).toHaveBeenCalledWith(expect.objectContaining({ status: 403 })));
   expect(fetchMock.mock.calls.some(([path]) => path.startsWith('https:'))).toBe(false);
+});
+
+it('uses the parent download authorization and cancels a pending preview on close', async () => {
+  const available = { ...file, status: 'AVAILABLE', scanStatus: 'CLEAN' };
+  const fetchMock = vi.fn(async () => json(available));
+  const signals: AbortSignal[] = [];
+  const downloadUrl = vi.fn((_id: string, signal: AbortSignal) => {
+    signals.push(signal);
+    return new Promise<string>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} variant="standard" downloadUrl={downloadUrl} readOnly /></LanguageProvider>);
+
+  fireEvent.click(await screen.findByRole('button', { name: file.originalName }));
+  const modal = within(await screen.findByRole('dialog'));
+  expect(downloadUrl).toHaveBeenCalledWith(file.id, expect.any(AbortSignal));
+  expect(fetchMock.mock.calls).toHaveLength(1);
+  fireEvent.click(modal.getByRole('button', { name: '关闭' }));
+  expect(signals[0]?.aborted).toBe(true);
+});
+
+it('retires the D4 preview when the workspace authorization changes', async () => {
+  const available = { ...file, status: 'AVAILABLE', scanStatus: 'CLEAN' };
+  vi.stubGlobal('fetch', vi.fn(async () => json(available)));
+  const scopes: AbortSignal[] = [];
+  const originalRead = vi.fn((_path: string, init?: RequestInit) => {
+    const signal = init!.signal!;
+    scopes.push(signal);
+    return new Promise<never>((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true });
+    });
+  });
+  const nextRead = vi.fn(async (): Promise<never> => { throw new Error('Unexpected authorization request'); });
+  const view = (read: EightDRead) => <LanguageProvider><EightDAnalysisAttachments resource={resource} fileIds={[file.id]} readOnly read={read} onChange={vi.fn()} /></LanguageProvider>;
+  const { rerender } = render(view(originalRead));
+
+  expect(screen.getByText('附件')).toBeVisible();
+  expect(screen.queryByRole('group', { name: '上传附件' })).not.toBeInTheDocument();
+  fireEvent.click(await screen.findByRole('button', { name: file.originalName }));
+  expect(originalRead).toHaveBeenCalledWith(`/api/v1/files/${file.id}/download`, { method: 'POST', body: '{}', signal: expect.any(AbortSignal) });
+  expect(screen.getByRole('dialog')).toBeInTheDocument();
+  rerender(view(nextRead));
+  expect(scopes[0]?.aborted).toBe(true);
+  expect(nextRead).not.toHaveBeenCalled();
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
 it('distinguishes historical quarantine from pending work started in the current panel', async () => {
@@ -356,6 +406,17 @@ it('notifies the parent when a restored pending file finishes scanning', async (
   expect(await screen.findByText('等待安全扫描')).toBeInTheDocument();
   await waitFor(() => expect(changed).toHaveBeenCalledWith([expect.objectContaining({ id: file.id, status: 'AVAILABLE', scanStatus: 'CLEAN' })]), { timeout: 4000 });
   expect(ready).not.toHaveBeenCalled();
+});
+
+it('detaches a saved attachment from the draft without deleting the file', async () => {
+  const available = { ...file, status: 'AVAILABLE', scanStatus: 'CLEAN' };
+  const fetchMock = vi.fn(async () => json(available));
+  vi.stubGlobal('fetch', fetchMock);
+  const detach = vi.fn();
+  render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} variant="standard" onDetach={detach} /></LanguageProvider>);
+  await userEvent.click(await screen.findByRole('button', { name: '从本项移除附件' }));
+  expect(detach).toHaveBeenCalledWith(file.id);
+  expect(fetchMock.mock.calls).toHaveLength(1);
 });
 
 it('offers scan recovery for an unavailable scanner while keeping the file quarantined', async () => {

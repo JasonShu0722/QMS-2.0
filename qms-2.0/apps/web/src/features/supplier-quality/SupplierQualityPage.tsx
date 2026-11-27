@@ -11,9 +11,9 @@ import { SupplierProfilesPage } from './SupplierProfilesPage';
 import { SupplierResponseHistory } from './SupplierResponseHistory';
 import { SupplierWorkflowActions } from './SupplierWorkflowActions';
 import { useSupplierData } from './useSupplierData';
-import { ApiError } from '../../api/client';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { SupplierEightDWorkspace } from '../supplier-eight-d/SupplierEightDWorkspace';
+import { isSupplierRecordAccessDenied } from '../supplier-eight-d/supplier-eight-d';
 import { SupplierEightDIssueButton } from './SupplierEightDIssueButton';
 import './supplier-quality.css';
 
@@ -181,7 +181,7 @@ function ProblemDetail({ id, portal }: { id: string; portal: boolean }) {
   }
   function reload() { setSavedRecord(undefined); setNotice(undefined); result.reload(); }
   function denied(cause: unknown) {
-    if (!(cause instanceof ApiError) || ![401, 403].includes(cause.status ?? 0)) return;
+    if (!isSupplierRecordAccessDenied(cause)) return;
     setAccessDenied(true); setSavedRecord(undefined); setNotice(undefined);
   }
   return <><div className="supplier-toolbar"><Link to={supplierPath(portal)}>返回台账</Link><Button onClick={() => leave(reload)}>重新加载</Button></div>

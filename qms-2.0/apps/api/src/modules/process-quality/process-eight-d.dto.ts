@@ -1,7 +1,7 @@
 import { Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ProcessEightDDocumentDto } from './process-eight-d-document.dto.js';
+import { ProcessEightDDocumentDto, ProcessEightDSubmissionIssueDto } from './process-eight-d-document.dto.js';
 import { WorkflowClosureOptionsDto, WorkflowClosureOptionsQueryDto } from '../workflow/workflow-closure-preview.dto.js';
 
 export class ProcessEightDAssignmentOptionsQueryDto extends WorkflowClosureOptionsQueryDto {
@@ -147,6 +147,7 @@ export class ProcessEightDReportDto {
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) submittedAt!: string | null;
   @ApiProperty({ type: String, format: 'uuid', nullable: true }) closedRevisionId!: string | null;
   @ApiProperty({ type: [String] }) allowedActions!: string[];
+  @ApiPropertyOptional({ type: [ProcessEightDSubmissionIssueDto] }) submissionIssues?: ProcessEightDSubmissionIssueDto[];
   @ApiProperty({ type: [ProcessEightDSourceSnapshotDto] }) sources!: ProcessEightDSourceSnapshotDto[];
   @ApiProperty({ type: [ProcessEightDRevisionSummaryDto] }) revisions!: ProcessEightDRevisionSummaryDto[];
 }

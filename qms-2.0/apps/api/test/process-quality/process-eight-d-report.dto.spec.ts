@@ -8,7 +8,9 @@ import { ProcessEightDReportController } from '../../src/modules/process-quality
 it('accepts only optional UUID scope/revision and explicit supported view values', () => {
   expect(validateSync(Object.assign(new ProcessEightDReportQueryDto(), {}))).toHaveLength(0);
   expect(validateSync(Object.assign(new ProcessEightDReportQueryDto(), { revisionId: randomUUID(), view: 'APPROVED' }))).toHaveLength(0);
-  for (const value of [{ view: null }, { view: 'ANY' }, { revisionId: null }, { revisionId: 'file:///local' }, { organizationId: 'other' }]) {
+  expect(validateSync(Object.assign(new ProcessEightDReportQueryDto(), { previewFingerprint: 'a'.repeat(64) }))).toHaveLength(0);
+  for (const value of [{ view: null }, { view: 'ANY' }, { revisionId: null }, { revisionId: 'file:///local' }, { organizationId: 'other' },
+    { previewFingerprint: null }, { previewFingerprint: 'a'.repeat(63) }, { previewFingerprint: ['a'.repeat(64)] }]) {
     expect(validateSync(Object.assign(new ProcessEightDReportQueryDto(), value)).length).toBeGreaterThan(0);
   }
 });

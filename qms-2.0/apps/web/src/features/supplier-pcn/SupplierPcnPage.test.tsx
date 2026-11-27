@@ -89,11 +89,12 @@ it('passes the changed PCN page size to the server and resets page one', async (
   render(<SupplierPcnPage />);
   await screen.findByText('暂无 PCN 变更');
   const ledger = screen.getByRole('region', { name: 'PCN 变更台账' });
-  expect(within(ledger).getByRole('button', { name: '列设置' })).toBeEnabled();
-  await userEvent.click(within(ledger).getByTitle('2'));
+  const pagination = within(ledger);
+  expect(pagination.getByRole('button', { name: '列设置' })).toBeEnabled();
+  await userEvent.click(await pagination.findByTitle('2'));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests?page=2&pageSize=20'));
   await screen.findByText('暂无 PCN 变更');
-  await userEvent.click(within(ledger).getByRole('combobox', { name: '页码' }));
+  await userEvent.click(await pagination.findByRole('combobox', { name: '页码' }));
   await userEvent.click(await screen.findByRole('option', { name: /50/ }));
   await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/supplier-pcn/requests?page=1&pageSize=50'));
 });

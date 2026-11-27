@@ -57,6 +57,7 @@ async function fetchPreviewBlob(url: string, file: Attachment, signal: AbortSign
 
 export function EightDEvidenceSection({ label, ...props }: Parameters<typeof EightDEvidence>[0] & { label: string }) {
   const [opened, setOpened] = useState(false);
+  if (props.inlineImages) return <section aria-label={label}><h4>{label}</h4><EightDEvidence {...props} /></section>;
   return <details className={styles.evidence} onToggle={event => { if (event.currentTarget.open) setOpened(true); }}>
     <summary>{label} ({props.fileIds.length})</summary>
     {/* Keep an opened panel mounted so collapsing it cannot interrupt an upload. */}
@@ -64,10 +65,40 @@ export function EightDEvidenceSection({ label, ...props }: Parameters<typeof Eig
   </details>;
 }
 
-export function EightDEvidence({ problemId, resource, fileIds, readOnly, read, onChange, onLocalPendingChange, onFileReady }: {
+function InlineImage({ file, read, denied }: { file: Attachment; read: EightDRead; denied: (cause: ApiError) => void }) {
+  const text = useEightDText();
+  const [preview, setPreview] = useState<{ url?: string; failed?: boolean }>({});
+  useEffect(() => {
+    const controller = new AbortController();
+    let objectUrl: string | undefined;
+    setPreview({});
+    void (async () => {
+      try {
+        const grant = await read<components['schemas']['FileDownloadDto']>(`/api/v1/files/${encodeURIComponent(file.id)}/download`, { method: 'POST', body: '{}', signal: controller.signal });
+        controller.signal.throwIfAborted();
+        const blob = await fetchPreviewBlob(fileUrl(grant.url), file, controller.signal);
+        controller.signal.throwIfAborted();
+        objectUrl = URL.createObjectURL(blob);
+        setPreview({ url: objectUrl });
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        if (cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) denied(cause);
+        else setPreview({ failed: true });
+      }
+    })();
+    return () => { controller.abort(); if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [file.id, file.sizeBytes, file.sha256, file.contentType, read, denied]);
+  if (preview.failed) return <p role="status">{file.originalName} · {text('图片暂时无法预览', 'Image preview unavailable')}</p>;
+  if (preview.url) return <img className={styles.inlineImage} src={preview.url} alt={file.originalName} onError={() => setPreview({ failed: true })} />;
+  return <Spin size="small" aria-label={text('正在加载图片预览', 'Loading image preview')} />;
+}
+
+export function EightDEvidence({ problemId, resource, fileIds, readOnly, read, onChange, onLocalPendingChange, onFileReady, inlineImages, preserveAvailableFile }: {
   problemId: string; fileIds: string[]; readOnly: boolean; read: EightDRead; onChange: (ids: string[]) => void;
   resource?: FileResource; onLocalPendingChange?: (pending: boolean) => void;
   onFileReady?: (file: Attachment) => boolean | void;
+  inlineImages?: boolean;
+  preserveAvailableFile?: boolean;
 }) {
   const text = useEightDText();
   const scope = useEightDEvidenceScope();
@@ -140,10 +171,12 @@ export function EightDEvidence({ problemId, resource, fileIds, readOnly, read, o
     } finally { if (version === generation.current) setBusy(false); }
   }
   return <>
-    <AttachmentPanel resource={targetResource} fileIds={fileIds} readOnly={readOnly || revoked.current} onFilesChanged={changed}
+    <AttachmentPanel variant={inlineImages || preserveAvailableFile !== undefined ? 'standard' : undefined} imagesOnly={inlineImages} preserveAvailableFile={preserveAvailableFile} resource={targetResource} fileIds={fileIds} readOnly={readOnly || revoked.current} onFilesChanged={changed}
+      onDetach={preserveAvailableFile === undefined ? undefined : id => { if (!readOnly && !revoked.current) onChange(fileIds.filter(file => file !== id)); }}
       onAccessDenied={denied} onPendingChange={onLocalPendingChange ? undefined : scope.onPendingChange} onLocalPendingChange={onLocalPendingChange}
       onReady={file => { if (revoked.current) return false; if (onFileReady) return onFileReady(file); if (readOnly) return false; if (!fileIds.includes(file.id)) onChange([...fileIds, file.id]); return true; }} onRemoved={id => { if (!readOnly && !revoked.current) onChange(fileIds.filter(file => file !== id)); }} />
-    <Space wrap>{files.filter(file => fileIds.includes(file.id) && clean(file) && previewTypes.includes(file.contentType)).map(file => <Button key={file.id} disabled={busy} aria-label={`${text('预览附件', 'Preview attachment')} ${file.originalName}`} onClick={() => void open(file)}>{text('预览附件', 'Preview attachment')} · {file.originalName}</Button>)}</Space>
+    {inlineImages && <div className={styles.imageList}>{files.filter(file => fileIds.includes(file.id) && clean(file) && ['image/png', 'image/jpeg'].includes(file.contentType)).map(file => <InlineImage key={`${file.id}:${file.version}`} file={file} read={read} denied={denied} />)}</div>}
+    {!inlineImages && <Space wrap>{files.filter(file => fileIds.includes(file.id) && clean(file) && previewTypes.includes(file.contentType)).map(file => <Button key={file.id} disabled={busy} aria-label={`${text('预览附件', 'Preview attachment')} ${file.originalName}`} onClick={() => void open(file)}>{text('预览附件', 'Preview attachment')} · {file.originalName}</Button>)}</Space>}
     <Modal open={!!preview} title={preview?.file.originalName} onCancel={close} destroyOnHidden width="min(1000px, 95vw)" footer={<Space wrap>
       {preview && <Button disabled={busy} onClick={() => void download(preview.file)}>{text('授权下载附件', 'Download authorized attachment')}</Button>}
       <Button onClick={close}>{text('关闭预览', 'Close preview')}</Button>

@@ -86,11 +86,8 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
     {!workspace.instances.length ? <option value={selected?.id ?? ''}>{selected?.id ?? t('暂无流程实例')}</option> : workspace.instances.map((instance) => <option key={instance.id} value={instance.id}>{instance.current ? t('当前实例') : t('历史实例')} · {new Date(instance.createdAt).toLocaleString(locale)} · {instance.id}</option>)}
   </select></label>;
   if (workspace && processEightD && current) {
-    const returnLink = returnToProcessFollowup ? { pathname: '/app/process-quality/problems', search: returnScope === 'explicit' ? problemScope(workspace.problem.organizationId).toString() : '' }
-      : `/app/problem-center?${problemScope(workspace.problem.organizationId)}`;
     return <main className="problem-workspace"><ProcessEightDWorkspace problemId={problemId} title={problemTitle}
-      back={<Space wrap><Link to={returnLink}>{t(returnToProcessFollowup ? '返回制程问题跟进' : '返回问题中心')}</Link>
-        {workspace.instances.some(instance => !instance.current) && instanceSelector}</Space>}
+      back={workspace.instances.some(instance => !instance.current) ? instanceSelector : undefined}
       renderSourcePicker={props => <InternalEightDSourcePicker {...props} />} onRefresh={state.refresh} onAccessDenied={revoke} /></main>;
   }
   return <main className={`problem-workspace${focused ? ' is-focused' : ''}`}><h1 className="sr-only">{t('问题处理工作空间')}</h1><div className="problem-workspace__heading"><Button disabled={denied} aria-pressed={focused} onClick={() => setFocused((value) => !value)}>{t(focused ? '退出专注' : '专注处理')}</Button></div><ProblemError cause={state.error ?? error} />

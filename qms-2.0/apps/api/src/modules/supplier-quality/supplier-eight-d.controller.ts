@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Headers, Param, ParseUUIDPipe, Post, Put, Req } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
-import { IssueSupplierEightDDto, SaveSupplierEightDDto, SupplierEightDAnalysisCompleteDto, SupplierEightDDeadlinesDto, SupplierEightDReportDto, SupplierEightDVersionDto } from './supplier-eight-d.dto.js';
+import { EightDTeamOptionsDto, EightDTeamOptionsQueryDto } from '../process-quality/process-eight-d-document-team.dto.js';
+import { IssueSupplierEightDDto, SaveSupplierEightDDto, SupplierEightDAnalysisCompleteDto, SupplierEightDDeadlinesDto, SupplierEightDReportDto, SupplierEightDVersionDto, SupplierPortalEightDApprovalRoundDto } from './supplier-eight-d.dto.js';
 import { SupplierEightDService } from './supplier-eight-d.service.js';
 
 function actor(request: AuthorizedRequest) {
@@ -28,6 +29,10 @@ export class SupplierEightDController {
   @Get(':id') @ApiOkResponse({ type: SupplierEightDReportDto })
   @RequireAccess({ featurePermission: 'supplier-quality:issues:read', organizationScope: { source: 'session', optional: true } })
   read(@Req() request: AuthorizedRequest, @Param('id', ParseUUIDPipe) id: string) { return this.service.read(actor(request), id); }
+
+  @Get(':id/team-options') @ApiOkResponse({ type: EightDTeamOptionsDto })
+  @RequireAccess({ featurePermission: 'supplier-quality:issues:read', organizationScope: { source: 'session', optional: true } })
+  teamOptions(@Req() request: AuthorizedRequest, @Param('id', ParseUUIDPipe) id: string, @Query() query: EightDTeamOptionsQueryDto) { return this.service.teamOptions(actor(request), id, query); }
 
   @Put(':id') @ApiOkResponse({ type: SupplierEightDReportDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
@@ -67,6 +72,17 @@ export class SupplierPortalEightDController {
   @Get(':id') @ApiOkResponse({ type: SupplierEightDReportDto })
   @RequireAccess({ featurePermission: 'supplier-quality:responses:read', organizationScope: { source: 'session', optional: true } })
   read(@Req() request: AuthorizedRequest, @Param('id', ParseUUIDPipe) id: string) { return this.service.read(actor(request), id); }
+
+  @Get(':id/approval-history') @Header('Cache-Control', 'no-store')
+  @ApiOkResponse({ type: [SupplierPortalEightDApprovalRoundDto] })
+  @RequireAccess({ featurePermission: 'supplier-quality:responses:read', organizationScope: { source: 'session', optional: true } })
+  approvalHistory(@Req() request: AuthorizedRequest, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.portalApprovalHistory(actor(request), id);
+  }
+
+  @Get(':id/team-options') @ApiOkResponse({ type: EightDTeamOptionsDto })
+  @RequireAccess({ featurePermission: 'supplier-quality:responses:read', organizationScope: { source: 'session', optional: true } })
+  teamOptions(@Req() request: AuthorizedRequest, @Param('id', ParseUUIDPipe) id: string, @Query() query: EightDTeamOptionsQueryDto) { return this.service.teamOptions(actor(request), id, query); }
 
   @Put(':id') @ApiOkResponse({ type: SupplierEightDReportDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })

@@ -172,7 +172,7 @@
           },
           {
             "path": "docs/ATTACHMENTS.md",
-            "sha256": "2cde656c340aa2e7700f20f0f2a855f14bab39433dac727cbc549e657cf3d1a5"
+            "sha256": "94bf24e3f2e0ca17d88e9023ce4c0334178304f984c0442c33de3e931d33d892"
           }
         ]
       }
@@ -228,7 +228,7 @@
           },
           {
             "path": "docs/ATTACHMENTS.md",
-            "sha256": "2cde656c340aa2e7700f20f0f2a855f14bab39433dac727cbc549e657cf3d1a5"
+            "sha256": "94bf24e3f2e0ca17d88e9023ce4c0334178304f984c0442c33de3e931d33d892"
           }
         ]
       }
@@ -622,7 +622,7 @@
           },
           {
             "path": "apps/web/src/features/supplier-pcn/SupplierPcnPage.test.tsx",
-            "sha256": "93b58641ce9a31e07a5e2f2d189a4a2a825ea8fb1b8aaa17d6c210f3631e2928"
+            "sha256": "925b5b617379e94ee1c6d59bb24c2bd0a2728a4590cb9c17376cce2f95cf482b"
           },
           {
             "path": "apps/web/src/features/supplier-quality/SupplierUsersPanel.test.tsx",
@@ -1158,7 +1158,7 @@
           },
           {
             "path": "docs/ATTACHMENTS.md",
-            "sha256": "2cde656c340aa2e7700f20f0f2a855f14bab39433dac727cbc549e657cf3d1a5"
+            "sha256": "94bf24e3f2e0ca17d88e9023ce4c0334178304f984c0442c33de3e931d33d892"
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",

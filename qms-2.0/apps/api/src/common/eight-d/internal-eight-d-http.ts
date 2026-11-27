@@ -56,6 +56,7 @@ export class InternalEightDHttpService {
   bind(...args: Parameters<ProcessEightDService['bind']>) { return this.core.bind(...args); }
   activate(...args: Parameters<ProcessEightDService['activate']>) { return this.core.activate(...args); }
   assignmentOptions(...args: Parameters<ProcessEightDService['assignmentOptions']>) { return this.core.assignmentOptions(...args); }
+  teamOptions(...args: Parameters<ProcessEightDService['teamOptions']>) { return this.core.teamOptions(...args); }
   issue(actor: ProcessEightDActor, input: InternalEightDHttpIssueDto, traceId: string, key: string) { return this.core.issue(actor, toCoreEightDIssue(input), traceId, key); }
   async previewSources(actor: ProcessEightDActor, input: InternalEightDHttpSourcePreviewInputDto) { return (await this.core.previewSources(actor, toCoreEightDPreview(input))).map(toHttpEightDPreview); }
   async read(...args: Parameters<ProcessEightDService['read']>) { return toHttpEightDReport(await this.core.read(...args)); }

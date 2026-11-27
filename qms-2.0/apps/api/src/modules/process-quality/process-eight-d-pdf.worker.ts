@@ -6,8 +6,8 @@ import PDFDocument from 'pdfkit';
 import type { ProcessEightDControlledReportDto } from './process-eight-d-report.dto.js';
 
 const fontPath = createRequire(import.meta.url).resolve('@expo-google-fonts/noto-sans-sc/400Regular/NotoSansSC_400Regular.ttf');
-const { report, images: rawImages, dimensions, domainLabel } = workerData as {
-  report: ProcessEightDControlledReportDto; images: Map<string, Uint8Array>; dimensions: Map<string, { width: number; height: number }>; domainLabel: string;
+const { report, images: rawImages, dimensions, domainLabel, supplierPortal } = workerData as {
+  report: ProcessEightDControlledReportDto; images: Map<string, Uint8Array>; dimensions: Map<string, { width: number; height: number }>; domainLabel: string; supplierPortal: boolean;
 };
 const images = new Map([...rawImages].map(([id, bytes]) => [id, Buffer.from(bytes)]));
 
@@ -161,13 +161,21 @@ async function render(): Promise<Buffer> {
       const snapshot = report.snapshot; const document = snapshot.document;
       heading(`版本与${domainLabel}基础`);
       line('报告状态', report.label); line('修订ID', report.revisionId); line('生成时间（非审批时间）', report.generatedAt);
-      line('问题ID', report.problemId); line('负责人ID', snapshot.ownerUserId); line('实际发单 / 专业审核人ID', snapshot.professionalUserId);
-      line('责任科室ID', snapshot.responsibleSectionDepartmentId); line('协作者ID', snapshot.collaboratorUserIds.join('、'));
+      line('问题ID', report.problemId);
+      if (!supplierPortal) {
+        if (snapshot.ownerName) line('负责人', snapshot.ownerName);
+        if (snapshot.responsibleSectionName) line('责任科室', snapshot.responsibleSectionName);
+        line('负责人ID', snapshot.ownerUserId); line('实际发单 / 专业审核人ID', snapshot.professionalUserId);
+        line('责任科室ID', snapshot.responsibleSectionDepartmentId); line('协作者ID', snapshot.collaboratorUserIds.join('、'));
+      }
       const severity = snapshot.problem.severity ?? snapshot.severity;
       const riskLabels: Record<string, string> = { LOW: '低风险', MEDIUM: '中风险', HIGH: '高风险', CRITICAL: '重大风险' };
       line('风险', riskLabels[String(severity)] ?? severity); line('发起时间', snapshot.problem.createdAt);
+      const title = document.title || (domainLabel === '供应商' ? snapshot.problem.title : undefined);
+      if (title) line('标题', title);
+      if (document.riskAssessment) line('风险判定说明', document.riskAssessment);
       if (domainLabel === '供应商') {
-        line('标题', snapshot.problem.title); line('物料编码', snapshot.problem.materialCode); line('物料类别', snapshot.problem.materialCategory);
+        line('物料编码', snapshot.problem.materialCode); line('物料类别', snapshot.problem.materialCategory);
         line('不良描述', snapshot.problem.defectDescription); line('不良数量', snapshot.problem.defectQuantity);
         if (report.status === 'CLOSED_SUPPLEMENT') line('补充更新时间', snapshot.problem.supplementUpdatedAt);
       }
@@ -177,6 +185,9 @@ async function render(): Promise<Buffer> {
         ['完整提交', snapshot.deadlines.submissionDueAt, snapshot.submittedAt],
         ['关闭', snapshot.deadlines.closureDueAt, snapshot.problem.closedAt],
       ]);
+      heading('D1 团队名册');
+      table(['姓名', '部门', '职务', '职责分工', '协作范围', '组长'], (document.team ?? []).map(row =>
+        [row.name, row.department, row.jobTitle, row.responsibility, row.collaborationScope, row.isLeader ? '组长' : null]), [1, 1, 1, 2, 2, 0.8]);
       heading(`D2 问题描述与${domainLabel}来源`); line('问题描述', document.description);
       snapshot.sources.forEach((source, index) => {
         heading(`来源 ${index + 1} / ${source.sourceId} / V${source.sourceVersion}`);
@@ -184,12 +195,17 @@ async function render(): Promise<Buffer> {
       });
       if (!snapshot.sources.length) line('来源', null);
       if (snapshot.sourceConfirmations) { heading('来源关联 / 复发确认'); details(snapshot.sourceConfirmations); }
-      figures(document.okFileIds, 'D2 OK'); figures(document.ngFileIds, 'D2 NG');
+      if (document.okDescription) line('OK 图片说明', document.okDescription);
+      figures(document.okFileIds, 'D2 OK');
+      if (document.ngDescription) line('NG 图片说明', document.ngDescription);
+      figures(document.ngFileIds, 'D2 NG');
       heading('D3 临时措施');
       table(['措施', '责任部门 / 人', '导入时间'], document.temporaryMeasures.map(row => [row.description, row.departmentOwner, row.introducedAt]), [3, 1, 1]);
       document.temporaryMeasures.forEach(row => figures(row.fileIds, `D3 临时措施 ${row.id}`));
-      for (const [title, rows] of [['D3 围堵', document.containment], ['D3 可选扩展围堵', document.optionalAffectedContainment]] as const) {
-        heading(title); table(['组别 / 位置', '数量 / 不良数', '措施', '负责人 / 计划', '完成情况'],
+      for (const [title, rows, scope] of [['D3 围堵', document.containment], ['D3 可选扩展围堵', document.optionalAffectedContainment, document.optionalAffectedScope]] as const) {
+        heading(title);
+        if (scope) line('潜在影响范围', scope);
+        table(['组别 / 位置', '数量 / 不良数', '措施', '负责人 / 计划', '完成情况'],
           rows.map(row => [`${row.group} / ${row.location}`, `${display(row.quantity)} / ${display(row.ngQuantity)}`, row.measure, `${row.owner} / ${display(row.plannedAt)}`, row.completion]), [1, 1, 2, 1.5, 1.5]);
       }
       heading('D4 分析过程'); line('过程还原 / 分析方法', document.analysisProcess); figures(document.analysisFileIds, 'D4 分析');
@@ -199,6 +215,8 @@ async function render(): Promise<Buffer> {
         heading(`措施 ${index + 1} / ${row.id} / ${row.causeKind}`);
         table(['项目', '真实记录'], [
           ['对策 / 负责人 / 计划', `${row.action} / ${row.owner} / ${display(row.plannedAt)}`], ['验证方法', row.verificationMethod],
+          ...(row.selectionReason ? [['选用原因', row.selectionReason]] : []),
+          ...(row.implementer ? [['实施人', row.implementer]] : []), ...(row.verifier ? [['验证人', row.verifier]] : []),
           ['实施时间 / 结果', `${display(row.implementationAt)} / ${row.result}`], ['改善前', row.beforeState], ['改善后', row.afterState],
           ['真实首批断点', row.firstBatch], ['后续批数 / 时长', `${display(row.followUpBatchCount)} / ${display(row.followUpDuration)}`],
           ['验证记录', row.verificationRecord], ['人工明确有效结论', row.effective === null ? '尚未确认' : row.effective ? '确认有效' : '确认无效'],
@@ -206,14 +224,21 @@ async function render(): Promise<Buffer> {
         figures(row.fileIds, `D5 / D6 措施 ${row.id}`); figures(row.verificationFileIds, `D6 验证 ${row.id}`);
       });
       if (!document.correctiveActions.length) line('对策', null);
+      if (document.effectTracking) {
+        const { startDate, startOrderNumber, productionQuantity, defectQuantity, result, judgement } = document.effectTracking;
+        heading('D6 效果跟踪'); line('开始日期', startDate); line('开始订单号', startOrderNumber);
+        line('生产数量', productionQuantity); line('不良数量', defectQuantity); line('确认结果', result); line('判断', judgement);
+      }
       heading('D7 标准化（不代表受控文件已经发布）');
       table(['序号', '相关文件', '是否需要更新', '部门 / 主导者', '计划完成日期', '实际完成日期', '状态'], document.standardization.map((row, index) =>
         [index + 1, row.documentName, row.needsUpdate, row.departmentOwner, row.plannedAt, row.completedAt, row.status]), [0.5, 2.5, 0.9, 1.3, 1, 1, 0.8]);
       document.standardization.forEach((row, index) => { if (row.reason.trim()) line(`标准化第${index + 1}项补充说明`, row.reason); });
       heading('D7 横向展开');
-      table(['范围', '排查结果', '措施', '负责人', '完成情况'], document.horizontalDeployment.map(row => [row.scope, row.inspectionResult, row.action, row.owner, row.completion]), [1, 2, 2, 1, 2]);
+      table(['范围', '排查结果', '措施', '负责人', '完成情况', '状态'], document.horizontalDeployment.map(row =>
+        [row.scope, row.inspectionResult, row.action, row.owner, row.completion, row.completed == null ? null : row.completed ? '已完成' : '未完成']), [1, 2, 2, 1, 2, 0.8]);
       document.horizontalDeployment.forEach(row => figures(row.fileIds, `D7 横展 ${row.id}`));
       heading('D8 关闭与实际审批事实'); line('关闭总结', document.closureSummary); line('实际关闭时间', snapshot.problem.closedAt);
+      if (document.lessonsLearned) line('经验总结', document.lessonsLearned);
       const rounds = snapshot.approvalRounds ?? (snapshot.approval ? [snapshot.approval] : []);
       if (!rounds.length) line('审批记录', '未记录实际批准；草稿不代表签批');
       rounds.forEach(round => {
@@ -228,16 +253,16 @@ async function render(): Promise<Buffer> {
         }
         heading(`审批轮 ${display(round.roundNumber)} / ${display(round.status)}${qualification ? ` / ${qualification}` : ''}`);
         line('本轮内容版本', round.contentVersion);
-        if (round.context) { const context = object(round.context); line('轮次结束原因', context.endReason); line('结束操作人ID', context.endedBy); }
+        if (!supplierPortal && round.context) { const context = object(round.context); line('轮次结束原因', context.endReason); line('结束操作人ID', context.endedBy); }
         for (const raw of Array.isArray(round.duties) ? round.duties : []) {
           const duty = object(raw);
-          const signed = duty.status === 'APPROVED' && !!duty.decidedBy && !!duty.decidedAt;
+          const signed = duty.status === 'APPROVED' && (supplierPortal || !!duty.decidedBy) && !!duty.decidedAt;
           const fact = duty.status === 'SKIPPED_SAME_PERSON' ? '同人跳过（非签批）'
             : signed ? `实际签批 ${display(duty.decidedBy)} / ${display(duty.decidedAt)}` : '未形成批准签批';
           let dutyQualification = invalid ? '旧轮已失效，不作为本版批准' : '';
           if (!invalid && oldVersion) dutyQualification = round.status === 'APPROVED' && signed ? qualification : '非本版签批，不作为本版批准';
-          line(`${display(duty.duty)} / ${display(duty.status)}`, `${fact}${dutyQualification ? `（${dutyQualification}）` : ''}`);
-          line('记录人员 / 意见', `${display(duty.userId)} / ${display(duty.comment)}`);
+          line(`${display(duty.duty)} / ${display(duty.status)}`, supplierPortal ? duty.decidedAt : `${fact}${dutyQualification ? `（${dutyQualification}）` : ''}`);
+          if (!supplierPortal) line('记录人员 / 意见', `${display(duty.userId)} / ${display(duty.comment)}`);
         }
       });
       heading('原附件清单（不自动合并原文件）');

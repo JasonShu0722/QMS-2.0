@@ -81,3 +81,25 @@ it('does not substitute generatedAt when no actual supplement is recorded', asyn
     expect(text).not.toContain(`补充更新时间：${input.generatedAt}`);
   } finally { await loading.destroy(); }
 });
+
+it('keeps portal approval results and dates without exporting internal approval identities or comments', async () => {
+  const input = reportRead();
+  input.record.control.approvedRevisionId = 'approved-1';
+  input.revision = { id: 'approved-1' };
+  Object.assign(input.snapshot, { approvalRounds: [{ roundNumber: 1, status: 'APPROVED', contentVersion: 2,
+    duties: [{ duty: 'PROFESSIONAL', status: 'APPROVED', userId: 'private-assignee', decidedBy: 'private-decider',
+      decidedAt: '2026-10-28T08:00:00.000Z', comment: 'private-opinion' }] }] });
+  const portal = supplierEightDReportModel(input, { view: 'APPROVED' }, true);
+  const loading = getDocument({ data: new Uint8Array(await renderProcessEightDPdf(portal, new Map(), 'supplier-quality', true)), useSystemFonts: false });
+  try {
+    const pdf = await loading.promise; let text = '';
+    for (let index = 1; index <= pdf.numPages; index++) text += (await (await pdf.getPage(index)).getTextContent()).items.map(item => 'str' in item ? item.str : '').join('');
+    expect(text).toContain('PROFESSIONAL / APPROVED');
+    expect(text).toContain('2026-10-28T08:00:00.000Z');
+    for (const value of ['private-assignee', 'private-decider', 'private-opinion']) {
+      expect(text).not.toContain(value);
+      expect(JSON.stringify(portal.snapshot.approvalRounds)).not.toContain(value);
+    }
+    expect(text).not.toContain(portal.snapshot.professionalUserId);
+  } finally { await loading.destroy(); }
+});

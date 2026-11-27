@@ -2,13 +2,18 @@ import { applyDecorators } from '@nestjs/common';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsString, IsUUID,
+  ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsObject, IsString, IsUUID,
   Matches, Max, MaxLength, Min, MinLength, ValidateIf, ValidateNested,
 } from 'class-validator';
 
 export const PROCESS_EIGHT_D_MAX_ROWS = 100;
 export const PROCESS_EIGHT_D_MAX_FILES = 100;
 export const PROCESS_EIGHT_D_MAX_TEXT = 10000;
+
+export class ProcessEightDSubmissionIssueDto {
+  @ApiProperty() path!: string;
+  @ApiProperty() message!: string;
+}
 
 function Text(maxLength = PROCESS_EIGHT_D_MAX_TEXT) {
   return applyDecorators(ApiProperty({ type: String, maxLength }), IsString(), MaxLength(maxLength));
@@ -62,6 +67,16 @@ export class ProcessEightDTeamMemberDto {
   @Text(200) department = '';
   @Text() responsibility = '';
   @Text() collaborationScope = '';
+  @ApiPropertyOptional({ type: String, format: 'uuid' })
+  @ValidateIf((_object, value) => value !== undefined) @IsUUID('all')
+  userId?: string = undefined;
+  @ApiPropertyOptional({ type: String, format: 'uuid', nullable: true })
+  @ValidateIf((_object, value) => value !== undefined && value !== null) @IsUUID('all')
+  assignmentId?: string | null = undefined;
+  @OptionalText(200) jobTitle?: string = undefined;
+  @ApiPropertyOptional({ type: Boolean })
+  @ValidateIf((_object, value) => value !== undefined) @IsBoolean()
+  isLeader?: boolean = undefined;
 }
 
 export class ProcessEightDTemporaryMeasureDto {
@@ -116,6 +131,9 @@ export class ProcessEightDHorizontalDeploymentDto {
   @Text() action = '';
   @Text(200) owner = '';
   @Text() completion = '';
+  @ApiPropertyOptional({ type: Boolean })
+  @ValidateIf((_object, value) => value !== undefined) @IsBoolean()
+  completed?: boolean = undefined;
   @FileIds() fileIds: string[] = [];
 }
 
@@ -127,9 +145,21 @@ export class ProcessEightDStandardizationDto {
   @Text(200) departmentOwner = '';
   @NullableDate() plannedAt: string | null = null;
   @NullableDate() completedAt: string | null = null;
-  @ApiProperty({ type: String, maxLength: 100, description: 'COMPLETED 表示本项完成；NOT_APPLICABLE 须说明 reason；不等于受控文件已发布' })
+  @ApiProperty({ type: String, maxLength: 100, description: 'COMPLETED 表示本项完成，NOT_APPLICABLE 表示不适用' })
   @IsString() @MaxLength(100) status = '';
   @Text() reason = '';
+  @ApiPropertyOptional({ type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: PROCESS_EIGHT_D_MAX_FILES })
+  @ValidateIf((_object, value) => value !== undefined) @IsArray() @ArrayMaxSize(PROCESS_EIGHT_D_MAX_FILES) @IsUUID('all', { each: true })
+  fileIds?: string[] = undefined;
+}
+
+export class ProcessEightDEffectTrackingDto {
+  @NullableDate() startDate: string | null = null;
+  @Text(200) startOrderNumber = '';
+  @NullableCount() productionQuantity: number | null = null;
+  @NullableCount() defectQuantity: number | null = null;
+  @Text() result = '';
+  @Text(200) judgement = '';
 }
 
 export class ProcessEightDDocumentDto {
@@ -140,18 +170,26 @@ export class ProcessEightDDocumentDto {
   team?: ProcessEightDTeamMemberDto[] = undefined;
   @OptionalText() riskAssessment?: string = undefined;
   @Text() description = '';
+  @OptionalText() okDescription?: string = undefined;
+  @OptionalText() ngDescription?: string = undefined;
   @FileIds() okFileIds: string[] = [];
   @FileIds() ngFileIds: string[] = [];
   @Rows(ProcessEightDTemporaryMeasureDto) temporaryMeasures: ProcessEightDTemporaryMeasureDto[] = [];
   @Rows(ProcessEightDContainmentDto) containment: ProcessEightDContainmentDto[] = [];
   @Rows(ProcessEightDContainmentDto) optionalAffectedContainment: ProcessEightDContainmentDto[] = [];
+  @OptionalText() optionalAffectedScope?: string = undefined;
   @Text() analysisProcess = '';
   @FileIds() analysisFileIds: string[] = [];
   @Text() occurrenceCause = '';
   @Text() escapeCause = '';
   @Text() systemCause = '';
   @Rows(ProcessEightDCorrectiveActionDto) correctiveActions: ProcessEightDCorrectiveActionDto[] = [];
+  @ApiPropertyOptional({ type: () => ProcessEightDEffectTrackingDto })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsObject() @ValidateNested() @Type(() => ProcessEightDEffectTrackingDto)
+  effectTracking?: ProcessEightDEffectTrackingDto = undefined;
   @Rows(ProcessEightDHorizontalDeploymentDto) horizontalDeployment: ProcessEightDHorizontalDeploymentDto[] = [];
   @Rows(ProcessEightDStandardizationDto) standardization: ProcessEightDStandardizationDto[] = [];
   @Text() closureSummary = '';
+  @OptionalText() lessonsLearned?: string = undefined;
 }

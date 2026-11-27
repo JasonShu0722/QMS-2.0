@@ -11,6 +11,10 @@
 .chapterNav button:focus-visible, .chapterToggle:focus-visible { outline: 2px solid var(--ed-primary); outline-offset: -2px; }
 .chapterToggle { display: none; }
 .chapterContent { min-width: 0; }
+@media (min-width: 761px) {
+  .chapterLayout { align-items: stretch; height: clamp(320px, calc(100dvh - 325px), 1200px); }
+  .chapterDirectory, .chapterContent { position: static; min-height: 0; max-height: none; overflow: auto; scrollbar-gutter: stable; }
+}
 @media (max-width: 760px) {
   .chapterLayout { grid-template-columns: minmax(0, 1fr); }
   .chapterDirectory { position: static; max-height: none; }
@@ -33,6 +37,14 @@
 .entryTable { min-width: 0; }
 .entryTable th, .entryTable td { min-width: 76px; vertical-align: middle; overflow-wrap: anywhere; }
 .entryTable th { white-space: nowrap; }
+.entryGroup { margin-block: var(--qms-section-gap); border: 1px solid var(--ed-border); border-radius: 8px; padding: var(--qms-card-padding); }
+.entryGroup > summary { cursor: pointer; font-weight: 600; }
+.groupHeading { display: flex; align-items: center; justify-content: space-between; gap: var(--qms-section-gap); }
+.groupHeading h4 { margin-block: 0; }
+.groupHeading button { flex: none; }
+.measureTable th:first-child { width: 45%; }
+.measureTable td:first-child textarea, .containmentTable textarea { box-sizing: border-box; min-width: 9rem; min-height: 40px; }
+.containmentTable th:nth-child(4), .containmentTable th:nth-child(6) { width: 22%; }
 .entryTable input[type='date'] { min-width: 126px; }
 .entryTable select { min-width: 94px; }
 .entryTable tr:not(.entryDetails) td > .field > span, .positionGroup > .field > span { display: none; }
@@ -50,6 +62,26 @@
 .correctiveDetails:focus-visible { outline: 2px solid var(--ed-primary); outline-offset: 2px; }
 .correctiveActionText { white-space: pre-wrap; overflow-wrap: anywhere; }
 .improvementPair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--qms-section-gap); min-inline-size: 0; margin: var(--qms-section-gap) 0 0; border: 1px solid var(--ed-border); border-radius: 6px; }
+.responsibility { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--qms-card-padding); align-items: start; }
+.responsibility dl { margin: 0; display: grid; gap: var(--qms-section-gap); }
+.responsibility dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.responsibility table { width: 100%; border-collapse: collapse; }
+.responsibility th, .responsibility td { padding: var(--qms-section-gap); border-block-end: 1px solid var(--ed-border); text-align: start; }
+.responsibility thead th { background: var(--ed-fill); }
+.problemInput { display: grid; gap: var(--qms-section-gap); }
+.problemInput h4 { margin-block: 0 var(--qms-section-gap); }
+.factGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: var(--qms-section-gap); padding: 0; list-style: none; }
+.factGrid li { display: grid; align-content: start; gap: 4px; padding: var(--qms-card-padding); border-radius: 6px; background: var(--ed-fill); overflow-wrap: anywhere; }
+.sourceList { padding: 0; list-style: none; }
+.sourceList li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--qms-section-gap); padding: var(--qms-section-gap); border-block-end: 1px solid var(--ed-border); overflow-wrap: anywhere; }
+.descriptionTools, .imageGroups { display: grid; gap: var(--qms-section-gap); }
+.imageGroups { margin-block-start: var(--qms-card-padding); grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)); }
+.imageGroups > div { min-width: 0; }
+.imageList { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 128px), 1fr)); gap: var(--qms-section-gap); }
+.inlineImage { max-width: 100%; width: 100%; max-height: 180px; object-fit: contain; border-radius: 6px; }
+.deploymentTable th, .deploymentTable td, .standardizationTable th, .standardizationTable td { text-align: center; }
+.standardizationTable td:nth-child(2) { text-align: start; }
+.standardizationTable th:first-child, .standardizationTable td:first-child { width: 3rem; min-width: 0; }
 .flowRecords { min-width: 0; }
 .flowRecords th, .flowRecords td { min-width: 0; }
 .flowRecords td:first-child, .flowRecords td:nth-child(2) { white-space: nowrap; }

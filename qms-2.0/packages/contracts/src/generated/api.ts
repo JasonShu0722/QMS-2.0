@@ -3175,6 +3175,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/supplier-quality/eight-d/{id}/team-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierEightDController_teamOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/supplier-quality/eight-d/{id}/analysis-complete": {
         parameters: {
             query?: never;
@@ -3232,6 +3248,38 @@ export interface paths {
         };
         get: operations["SupplierPortalEightDController_read"];
         put: operations["SupplierPortalEightDController_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/approval-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDController_approvalHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/team-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SupplierPortalEightDController_teamOptions"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -4823,6 +4871,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer-quality/eight-d/{id}/team-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["CustomerEightDController_teamOptions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customer-quality/eight-d/{id}/analysis-complete": {
         parameters: {
             query?: never;
@@ -5616,6 +5680,22 @@ export interface paths {
         };
         get: operations["ProcessEightDController_read"];
         put: operations["ProcessEightDController_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/eight-d/{id}/team-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ProcessEightDController_teamOptions"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -6768,6 +6848,22 @@ export interface paths {
         };
         get: operations["NewProductEightDController_read"];
         put: operations["NewProductEightDController_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}/team-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["NewProductEightDController_teamOptions"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -12537,6 +12633,12 @@ export interface components {
             department: string;
             responsibility: string;
             collaborationScope: string;
+            /** Format: uuid */
+            userId?: string;
+            /** Format: uuid */
+            assignmentId?: string | null;
+            jobTitle?: string;
+            isLeader?: boolean;
         };
         ProcessEightDTemporaryMeasureDto: {
             id: string;
@@ -12583,6 +12685,15 @@ export interface components {
             verificationFileIds: string[];
             effective: boolean | null;
         };
+        ProcessEightDEffectTrackingDto: {
+            /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
+            startDate: string | null;
+            startOrderNumber: string;
+            productionQuantity: number | null;
+            defectQuantity: number | null;
+            result: string;
+            judgement: string;
+        };
         ProcessEightDHorizontalDeploymentDto: {
             id: string;
             scope: string;
@@ -12590,6 +12701,7 @@ export interface components {
             action: string;
             owner: string;
             completion: string;
+            completed?: boolean;
             fileIds: string[];
         };
         ProcessEightDStandardizationDto: {
@@ -12602,29 +12714,39 @@ export interface components {
             plannedAt: string | null;
             /** @description 明确选择的 YYYY-MM-DD 日期或带时区的 ISO 8601 时间；未知为 null */
             completedAt: string | null;
-            /** @description COMPLETED 表示本项完成；NOT_APPLICABLE 须说明 reason；不等于受控文件已发布 */
+            /** @description COMPLETED 表示本项完成，NOT_APPLICABLE 表示不适用 */
             status: string;
             reason: string;
+            fileIds?: string[];
         };
         ProcessEightDDocumentDto: {
             title?: string;
             team?: components["schemas"]["ProcessEightDTeamMemberDto"][];
             riskAssessment?: string;
             description: string;
+            okDescription?: string;
+            ngDescription?: string;
             okFileIds: string[];
             ngFileIds: string[];
             temporaryMeasures: components["schemas"]["ProcessEightDTemporaryMeasureDto"][];
             containment: components["schemas"]["ProcessEightDContainmentDto"][];
             optionalAffectedContainment: components["schemas"]["ProcessEightDContainmentDto"][];
+            optionalAffectedScope?: string;
             analysisProcess: string;
             analysisFileIds: string[];
             occurrenceCause: string;
             escapeCause: string;
             systemCause: string;
             correctiveActions: components["schemas"]["ProcessEightDCorrectiveActionDto"][];
+            effectTracking?: components["schemas"]["ProcessEightDEffectTrackingDto"];
             horizontalDeployment: components["schemas"]["ProcessEightDHorizontalDeploymentDto"][];
             standardization: components["schemas"]["ProcessEightDStandardizationDto"][];
             closureSummary: string;
+            lessonsLearned?: string;
+        };
+        ProcessEightDSubmissionIssueDto: {
+            path: string;
+            message: string;
         };
         WorkflowClosureDutyRecordDto: {
             /** Format: uuid */
@@ -12707,7 +12829,24 @@ export interface components {
             /** Format: date-time */
             releasedToSupplierAt: string | null;
             allowedActions: string[];
+            submissionIssues?: components["schemas"]["ProcessEightDSubmissionIssueDto"][];
             closure: components["schemas"]["WorkflowClosureRoundDto"] | null;
+        };
+        EightDTeamOptionDto: {
+            /** Format: uuid */
+            userId: string;
+            /** Format: uuid */
+            assignmentId: string | null;
+            name: string;
+            username: string;
+            department: string | null;
+            jobTitle: string | null;
+        };
+        EightDTeamOptionsDto: {
+            items: components["schemas"]["EightDTeamOptionDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         SaveSupplierEightDDto: {
             expectedRowVersion: number;
@@ -12731,6 +12870,29 @@ export interface components {
             analysisDueAt?: string;
             /** Format: date-time */
             closureDueAt?: string;
+        };
+        SupplierPortalEightDApprovalDutyDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            duty: "PROFESSIONAL" | "SECTION_MANAGER" | "MINISTER";
+            /** @enum {string} */
+            status: "PENDING" | "WAITING" | "APPROVED" | "SKIPPED_SAME_PERSON" | "CANCELLED";
+            /** Format: date-time */
+            decidedAt: string | null;
+        };
+        SupplierPortalEightDApprovalRoundDto: {
+            /** Format: uuid */
+            id: string;
+            contentVersion: number;
+            roundNumber: number;
+            /** @enum {string} */
+            status: "PENDING" | "APPROVED" | "RETURNED" | "CANCELLED";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            duties: components["schemas"]["SupplierPortalEightDApprovalDutyDto"][];
         };
         SupplierDisclosurePreviewDto: {
             expectedRowVersion: number;
@@ -12926,6 +13088,8 @@ export interface components {
             rowVersion: number;
             /** Format: date-time */
             generatedAt: string;
+            /** @description 供 PDF 下载核对当前预览的服务端快照 */
+            previewFingerprint?: string;
             snapshot: components["schemas"]["ProcessEightDReportSnapshotDto"];
             attachments: components["schemas"]["ProcessEightDReportAttachmentDto"][];
             /** Format: uuid */
@@ -14618,6 +14782,8 @@ export interface components {
             rowVersion: number;
             /** Format: date-time */
             generatedAt: string;
+            /** @description 供 PDF 下载核对当前预览的服务端快照 */
+            previewFingerprint?: string;
             snapshot: components["schemas"]["ProcessEightDReportSnapshotDto"];
             attachments: components["schemas"]["ProcessEightDReportAttachmentDto"][];
         };
@@ -14784,6 +14950,7 @@ export interface components {
             /** Format: uuid */
             closedRevisionId: string | null;
             allowedActions: string[];
+            submissionIssues?: components["schemas"]["ProcessEightDSubmissionIssueDto"][];
             revisions: components["schemas"]["ProcessEightDRevisionSummaryDto"][];
             sources: components["schemas"]["InternalEightDHttpSourceSnapshotDto"][];
         };
@@ -15868,6 +16035,7 @@ export interface components {
             /** Format: uuid */
             closedRevisionId: string | null;
             allowedActions: string[];
+            submissionIssues?: components["schemas"]["ProcessEightDSubmissionIssueDto"][];
             sources: components["schemas"]["ProcessEightDSourceSnapshotDto"][];
             revisions: components["schemas"]["ProcessEightDRevisionSummaryDto"][];
         };
@@ -16997,6 +17165,7 @@ export interface components {
             /** Format: uuid */
             closedRevisionId: string | null;
             allowedActions: string[];
+            submissionIssues?: components["schemas"]["ProcessEightDSubmissionIssueDto"][];
             revisions: components["schemas"]["ProcessEightDRevisionSummaryDto"][];
             sources: components["schemas"]["InternalEightDHttpSourceSnapshotDto"][];
         };
@@ -19104,7 +19273,7 @@ export interface components {
         /** @enum {string} */
         NotificationStatus: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
         /** @enum {string} */
-        PlatformErrorCode: "AI_CONNECTION_INVALID" | "AI_CONNECTION_NOT_FOUND" | "AI_CONNECTION_UNAVAILABLE" | "AI_CONNECTION_VERSION_CONFLICT" | "AI_APPLICATION_INVALID" | "AI_APPLICATION_NOT_FOUND" | "AI_APPLICATION_UNAVAILABLE" | "AI_APPLICATION_VERSION_CONFLICT" | "AI_CONNECTION_TARGET_DENIED" | "AI_CONNECTION_REQUEST_FAILED" | "AI_CONNECTION_TIMEOUT" | "AI_CONNECTION_RESPONSE_INVALID" | "AI_CONNECTION_RESPONSE_TOO_LARGE" | "AI_DESCRIPTION_INPUT_EMPTY" | "AI_DESCRIPTION_INPUT_INVALID" | "AI_DESCRIPTION_INPUT_TOO_LARGE" | "INGESTION_RULE_INVALID" | "INGESTION_FIELD_MISSING" | "INGESTION_FIELD_TYPE" | "INGESTION_FIELD_INVALID" | "INGESTION_SOURCE_VERSION_INVALID" | "INGESTION_RULE_OVERLAP" | "INGESTION_NOT_FOUND" | "INGESTION_PREVIEW_EXPIRED" | "INGESTION_INPUT_PROTECTED" | "INGESTION_CAPACITY_UNAVAILABLE" | "INGESTION_HISTORY_LIMIT_EXCEEDED" | "INGESTION_PREVIEW_LIMIT_EXCEEDED" | "INGESTION_STALE_CONFIRMATION" | "INGESTION_QUEUE_BLOCKED" | "INGESTION_PROCESSING_FAILED" | "INGESTION_AUTHORIZATION_REVOKED" | "INTEGRATION_INPUT_INVALID" | "INTEGRATION_ENDPOINT_NOT_FOUND" | "INTEGRATION_CREDENTIAL_NOT_FOUND" | "INTEGRATION_CREDENTIAL_REQUIRED" | "INTEGRATION_CREDENTIAL_LIMIT" | "INTEGRATION_CREDENTIAL_SECRET_UNAVAILABLE" | "INTEGRATION_CAPACITY_CONFLICT" | "INTEGRATION_AUTH_INVALID" | "INTEGRATION_ACCESS_DENIED" | "INTEGRATION_MESSAGE_INVALID" | "INTEGRATION_MESSAGE_CONFLICT" | "INTEGRATION_BODY_TOO_LARGE" | "INTEGRATION_CONTENT_TYPE_UNSUPPORTED" | "INTEGRATION_RATE_LIMITED" | "INTEGRATION_RECEIPT_NOT_FOUND" | "INTEGRATION_PAYLOAD_EXPIRED" | "ORGANIZATION_DIRECTORY_QUERY_INVALID" | "SUPPLIER_EIGHT_D_DOCUMENT_INVALID" | "SUPPLIER_EIGHT_D_ANALYSIS_INCOMPLETE" | "SUPPLIER_EIGHT_D_SUBMISSION_INCOMPLETE" | "SUPPLIER_EIGHT_D_DUE_AT_INVALID" | "SUPPLIER_EIGHT_D_DUE_AT_REQUIRED" | "SUPPLIER_EIGHT_D_EVIDENCE_CHANGED" | "SUPPLIER_EIGHT_D_EVIDENCE_INVALID" | "SUPPLIER_EIGHT_D_EVIDENCE_NOT_CLEAN" | "SUPPLIER_EIGHT_D_EXTENSION_REQUIRED" | "SUPPLIER_EIGHT_D_REQUIRED" | "SUPPLIER_EIGHT_D_RESPONDER_INVALID" | "SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_REVISION_NOT_FOUND" | "SUPPLIER_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_VERSION_CONFLICT" | "SUPPLIER_EIGHT_D_REPORT_PRIVATE_SUPPLEMENT" | "SUPPLIER_EIGHT_D_REPORT_ACCESS_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_INVALID" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_PDF_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_OBJECT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_QUERY_INVALID" | "SUPPLIER_EIGHT_D_REPORT_RENDER_FAILED" | "SUPPLIER_EIGHT_D_REPORT_STORAGE_UNAVAILABLE" | "PROCESS_EIGHT_D_CONFIGURATION_REQUIRED" | "PROCESS_EIGHT_D_WORKFLOW_NOT_READY" | "PROCESS_EIGHT_D_STAGE_UNAVAILABLE" | "PROCESS_EIGHT_D_CONFIGURATION_INVALID" | "PROCESS_EIGHT_D_NOT_FOUND" | "PROCESS_EIGHT_D_APPROVAL_LOCKED" | "PROCESS_EIGHT_D_CANCEL_APPROVAL_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_CLOSED_SOURCES_APPEND_ONLY" | "PROCESS_EIGHT_D_ANALYSIS_INCOMPLETE" | "PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE" | "PROCESS_EIGHT_D_DOCUMENT_INVALID" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_INVALID" | "PROCESS_EIGHT_D_BOARD_REQUIRED" | "PROCESS_EIGHT_D_TITLE_REQUIRED" | "PROCESS_EIGHT_D_SOURCES_INVALID" | "PROCESS_EIGHT_D_OWNER_ASSIGNMENT_INVALID" | "PROCESS_EIGHT_D_COLLABORATOR_INVALID" | "PROCESS_EIGHT_D_COLLABORATORS_INVALID" | "PROCESS_EIGHT_D_ASSIGNMENT_QUERY_INVALID" | "PROCESS_EIGHT_D_DUE_AT_INVALID" | "PROCESS_EIGHT_D_DUE_AT_REQUIRED" | "PROCESS_EIGHT_D_EXTENSION_REQUIRED" | "PROCESS_EIGHT_D_EVIDENCE_NOT_CLEAN" | "PROCESS_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT" | "PROCESS_EIGHT_D_REPORT_QUERY_INVALID" | "PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "PROCESS_EIGHT_D_REPORT_IMAGE_INVALID" | "PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT" | "PROCESS_EIGHT_D_REPORT_OBJECT_INVALID" | "PROCESS_EIGHT_D_REPORT_RENDER_FAILED" | "PROCESS_PRODUCTION_QUANTITY_INCOMPLETE" | "PROCESS_DEFECT_INPUT_INVALID" | "PROCESS_DEFECT_DELETE_BLOCKED" | "PROCESS_DEFECT_REQUIRED_FACTS_MISSING" | "PROCESS_DEFECT_DERIVED_FIELD_READ_ONLY" | "PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT" | "PROCESS_DEFECT_MANUAL_CONFIRMATION_REQUIRED" | "PROCESS_OPERATION_SECTOR_INPUT_INVALID" | "PROCESS_OPERATION_SECTOR_NAME_CONFLICT" | "PROCESS_OPERATION_SECTOR_NOT_FOUND" | "PROCESS_OPERATION_CODE_CONFLICT" | "PROCESS_OPERATION_CODE_IMMUTABLE" | "PROCESS_DEFECT_NOT_FOUND" | "PROCESS_DEFECT_TYPE_NOT_FOUND" | "PROCESS_DEFECT_QUERY_INVALID" | "PROCESS_DEFECT_STATUS_CONFLICT" | "PROCESS_DEFECT_CLASSIFICATION_INVALID" | "PROCESS_DEFECT_MATERIAL_NOT_FOUND" | "PROCESS_DEFECT_MATERIALS_INVALID" | "PROCESS_DEFECT_MATERIAL_OWNERSHIP_CONFLICT" | "PROCESS_DEFECT_SQE_INVALID" | "PROCESS_DEFECT_SQE_REQUIRED" | "PROCESS_DEFECT_SUPPLIER_INVALID" | "PROCESS_DEFECT_VERIFICATION_INVALID" | "SUPPLIER_INPUT_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_REQUIRED" | "SUPPLIER_RECORD_NOT_FOUND" | "SUPPLIER_DRAFT_LOCKED" | "SUPPLIER_PROFILE_DUPLICATE" | "SUPPLIER_COLLABORATION_NOT_ENABLED" | "SUPPLIER_PPAP_INPUT_INVALID" | "SUPPLIER_PPAP_NOT_FOUND" | "SUPPLIER_PPAP_STATE_INVALID" | "SUPPLIER_PPAP_ITEM_EXISTS" | "SUPPLIER_PPAP_ITEMS_INCOMPLETE" | "SUPPLIER_PPAP_ITEMS_NOT_REVIEWED" | "SUPPLIER_PPAP_ITEM_EVIDENCE_REQUIRED" | "SUPPLIER_INSPECTION_STANDARD_INPUT_INVALID" | "SUPPLIER_INSPECTION_STANDARD_NOT_FOUND" | "SUPPLIER_INSPECTION_STANDARD_STATE_INVALID" | "SUPPLIER_INSPECTION_STANDARD_ITEM_EXISTS" | "SUPPLIER_INSPECTION_STANDARD_ITEMS_REQUIRED" | "SUPPLIER_BARCODE_INPUT_INVALID" | "SUPPLIER_BARCODE_RULE_NOT_FOUND" | "SUPPLIER_BARCODE_RULE_NOT_PUBLISHED" | "SUPPLIER_BARCODE_FORMAT_INVALID" | "SUPPLIER_BARCODE_DUPLICATE" | "SUPPLIER_ASN_INPUT_INVALID" | "SUPPLIER_ASN_NOT_FOUND" | "SUPPLIER_ASN_STANDARD_REQUIRED" | "SUPPLIER_ASN_PPAP_REQUIRED" | "NEW_PRODUCT_INPUT_INVALID" | "NEW_PRODUCT_PROJECT_NOT_FOUND" | "NEW_PRODUCT_PROJECT_ARCHIVED" | "NEW_PRODUCT_TRIAL_BATCH_NOT_FOUND" | "NEW_PRODUCT_ISSUE_NOT_FOUND" | "NEW_PRODUCT_ISSUE_STATE_INVALID" | "NEW_PRODUCT_ISSUE_ASSIGNEE_INVALID" | "AUDIT_NC_WORKFLOW_NOT_CLOSED" | "NEW_PRODUCT_EVIDENCE_UNAVAILABLE" | "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "FILE_SCAN_RETRY_UNAVAILABLE" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "TASK_ASSIGNEE_NOT_ELIGIBLE" | "TASK_RETRY_UNAVAILABLE" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_PASSWORD_CHANGE_INVALID" | "ADMIN_BATCH_ROW_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "POSITION_GRANT_CEILING_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "COMPONENT_PROJECT_LINK_REQUIRED" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_ACTIVE_REFERENCES" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
+        PlatformErrorCode: "AI_CONNECTION_INVALID" | "AI_CONNECTION_NOT_FOUND" | "AI_CONNECTION_UNAVAILABLE" | "AI_CONNECTION_VERSION_CONFLICT" | "AI_APPLICATION_INVALID" | "AI_APPLICATION_NOT_FOUND" | "AI_APPLICATION_UNAVAILABLE" | "AI_APPLICATION_VERSION_CONFLICT" | "AI_CONNECTION_TARGET_DENIED" | "AI_CONNECTION_REQUEST_FAILED" | "AI_CONNECTION_TIMEOUT" | "AI_CONNECTION_RESPONSE_INVALID" | "AI_CONNECTION_RESPONSE_TOO_LARGE" | "AI_DESCRIPTION_INPUT_EMPTY" | "AI_DESCRIPTION_INPUT_INVALID" | "AI_DESCRIPTION_INPUT_TOO_LARGE" | "INGESTION_RULE_INVALID" | "INGESTION_FIELD_MISSING" | "INGESTION_FIELD_TYPE" | "INGESTION_FIELD_INVALID" | "INGESTION_SOURCE_VERSION_INVALID" | "INGESTION_RULE_OVERLAP" | "INGESTION_NOT_FOUND" | "INGESTION_PREVIEW_EXPIRED" | "INGESTION_INPUT_PROTECTED" | "INGESTION_CAPACITY_UNAVAILABLE" | "INGESTION_HISTORY_LIMIT_EXCEEDED" | "INGESTION_PREVIEW_LIMIT_EXCEEDED" | "INGESTION_STALE_CONFIRMATION" | "INGESTION_QUEUE_BLOCKED" | "INGESTION_PROCESSING_FAILED" | "INGESTION_AUTHORIZATION_REVOKED" | "INTEGRATION_INPUT_INVALID" | "INTEGRATION_ENDPOINT_NOT_FOUND" | "INTEGRATION_CREDENTIAL_NOT_FOUND" | "INTEGRATION_CREDENTIAL_REQUIRED" | "INTEGRATION_CREDENTIAL_LIMIT" | "INTEGRATION_CREDENTIAL_SECRET_UNAVAILABLE" | "INTEGRATION_CAPACITY_CONFLICT" | "INTEGRATION_AUTH_INVALID" | "INTEGRATION_ACCESS_DENIED" | "INTEGRATION_MESSAGE_INVALID" | "INTEGRATION_MESSAGE_CONFLICT" | "INTEGRATION_BODY_TOO_LARGE" | "INTEGRATION_CONTENT_TYPE_UNSUPPORTED" | "INTEGRATION_RATE_LIMITED" | "INTEGRATION_RECEIPT_NOT_FOUND" | "INTEGRATION_PAYLOAD_EXPIRED" | "ORGANIZATION_DIRECTORY_QUERY_INVALID" | "SUPPLIER_EIGHT_D_DOCUMENT_INVALID" | "SUPPLIER_EIGHT_D_ANALYSIS_INCOMPLETE" | "SUPPLIER_EIGHT_D_SUBMISSION_INCOMPLETE" | "SUPPLIER_EIGHT_D_DUE_AT_INVALID" | "SUPPLIER_EIGHT_D_DUE_AT_REQUIRED" | "SUPPLIER_EIGHT_D_EVIDENCE_CHANGED" | "SUPPLIER_EIGHT_D_EVIDENCE_INVALID" | "SUPPLIER_EIGHT_D_EVIDENCE_NOT_CLEAN" | "SUPPLIER_EIGHT_D_EXTENSION_REQUIRED" | "SUPPLIER_EIGHT_D_REQUIRED" | "SUPPLIER_EIGHT_D_RESPONDER_INVALID" | "SUPPLIER_EIGHT_D_SQE_ASSIGNMENT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_REVISION_NOT_FOUND" | "SUPPLIER_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_VERSION_CONFLICT" | "SUPPLIER_EIGHT_D_REPORT_PRIVATE_SUPPLEMENT" | "SUPPLIER_EIGHT_D_REPORT_ACCESS_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_DENIED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNAVAILABLE" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "SUPPLIER_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_INVALID" | "SUPPLIER_EIGHT_D_REPORT_IMAGE_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_PDF_LIMIT" | "SUPPLIER_EIGHT_D_REPORT_OBJECT_INVALID" | "SUPPLIER_EIGHT_D_REPORT_QUERY_INVALID" | "SUPPLIER_EIGHT_D_REPORT_RENDER_FAILED" | "SUPPLIER_EIGHT_D_REPORT_STORAGE_UNAVAILABLE" | "PROCESS_EIGHT_D_CONFIGURATION_REQUIRED" | "PROCESS_EIGHT_D_WORKFLOW_NOT_READY" | "PROCESS_EIGHT_D_STAGE_UNAVAILABLE" | "PROCESS_EIGHT_D_CONFIGURATION_INVALID" | "PROCESS_EIGHT_D_NOT_FOUND" | "PROCESS_EIGHT_D_APPROVAL_LOCKED" | "PROCESS_EIGHT_D_CANCEL_APPROVAL_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_CLOSED_SOURCES_APPEND_ONLY" | "PROCESS_EIGHT_D_ANALYSIS_INCOMPLETE" | "PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE" | "PROCESS_EIGHT_D_DOCUMENT_INVALID" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_REQUIRED" | "PROCESS_EIGHT_D_SOURCE_CONFIRMATION_INVALID" | "PROCESS_EIGHT_D_BOARD_REQUIRED" | "PROCESS_EIGHT_D_TITLE_REQUIRED" | "PROCESS_EIGHT_D_SOURCES_INVALID" | "PROCESS_EIGHT_D_OWNER_ASSIGNMENT_INVALID" | "PROCESS_EIGHT_D_COLLABORATOR_INVALID" | "PROCESS_EIGHT_D_COLLABORATORS_INVALID" | "PROCESS_EIGHT_D_ASSIGNMENT_QUERY_INVALID" | "PROCESS_EIGHT_D_DUE_AT_INVALID" | "PROCESS_EIGHT_D_DUE_AT_REQUIRED" | "PROCESS_EIGHT_D_EXTENSION_REQUIRED" | "PROCESS_EIGHT_D_EVIDENCE_NOT_CLEAN" | "PROCESS_EIGHT_D_REPORT_APPROVED_UNAVAILABLE" | "PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT" | "PROCESS_EIGHT_D_REPORT_QUERY_INVALID" | "PROCESS_EIGHT_D_REPORT_SNAPSHOT_INVALID" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_LIMIT" | "PROCESS_EIGHT_D_REPORT_EVIDENCE_UNPINNED" | "PROCESS_EIGHT_D_REPORT_IMAGE_INVALID" | "PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT" | "PROCESS_EIGHT_D_REPORT_OBJECT_INVALID" | "PROCESS_EIGHT_D_REPORT_RENDER_FAILED" | "PROCESS_PRODUCTION_QUANTITY_INCOMPLETE" | "PROCESS_DEFECT_INPUT_INVALID" | "PROCESS_DEFECT_DELETE_BLOCKED" | "PROCESS_DEFECT_REQUIRED_FACTS_MISSING" | "PROCESS_DEFECT_DERIVED_FIELD_READ_ONLY" | "PROCESS_DEFECT_EXTERNAL_IDENTITY_CONFLICT" | "PROCESS_DEFECT_MANUAL_CONFIRMATION_REQUIRED" | "PROCESS_OPERATION_SECTOR_INPUT_INVALID" | "PROCESS_OPERATION_SECTOR_NAME_CONFLICT" | "PROCESS_OPERATION_SECTOR_NOT_FOUND" | "PROCESS_OPERATION_CODE_CONFLICT" | "PROCESS_OPERATION_CODE_IMMUTABLE" | "PROCESS_DEFECT_NOT_FOUND" | "PROCESS_DEFECT_TYPE_NOT_FOUND" | "PROCESS_DEFECT_QUERY_INVALID" | "PROCESS_DEFECT_STATUS_CONFLICT" | "PROCESS_DEFECT_CLASSIFICATION_INVALID" | "PROCESS_DEFECT_MATERIAL_NOT_FOUND" | "PROCESS_DEFECT_MATERIALS_INVALID" | "PROCESS_DEFECT_MATERIAL_OWNERSHIP_CONFLICT" | "PROCESS_DEFECT_SQE_INVALID" | "PROCESS_DEFECT_SQE_REQUIRED" | "PROCESS_DEFECT_SUPPLIER_INVALID" | "PROCESS_DEFECT_VERIFICATION_INVALID" | "SUPPLIER_INPUT_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_INVALID" | "SUPPLIER_WORKFLOW_CONFIGURATION_REQUIRED" | "SUPPLIER_RECORD_NOT_FOUND" | "SUPPLIER_DRAFT_LOCKED" | "SUPPLIER_PROFILE_DUPLICATE" | "SUPPLIER_COLLABORATION_NOT_ENABLED" | "SUPPLIER_PPAP_INPUT_INVALID" | "SUPPLIER_PPAP_NOT_FOUND" | "SUPPLIER_PPAP_STATE_INVALID" | "SUPPLIER_PPAP_ITEM_EXISTS" | "SUPPLIER_PPAP_ITEMS_INCOMPLETE" | "SUPPLIER_PPAP_ITEMS_NOT_REVIEWED" | "SUPPLIER_PPAP_ITEM_EVIDENCE_REQUIRED" | "SUPPLIER_INSPECTION_STANDARD_INPUT_INVALID" | "SUPPLIER_INSPECTION_STANDARD_NOT_FOUND" | "SUPPLIER_INSPECTION_STANDARD_STATE_INVALID" | "SUPPLIER_INSPECTION_STANDARD_ITEM_EXISTS" | "SUPPLIER_INSPECTION_STANDARD_ITEMS_REQUIRED" | "SUPPLIER_BARCODE_INPUT_INVALID" | "SUPPLIER_BARCODE_RULE_NOT_FOUND" | "SUPPLIER_BARCODE_RULE_NOT_PUBLISHED" | "SUPPLIER_BARCODE_FORMAT_INVALID" | "SUPPLIER_BARCODE_DUPLICATE" | "SUPPLIER_ASN_INPUT_INVALID" | "SUPPLIER_ASN_NOT_FOUND" | "SUPPLIER_ASN_STANDARD_REQUIRED" | "SUPPLIER_ASN_PPAP_REQUIRED" | "NEW_PRODUCT_INPUT_INVALID" | "NEW_PRODUCT_PROJECT_NOT_FOUND" | "NEW_PRODUCT_PROJECT_ARCHIVED" | "NEW_PRODUCT_TRIAL_BATCH_NOT_FOUND" | "NEW_PRODUCT_ISSUE_NOT_FOUND" | "NEW_PRODUCT_ISSUE_STATE_INVALID" | "NEW_PRODUCT_ISSUE_ASSIGNEE_INVALID" | "AUDIT_NC_WORKFLOW_NOT_CLOSED" | "NEW_PRODUCT_EVIDENCE_UNAVAILABLE" | "WORKFLOW_UPGRADE_DOMAIN_DENIED" | "WORKFLOW_UPGRADE_NOT_ALLOWED" | "WORKFLOW_UPGRADE_MAPPING_INVALID" | "FILE_RESOURCE_DENIED" | "FILE_NOT_FOUND" | "FILE_NOT_AVAILABLE" | "FILE_REQUIRED_EVIDENCE" | "FILE_UPLOAD_EXPIRED" | "FILE_UPLOAD_INVALID" | "FILE_QUOTA_EXCEEDED" | "FILE_OBJECT_UNAVAILABLE" | "FILE_CONTENT_MISMATCH" | "FILE_MIME_NOT_ALLOWED" | "FILE_TOO_LARGE" | "FILE_EMPTY" | "FILE_COUNT_EXCEEDED" | "FILE_SCAN_RETRY_UNAVAILABLE" | "TASK_NOT_FOUND" | "TASK_NOT_CLAIMED" | "TASK_CLAIM_OWNER_REQUIRED" | "TASK_ALREADY_CLAIMED" | "TASK_ASSIGNEE_NOT_ELIGIBLE" | "TASK_RETRY_UNAVAILABLE" | "NOTIFICATION_NOT_FOUND" | "PROBLEM_NOT_FOUND" | "EXPORT_TOO_LARGE" | "EXPORT_NOT_FOUND" | "EXPORT_EXPIRED" | "OUTBOX_EVENT_NOT_FOUND" | "NUMBERING_CONFLICT" | "WORKFLOW_VERSION_IMMUTABLE" | "WORKFLOW_DRAFT_INVALID" | "WORKFLOW_NODE_FORBIDDEN" | "WORKFLOW_INSTANCE_NOT_FOUND" | "WORKFLOW_VERSION_NOT_FOUND" | "WORKFLOW_VERSION_MISMATCH" | "WORKFLOW_ACTION_INVALID" | "WORKFLOW_TRANSITION_AMBIGUOUS" | "WORKFLOW_INDEPENDENT_VERIFICATION_REQUIRED" | "WORKFLOW_TRANSACTION_ISOLATION_UNSUPPORTED" | "IDEMPOTENCY_REPLAY" | "CONCURRENCY_CONFLICT" | "AUTH_INVALID_CREDENTIALS" | "AUTH_MFA_REQUIRED" | "AUTH_MFA_CHALLENGE_INVALID" | "AUTH_MFA_CODE_INVALID" | "AUTH_MFA_RATE_LIMITED" | "AUTH_MFA_ALREADY_ENABLED" | "AUTH_MFA_NOT_ENABLED" | "AUTH_MFA_POLICY_REQUIRED" | "AUTH_REAUTHENTICATION_REQUIRED" | "AUTH_SECURITY_KEY_UNAVAILABLE" | "AUTH_MAIL_UNAVAILABLE" | "AUTH_EMAIL_REQUIRED" | "AUTH_RECOVERY_INVALID" | "AUTH_RECOVERY_UNAVAILABLE" | "AUTH_CURRENT_PASSWORD_INVALID" | "AUTH_PASSWORD_POLICY_INVALID" | "AUTH_PASSWORD_CHANGE_INVALID" | "ADMIN_BATCH_ROW_INVALID" | "AUTH_SESSION_NOT_FOUND" | "AUTH_CURRENT_SESSION_REVOKE_FORBIDDEN" | "AUTH_SESSION_REQUIRED" | "AUTH_RATE_LIMITED" | "CSRF_INVALID" | "FEATURE_PERMISSION_DENIED" | "POSITION_GRANT_CEILING_DENIED" | "ORGANIZATION_SCOPE_AMBIGUOUS" | "ORGANIZATION_SCOPE_DENIED" | "ORGANIZATION_DISABLED" | "ORGANIZATION_NOT_FOUND" | "ORGANIZATION_HIERARCHY_INVALID" | "ORGANIZATION_TYPE_MISMATCH" | "STRUCTURE_NOT_FOUND" | "STRUCTURE_DISABLED" | "STRUCTURE_REFERENCE_INVALID" | "STRUCTURE_DUPLICATE" | "COMPONENT_PROJECT_LINK_REQUIRED" | "WORKFLOW_PERMISSION_REQUIRED" | "ADMIN_USER_NOT_FOUND" | "ADMIN_USER_ACTIVE_REFERENCES" | "ADMIN_USER_DUPLICATE" | "ADMIN_USER_ORGANIZATION_IN_USE" | "ADMIN_SELF_DISABLE_FORBIDDEN" | "ADMIN_ACCOUNT_TYPE_ORGANIZATION_MISMATCH" | "ADMIN_ROLE_NOT_FOUND" | "ADMIN_ROLE_DUPLICATE" | "ADMIN_ROLE_IN_USE" | "ADMIN_PERMISSION_NOT_FOUND" | "ADMIN_PERMISSION_BASELINE_REQUIRED" | "ADMIN_SELF_LOCK_FORBIDDEN" | "IDEMPOTENCY_KEY_REQUIRED" | "AUTH_PASSWORD_RESET_INVALID" | "ADMIN_GLOBAL_ROLE_IMMUTABLE";
         PlatformTypesDto: {
             /**
              * @description Stable code owned by the domain service.
@@ -27402,6 +27571,39 @@ export interface operations {
             };
         };
     };
+    SupplierEightDController_teamOptions: {
+        parameters: {
+            query?: {
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EightDTeamOptionsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     SupplierEightDController_analysisComplete: {
         parameters: {
             query?: never;
@@ -27567,6 +27769,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SupplierEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDController_approvalHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupplierPortalEightDApprovalRoundDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDController_teamOptions: {
+        parameters: {
+            query?: {
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EightDTeamOptionsDto"];
                 };
             };
             default: {
@@ -28007,6 +28271,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -28041,6 +28307,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -28075,6 +28343,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -28109,6 +28379,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -31112,6 +31384,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -31146,6 +31420,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -31432,6 +31708,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CustomerEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    CustomerEightDController_teamOptions: {
+        parameters: {
+            query?: {
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EightDTeamOptionsDto"];
                 };
             };
             default: {
@@ -33229,6 +33539,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -33263,6 +33575,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -33549,6 +33863,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessEightDController_teamOptions: {
+        parameters: {
+            query?: {
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EightDTeamOptionsDto"];
                 };
             };
             default: {
@@ -36116,6 +36464,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -36150,6 +36500,8 @@ export interface operations {
                 /** @description 指定不可变修订；指定时不允许同时选择 CURRENT */
                 revisionId?: string;
                 view?: "CURRENT" | "APPROVED";
+                /** @description 所选预览快照指纹；版本变化时返回 409 */
+                previewFingerprint?: string;
             };
             header?: never;
             path: {
@@ -36436,6 +36788,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NewProductEightDReportDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_teamOptions: {
+        parameters: {
+            query?: {
+                page?: components["schemas"]["Object"];
+                pageSize?: components["schemas"]["Object"];
+                search?: string;
+                organizationId?: string;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EightDTeamOptionsDto"];
                 };
             };
             default: {

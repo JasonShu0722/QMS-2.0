@@ -7,10 +7,11 @@ import { SupplierEightDReportQueryDto } from '../../src/modules/supplier-quality
 import { SupplierEightDReportController, SupplierPortalEightDReportController } from '../../src/modules/supplier-quality/supplier-eight-d-report.controller.js';
 
 it('validates optional UUID scope/history and explicit report views without accepting null', () => {
-  for (const query of [{}, { revisionId: randomUUID() }, { view: 'APPROVED' }, { organizationId: randomUUID(), view: 'CURRENT' }]) {
+  for (const query of [{}, { revisionId: randomUUID() }, { view: 'APPROVED', previewFingerprint: '9'.repeat(64) }, { organizationId: randomUUID(), view: 'CURRENT' }]) {
     expect(validateSync(Object.assign(new SupplierEightDReportQueryDto(), query))).toHaveLength(0);
   }
-  for (const query of [{ view: null }, { view: 'ANY' }, { revisionId: null }, { revisionId: '../local' }, { organizationId: null }]) {
+  for (const query of [{ view: null }, { view: 'ANY' }, { revisionId: null }, { revisionId: '../local' }, { organizationId: null },
+    { previewFingerprint: null }, { previewFingerprint: 'g'.repeat(64) }]) {
     expect(validateSync(Object.assign(new SupplierEightDReportQueryDto(), query)).length).toBeGreaterThan(0);
   }
 });

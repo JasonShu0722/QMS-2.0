@@ -6,6 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { CustomerEightDService } from './customer-eight-d.service.js';
+import { EightDTeamOptionsDto, InternalEightDTeamOptionsQueryDto } from '../process-quality/process-eight-d-document-team.dto.js';
 import { CustomerEightDIssueResultDto, IssueCustomerEightDDto, CustomerEightDActivationDto, CustomerEightDAnalysisCompleteDto, CustomerEightDAssignmentOptionsDto, CustomerEightDAssignmentOptionsQueryDto, CustomerEightDBindingDto, CustomerEightDBindingResultDto,
   CustomerEightDCollaboratorsDto, CustomerEightDDeadlinesDto, CustomerEightDReportDto, CustomerEightDRiskDto, CustomerEightDScopeDto,
   CustomerEightDSourcesDto, CustomerEightDSourcePreviewDto, CustomerEightDSourcePreviewInputDto, CustomerEightDVersionDto, ReassignCustomerEightDDto, SaveCustomerEightDDto } from './customer-eight-d.dto.js';
@@ -57,6 +58,10 @@ export class CustomerEightDController {
   @Get(':id') @ApiOkResponse({ type: CustomerEightDReportDto })
   @RequireAccess({ featurePermission: 'customer-quality:issues:read', organizationScope: queryScope })
   read(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() _query: CustomerEightDScopeDto) { return this.service.read(actor(request), id); }
+
+  @Get(':id/team-options') @ApiOkResponse({ type: EightDTeamOptionsDto })
+  @RequireAccess({ featurePermission: 'customer-quality:issues:read', organizationScope: queryScope })
+  teamOptions(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() query: InternalEightDTeamOptionsQueryDto) { return this.service.teamOptions(actor(request), id, query); }
 
   @Put(':id') @ApiOkResponse({ type: CustomerEightDReportDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })

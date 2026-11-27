@@ -54,6 +54,41 @@ it('renders fixed verified image bytes outside transactions and final-audits the
   expect(s.audit.record).toHaveBeenCalledWith(expect.objectContaining({ metadata: expect.objectContaining({ sha256: createHash('sha256').update(output.content).digest('hex'), sizeBytes: output.content.length }) }), s.tx);
 });
 
+it('binds saved D7 standardization evidence to the supplier preview and PDF', async () => {
+  const s = setup(true);
+  const { document } = s.result.snapshot;
+  document.okFileIds = [];
+  const standard = document.standardization[0]!;
+  standard.fileIds = [fileId];
+  const preview = await s.service.read(actor, id, {}, 'preview');
+  expect(preview.attachments).toEqual([expect.objectContaining({ id: fileId, uses: [`D7 标准化 ${standard.id}`] })]);
+  const pdf = await s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'pdf');
+  expect(pdf.content.subarray(0, 5).toString()).toBe('%PDF-');
+});
+
+it.each(['CURRENT', 'APPROVED'] as const)('binds a supplier PDF request to the previewed %s report and evidence', async view => {
+  const s = setup(true);
+  s.tx.user.findUnique = async () => ({ ...supplier, status: 'ACTIVE', organization: { status: 'ACTIVE' } });
+  if (view === 'APPROVED') {
+    s.result.revision = { id: revisionId };
+    s.result.record.control.approvedRevisionId = revisionId;
+    Object.assign(s.result.snapshot, { evidence: [s.ref] });
+  }
+  const preview = await s.service.read(supplier, id, { view }, 'preview');
+  expect(preview).toHaveProperty('previewFingerprint', expect.stringMatching(/^[a-f0-9]{64}$/));
+  const query = { view, previewFingerprint: Reflect.get(preview, 'previewFingerprint') };
+  const pdf = await s.service.pdf(supplier, id, query, 'pdf');
+  expect(pdf.content.subarray(0, 5).toString()).toBe('%PDF-');
+  if (view === 'APPROVED') {
+    s.result.revision = { id: randomUUID() };
+    s.result.record.control.approvedRevisionId = s.result.revision.id;
+  } else s.ref.objectVersionId = 'version-changed-after-preview';
+  s.storage.readVersion.mockClear();
+  await expect(s.service.pdf(supplier, id, query, 'stale')).rejects.toMatchObject({ status: 409,
+    response: { code: 'SUPPLIER_EIGHT_D_REPORT_VERSION_CONFLICT' } });
+  expect(s.storage.readVersion).not.toHaveBeenCalled();
+});
+
 it.each(['read', 'pdf'] as const)('%s rejects client snapshot/domain/key injection and bad or conflicting selections before core access', async method => {
   for (const query of [{ snapshot: {} }, { domainCode: 'process-quality' }, { revisionId, view: 'CURRENT' }, { view: null }, { revisionId: 'x' }, { organizationId: randomUUID() }]) {
     const s = setup();
@@ -105,6 +140,24 @@ it('groups private supplement files separately and never uses that resource for 
   portal.tx.user.findUnique = async () => ({ ...supplier, status: 'ACTIVE', organization: { status: 'ACTIVE' } });
   await expect(portal.service.pdf(supplier, id, {}, 't')).rejects.toMatchObject({ status: 403 });
   expect(portal.storage.readVersion).not.toHaveBeenCalled();
+});
+
+it('rechecks evidence authorization before reading bytes for an already previewed PDF', async () => {
+  const s = setup(true);
+  const preview = await s.service.read(actor, id, {}, 'preview');
+  s.files.readReportEvidence.mockRejectedValue(new HttpException('FILE_RESOURCE_DENIED', 403));
+  await expect(s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'revoked')).rejects.toMatchObject({ status: 403 });
+  expect(s.storage.readVersion).not.toHaveBeenCalled();
+});
+
+it('rejects a PDF when the report status changes during generation', async () => {
+  const s = setup(true);
+  const preview = await s.service.read(actor, id, {}, 'preview');
+  s.storage.readVersion.mockImplementation(async function* () {
+    s.result.inReview = true;
+    yield png;
+  });
+  await expect(s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'changed-status')).rejects.toMatchObject({ status: 409 });
 });
 
 it.each(['objectVersionId', 'sha256', 'version', 'scannedAt', 'scanStatus'] as const)('validates pinned history %s for every fixed attachment', async field => {

@@ -6,6 +6,7 @@ import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { NewProductEightDService } from './new-product-eight-d.service.js';
+import { EightDTeamOptionsDto, InternalEightDTeamOptionsQueryDto } from '../process-quality/process-eight-d-document-team.dto.js';
 import { NewProductEightDIssueResultDto, IssueNewProductEightDDto, NewProductEightDActivationDto, NewProductEightDAnalysisCompleteDto, NewProductEightDAssignmentOptionsDto, NewProductEightDAssignmentOptionsQueryDto, NewProductEightDBindingDto, NewProductEightDBindingResultDto,
   NewProductEightDCollaboratorsDto, NewProductEightDDeadlinesDto, NewProductEightDReportDto, NewProductEightDRiskDto, NewProductEightDScopeDto,
   NewProductEightDSourcesDto, NewProductEightDSourcePreviewDto, NewProductEightDSourcePreviewInputDto, NewProductEightDVersionDto, ReassignNewProductEightDDto, SaveNewProductEightDDto } from './new-product-eight-d.dto.js';
@@ -57,6 +58,10 @@ export class NewProductEightDController {
   @Get(':id') @ApiOkResponse({ type: NewProductEightDReportDto })
   @RequireAccess({ featurePermission: 'new-product-quality:issues:read', organizationScope: queryScope })
   read(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() _query: NewProductEightDScopeDto) { return this.service.read(actor(request), id); }
+
+  @Get(':id/team-options') @ApiOkResponse({ type: EightDTeamOptionsDto })
+  @RequireAccess({ featurePermission: 'new-product-quality:issues:read', organizationScope: queryScope })
+  teamOptions(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() query: InternalEightDTeamOptionsQueryDto) { return this.service.teamOptions(actor(request), id, query); }
 
   @Put(':id') @ApiOkResponse({ type: NewProductEightDReportDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })

@@ -21,6 +21,36 @@ const pipe = new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, t
 const transform = (input: unknown): Promise<dto.ProcessEightDDocumentDto> =>
   pipe.transform(input, { type: 'body', metatype: dto.ProcessEightDDocumentDto });
 
+it('round-trips the expanded sections through the real ValidationPipe and stored JSON', async () => {
+  const userId = randomUUID(), fileId = randomUUID();
+  const payload = {
+    team: [{ id: 'leader', name: '同事', department: '制造', userId, jobTitle: '工程师', isLeader: true, collaborationScope: '既有协作内容' }],
+    okDescription: '良品对照', ngDescription: '不良品表现', optionalAffectedScope: '其他产线',
+    optionalAffectedContainment: [{ id: 'affected', plannedAt: '2026-11-27', completion: '已检查首批' }],
+    effectTracking: { startDate: '2026-11-27', startOrderNumber: '订单一', productionQuantity: 0, defectQuantity: null, result: '持续观察', judgement: '待确认' },
+    horizontalDeployment: [{ id: 'horizontal', completion: '历史文字', completed: true, fileIds: [fileId] }],
+    standardization: [{ id: 'custom', key: 'CUSTOM', documentName: '文件', fileIds: [fileId] }],
+    lessonsLearned: '经验记录',
+  };
+  const saved = policy.normalizeProcessEightDDocument(await transform(payload));
+  expect(policy.normalizeProcessEightDDocument(JSON.parse(JSON.stringify(saved)))).toMatchObject(payload);
+  expect(policy.documentFileIds(saved)).toEqual([fileId]);
+});
+
+it.each([
+  { team: [{ id: 'member', userId: 'external text' }] },
+  { team: [{ id: 'member', isLeader: 'true' }] },
+  { effectTracking: [] }, { effectTracking: null },
+  { effectTracking: { productionQuantity: '0' } },
+  { effectTracking: { startDate: '2026-02-30' } },
+  { effectTracking: { unknown: true } },
+  { horizontalDeployment: [{ id: 'horizontal', completed: 1 }] },
+  { standardization: [{ id: 'custom', key: 'CUSTOM', fileIds: ['not a UUID'] }] },
+])('rejects malformed new fields at the HTTP and stored document boundaries %#', async payload => {
+  await expect(transform(payload)).rejects.toMatchObject({ status: 400 });
+  expect(() => policy.normalizeProcessEightDDocument(payload)).toThrow(policy.ProcessEightDDocumentError);
+});
+
 function fieldsFor(section: string) {
   return section === 'root' ? {} : {
     id: 'row',
@@ -112,9 +142,9 @@ describe('process eight-d document DTO', () => {
       }
       const root = schema(document.components!.schemas!.ProcessEightDDocumentDto!);
       expect(Object.keys(root.properties!)).toEqual([
-        'title', 'team', 'riskAssessment', 'description', 'okFileIds', 'ngFileIds', 'temporaryMeasures', 'containment', 'optionalAffectedContainment',
+        'title', 'team', 'riskAssessment', 'description', 'okDescription', 'ngDescription', 'okFileIds', 'ngFileIds', 'temporaryMeasures', 'containment', 'optionalAffectedContainment', 'optionalAffectedScope',
         'analysisProcess', 'analysisFileIds', 'occurrenceCause', 'escapeCause', 'systemCause',
-        'correctiveActions', 'horizontalDeployment', 'standardization', 'closureSummary',
+        'correctiveActions', 'effectTracking', 'horizontalDeployment', 'standardization', 'closureSummary', 'lessonsLearned',
       ]);
       for (const name of ['temporaryMeasures', 'containment', 'optionalAffectedContainment', 'correctiveActions', 'horizontalDeployment', 'standardization']) {
         const array = schema(root.properties![name]!);
@@ -127,6 +157,9 @@ describe('process eight-d document DTO', () => {
       expect(schema(action.properties!.followUpBatchCount!)).toMatchObject({ type: 'integer', nullable: true });
       expect(schema(action.properties!.implementationAt!)).toMatchObject({ type: 'string', nullable: true });
       expect(schema(schema(action.properties!.verificationFileIds!).items!)).toMatchObject({ type: 'string', format: 'uuid' });
+      const tracking = schema(root.properties!.effectTracking!);
+      expect(schema(tracking.properties!.productionQuantity!)).toMatchObject({ type: 'integer', nullable: true });
+      expect(schema(tracking.properties!.judgement!)).toMatchObject({ type: 'string' });
     } finally {
       await app.close();
     }

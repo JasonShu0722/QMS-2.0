@@ -7,7 +7,13 @@ import { workflowError } from '../workflow/workflow-runtime-policy.js';
 export type FileActor = WorkflowActor;
 export interface FileResourceRef { resourceType: string; resourceId: string }
 export type FileResourceAction = 'upload' | 'complete' | 'read' | 'delete' | 'attach';
-export interface FileResourceGrant { organizationId: string; version: number; readonly readableFileIds?: readonly string[] }
+export interface FileResourceGrant {
+  organizationId: string;
+  version: number;
+  readonly readableFileIds?: readonly string[];
+  readonly requiredEvidenceRows?: readonly { path: string; fileIds: readonly string[] }[];
+  readonly relatedEvidenceScope?: { organizationId: string; resourceType: string };
+}
 export type FileResourceChange = { resource: FileResourceRef; organizationId: string; actorUserId: string; action: 'added' | 'removed'; traceId: string };
 export interface FileResourceAccessAdapter {
   readonly resourceType: string;

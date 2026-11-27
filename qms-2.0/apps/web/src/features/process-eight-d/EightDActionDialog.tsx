@@ -47,7 +47,7 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
     if (value) onDirty();
   }, [sourceBaseline, onDirty]);
   const titles: Record<EightDAction, string> = {
-    submit: text('完整提交', 'Submit complete report'), 'analysis-complete': text('分析完成并设提交计划', 'Complete analysis and plan submission'),
+    submit: text('完整提交', 'Submit complete report'), 'analysis-complete': text('确认分析完成并设置正式提交期限', 'Confirm analysis and set the final submission deadline'),
     collaborators: text('维护协作者', 'Manage collaborators'), reassign: text('专业重派 / 科室内转派', 'Professional / within-section reassignment'),
     risk: text('调整风险', 'Change risk'), sources: text('调整来源', 'Change sources'), deadlines: text('设置期限', 'Set deadlines'), extension: text('申请延期', 'Request extension'),
   };
@@ -96,7 +96,7 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
       {recovery}
       <p>{text('固定内容版本', 'Fixed content version')} {report.contentVersion} · {text('记录版本', 'Row version')} {report.version}</p>
       {action === 'submit' && <Alert type="info" title={text('提交后锁定正文，进入关闭审核。', 'Submission locks the content and starts closure review.')} />}
-      {action === 'analysis-complete' && <>{datetime(text('完整提交计划', 'Planned complete submission'), submissionDueAt, setSubmissionDueAt, true)}<p>{text('确认分析与对策计划已完成；完整实施及验证仍须在正式提交前完成。', 'Confirm analysis and corrective plans are complete. Implementation and verification are still required before final submission.')}</p></>}
+      {action === 'analysis-complete' && <>{datetime(text('正式提交期限', 'Final submission deadline'), submissionDueAt, setSubmissionDueAt, true)}<p>{text('这是整份 8D 报告的提交期限。正式提交前须完成对策实施及验证。', 'This deadline applies to the full 8D report. Implement and verify corrective actions before final submission.')}</p></>}
       {(action === 'collaborators' || action === 'reassign') && <EightDAssignmentPicker report={report} domain={domain} read={read} collaborators={action === 'collaborators'} disabled={disabled} section={section} onSection={value => { onDirty(); setSection(value); }} selected={selected} onSelect={value => { onDirty(); setSelected(value); }} />}
       {action === 'risk' && <EightDField label={text('风险等级', 'Risk level')}><select disabled={disabled} value={severity} onChange={event => setSeverity(event.target.value as typeof severity)}><option value="LOW">{severityText('LOW')}</option><option value="MEDIUM">{severityText('MEDIUM')}</option><option value="HIGH">{severityText('HIGH')}</option><option value="CRITICAL">{severityText('CRITICAL')}</option></select></EightDField>}
       {action === 'sources' && (domain === 'process'

@@ -41,7 +41,7 @@ describe('process eight-d document policy', () => {
 
   it('creates independent incomplete drafts with eleven stable standardization rows', () => {
     const draft = policy.emptyProcessEightDDocument();
-    expect(policy.normalizeProcessEightDDocument({})).toEqual(draft);
+    expect(policy.normalizeProcessEightDDocument({})).toEqual({ ...draft, horizontalDeployment: [] });
     expect(draft.standardization.map((row) => row.key)).toEqual([
       'DFMEA', 'PFMEA', 'DESIGN_RECORD', 'SPECIAL_CHARACTERISTICS', 'PROCESS_FLOW', 'CONTROL_PLAN',
       'SOP', 'INSPECTION_STANDARD', 'PACKAGING_CONFIRMATION', 'INTERNAL_PROCESS_AUDIT', 'LLR',
@@ -65,9 +65,22 @@ describe('process eight-d document policy', () => {
   it('projects preset rows for a stored legacy document missing the D7 field', () => {
     const legacy = { closureSummary: 'Historical work' };
     expect(policy.normalizeProcessEightDDocument(legacy)).toEqual({
-      ...policy.emptyProcessEightDDocument(), closureSummary: legacy.closureSummary,
+      ...policy.emptyProcessEightDDocument(), closureSummary: legacy.closureSummary, horizontalDeployment: [],
     });
     expect(legacy).not.toHaveProperty('standardization');
+  });
+
+  it('adds one blank horizontal row to new documents and respects an explicitly deleted list', () => {
+    const draft = policy.emptyProcessEightDDocument();
+    expect(draft.horizontalDeployment).toEqual([expect.objectContaining({ scope: '', completion: '', fileIds: [] })]);
+    expect(policy.normalizeProcessEightDDocument({ ...draft, horizontalDeployment: [] }).horizontalDeployment).toEqual([]);
+    expect(policy.normalizeProcessEightDDocument({ horizontalDeployment: [{ id: 'legacy', completion: '已确认' }] }).horizontalDeployment)
+      .toEqual([expect.objectContaining({ id: 'legacy', completion: '已确认', completed: undefined })]);
+  });
+
+  it('rejects two designated team leaders with the second member path', () => {
+    const input = { team: [{ id: 'first', isLeader: true }, { id: 'second', isLeader: true }] };
+    expect(() => policy.normalizeProcessEightDDocument(input)).toThrow(expect.objectContaining({ issues: [expect.objectContaining({ path: 'team[1].isLeader' })] }));
   });
 
   it.each([
@@ -142,10 +155,17 @@ describe('process eight-d document policy', () => {
     expect(policy.analysisCompletionIssues(document).map((issue) => issue.path)).toEqual(expect.arrayContaining(['occurrenceCause', 'correctiveActions']));
   });
 
-  it.each(['action', 'owner', 'plannedAt', 'verificationMethod'] as const)('checks D5 %s on every occurrence and escape action', (field) => {
+  it.each(['action', 'owner', 'plannedAt'] as const)('checks D5 %s on every occurrence and escape action', (field) => {
     const document = validDocument();
     Object.assign(document.correctiveActions[1]!, { [field]: field === 'plannedAt' ? null : '' });
     expect(paths(document)).toContain(`correctiveActions[1].${field}`);
+  });
+
+  it('accepts D5 without the removed fields during analysis and submission', () => {
+    const document = validDocument();
+    document.correctiveActions.forEach(row => { row.verificationMethod = ''; });
+    expect(policy.analysisCompletionIssues(document)).toEqual([]);
+    expect(policy.submissionIssues(document)).toEqual([]);
   });
 
   it('submits verified measures without D3, system cause, OK/NG, D7 updates or closure text', () => {
@@ -201,18 +221,59 @@ describe('process eight-d document policy', () => {
     expect(() => policy.normalizeProcessEightDDocument({ standardization: [{ id: 'x', key: 'CUSTOM', documentName: 'A' }, { id: 'y', key: 'CUSTOM', documentName: 'B' }] })).toThrow(policy.ProcessEightDDocumentError);
   });
 
-  it('requires completion only for explicitly requested D7 updates, and reasons only for NOT_APPLICABLE', () => {
+  it('requires D7 completion dates for requested updates and row evidence when completed', () => {
     const document = validDocument();
     document.standardization[0]!.needsUpdate = true;
     expect(paths(document)).toEqual(expect.arrayContaining(['standardization[0].completedAt', 'standardization[0].status']));
     document.standardization[0]!.completedAt = '2026-10-25';
     document.standardization[0]!.status = 'COMPLETED';
+    expect(paths(document)).toEqual(['standardization[0].fileIds']);
+    document.standardization[0]!.fileIds = [fileId];
     document.standardization[1]!.needsUpdate = false;
-    expect(paths(document)).toEqual([]);
     document.standardization[1]!.status = 'NOT_APPLICABLE';
-    expect(paths(document)).toContain('standardization[1].reason');
-    document.standardization[1]!.reason = 'Not applicable to this change';
     expect(paths(document)).toEqual([]);
+  });
+
+  it('locates completed horizontal rows without evidence and ignores evidence belonging to another row', () => {
+    const document = validDocument();
+    document.horizontalDeployment = [{ ...policy.emptyProcessEightDDocument().horizontalDeployment[0]!, fileIds: [fileId] }];
+    document.horizontalDeployment.push({ ...document.horizontalDeployment[0]!, id: 'second', completed: true, fileIds: [] });
+    expect(paths(document)).toEqual(['horizontalDeployment[1].fileIds']);
+    document.horizontalDeployment[1]!.fileIds = [otherFileId];
+    expect(paths(document)).toEqual([]);
+    expect(policy.completedD7EvidenceIssues(document, new Set([fileId]))).toEqual([
+      expect.objectContaining({ path: 'horizontalDeployment[1].fileIds' }),
+    ]);
+  });
+
+  it.each([
+    ['horizontalDeployment', 'horizontalDeployment'],
+    ['horizontalDeployment', 'standardization'],
+    ['standardization', 'standardization'],
+  ] as const)('rejects the same D7 attachment across %s and %s rows on save and submit', (firstSection, secondSection) => {
+    const previous = validDocument();
+    previous.horizontalDeployment = [];
+    previous.standardization = [];
+    const addRow = (document: ReturnType<typeof validDocument>, section: typeof firstSection | typeof secondSection,
+      id: string, ids: string[], completed: boolean) => {
+      if (section === 'horizontalDeployment') {
+        document.horizontalDeployment.push({ ...policy.emptyProcessEightDDocument().horizontalDeployment[0]!, id, completed, fileIds: ids });
+      } else {
+        document.standardization.push({ ...policy.emptyProcessEightDDocument().standardization[0]!, id, key: id,
+          status: completed ? 'COMPLETED' : '', fileIds: ids });
+      }
+      return `${section}[${document[section].length - 1}].fileIds`;
+    };
+    const firstPath = addRow(previous, firstSection, 'first', [fileId, fileId], true);
+    const document = structuredClone(previous);
+    const secondPath = addRow(document, secondSection, 'second', [fileId.toUpperCase(), otherFileId], false);
+    const available = new Set([fileId, otherFileId]);
+    expect(policy.completedD7EvidenceIssues(previous, available)).toEqual([]);
+    expect(policy.completedD7EvidenceIssues(document, available, previous).map(issue => issue.path)).toEqual([firstPath, secondPath]);
+    expect(paths(document)).toEqual([firstPath, secondPath]);
+    expect(policy.normalizeProcessEightDDocument(document)).toEqual(document);
+    document[secondSection].at(-1)!.fileIds = [otherFileId];
+    expect(policy.completedD7EvidenceIssues(document, available, previous)).toEqual([]);
   });
 
   it('collects each file reference once across all evidence-bearing sections without mutating input', () => {
@@ -239,6 +300,7 @@ describe('process eight-d document policy', () => {
       ['corrective action', { correctiveActions: [{ id: 'a', causeKind: 'SYSTEM', fileIds: [ids[100]!] }] }],
       ['verification', { correctiveActions: [{ id: 'a', causeKind: 'SYSTEM', verificationFileIds: [ids[100]!] }] }],
       ['horizontal deployment', { horizontalDeployment: [{ id: 'h', fileIds: [ids[100]!] }] }],
+      ['standardization', { standardization: [{ id: 's', key: 'CUSTOM', fileIds: [ids[100]!] }] }],
     ] as const;
 
     it.each(extraEvidence)('rejects 100 OK plus one distinct %s attachment on save', (_section, extra) => {

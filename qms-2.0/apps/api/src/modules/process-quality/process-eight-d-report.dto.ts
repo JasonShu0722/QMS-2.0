@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsIn, IsUUID, ValidateIf } from 'class-validator';
+import { IsIn, IsUUID, Matches, ValidateIf } from 'class-validator';
+import { reportPreviewFingerprintPattern } from '../../common/eight-d/report-preview-fingerprint.js';
 import { ProcessEightDDocumentDto } from './process-eight-d-document.dto.js';
 
 export class ProcessEightDReportQueryDto {
@@ -11,6 +12,9 @@ export class ProcessEightDReportQueryDto {
   @ApiPropertyOptional({ enum: ['CURRENT', 'APPROVED'], default: 'CURRENT' })
   @ValidateIf((_object, value) => value !== undefined) @IsIn(['CURRENT', 'APPROVED'])
   view?: 'CURRENT' | 'APPROVED';
+  @ApiPropertyOptional({ pattern: reportPreviewFingerprintPattern.source, description: '所选预览快照指纹；版本变化时返回 409' })
+  @ValidateIf((_object, value) => value !== undefined) @Matches(reportPreviewFingerprintPattern)
+  previewFingerprint?: string;
 }
 
 export class ProcessEightDReportSourceDto {
@@ -67,6 +71,8 @@ export class ProcessEightDControlledReportDto {
   @ApiProperty() contentVersion!: number;
   @ApiProperty() rowVersion!: number;
   @ApiProperty({ format: 'date-time' }) generatedAt!: string;
+  @ApiPropertyOptional({ pattern: reportPreviewFingerprintPattern.source, description: '供 PDF 下载核对当前预览的服务端快照' })
+  previewFingerprint?: string;
   @ApiProperty({ type: ProcessEightDReportSnapshotDto }) snapshot!: ProcessEightDReportSnapshotDto;
   @ApiProperty({ type: [ProcessEightDReportAttachmentDto] }) attachments!: ProcessEightDReportAttachmentDto[];
 }
