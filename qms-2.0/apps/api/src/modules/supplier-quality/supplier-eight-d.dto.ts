@@ -1,8 +1,14 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PickType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import { IsDate, IsInt, IsOptional, IsUUID, Max, Min, ValidateNested } from 'class-validator';
-import { ProcessEightDDocumentDto } from '../process-quality/process-eight-d-document.dto.js';
-import { WorkflowClosureRoundDto } from '../workflow/workflow-closure-round.dto.js';
+import { ProcessEightDDocumentDto, ProcessEightDSubmissionIssueDto } from '../process-quality/process-eight-d-document.dto.js';
+import { WorkflowClosureDutyRecordDto, WorkflowClosureRoundDto } from '../workflow/workflow-closure-round.dto.js';
+
+export class SupplierPortalEightDApprovalDutyDto extends PickType(WorkflowClosureDutyRecordDto, ['id', 'duty', 'status', 'decidedAt']) {}
+
+export class SupplierPortalEightDApprovalRoundDto extends PickType(WorkflowClosureRoundDto, ['id', 'contentVersion', 'roundNumber', 'status', 'createdAt', 'updatedAt']) {
+  @ApiProperty({ type: [SupplierPortalEightDApprovalDutyDto] }) duties!: SupplierPortalEightDApprovalDutyDto[];
+}
 
 export class IssueSupplierEightDDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) @Max(2147483647) expectedVersion!: number;
@@ -51,5 +57,6 @@ export class SupplierEightDReportDto {
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) closedAt!: string | null;
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) releasedToSupplierAt!: string | null;
   @ApiProperty({ type: [String] }) allowedActions!: string[];
+  @ApiPropertyOptional({ type: [ProcessEightDSubmissionIssueDto] }) submissionIssues?: ProcessEightDSubmissionIssueDto[];
   @ApiProperty({ type: WorkflowClosureRoundDto, nullable: true }) closure!: WorkflowClosureRoundDto | null;
 }

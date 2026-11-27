@@ -3,6 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { isUUID } from 'class-validator';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
+import { reportPreviewFingerprint, reportPreviewFingerprintPattern } from '../../common/eight-d/report-preview-fingerprint.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { FileLifecycleService } from '../file-management/file-lifecycle.service.js';
 import type { FileEvidenceDto } from '../file-management/file.dto.js';
@@ -29,13 +30,15 @@ export class SupplierEightDReportService {
   async read(actor: SupplierEightDActor, id: string, query: SupplierEightDReportQueryDto, traceId: string): Promise<SupplierEightDControlledReportDto> {
     this.validate(actor, id, query);
     const selected = await this.transaction(tx => this.select(tx, actor, id, query));
+    const previewFingerprint = this.checkPreview(selected.report, query.previewFingerprint);
     await this.finish(actor, id, query, selected, traceId, 'READ');
-    return selected.report;
+    return { ...selected.report, previewFingerprint };
   }
 
   async pdf(actor: SupplierEightDActor, id: string, query: SupplierEightDReportQueryDto, traceId: string): Promise<{ content: Buffer; contentType: 'application/pdf'; filename: string }> {
     this.validate(actor, id, query);
     const selected = await this.transaction(tx => this.select(tx, actor, id, query));
+    if (query.previewFingerprint !== undefined) this.checkPreview(selected.report, query.previewFingerprint);
     const images = await this.images(selected);
     const executionId = randomUUID(), startedAt = new Date();
     const observe = async (status: 'STARTED' | 'SUCCEEDED' | 'FAILED') => {
@@ -44,7 +47,7 @@ export class SupplierEightDReportService {
     };
     await observe('STARTED');
     let content: Buffer;
-    try { content = await renderProcessEightDPdf(selected.report, images, 'supplier-quality'); await observe('SUCCEEDED'); }
+    try { content = await renderProcessEightDPdf(selected.report, images, 'supplier-quality', actor.accountType === 'SUPPLIER'); await observe('SUCCEEDED'); }
     catch (error) {
       await observe('FAILED');
       if (error instanceof Error && ['PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT', 'PROCESS_EIGHT_D_REPORT_PDF_LIMIT'].includes(error.message)) fail(error.message.replace('PROCESS_EIGHT_D_REPORT_', ''), 413);
@@ -56,13 +59,20 @@ export class SupplierEightDReportService {
 
   private validate(actor: SupplierEightDActor, id: string, query: SupplierEightDReportQueryDto) {
     if (!isUUID(id) || !query || typeof query !== 'object' || Array.isArray(query)
-      || Object.keys(query).some(key => !['organizationId', 'revisionId', 'view'].includes(key))
+      || Object.keys(query).some(key => !['organizationId', 'revisionId', 'view', 'previewFingerprint'].includes(key))
+      || query.previewFingerprint !== undefined && (typeof query.previewFingerprint !== 'string' || !reportPreviewFingerprintPattern.test(query.previewFingerprint))
       || query.organizationId !== undefined && !isUUID(query.organizationId)
       || query.revisionId !== undefined && !isUUID(query.revisionId)
       || query.view !== undefined && !['CURRENT', 'APPROVED'].includes(query.view)
       || query.revisionId !== undefined && query.view === 'CURRENT') fail('QUERY_INVALID', 400);
     if (!['INTERNAL', 'SUPPLIER'].includes(actor.accountType) || actor.scopeOrganizationId && actor.scopeOrganizationId !== actor.organizationId
       || query.organizationId !== undefined && query.organizationId !== actor.organizationId) fail('ACCESS_DENIED', 403);
+  }
+
+  private checkPreview(report: SupplierEightDControlledReportDto, expected?: string): string {
+    const fingerprint = reportPreviewFingerprint(report);
+    if (expected !== undefined && expected !== fingerprint) fail('VERSION_CONFLICT');
+    return fingerprint;
   }
 
   private async select(tx: Prisma.TransactionClient, actor: SupplierEightDActor, id: string, query: SupplierEightDReportQueryDto, downloadTraceId?: string): Promise<Selection> {
@@ -90,6 +100,7 @@ export class SupplierEightDReportService {
     document.temporaryMeasures.forEach(row => add(row.fileIds, `D3 临时措施 ${row.id}`));
     document.correctiveActions.forEach(row => { add(row.fileIds, `D5 / D6 措施 ${row.id}`); add(row.verificationFileIds, `D6 验证 ${row.id}`); });
     document.horizontalDeployment.forEach(row => add(row.fileIds, `D7 横展 ${row.id}`));
+    document.standardization.forEach(row => add(row.fileIds ?? [], `D7 标准化 ${row.id}`));
     for (const file of refs) {
       const group = groups.find(group => group.fileIds.includes(file.id));
       if (!group || file.resourceId !== id || file.resourceType !== group.resource.resourceType) fail('EVIDENCE_DENIED', 403);
@@ -102,10 +113,14 @@ export class SupplierEightDReportService {
         if (!pinned) fail('EVIDENCE_UNPINNED');
         if (['objectVersionId', 'sha256', 'version', 'scannedAt', 'scanStatus'].some(key => pinned[key] !== file[key as keyof Reference])) fail('VERSION_CONFLICT');
       }
-      const image = ['image/png', 'image/jpeg'].includes(file.contentType), embed = image && file.sizeBytes <= REPORT_IMAGE_MAX_BYTES;
+      const purposes = uses.get(file.id)!;
+      const standardizationOnly = purposes.every(purpose => purpose.startsWith('D7 标准化 '));
+      const image = ['image/png', 'image/jpeg'].includes(file.contentType), embed = !standardizationOnly && image && file.sizeBytes <= REPORT_IMAGE_MAX_BYTES;
       report.attachments.push({ id: file.id, originalName: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes,
-        sha256: file.sha256, objectVersionId: file.objectVersionId, version: file.version, uses: uses.get(file.id)!, rendering: embed ? 'EMBEDDED' : 'LISTED',
-        note: embed ? 'PNG/JPEG 按章节嵌入，下载原文件仍需授权' : image ? '图像超过 8 MiB，未嵌入；下载原文件仍需授权' : '非 PNG/JPEG 附件仅列示，不合并原文件' });
+        sha256: file.sha256, objectVersionId: file.objectVersionId, version: file.version, uses: purposes, rendering: embed ? 'EMBEDDED' : 'LISTED',
+        note: embed ? 'PNG/JPEG 按章节嵌入，下载原文件仍需授权'
+          : standardizationOnly ? '标准化附件仅列于附件清单，下载原文件仍需授权'
+          : image ? '图像超过 8 MiB，未嵌入；下载原文件仍需授权' : '非 PNG/JPEG 附件仅列示，不合并原文件' });
     }
     return { result, report, refs, fingerprint: canonical({ snapshot: raw, revisionId: result.revision?.id ?? null,
       versionFingerprint: result.versionFingerprint, record: result.record, privateIds, refs: [...refs].sort((a, b) => a.id.localeCompare(b.id)) }) };
@@ -149,7 +164,7 @@ export class SupplierEightDReportService {
     try {
       await this.transaction(async tx => {
         const current = await this.select(tx, actor, id, query, format === 'PDF' ? traceId : undefined);
-        if (current.fingerprint !== selected.fingerprint) fail('VERSION_CONFLICT');
+        if (current.fingerprint !== selected.fingerprint || current.report.status !== selected.report.status) fail('VERSION_CONFLICT');
         await this.audit.record({ organizationId: selected.result.record.control.organizationId, actorUserId: actor.id,
           action: `SUPPLIER_EIGHT_D_REPORT_${format}`, resourceType: 'SupplierEightDReport', resourceId: id, outcome: 'SUCCESS', traceId,
           metadata: { resourceVersion: selected.report.rowVersion, status: selected.report.status,

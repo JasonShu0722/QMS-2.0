@@ -1,8 +1,10 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { isUUID } from 'class-validator';
 import type { FileObject, Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../database/prisma.service.js';
+import { ControlledValidationException } from '../../common/contracts/controlled-validation.exception.js';
+import { PLATFORM_ERROR_MESSAGES } from '../../common/contracts/platform-error.js';
 import { assertActiveAuthentication, mfaPolicy } from '../../common/security/session-security.js';
 import { AuditLogService } from '../audit-log/audit-log.service.js';
 import { canonical, workflowError } from '../workflow/workflow-runtime-policy.js';
@@ -181,7 +183,17 @@ export class FileLifecycleService {
     return files.map((file) => ({ ...fileDto(file), downloadable: this.isAvailable(file) }));
   }
 
-  async readReportEvidence(tx: Prisma.TransactionClient, actor: FileActor, groups: { resource: FileResourceRef; fileIds: string[] }[], traceId?: string): Promise<(FileEvidenceDto & { objectKey: string; objectVersionId: string })[]> {
+  async reportEvidenceAvailableIds(tx: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, ids: string[]): Promise<ReadonlySet<string>> {
+    if (!ids.length) return new Set();
+    const grant = await this.resources.authorizeAndLock(tx, actor, resource, 'read');
+    const allowed = grant.readableFileIds ? new Set(grant.readableFileIds) : null;
+    const files = await tx.fileObject.findMany({ where: { id: { in: allowed ? ids.filter(id => allowed.has(id)) : ids },
+      organizationId: grant.organizationId, resourceType: resource.resourceType, resourceId: resource.resourceId } });
+    return new Set(files.filter(file => this.isReportEvidenceAvailable(file)).map(file => file.id));
+  }
+
+  async readReportEvidence(tx: Prisma.TransactionClient, actor: FileActor, groups: { resource: FileResourceRef; fileIds: string[] }[], traceId?: string,
+    validateAvailability?: (availableIds: ReadonlySet<string>) => void): Promise<(FileEvidenceDto & { objectKey: string; objectVersionId: string })[]> {
     const resourceKey = (resource: FileResourceRef) => `${resource.resourceType}:${resource.resourceId}`;
     if (!Array.isArray(groups) || groups.length > 100 || groups.some(group => !group?.resource || !Array.isArray(group.fileIds)
       || !/^[A-Za-z][A-Za-z0-9._:-]{0,99}$/.test(group.resource.resourceType) || !isUUID(group.resource.resourceId))) workflowError('FILE_UPLOAD_INVALID', 400);
@@ -223,13 +235,9 @@ export class FileLifecycleService {
     }
     const files = await tx.fileObject.findMany({ where: { id: { in: ids } }, orderBy: { id: 'asc' } });
     assertScope(files);
-    for (const file of files) {
-      if (!this.isAvailable(file) || file.deletedAt || !isUUID(file.objectKey, '4') || file.objectVersionId === 'null'
-        || file.objectVersionId!.length > 1024 || !file.uploadCompletedAt || !Number.isFinite(file.uploadCompletedAt.getTime())
-        || !Number.isFinite(file.scannedAt!.getTime()) || file.scannedAt!.getTime() < file.uploadCompletedAt.getTime()
-        || !Number.isSafeInteger(Number(file.sizeBytes)) || file.sizeBytes < 1n || file.sizeBytes > BigInt(this.policy.maxBytes)
-        || !/^[0-9a-f]{64}$/.test(file.sha256)) workflowError('FILE_NOT_AVAILABLE', 409);
-    }
+    const available = files.filter(file => this.isReportEvidenceAvailable(file));
+    validateAvailability?.(new Set(available.map(file => file.id)));
+    if (available.length !== files.length) workflowError('FILE_NOT_AVAILABLE', 409);
     if (traceId !== undefined) for (const file of files) await this.record(tx, actor, file, 'ATTACHMENT_DOWNLOAD_AUTHORIZED', traceId);
     return files.map(file => ({ ...fileDto(file), downloadable: true, objectKey: file.objectKey, objectVersionId: file.objectVersionId! }));
   }
@@ -258,14 +266,30 @@ export class FileLifecycleService {
   async deleteLogically(actor: FileActor, id: string, expectedVersion: number, traceId: string): Promise<FileDto> {
     this.assertVersion(expectedVersion);
     return this.prisma.$transaction(async (tx) => {
-      const { file } = await this.authorizedFile(tx, actor, id, 'delete');
+      const { file, grant } = await this.authorizedFile(tx, actor, id, 'delete');
       if (file.version !== expectedVersion) workflowError('CONCURRENCY_CONFLICT', 409);
       if (file.status === 'DELETED') workflowError('FILE_NOT_AVAILABLE', 409);
+      await this.assertEvidenceCanBeRemoved(tx, file, grant);
       const deleted = await tx.fileObject.update({ where: { id }, data: { status: 'DELETED', deletedAt: new Date(), deletedById: actor.id, version: { increment: 1 } } });
       await this.record(tx, actor, deleted, 'ATTACHMENT_DELETED', traceId);
       if (file.uploadCompletedAt) await this.recordResourceChange(tx, actor, deleted, 'removed', traceId);
       return fileDto(deleted);
     }, { isolationLevel: 'ReadCommitted' });
+  }
+
+  private async assertEvidenceCanBeRemoved(tx: Prisma.TransactionClient, file: FileObject, grant: FileResourceGrant): Promise<void> {
+    const rows = grant.requiredEvidenceRows?.filter(row => row.fileIds.includes(file.id));
+    if (!rows?.length || !this.isReportEvidenceAvailable(file)) return;
+    const alternativeIds = [...new Set(rows.flatMap(row => row.fileIds))].filter(id => id !== file.id);
+    const scopes = [{ organizationId: file.organizationId, resourceType: file.resourceType }];
+    if (grant.relatedEvidenceScope) scopes.push(grant.relatedEvidenceScope);
+    const alternatives = alternativeIds.length ? await tx.fileObject.findMany({ where: {
+      id: { in: alternativeIds }, resourceId: file.resourceId, OR: scopes,
+    } }) : [];
+    const available = new Set(alternatives.filter(candidate => this.isReportEvidenceAvailable(candidate)).map(candidate => candidate.id));
+    const issues = rows.filter(row => !row.fileIds.some(id => available.has(id)))
+      .map(row => ({ path: row.path, message: PLATFORM_ERROR_MESSAGES.FILE_REQUIRED_EVIDENCE }));
+    if (issues.length) throw new ControlledValidationException('FILE_REQUIRED_EVIDENCE', issues, HttpStatus.CONFLICT);
   }
 
   async assertAttachable(tx: Prisma.TransactionClient, actor: FileActor, resource: FileResourceRef, fileIds: string[]): Promise<FileDto[]> {
@@ -331,6 +355,14 @@ export class FileLifecycleService {
   private isAvailable(file: FileObject): boolean {
     return file.status === 'AVAILABLE' && file.scanStatus === 'CLEAN' && !!file.objectVersionId && !!file.scannedAt && !!file.scannerEngine
       && file.verifiedSha256 === file.sha256 && file.verifiedContentType === file.contentType && file.verifiedSizeBytes === file.sizeBytes;
+  }
+
+  private isReportEvidenceAvailable(file: FileObject): boolean {
+    return this.isAvailable(file) && !file.deletedAt && isUUID(file.objectKey, '4') && file.objectVersionId !== 'null'
+      && file.objectVersionId!.length <= 1024 && !!file.uploadCompletedAt && Number.isFinite(file.uploadCompletedAt.getTime())
+      && Number.isFinite(file.scannedAt!.getTime()) && file.scannedAt!.getTime() >= file.uploadCompletedAt.getTime()
+      && Number.isSafeInteger(Number(file.sizeBytes)) && file.sizeBytes >= 1n && file.sizeBytes <= BigInt(this.policy.maxBytes)
+      && /^[0-9a-f]{64}$/.test(file.sha256);
   }
 
   private validateInput(input: InitializeFileUploadDto) {

@@ -23,8 +23,9 @@ function previewFailureMessage(cause: unknown, english: boolean) {
   return english ? 'The file could not be read or its format could not be parsed.' : '无法读取文件或解析其格式。';
 }
 
-export function AttachmentPreviewDialog({ file, downloading, onDownload, onClose, onDenied }: {
+export function AttachmentPreviewDialog({ file, downloadUrl, downloading, onDownload, onClose, onDenied }: {
   file: Attachment;
+  downloadUrl: (id: string, signal: AbortSignal) => Promise<string>;
   downloading: boolean;
   onDownload: () => Promise<boolean>;
   onClose: () => void;
@@ -39,7 +40,7 @@ export function AttachmentPreviewDialog({ file, downloading, onDownload, onClose
   useEffect(() => {
     const controller = new AbortController();
     let url: string | undefined;
-    void readAttachmentPreview(file, controller.signal).then(preview => {
+    void readAttachmentPreview(file, controller.signal, downloadUrl).then(preview => {
       if (controller.signal.aborted) return;
       if ('blob' in preview) url = URL.createObjectURL(preview.blob);
       setResult({ ...preview, url });
@@ -52,7 +53,7 @@ export function AttachmentPreviewDialog({ file, downloading, onDownload, onClose
       controller.abort();
       if (url) URL.revokeObjectURL(url);
     };
-  }, [file, onDenied]);
+  }, [file, downloadUrl, onDenied]);
 
   const cannotDisplay = mediaFailed || (result?.kind === 'pdf' && navigator.pdfViewerEnabled === false);
   const failureDetail = failure ? previewFailureMessage(failure.cause, english)

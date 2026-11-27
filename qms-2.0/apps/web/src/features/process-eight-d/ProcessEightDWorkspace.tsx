@@ -7,14 +7,14 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { EightDDocumentEditor } from './EightDDocumentEditor';
 import { EightDActionDialog, type EightDAction } from './EightDActionDialog';
 import { EightDControlledReport } from './EightDControlledReport';
-import { EightDProblemInput, EightDSourceSummary } from './EightDProblemInput';
+import { EightDProblemInput, useEightDProblemFacts } from './EightDProblemInput';
 import { EightDEvidenceScopeContext } from './EightDEvidenceScope';
 import { EightDHistory, EightDRounds, ProcessEightDFlowRecords } from './EightDHistory';
-import { aborted, eightDFieldLocation, eightDPath, useEightDSeverityText, useEightDStyle, useEightDText, type EightDDocument, type EightDFields, type EightDRead, type EightDReport, type EightDWriteBody } from './eight-d';
+import { useEightDReceipt } from './useEightDReceipt';
+import { aborted, eightDFieldLocation, eightDPath, extensionPath, isFeaturePermissionDenied, roundPath, useEightDSeverityText, useEightDStyle, useEightDText, type EightDDocument, type EightDFields, type EightDRead, type EightDReport, type EightDWriteBody } from './eight-d';
 import styles from './eight-d.module.css';
 import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/domain';
 import type { RenderInternalEightDSourcePicker } from '../internal-eight-d/source-picker';
-import { InternalEightDSourceFacts } from '../internal-eight-d/InternalEightDSourceFacts';
 export type { InternalEightDDomain } from '../internal-eight-d/domain';
 export type { InternalEightDSourcePickerProps, RenderInternalEightDSourcePicker } from '../internal-eight-d/source-picker';
 
@@ -49,6 +49,7 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
   const [fieldTarget, setFieldTarget] = useState<ReturnType<typeof eightDFieldLocation>>();
   const [tab, setTab] = useState(initialView);
   const [flowLogOpen, setFlowLogOpen] = useState(false);
+  const [refreshedChecks, setRefreshedChecks] = useState<{ report: EightDReport; issues: EightDReport['submissionIssues'] }>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [fields, setFields] = useState<EightDFields>({});
@@ -56,7 +57,7 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
   const [busy, setBusy] = useState(false);
   const [conflict, setConflict] = useState(false);
   const [pending, setPending] = useState<Attempt>();
-  const [receipt, setReceipt] = useState(false);
+  const [receipt, setReceipt] = useEightDReceipt();
   const [evidencePending, setEvidencePending] = useState(0);
   const pendingPanels = useRef(new Set<string>());
   const evidenceBlocks = useCallback((path: string) => pendingPanels.current.size > 0 && (path === `${eightDPath(problemId, domain)}/submit` || path === `${eightDPath(problemId, domain)}/reassign`), [problemId, domain]);
@@ -66,6 +67,9 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
   const writing = useRef(false);
   const attempt = useRef<Attempt | undefined>(undefined);
   const loadVersion = useRef(0);
+  const stages = useRef<HTMLElement>(null);
+  const checkRequest = useRef(0);
+  const problemFacts = useEightDProblemFacts(report?.sources ?? [], domain);
   const current = useCallback(() => alive.current && !revoked.current && session === useWorkTabsStore.getState().sessionScope && !lifetime.current.signal.aborted, [session]);
   const revoke = useCallback((cause: unknown) => {
     if (current() && cause instanceof ApiError && (cause.status === 401 || cause.status === 403)) {
@@ -85,6 +89,8 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
     setEvidencePending(panels.size);
   }, [current]);
   const evidenceScope = useMemo(() => ({ onAccessDenied: revoke, onPendingChange }), [revoke, onPendingChange]);
+  const query = new URLSearchParams(); if (organizationId) query.set('organizationId', organizationId);
+  const readPath = `${eightDPath(problemId, domain)}?${query}`;
   const read: EightDRead = useCallback(async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
     if (!current()) throw new DOMException('Stale scope', 'AbortError');
     const signal = init.signal ? AbortSignal.any([lifetime.current.signal, init.signal]) : lifetime.current.signal;
@@ -98,13 +104,29 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
       if (!current()) throw new DOMException('Stale scope', 'AbortError');
       signal.throwIfAborted();
       return value;
-    } catch (cause) { if (current()) revoke(cause); throw cause; }
-  }, [current, revoke, evidenceBlocks]);
+    } catch (cause) {
+      const optionalHistory = path === roundPath(problemId) || domain !== 'process' &&
+        (path === extensionPath(problemId) || path.split('?')[0] === `/api/v1/problems/${encodeURIComponent(problemId)}/audit-trail`);
+      if (current() && !signal.aborted) {
+        if (optionalHistory && isFeaturePermissionDenied(cause)) {
+          try {
+            const saved = await apiRequest<EightDReport>(readPath, { signal }, { replayAfterReauthentication: false });
+            if (!signal.aborted && (saved.problemId !== problemId || organizationId && saved.organizationId !== organizationId)) {
+              revoke(new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: 'Scope mismatch' }, 403));
+            }
+          } catch (checkError) {
+            if (!signal.aborted) revoke(checkError instanceof ApiError && checkError.status === 404
+              ? new ApiError({ code: checkError.code, message: checkError.message }, 403) : checkError);
+          }
+        } else revoke(cause);
+      }
+      throw cause;
+    }
+  }, [current, revoke, evidenceBlocks, problemId, organizationId, domain, readPath]);
   const load = useCallback(async (preserveDraft = false) => {
     const version = ++loadVersion.current; setLoading(true); setError('');
     try {
-      const query = new URLSearchParams(); if (organizationId) query.set('organizationId', organizationId);
-      const value = await read<EightDReport>(`${eightDPath(problemId, domain)}?${query}`);
+      const value = await read<EightDReport>(readPath);
       if (!current() || version !== loadVersion.current) return;
       if (value.problemId !== problemId || organizationId && value.organizationId !== organizationId) {
         revoke(new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: 'Scope mismatch' }, 403)); return;
@@ -114,7 +136,7 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
       setConflict(false); setFields({});
     } catch (cause) { if (current() && version === loadVersion.current && !aborted(cause)) setError(text('工作区加载失败，请重试。', 'Workspace could not be loaded. Retry.')); }
     finally { if (current() && version === loadVersion.current) setLoading(false); }
-  }, [problemId, organizationId, read, current, revoke, domain]);
+  }, [problemId, organizationId, read, current, revoke, readPath]);
   useEffect(() => {
     alive.current = true; lifetime.current = new AbortController();
     const unsubscribe = useWorkTabsStore.subscribe(() => { if (session !== useWorkTabsStore.getState().sessionScope) lifetime.current.abort(); });
@@ -200,14 +222,14 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
     requestLeave(() => { setAction(undefined); setModalDirty(false); }, true);
   };
   const recovery = <>
-    {error && <Alert role="alert" type="error" title={error} description={Object.keys(fields).length ? <ul>{Object.entries(fields).map(([path, values]) => <li key={path}>{eightDFieldLocation(path, domain) ? <button type="button" disabled={busy || loading || !!pending || evidencePending > 0} onClick={() => { setFieldTarget(eightDFieldLocation(path, domain)); setTab('workspace'); setActionVisible(false); }}><code>{path}</code></button> : <code>{path}</code>} · {values.join(' / ')}</li>)}</ul> : undefined} />}
+    {error && <Alert role="alert" type="error" title={error} description={Object.keys(fields).length ? <ul>{Object.entries(fields).map(([path, values]) => <li key={path}>{eightDFieldLocation(path) ? <button type="button" disabled={busy || loading || !!pending || evidencePending > 0} onClick={() => { setFieldTarget(eightDFieldLocation(path)); setTab('workspace'); setActionVisible(false); }}><code>{path}</code></button> : <code>{path}</code>} · {values.join(' / ')}</li>)}</ul> : undefined} />}
     {conflict && <Button disabled={busy || loading} onClick={() => void load(true)}>{text('刷新基线并保留草稿', 'Refresh baseline and keep draft')}</Button>}
     {pending && <Button loading={busy} disabled={busy} onClick={() => void run(pending)}>{text('重试原请求', 'Retry original request')}</Button>}
   </>;
   if (denied) return <Alert role="alert" type="error" title={text('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。', 'Session expired or access denied. Sensitive content cleared. Sign in again or contact an authorized person.')} />;
   const isProcess = domain === 'process';
   const allowedActions = ([
-    ['analysis-complete', text('分析完成并设提交计划', 'Complete analysis and plan submission')],
+    ['analysis-complete', text('确认分析完成并设置正式提交期限', 'Confirm analysis and set the final submission deadline')],
     ['submit', text('完整提交', 'Submit complete report')],
     ['collaborators', text('维护协作者', 'Manage collaborators')],
     ['reassign', text('专业重派 / 科室内转派', 'Professional / within-section reassignment')],
@@ -224,6 +246,20 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
   >{text('保存草稿', 'Save draft')}</Button>;
   const dirtyMessage = dirty && <p role="status">{text('有未保存草稿，请先保存，再执行提交或责任 / 来源 / 计划变更。', 'Unsaved draft: save before submitting or changing responsibility, sources or plans.')}</p>;
   const responsibilityName = (name?: string | null, id?: string | null) => name?.trim() || (id ? text('名称未记录', 'Name unavailable') : text('未配置', 'Not configured'));
+  const refreshChecks = async () => {
+    if (!report || locked || !can('save')) return;
+    const request = ++checkRequest.current;
+    setRefreshedChecks({ report, issues: undefined });
+    try {
+      const query = new URLSearchParams({ organizationId: report.organizationId });
+      const saved = await read<EightDReport>(`${eightDPath(problemId, domain)}?${query}`);
+      if (saved.problemId !== problemId || saved.organizationId !== report.organizationId) {
+        revoke(new ApiError({ code: 'ORGANIZATION_SCOPE_DENIED', message: 'Scope mismatch' }, 403));
+        return;
+      }
+      if (request === checkRequest.current && saved.version === report.version && saved.contentVersion === report.contentVersion) setRefreshedChecks({ report, issues: saved.submissionIssues });
+    } catch { return; }
+  };
   return <EightDEvidenceScopeContext.Provider value={evidenceScope}><section className={styles.workspace} style={css} aria-label={text(config.label[0], config.label[1])}>
     <header className={styles.header}><div>{back}<h2>{title ?? report?.reportNumber ?? text(config.title[0], config.title[1])}</h2>{report && <Space wrap>
       {title && (!isProcess || title.trim() !== report.reportNumber) && <Tag>{report.reportNumber}</Tag>}<Tag>{statusLabels.get(report.status) ?? report.status}</Tag><Tag>{severityText(report.severity)}</Tag>
@@ -239,7 +275,7 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
           })) }}><Button aria-haspopup="menu" autoInsertSpace={false}>{text('更多', 'More')}</Button></Dropdown>}
         </Space>}
         <Button disabled={loading || busy || !!pending || !!action || evidencePending > 0} onClick={() => requestLeave(() => { onRefresh?.(); void load(); })}>{text('刷新工作区', 'Refresh workspace')}</Button>
-        {isProcess && report && <Button onClick={() => setFlowLogOpen(true)}>{text('流程日志', 'Workflow log')}</Button>}
+        {report && <Button onClick={() => setFlowLogOpen(true)}>{text('流程日志', 'Workflow log')}</Button>}
       </Space>
     </header>
     {(!action || !actionVisible) && recovery}
@@ -248,33 +284,44 @@ function Workspace({ problemId, domain = 'process', title, back, renderSourcePic
     {loading && <Spin aria-label={text('正在加载工作区', 'Loading workspace')} />}
     {report && draft && <>
       {isProcess && dirtyMessage}
-      <section className={styles.section}><h3>{text('当前责任与计划', 'Current responsibility and plans')}</h3>
-        {isProcess ? <p>{text('负责人', 'Owner')}：{responsibilityName(report.ownerName, report.ownerUserId)} · {text('责任科室', 'Responsible section')}：{responsibilityName(report.responsibleSectionName, report.responsibleSectionDepartmentId)}</p>
+      <section className={styles.section} ref={stages} tabIndex={-1}><h3>{text('当前责任与计划', 'Current responsibility and plans')}</h3>
+        <div className={styles.responsibility}>
+        {isProcess ? <dl>
+          <div><dt>{text('负责人', 'Owner')}</dt><dd>{responsibilityName(report.ownerName, report.ownerUserId)}</dd></div>
+          <div><dt>{text('责任科室', 'Responsible section')}</dt><dd>{responsibilityName(report.responsibleSectionName, report.responsibleSectionDepartmentId)}</dd></div>
+        </dl>
           : <><p>{text('负责人', 'Owner')}：{report.ownerUserId} · {text('专业审核人', 'Professional reviewer')}：{report.professionalUserId}</p><p>{text('责任科室', 'Responsible section')}：{report.responsibleSectionDepartmentId} · {text('协作者', 'Collaborators')}：{report.collaboratorUserIds.join(', ') || '—'}</p></>}
         <table aria-label={text('计划与实际', 'Planned and actual dates')}><thead><tr><th>{text('阶段', 'Stage')}</th><th>{text('计划', 'Planned')}</th><th>{text('实际', 'Actual')}</th></tr></thead><tbody>
           <tr><th scope="row">{text('分析', 'Analysis')}</th><td>{report.analysisDueAt ?? '—'}</td><td>{report.analysisCompletedAt ?? '—'}</td></tr>
           <tr><th scope="row">{text('完整提交', 'Complete submission')}</th><td>{report.submissionDueAt ?? '—'}</td><td>{report.submittedAt ?? '—'}</td></tr>
-        </tbody></table><p>{text('关闭计划', 'Closure due')}：{report.closureDueAt ?? '—'}</p>
+        </tbody></table></div><p>{text('关闭计划', 'Closure due')}：{report.closureDueAt ?? '—'}</p>
         {!isProcess && <><Space wrap>{saveDraft(true)}
           {allowedActions.map(([name, label]) => <Button key={name} disabled={actionDisabled(name)} onClick={() => open(name)}>{label}</Button>)}
         </Space>{dirtyMessage}</>}
       </section>
       {report.closedRevisionId && <Alert type="info" title={text('已关闭：正文与批准版只读，批准版不随关闭后来源补充改变。', 'Closed: content and approved version are read-only. Source supplements do not change the approved version.')} />}
-      {tab === 'workspace' && domain !== 'process' && <InternalEightDSourceFacts domain={domain} sources={report.sources} />}
       <Tabs activeKey={tab} onChange={value => { if (!locked && !action) { if (pendingPanels.current.size) requestLeave(() => setTab(value)); else setTab(value); } }} items={[
         { key: 'workspace', label: text('工作区', 'Workspace'), children: tab === 'workspace' ? <EightDDocumentEditor
-          domain={domain} problemId={problemId} document={draft} chapterTarget={fieldTarget}
-          overview={domain === 'process' ? <EightDProblemInput sources={report.sources} severity={report.severity} /> : undefined}
-          sourceSummary={domain === 'process' ? <EightDSourceSummary sources={report.sources} /> : undefined}
-          teamContext={report}
+          domain={domain} problemId={problemId} document={draft} chapterTarget={fieldTarget} mode="workspace"
+          overview={<EightDProblemInput domain={domain} organizationId={report.organizationId} sources={report.sources} severity={report.severity} />}
+          problemFacts={problemFacts}
+          teamOptionsPath={`${eightDPath(problemId, domain)}/team-options`} teamOrganizationId={report.organizationId}
+          submissionChecks={refreshedChecks?.report === report ? refreshedChecks.issues : report.submissionIssues} hasUnsavedChanges={dirty}
+          onRefreshChecks={can('save') ? () => void refreshChecks() : undefined}
+          onLocateStageCheck={() => {
+            if (can('analysis-complete') && !actionDisabled('analysis-complete')) open('analysis-complete');
+            else { stages.current?.focus(); stages.current?.scrollIntoView?.({ block: 'nearest' }); }
+          }}
           removalBlocked={evidencePending > 0} disabled={!can('save') || locked || !!action && actionVisible} read={read}
           onChange={change => { if (!writing.current && !attempt.current && can('save')) { setDraft(current => current ? change(current) : current); setDirty(true); setReceipt(false); } }}
         /> : null },
         { key: 'report', label: text('报告', 'Report'), children: tab === 'report' ? <EightDControlledReport domain={domain} report={report} read={read} download={download} /> : null },
         ...(domain === 'process' ? [] : [{ key: 'history', label: text('轨迹', 'History'), children: tab === 'history' ? <EightDHistory report={report} read={read} /> : null }]),
       ]} />
-      {flowLogOpen && <Modal open title={text('流程日志', 'Workflow log')} width={860} footer={null} onCancel={() => setFlowLogOpen(false)}><ProcessEightDFlowRecords report={report} read={read} /></Modal>}
-      <EightDRounds problemId={problemId} read={read} revision={report.version} blocked={locked || dirty || !!action} onInboxClosed={() => void load()} />
+      {flowLogOpen && <Modal open title={text('流程日志', 'Workflow log')} width={860} footer={null} onCancel={() => setFlowLogOpen(false)}>
+        {isProcess ? <ProcessEightDFlowRecords report={report} read={read} /> : <EightDHistory report={report} read={read} />}
+        <EightDRounds problemId={problemId} read={read} revision={report.version} blocked={locked || dirty || !!action} onInboxClosed={() => void load()} />
+      </Modal>}
       {action && <EightDActionDialog domain={domain} renderSourcePicker={renderSourcePicker} key={action} open={actionVisible} afterClose={focusField} action={action} report={report} read={read} write={write} frozen={!!pending || conflict || loading} busy={busy} recovery={recovery} onClose={close} onDirty={onModalDirty} />}
     </>}
   </section></EightDEvidenceScopeContext.Provider>;

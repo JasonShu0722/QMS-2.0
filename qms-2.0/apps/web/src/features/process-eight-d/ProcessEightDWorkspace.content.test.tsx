@@ -9,6 +9,7 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessEightDWorkspace } from './ProcessEightDWorkspace';
 import type { EightDEvidenceScopeValue } from './EightDEvidenceScope';
 import { ApiError } from '../../api/client';
+import { eightDPath } from './eight-d';
 
 let capturedScope: EightDEvidenceScopeValue | undefined;
 
@@ -42,8 +43,9 @@ let fetcher: ReturnType<typeof vi.fn>;
 beforeEach(() => {
   vi.unstubAllGlobals(); localStorage.clear(); useWorkTabsStore.getState().reset(); useWorkTabsStore.getState().bindSession('INTERNAL:owner-1:org-1');
   vi.stubGlobal('AbortController', function () { return transferableAbortController(); });
+  vi.stubGlobal('AbortSignal', transferableAbortController().signal.constructor);
   fetcher = vi.fn(async (url: string) => new Response(JSON.stringify(url.includes('/rounds') || url.includes('/requests') ? [] : url.includes('/report?') ? {
-    problemId: report.problemId, reportNumber: report.reportNumber, view: 'CURRENT', revisionId: null, label: 'saved report', contentVersion: 4, rowVersion: 7, generatedAt: '', attachments: [],
+    problemId: report.problemId, reportNumber: report.reportNumber, view: url.includes('view=APPROVED') ? 'APPROVED' : 'CURRENT', revisionId: url.includes('view=APPROVED') ? 'approved-revision' : null, label: 'saved report', contentVersion: 4, rowVersion: 7, generatedAt: '', attachments: [], previewFingerprint: 'a'.repeat(64),
     snapshot: { document: report.document, sources: [], problem: {}, instance: {}, deadlines: {}, contentVersion: 4, rowVersion: 7, ownerUserId: report.ownerUserId, professionalUserId: report.professionalUserId, responsibleSectionDepartmentId: report.responsibleSectionDepartmentId, collaboratorUserIds: [], analysisCompletedAt: null, submittedAt: null },
   } : report), { headers: { 'content-type': 'application/json' } }));
   vi.stubGlobal('fetch', fetcher);
@@ -56,6 +58,85 @@ function mount(onAccessDenied?: (cause: unknown) => void) {
   render(<RouterProvider router={router} />);
   return router;
 }
+
+it('shows each confirmed save briefly', async () => {
+  mount();
+  await screen.findByDisplayValue('sensitive body');
+  const save = screen.getByRole('button', { name: '保存草稿' });
+  const confirmation = '服务端已确认保存 / 操作成功。';
+  vi.useFakeTimers();
+  try {
+    for (const iteration of [1, 2]) {
+      await act(async () => { fireEvent.click(save); });
+      expect(screen.getByText(confirmation)).toBeVisible();
+      act(() => vi.advanceTimersByTime(iteration === 1 ? 2999 : 3000));
+      if (iteration === 1) {
+        expect(screen.getByText(confirmation)).toBeVisible();
+        act(() => vi.advanceTimersByTime(1));
+      }
+      expect(screen.queryByText(confirmation)).not.toBeInTheDocument();
+    }
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('does not link a saved row check to a changed draft row', async () => {
+  const respond = fetcher.getMockImplementation()!;
+  const message = '第 2 条横向展开缺少附件';
+  fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.split('?')[0] !== eightDPath(report.problemId)) return respond(url, init);
+    return Response.json({ ...report, submissionIssues: [{ path: 'horizontalDeployment[1].fileIds', message }] });
+  });
+  mount();
+  const description = await screen.findByDisplayValue('sensitive body');
+  fireEvent.click(screen.getByRole('button', { name: 'D8 · 结案总结' }));
+  expect(await screen.findByRole('button', { name: message })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: 'D2 · 问题描述' }));
+  fireEvent.change(description, { target: { value: 'changed draft' } });
+  fireEvent.click(screen.getByRole('button', { name: 'D8 · 结案总结' }));
+  expect(await screen.findByText(message)).toBeVisible();
+  expect(screen.queryByRole('button', { name: message })).not.toBeInTheDocument();
+});
+
+it('saves the selected appointment when a team member has several appointments', async () => {
+  const respond = fetcher.getMockImplementation()!;
+  const appointments = [
+    { userId: 'person-1', assignmentId: 'assignment-1', name: '王工', username: 'engineer', department: '制造部', jobTitle: '工程师' },
+    { userId: 'person-1', assignmentId: 'assignment-2', name: '王工', username: 'engineer', department: '质量部', jobTitle: '质量主管' },
+  ];
+  fetcher.mockImplementation(async (url: string, init?: RequestInit) => url.includes('/team-options?')
+    ? Response.json({ items: appointments, total: 2, page: 1, pageSize: 10 })
+    : respond(url, init));
+  mount();
+  await screen.findByDisplayValue('sensitive body');
+  fireEvent.click(screen.getByRole('button', { name: 'D1 · 团队建立' }));
+  fireEvent.click(screen.getByRole('button', { name: '增加团队成员' }));
+  const position = await screen.findByText('质量主管');
+  const row = position.closest('tr')!;
+  fireEvent.click(within(row).getByRole('button', { name: /选择.*engineer/ }));
+  fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
+  await waitFor(() => {
+    const save = fetcher.mock.calls.find(([url, init]) => url === eightDPath(report.problemId) && init?.method === 'PUT');
+    expect(JSON.parse(save?.[1]?.body ?? '{}')).toMatchObject({ document: { team: [{ userId: 'person-1', assignmentId: 'assignment-2' }] } });
+  });
+});
+
+it('previews a structured D2 description while preserving quantities and uncertainty', async () => {
+  mount();
+  const description = await screen.findByDisplayValue('sensitive body');
+  const original = '不良数量：2.5 kg\n• 现象：气密不良\n工序：气密检测\n疑似与治具相关，尚未确认';
+  fireEvent.change(description, { target: { value: original } });
+  const format = screen.getByRole('button', { name: '整理为质量工程表述' });
+  fireEvent.click(format);
+  const preview = await screen.findByRole('dialog', { name: '预览问题描述' });
+  await waitFor(() => expect(within(preview).getByText(/工序：气密检测。\s+不良现象：气密不良。\s+已记录不良数量：2\.5 kg。\s+疑似与治具相关，尚未确认。/u)).toBeVisible());
+  fireEvent.click(within(preview).getByRole('button', { name: /取\s*消/ }));
+  expect(description).toHaveValue(original);
+  fireEvent.click(format);
+  fireEvent.click(await screen.findByRole('button', { name: '使用此描述' }));
+  expect(description).toHaveValue('工序：气密检测。\n不良现象：气密不良。\n已记录不良数量：2.5 kg。\n疑似与治具相关，尚未确认。');
+});
 
 it('keeps the draft while switching between problem input and the two corrective action chapters', async () => {
   mount();
@@ -97,59 +178,53 @@ it('shows the selected report snapshot in both corrective action lists', async (
   mount();
   await screen.findByDisplayValue('sensitive body');
   fireEvent.click(screen.getByRole('tab', { name: '报告' }));
-  await screen.findByRole('button', { name: /^D5 ·/ });
+  await screen.findByRole('heading', { name: /^D5 ·/ });
   for (const version of ['CURRENT', 'APPROVED']) {
     const label = version === 'CURRENT' ? '当前保存版' : '批准版';
     if (version === 'APPROVED') {
       fireEvent.change(screen.getByLabelText('报告版本'), { target: { value: version } });
-      await screen.findByRole('button', { name: /^D5 ·/ });
+      await screen.findByRole('heading', { name: /^D5 ·/ });
     }
-    fireEvent.click(screen.getByRole('button', { name: /^D5 ·/ }));
-    const plans = within(screen.getByRole('region', { name: '措施计划清单' }));
-    expect(plans.getByRole('heading', { name: `措施 1 · ${label}校验治具` })).toBeVisible();
-    expect(plans.getByRole('heading', { name: `措施 2 · ${label}复查批次` })).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: /^D6 ·/ }));
-    const results = within(screen.getByRole('region', { name: '措施实绩清单' }));
-    expect(results.getByRole('heading', { name: `措施 2 · ${label}复查批次` })).toBeVisible();
-    fireEvent.click(results.getByRole('button', { name: '详情 措施 2' }));
-    expect(results.getByDisplayValue(`${label}改善前 1`)).toBeDisabled();
-    expect(results.getByDisplayValue(`${label}改善后 1`)).toBeDisabled();
-    expect(results.getByDisplayValue(`${label}改善后 1`)).toBeVisible();
-    expect(results.getByLabelText('措施 2 人工有效性结论')).toHaveValue('false');
-    expect(results.getByLabelText('措施 1 改善后')).not.toBeVisible();
+    const plans = within(screen.getByRole('heading', { name: /^D5 ·/ }).closest('section')!);
+    expect(plans.getByText(`${label}校验治具`)).toBeVisible();
+    expect(plans.getByText(`${label}复查批次`)).toBeVisible();
+    const results = within(screen.getByRole('heading', { name: /^D6 ·/ }).closest('section')!);
+    expect(results.getByText(`${label}改善前 1`)).toBeVisible();
+    expect(results.getByText(`${label}改善后 1`)).toBeVisible();
+    expect(results.queryByRole('textbox')).not.toBeInTheDocument();
   }
 });
 
 it('aggregates panel pending and blocks route leaving until every panel settles', async () => {
   const router = mount(); await screen.findByDisplayValue('sensitive body');
-  fireEvent.click(screen.getByRole('button', { name: 'pending OK 附件（可选）' }));
-  fireEvent.click(screen.getByRole('button', { name: 'pending NG 附件（可选）' }));
-  fireEvent.click(screen.getByRole('button', { name: 'settled OK 附件（可选）' }));
+  fireEvent.click(screen.getByRole('button', { name: 'pending OK 图片' }));
+  fireEvent.click(screen.getByRole('button', { name: 'pending NG 图片' }));
+  fireEvent.click(screen.getByRole('button', { name: 'settled OK 图片' }));
   const unload = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(unload);
   expect(unload.defaultPrevented).toBe(true);
   fireEvent.click(screen.getByRole('link', { name: 'Leave workspace' }));
   expect(router.state.location.pathname).toBe('/workspace');
   expect(screen.queryByText('当前草稿尚未保存，继续将放弃修改。')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'settled NG 附件（可选）' }));
+  fireEvent.click(screen.getByRole('button', { name: 'settled NG 图片' }));
   await screen.findByText('Other page');
 });
 
 it('defers inner report switching without unmounting pending evidence', async () => {
   mount(); await screen.findByDisplayValue('sensitive body');
-  fireEvent.click(screen.getByRole('button', { name: 'pending OK 附件（可选）' }));
+  fireEvent.click(screen.getByRole('button', { name: 'pending OK 图片' }));
   fireEvent.click(screen.getByRole('tab', { name: '报告' }));
   expect(screen.getByRole('tab', { name: '工作区' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByRole('button', { name: 'settled OK 附件（可选）' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'settled OK 图片' })).toBeVisible();
   expect(fetcher.mock.calls.some(([url]) => url.includes('/report?'))).toBe(false);
-  fireEvent.click(screen.getByRole('button', { name: 'settled OK 附件（可选）' }));
+  fireEvent.click(screen.getByRole('button', { name: 'settled OK 图片' }));
   await screen.findByText('saved report');
 });
 
 it('clears pending and sensitive body draft and report on evidence access denial', async () => {
   mount(); await screen.findByDisplayValue('sensitive body');
-  fireEvent.change(screen.getByLabelText('D4 分析过程'), { target: { value: 'sensitive draft' } });
-  fireEvent.click(screen.getByRole('button', { name: 'pending OK 附件（可选）' }));
-  fireEvent.click(screen.getByRole('button', { name: 'denied OK 附件（可选）' }));
+  fireEvent.change(screen.getByLabelText('分析过程描述'), { target: { value: 'sensitive draft' } });
+  fireEvent.click(screen.getByRole('button', { name: 'pending OK 图片' }));
+  fireEvent.click(screen.getByRole('button', { name: 'denied OK 图片' }));
   await screen.findByText(/当前会话失效或无权访问/);
   expect(screen.queryByDisplayValue('sensitive draft')).not.toBeInTheDocument();
   expect(screen.queryByDisplayValue('sensitive body')).not.toBeInTheDocument();
@@ -197,33 +272,35 @@ it('rechecks evidence at the send boundary when pending starts while CSRF is in 
 
 it('closes an unchanged action without waiting on evidence that is readOnly only for that action', async () => {
   mount(); await screen.findByDisplayValue('sensitive body');
-  fireEvent.click(screen.getByRole('button', { name: 'pending OK 附件（可选）' }));
+  fireEvent.click(screen.getByRole('button', { name: 'pending OK 图片' }));
   fireEvent.click(screen.getByRole('button', { name: '更多' }));
   fireEvent.click(await screen.findByRole('menuitem', { name: '调整风险' }));
   fireEvent.click(await screen.findByRole('button', { name: '取消' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-  expect(screen.getByRole('button', { name: 'settled OK 附件（可选）' })).toBeVisible();
+  expect(screen.getByRole('button', { name: 'settled OK 图片' })).toBeVisible();
 });
 
-it('retains simultaneous CLEAN receipts across document fields and across fields in one corrective action', async () => {
+it('retains simultaneous CLEAN receipts across image groups and verification evidence', async () => {
   mount(); await screen.findByDisplayValue('sensitive body');
   fireEvent.click(screen.getByRole('button', { name: /^D5 ·/ }));
   fireEvent.click(screen.getByRole('button', { name: '增加永久措施' }));
   act(() => {
-    fireEvent.click(screen.getByRole('button', { name: 'ready OK 附件（可选）', hidden: true }));
-    fireEvent.click(screen.getByRole('button', { name: 'ready NG 附件（可选）', hidden: true }));
-    fireEvent.click(screen.getByRole('button', { name: 'ready 措施附件', hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'ready OK 图片', hidden: true }));
+    fireEvent.click(screen.getByRole('button', { name: 'ready NG 图片', hidden: true }));
     fireEvent.click(screen.getByRole('button', { name: 'ready 验证附件', hidden: true }));
   });
-  for (const label of ['OK 附件（可选）', 'NG 附件（可选）', '措施附件', '验证附件']) expect(screen.getByText(`${label} (2)`)).toBeInTheDocument();
+  expect(screen.getByText('验证附件 (2)')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /^D2 ·/ }));
+  expect(screen.getByRole('region', { name: 'OK 图片' })).toBeVisible();
+  expect(screen.getByRole('region', { name: 'NG 图片' })).toBeVisible();
 });
 
 it('does not remove an evidence-bearing row while any panel is still pending', async () => {
   mount(); await screen.findByDisplayValue('sensitive body');
   fireEvent.click(screen.getByRole('button', { name: /^D5 ·/ }));
   fireEvent.click(screen.getByRole('button', { name: '增加永久措施' }));
-  fireEvent.click(screen.getByRole('button', { name: 'pending 措施附件' }));
+  act(() => capturedScope!.onPendingChange('verification-panel', true));
   expect(screen.getByRole('button', { name: '移除措施 1' })).toBeDisabled();
-  fireEvent.click(screen.getByRole('button', { name: 'settled 措施附件' }));
+  act(() => capturedScope!.onPendingChange('verification-panel', false));
   expect(screen.getByRole('button', { name: '移除措施 1' })).toBeEnabled();
 });

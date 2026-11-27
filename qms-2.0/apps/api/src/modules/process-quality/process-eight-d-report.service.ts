@@ -15,6 +15,7 @@ import { ProcessEightDService } from './process-eight-d.service.js';
 import type { AdminActor as ProcessEightDActor } from '../../common/security/admin-mutation.service.js';
 import { INTERNAL_EIGHT_D_REPORT_DOMAIN, type InternalEightDReportCore, type InternalEightDReportDescriptor } from '../../common/eight-d/internal-eight-d-report.js';
 import { INTERNAL_EIGHT_D_DOMAINS } from '../../common/eight-d/internal-eight-d-domain.js';
+import { reportPreviewFingerprint, reportPreviewFingerprintPattern } from '../../common/eight-d/report-preview-fingerprint.js';
 export type { InternalEightDReportCore, InternalEightDReportDescriptor } from '../../common/eight-d/internal-eight-d-report.js';
 import { ProcessEightDControlledReportDto, type ProcessEightDReportAttachmentDto, type ProcessEightDReportQueryDto, type ProcessEightDReportSnapshotDto } from './process-eight-d-report.dto.js';
 import { REPORT_IMAGE_MAX_BYTES, REPORT_TOTAL_IMAGE_BYTES, REPORT_TOTAL_IMAGE_PIXELS, renderProcessEightDPdf, reportImageSize } from './process-eight-d-pdf.js';
@@ -31,6 +32,7 @@ export function reportAttachmentUses(document: ProcessEightDReportSnapshotDto['d
   document.temporaryMeasures.forEach(row => add(row.fileIds, `D3 临时措施 ${row.id}`));
   document.correctiveActions.forEach(row => { add(row.fileIds, `D5 / D6 措施 ${row.id}`); add(row.verificationFileIds, `D6 验证 ${row.id}`); });
   document.horizontalDeployment.forEach(row => add(row.fileIds, `D7 横展 ${row.id}`));
+  document.standardization.forEach(row => add(row.fileIds ?? [], `D7 标准化 ${row.id}`));
   return uses;
 }
 
@@ -59,13 +61,15 @@ export class ProcessEightDReportService {
   async read(actor: ProcessEightDActor, problemId: string, query: ProcessEightDReportQueryDto, traceId: string): Promise<ProcessEightDControlledReportDto> {
     this.validate(actor, problemId, query);
     const selected = await this.transaction(tx => this.select(tx, actor, problemId, query));
+    const previewFingerprint = this.checkPreview(selected.report, query.previewFingerprint);
     await this.finish(actor, problemId, query, selected, traceId, 'READ');
-    return selected.report;
+    return { ...selected.report, previewFingerprint };
   }
 
   async pdf(actor: ProcessEightDActor, problemId: string, query: ProcessEightDReportQueryDto, traceId: string): Promise<{ content: Buffer; contentType: 'application/pdf'; filename: string }> {
     this.validate(actor, problemId, query);
     const selected = await this.transaction(tx => this.select(tx, actor, problemId, query));
+    if (query.previewFingerprint !== undefined) this.checkPreview(selected.report, query.previewFingerprint);
     // No storage/network access inside database transactions. References are server-owned and fixed first.
     const images = await this.images(selected);
     const executionId = randomUUID(), startedAt = new Date();
@@ -88,12 +92,19 @@ export class ProcessEightDReportService {
 
   private validate(actor: ProcessEightDActor, problemId: string, query: ProcessEightDReportQueryDto) {
     if (!isUUID(problemId) || !query || typeof query !== 'object' || Array.isArray(query)
-      || Object.keys(query).some(key => !['organizationId', 'revisionId', 'view'].includes(key))
+      || Object.keys(query).some(key => !['organizationId', 'revisionId', 'view', 'previewFingerprint'].includes(key))
+      || query.previewFingerprint !== undefined && (typeof query.previewFingerprint !== 'string' || !reportPreviewFingerprintPattern.test(query.previewFingerprint))
       || query.revisionId !== undefined && !isUUID(query.revisionId)
       || query.organizationId !== undefined && !isUUID(query.organizationId)
       || query.view !== undefined && !['CURRENT', 'APPROVED'].includes(query.view)
       || query.revisionId !== undefined && query.view === 'CURRENT') this.fail('PROCESS_EIGHT_D_REPORT_QUERY_INVALID', 400);
     if (actor.accountType !== 'INTERNAL' || query.organizationId !== undefined && query.organizationId !== (actor.scopeOrganizationId ?? actor.organizationId)) this.fail('ORGANIZATION_SCOPE_DENIED', 403);
+  }
+
+  private checkPreview(report: ProcessEightDControlledReportDto, expected?: string): string {
+    const fingerprint = reportPreviewFingerprint(report);
+    if (expected !== undefined && expected !== fingerprint) this.fail('PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT', 409);
+    return fingerprint;
   }
 
   private async select(tx: Prisma.TransactionClient, actor: ProcessEightDActor, problemId: string, query: ProcessEightDReportQueryDto, downloadTraceId?: string): Promise<Selection> {
@@ -137,11 +148,14 @@ export class ProcessEightDReportService {
     }
     const uses = reportAttachmentUses(normalized);
     const attachments: ProcessEightDReportAttachmentDto[] = refs.map(file => {
+      const purposes = uses.get(file.id)!;
+      const standardizationOnly = purposes.every(purpose => purpose.startsWith('D7 标准化 '));
       const isImage = ['image/png', 'image/jpeg'].includes(file.contentType);
-      const canEmbed = isImage && file.sizeBytes <= REPORT_IMAGE_MAX_BYTES;
+      const canEmbed = !standardizationOnly && isImage && file.sizeBytes <= REPORT_IMAGE_MAX_BYTES;
       return { id: file.id, originalName: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes, sha256: file.sha256,
-        objectVersionId: file.objectVersionId, version: file.version, uses: uses.get(file.id)!, rendering: canEmbed ? 'EMBEDDED' : 'LISTED',
+        objectVersionId: file.objectVersionId, version: file.version, uses: purposes, rendering: canEmbed ? 'EMBEDDED' : 'LISTED',
         note: canEmbed ? 'PNG/JPEG 按章节嵌入；导出校验实际图像，原文件请使用正常授权下载'
+          : standardizationOnly ? '标准化附件仅列于附件清单，原文件请使用正常授权下载'
           : isImage ? '图像超过 8 MiB 嵌入上限，未嵌入；请使用正常授权下载' : '非 PNG/JPEG 附件不合并；请使用正常授权下载' };
     });
     const historical = !!query.revisionId;
@@ -197,7 +211,7 @@ export class ProcessEightDReportService {
   private async finish(actor: ProcessEightDActor, problemId: string, query: ProcessEightDReportQueryDto, selected: Selection, traceId: string, format: 'READ' | 'PDF', content?: Buffer): Promise<void> {
     try { await this.transaction(async tx => {
       const current = await this.select(tx, actor, problemId, query, format === 'PDF' ? traceId : undefined);
-      if (current.fingerprint !== selected.fingerprint) this.fail('PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT', 409);
+      if (current.fingerprint !== selected.fingerprint || current.report.status !== selected.report.status) this.fail('PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT', 409);
       await this.audit.record({ organizationId: selected.result.record.problem.organizationId, actorUserId: actor.id, action: this.code(`PROCESS_EIGHT_D_REPORT_${format}`),
         resourceType: this.auditResource, resourceId: problemId, outcome: 'SUCCESS', traceId,
         metadata: { resourceVersion: selected.report.rowVersion, status: selected.report.status,

@@ -162,7 +162,7 @@ describe('process 8D real domain transactions with managed workflow configuratio
     const issue = async () => { const defect = await source(); const issued = await service.issue(issuer.actor, input([defect]), randomUUID(), randomUUID()); return String(issued.problem.id); };
     const read = (id: string) => service.read(owner.actor, id);
     const draft = () => normalizeProcessEightDDocument({ occurrenceCause: '发生因', escapeCause: '流出因', correctiveActions: ['OCCURRENCE', 'ESCAPE'].map((causeKind, index) => ({
-      id: `action-${index}`, causeKind, action: '真实对策', owner: '实际负责人', plannedAt: '2026-10-25', verificationMethod: '按实测标准', implementationAt: '2026-10-25',
+      id: `action-${index}`, causeKind, action: '真实对策', owner: '实际负责人', plannedAt: '2026-10-25', implementationAt: '2026-10-25',
       result: '已实施', beforeState: '改善前', afterState: '改善后', firstBatch: `REAL-BATCH-${index}`, followUpDuration: '实际跟进一周', verificationRecord: '实测符合判定标准', effective: true,
     })) });
     const ready = async (id: string) => {
@@ -175,6 +175,86 @@ describe('process 8D real domain transactions with managed workflow configuratio
     const submit = async (id: string) => { const current = await ready(id); await service.submit(owner.actor, id, { expectedVersion: current.version }, randomUUID(), randomUUID()); return rounds.readProjection(prisma, organization.id, id); };
     return { organization, department, section, otherSection, role, person, issuer, owner, manager, minister, collaborator, source, input, issue, read, ready, submit, draft, configureManaged, setLeaders, setScope };
   }
+
+  it('lists active team appointments for a non-admin editor without granting the directory to read-only users', async () => {
+    const f = await fixture(), id = await f.issue();
+    const other = await fixture(false);
+    const name = `team-${randomUUID()}`;
+    await prisma.user.updateMany({ where: { id: { in: [f.owner.user.id, other.owner.user.id] } }, data: { fullName: name } });
+    const second = await prisma.userPosition.create({ data: { organizationId: f.organization.id, userId: f.owner.user.id, positionId: f.collaborator.position.id } });
+    await prisma.userPosition.create({ data: { organizationId: f.organization.id, userId: f.owner.user.id, positionId: f.manager.position.id,
+      startedAt: new Date(0), endedAt: new Date(1) } });
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    try {
+      await app.init();
+      const cookie = async (userId: string) => `qms_session=${await app.get(SessionService).create(userId, app.get(PrismaService), { mfaVerified: true })}`;
+      const path = `/api/v1/process-quality/eight-d/${id}`;
+      const ownerCookie = await cookie(f.owner.user.id), readerCookie = await cookie(f.collaborator.user.id);
+      const get = (who: string, suffix = '') => request(app.getHttpServer()).get(`${path}${suffix}`).set('Cookie', who);
+      await get(readerCookie).expect(200);
+      await get(readerCookie, '/team-options').expect(403);
+      const { body } = await get(ownerCookie, `/team-options?search=${name}&pageSize=1`).expect(200);
+      const { body: next } = await get(ownerCookie, `/team-options?search=${name}&pageSize=1&page=2`).expect(200);
+      expect(body).toMatchObject({ total: 2, page: 1, pageSize: 1 });
+      expect(next).toMatchObject({ total: 2, page: 2, pageSize: 1 });
+      expect([...body.items, ...next.items]).toEqual(expect.arrayContaining([
+        { assignmentId: f.owner.assignment.id, userId: f.owner.user.id, name, username: f.owner.user.username, department: f.section.name, jobTitle: f.owner.position.name },
+        { assignmentId: second.id, userId: f.owner.user.id, name, username: f.owner.user.username, department: f.otherSection.name, jobTitle: f.collaborator.position.name },
+      ]));
+    } finally { await app.close(); }
+  }, 30_000);
+
+  it('projects D8 readiness for a saved version and revalidates completed D7 rows at submit', async () => {
+    const f = await fixture(), id = await f.issue();
+    let current = await f.ready(id);
+    expect(current).toMatchObject({ submissionIssues: [] });
+    const clean = () => {
+      const sha256 = 'a'.repeat(64);
+      return prisma.fileObject.create({ data: { organizationId: f.organization.id, uploadedById: f.owner.user.id,
+        resourceType: 'process-eight-d', resourceId: id, resourceVersion: current.version, objectKey: randomUUID(),
+        originalName: 'D7 evidence.pdf', contentType: 'application/pdf', sizeBytes: 1, sha256, objectVersionId: 'd7-test',
+        uploadCompletedAt: new Date(), scannedAt: new Date(), scannerEngine: 'test fixture', status: 'AVAILABLE', scanStatus: 'CLEAN',
+        verifiedSha256: sha256, verifiedContentType: 'application/pdf', verifiedSizeBytes: 1 } });
+    };
+    const [horizontal, spare, standard] = await Promise.all([clean(), clean(), clean()]);
+    const lifecycle = new FileLifecycleService(prisma, new FilePolicyService(), new S3CompatibleObjectStorage(), audit, resources);
+    const document = normalizeProcessEightDDocument({ ...f.draft(), horizontalDeployment: [{ id: 'horizontal', completed: true, fileIds: [horizontal.id] }],
+      standardization: [{ id: 'standard', key: 'standard', documentName: 'Standard', status: 'COMPLETED', fileIds: [standard.id] }] });
+    document.horizontalDeployment[0]!.fileIds.push(spare.id);
+    document.standardization[0]!.fileIds = [horizontal.id, standard.id];
+    await expect(service.save(f.owner.actor, id, { expectedVersion: current.version, document }, randomUUID(), randomUUID())).rejects.toMatchObject({
+      response: { code: 'PROCESS_EIGHT_D_DOCUMENT_INVALID' }, fields: {
+        'horizontalDeployment[0].fileIds': expect.any(Array), 'standardization[0].fileIds': expect.any(Array),
+      },
+    });
+    document.standardization[0]!.fileIds = [standard.id];
+    await service.save(f.owner.actor, id, { expectedVersion: current.version, document }, randomUUID(), randomUUID());
+    current = await f.read(id);
+    expect(current).toMatchObject({ submissionIssues: [] });
+    const attempts = await Promise.allSettled([horizontal, spare].map(file => lifecycle.deleteLogically(f.owner.actor, file.id, file.version, randomUUID())));
+    expect(attempts.filter(attempt => attempt.status === 'fulfilled')).toHaveLength(1);
+    const remaining = attempts[0]!.status === 'rejected' ? horizontal : spare;
+    expect(attempts.find(attempt => attempt.status === 'rejected')).toMatchObject({ reason: { status: 409, response: { code: 'FILE_REQUIRED_EVIDENCE' },
+      fields: { 'horizontalDeployment[0].fileIds': expect.any(Array) } } });
+    await expect(lifecycle.deleteLogically(f.owner.actor, standard.id, standard.version, randomUUID())).rejects.toMatchObject({ status: 409, response: { code: 'FILE_REQUIRED_EVIDENCE' } });
+    await prisma.fileObject.update({ where: { id: remaining.id }, data: { status: 'QUARANTINED', scanStatus: 'PENDING' } });
+    const issues = [{ path: 'horizontalDeployment[0].fileIds', message: '已完成的项目须关联本行通过安全扫描的附件' }];
+    expect(await f.read(id)).toMatchObject({ contentVersion: current.contentVersion, submissionIssues: issues });
+    await expect(service.submit(f.owner.actor, id, { expectedVersion: current.version }, randomUUID(), randomUUID())).rejects.toMatchObject({
+      response: { code: 'PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE' }, fields: { 'horizontalDeployment[0].fileIds': [issues[0]!.message] },
+    });
+    expect(await f.read(id)).toMatchObject({ version: current.version, status: 'PROCESSING' });
+    document.horizontalDeployment[0]!.fileIds = [];
+    await expect(service.save(f.owner.actor, id, { expectedVersion: current.version, document }, randomUUID(), randomUUID())).rejects.toMatchObject({
+      response: { code: 'PROCESS_EIGHT_D_DOCUMENT_INVALID' }, fields: { 'horizontalDeployment[0].fileIds': [issues[0]!.message] },
+    });
+    document.horizontalDeployment[0]!.completed = false;
+    await service.save(f.owner.actor, id, { expectedVersion: current.version, document }, randomUUID(), randomUUID());
+    const detached = await f.read(id);
+    expect(detached.contentVersion).toBeGreaterThan(current.contentVersion);
+    expect(detached.submissionIssues).toEqual([]);
+  }, 30_000);
 
   it('persists deleted D7 preset rows through HTTP save, reopen and report projection', async () => {
     const f = await fixture(), id = await f.issue();

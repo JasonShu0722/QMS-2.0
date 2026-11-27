@@ -45,7 +45,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       toErrorResponse({
         code: status >= 500 ? 'INTERNAL_ERROR' : (code ?? `HTTP_${status}`),
         message,
-        fields: status === HttpStatus.BAD_REQUEST && code && exception instanceof ControlledValidationException ? exception.fields : undefined,
+        fields: code && exception instanceof ControlledValidationException ? exception.fields : undefined,
         traceId,
         cause: exception,
       }),

@@ -11,4 +11,13 @@
 .section table { width: 100%; border-collapse: collapse; }
 .section th, .section td { padding: 5px; text-align: left; border-bottom: 1px solid var(--ed-border); }
 .section input, .section select, .section textarea { max-width: 100%; box-sizing: border-box; background: var(--ed-input); color: var(--ed-text); border: 1px solid var(--ed-border); border-radius: 4px; padding: 5px; }
+.viewTabs { min-width: 0; }
+.tabPanel { min-width: 0; }
+.inbox { display: grid; gap: 8px; margin-top: 8px; }
+.logRound { display: grid; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--ed-border); }
+.logRound h4, .logRound p { margin: 0; }
+.logRound header { display: grid; gap: 4px; }
+.logDuties { display: grid; gap: 8px; }
+.logDuties time { color: var(--ed-muted); }
+.logComment { white-space: pre-wrap; overflow-wrap: anywhere; }
 @media (max-width: 600px) { .header { display: grid; } .section { padding: 6px; } }

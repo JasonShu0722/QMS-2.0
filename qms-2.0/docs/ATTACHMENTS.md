@@ -32,10 +32,26 @@ P3实现公共附件边界；专业证据关系由领域模块维护。生产默
 
 ## 通用附件交互
 
-- 区块统一命名为「附件」，各业务复用共享附件组件及上传、等待安全扫描、可预览、失败等状态反馈。
-- 有上传权限时提供选择文件、拖放和拍照入口。拍照后可查看照片再确认上传，相机不可用时可选择文件。各种入口统一使用同一套上传校验和扫描流程。
-- 点击文件名预览受支持的图片、PDF、纯文本、Word 和 Excel。默认在浮窗预览，关闭后回到原业务位置。提供独立下载操作，预览失败时给出反馈及有权限的下载入口。预览与下载沿用资源读取授权及文件可用状态校验。
-- 制程不合格台账作为首个接入场景。附件类型、设备、授权和安全扫描状态按实际结果验收，进度见[精调计划](../../docs/superpowers/plans/2026-11-24-qms-process-defect-ledger-flow.md#4-通用附件上传与预览)。
+- 新增通用附件区使用共享 `AttachmentPanel` 的 `variant="standard"`。紧凑标题行左侧为「附件」，右侧为「刷新附件」，业务宿主直接嵌入组件。空态显示「暂无附件」。文件列表显示名称、状态、大小和当前可用操作。窄屏下上传控件和文件操作自然折行，长文件名换行。
+- 有上传权限时，在同一上传区域提供选择附件、拍照上传和拖放。拍照后先在浮窗确认照片，相机不可用时可选择文件。三种入口使用同一上传校验、完成请求和安全扫描流程。历史版本、流程锁定及其他只读场景隐藏上传、重试扫描和删除，保留有权执行的刷新、预览及下载。
+- 加载和处理中显示进度反馈。「等待上传完成」「等待安全扫描」「上传已过期」「扫描暂不可用」「扫描未通过」与已删除分别显示。只有 `AVAILABLE/CLEAN` 的附件可预览或下载。上传失败可重试原操作或放弃，重试安全扫描仅由服务端认可的上传者发起。读取、授权和操作失败显示反馈，并由宿主处理会话或资源失权。关联回执与当前业务草稿保护通过原有回调接续。
+- 点击文件名可在浮窗预览符合条件的图片、PDF、纯文本、Word 和 Excel，关闭后返回原业务位置。提供独立下载操作，预览失败时可重新授权下载。预览和下载都实时核对资源读取权限及可用状态。通用样式沿用各资源已有权限、类型、扫描、删除和版本归属。
+
+### 现有入口盘点
+
+| 入口 | 状态与说明 |
+| --- | --- |
+| 制程不良品台账详情 `ProcessDefectLedgerPage` | 已采用。标准布局的基准，见[台账精调计划](../../docs/superpowers/plans/2026-11-24-qms-process-defect-ledger-flow.md#4-通用附件上传与预览)。 |
+| 通用完整 8D D4 `EightDAnalysisAttachments` | 本批接入标准样式。制程、客诉、新品及供应商沿已有 `analysisFileIds` 和对应资源权限。工作区集成和实际浏览器结果见[通用 8D 精调计划](../../docs/superpowers/plans/2026-11-27-qms-shared-eight-d-tuning.md)。 |
+| 制程不良品独立编辑器 `ProcessDefectEditor`、出货报告 `ProcessShipmentReportPanel`、新品早期质量 `NewProductQualityPage` | 待迁移。保留独立编辑入口、报告附件关联及早期质量办理状态。 |
+| 客诉处理 `CustomerComplaintProcessing`、旧客诉 8D `CustomerComplaintEightDPanel`、客诉解析 `CustomerAnalysisPanel` | 待迁移。分别保留事件证据、旧 8D 验证证据及 FAE/SQE 分区的草稿保护与关联。 |
+| 供应商审核 `SupplierAuditPage`、来料 `SupplierIncomingPage`、送货 `SupplierAsnPage`、PCN `SupplierPcnPage`、PPAP `SupplierPpapPage` | 待迁移。逐入口核对业务状态、提交证据选择、逐项绑定及内外部角色。 |
+| 供应商质量办理 `SupplierQualityPage`、答复历史 `SupplierResponseHistory` | 待迁移。保留供应商答复证据与只读修订归属。 |
+| 8D 逐条证据 `EightDEvidence`、内部及供应商 `EightDControlledReport` / `SupplierControlledReport` | 保留专用布局。逐条证据紧贴对应业务条目，受控报告按所选版本和证据用途读取。 |
+| 8D D2 的 OK／NG 图片、客诉台账 `CustomerLedgerSourceAttachments` | 保留专用布局。D2 按 OK／NG 并排显示图片与说明，客诉台账来源附件沿独立归属及编辑保护。 |
+| 供应商 `SupplierDisclosure` / `SupplierDisclosedAttachments`、通用问题 `ProblemEvidence`、`AccountAvatar` | 保留专用布局，分别承载明确授权的披露清单、只读问题证据和单张头像替换。 |
+
+标准区验收以实际入口为单位，覆盖桌面、窄屏、空态、上传与扫描、预览与下载、只读和失权。组件测试与资源链路、浏览器及业务角色验收分别记录。
 
 ## 对象与扫描配置
 

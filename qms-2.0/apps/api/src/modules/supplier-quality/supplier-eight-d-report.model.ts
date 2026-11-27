@@ -85,7 +85,7 @@ export function supplierEightDReportModel(result: SupplierEightDReportRead, quer
       return { ...Object.fromEntries(['id', 'roundNumber', 'status', 'contentVersion', 'version', 'createdAt', 'updatedAt'].map(key => [key, round[key]])),
         duties: (Array.isArray(round.duties) ? round.duties : []).map(value => {
           const duty = supplierReportObject(value);
-          return Object.fromEntries(['id', 'duty', 'status', 'userId', 'decidedBy', 'decidedAt', ...supplier ? [] : ['comment']].map(key => [key, duty[key]]));
+          return Object.fromEntries(['id', 'duty', 'status', 'decidedAt', ...supplier ? [] : ['userId', 'decidedBy', 'comment']].map(key => [key, duty[key]]));
         }) };
     });
   }

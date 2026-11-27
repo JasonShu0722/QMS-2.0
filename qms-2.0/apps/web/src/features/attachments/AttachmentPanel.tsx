@@ -14,7 +14,10 @@ interface Props {
   resource: FileResource;
   fileIds: string[];
   variant?: 'standard';
+  imagesOnly?: boolean;
+  preserveAvailableFile?: boolean;
   readOnly?: boolean;
+  downloadUrl?: (id: string, signal: AbortSignal) => Promise<string>;
   onReady?: (file: Attachment) => void | boolean;
   onUploadCompleted?: (file: Attachment) => void;
   onAccessDenied?: (cause: ApiError) => void;
@@ -23,13 +26,14 @@ interface Props {
   onLocalPendingChange?: (pending: boolean) => void;
   onFilesChanged?: (files: Attachment[]) => void;
   onRemoved?: (id: string) => void;
+  onDetach?: (id: string) => void;
 }
 
 export function AttachmentPanel(props: Props) {
   return <AttachmentContent key={`${props.resource.resourceType}:${props.resource.resourceId}`} {...props} />;
 }
 
-function AttachmentContent({ resource, fileIds, variant, readOnly = false, onReady, onUploadCompleted, onFilesChanged, onRemoved, onAccessDenied, onWriteAccessDenied, onPendingChange, onLocalPendingChange }: Props) {
+function AttachmentContent({ resource, fileIds, variant, imagesOnly = false, preserveAvailableFile = false, readOnly = false, downloadUrl = attachmentDownload, onReady, onUploadCompleted, onFilesChanged, onRemoved, onDetach, onAccessDenied, onWriteAccessDenied, onPendingChange, onLocalPendingChange }: Props) {
   const { t, locale } = useLanguage();
   const standard = variant === 'standard';
   const english = locale === 'en-US';
@@ -41,7 +45,7 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
   const [actionError, setActionError] = useState<unknown>();
   const [busy, setBusy] = useState(false);
   const [retryAvailable, setRetryAvailable] = useState(false);
-  const [preview, setPreview] = useState<Attachment>();
+  const [preview, setPreview] = useState<{ file: Attachment; downloadUrl: typeof downloadUrl }>();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
   const picker = useRef<HTMLInputElement>(null);
@@ -72,7 +76,10 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
   const idsKey = [...new Set([...fileIds, ...localIds])].sort().join(',');
   const ids = idsKey ? idsKey.split(',') : [];
   const visible = ids.flatMap((id) => files[id] ? [files[id]!] : []);
-  const previewFile = preview && ids.includes(preview.id) && files[preview.id]?.version === preview.version && canPreviewAttachment(files[preview.id]!) ? preview : undefined;
+  const requiredFile = (file: Attachment) => preserveAvailableFile && fileIds.includes(file.id) && canDownloadAttachment(file)
+    && !visible.some(other => other.id !== file.id && fileIds.includes(other.id) && canDownloadAttachment(other));
+  const selected = preview?.file;
+  const previewFile = selected && preview?.downloadUrl === downloadUrl && ids.includes(selected.id) && files[selected.id]?.version === selected.version && canPreviewAttachment(files[selected.id]!) ? selected : undefined;
   useEffect(() => { if (preview && !previewFile) setPreview(undefined); }, [preview, previewFile]);
   useEffect(() => { if (readOnly) setCameraOpen(false); }, [readOnly]);
   const pending = visible.some((file) => file.status === 'QUARANTINED' && ['WAITING_UPLOAD', 'PENDING'].includes(file.scanStatus));
@@ -130,6 +137,10 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
     setFiles((current) => ({ ...current, [file.id]: file }));
   };
   async function upload(selected?: File) {
+    if (imagesOnly && selected && !['image/png', 'image/jpeg'].includes(selected.type)) {
+      setActionError(new Error('FILE_IMAGE_REQUIRED'));
+      return;
+    }
     if (actionLock.current || readOnly) return;
     actionLock.current = true; setBusy(true); setActionError(undefined); setRetryAvailable(false);
     try {
@@ -155,7 +166,7 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
       } else if (action === 'retry-scan') {
         observe(await retryScanAttachment(file));
       } else {
-        const url = await attachmentDownload(file.id, lifetime.current.signal);
+        const url = await downloadUrl(file.id, lifetime.current.signal);
         if (!lifetime.current.signal.aborted) {
           const link = document.createElement('a');
           link.href = url; link.download = file.originalName; link.rel = 'noreferrer';
@@ -169,7 +180,8 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
   const error = actionError ?? queryError;
   const errorText = error instanceof ApiError && error.code.startsWith('FILE_') ? '附件操作被拒绝，请检查权限、状态和文件内容'
     : error instanceof Error && error.message === 'FILE_SIZE_INVALID' ? '附件大小须为 1 字节至 25 MiB'
-      : error instanceof Error && error.message === 'FILE_SINGLE_REQUIRED' ? (english ? 'Drop one file at a time.' : '请每次拖放一个文件。') : safeAccountError(error);
+      : error instanceof Error && error.message === 'FILE_IMAGE_REQUIRED' ? (english ? 'Select a PNG or JPEG image.' : '请选择 PNG 或 JPEG 图片。')
+        : error instanceof Error && error.message === 'FILE_SINGLE_REQUIRED' ? (english ? 'Drop one file at a time.' : '请每次拖放一个文件。') : safeAccountError(error);
   const status = (file: Attachment) => file.status === 'DELETED' ? '已删除，保留历史记录'
     : canDownloadAttachment(file) ? !standard ? '扫描通过，可作为证据' : canPreviewAttachment(file) ? (english ? 'Ready to preview' : '可预览') : (english ? 'Ready to download' : '可下载')
       : file.scanStatus === 'PENDING' ? '等待安全扫描'
@@ -177,7 +189,7 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
           : file.scanStatus === 'EXPIRED' ? '上传已过期'
             : file.scanStatus === 'ERROR' ? '扫描暂不可用，附件仍隔离' : '扫描未通过，附件已隔离';
   const blockedUpload = busy || retryAvailable || cameraOpen;
-  const accept = '.pdf,.png,.jpg,.jpeg,.txt,.docx,.xlsx';
+  const accept = imagesOnly ? '.png,.jpg,.jpeg' : '.pdf,.png,.jpg,.jpeg,.txt,.docx,.xlsx';
   const fileInput = <input ref={picker} aria-label={t('选择附件')} type="file" hidden={standard} disabled={blockedUpload} accept={accept} onChange={(event) => {
     const selected = event.target.files?.[0];
     event.target.value = '';
@@ -185,7 +197,9 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
   }} />;
   const refreshButton = <Button aria-label={t('刷新附件')} onClick={refresh} disabled={loading} size={standard ? 'small' : undefined} icon={standard && <RefreshCw size={14} />}>{t('刷新附件')}</Button>;
   const showRetry = retryAvailable && !readOnly;
-  return <Card className={standard ? 'attachment-panel attachment-panel--standard' : 'attachment-panel'} title={t(standard ? '附件' : '附件证据')} extra={standard ? refreshButton : undefined}>
+  const detachLabel = english ? 'Remove attachment from this item' : '从本项移除附件';
+  const requiredTitle = english ? 'Completed items require an attachment' : '已完成事项必须保留附件';
+  return <Card className={standard ? 'attachment-panel attachment-panel--standard' : 'attachment-panel'} title={imagesOnly ? (english ? 'Images' : '图片') : t(standard ? '附件' : '附件证据')} extra={standard ? refreshButton : undefined}>
     <Space orientation="vertical" size={6} style={{ width: '100%' }}>
 
       {error ? <Alert type="error" title={t(errorText)} description={error instanceof ApiError && error.traceId ? <code>{error.traceId}</code> : undefined} showIcon /> : null}
@@ -215,19 +229,23 @@ function AttachmentContent({ resource, fileIds, variant, readOnly = false, onRea
       </Space>}
       {loading && !visible.length ? <Spin aria-label={t('正在加载附件')} /> : !error && !visible.length ? standard ? <Typography.Text type="secondary">{t('暂无附件')}</Typography.Text> : <Empty description={t('暂无附件')} /> : null}
       {visible.map((file) => <Card className="attachment-panel__file" key={file.id} size="small" title={standard && canPreviewAttachment(file) ?
-        <Button className="attachment-panel__preview-link" type="link" size="small" disabled={busy} onClick={() => setPreview(file)}>{file.originalName}</Button> : file.originalName}>
+        <Button className="attachment-panel__preview-link" type="link" size="small" disabled={busy} onClick={() => setPreview({ file, downloadUrl })}>{file.originalName}</Button> : file.originalName}>
         <Space wrap>
           <Tag color={file.status === 'AVAILABLE' && file.scanStatus === 'CLEAN' ? 'green' : 'orange'}>{t(status(file))}</Tag>
           <span>{new Intl.NumberFormat(locale).format(file.sizeBytes)} {t('字节')}</span>
           {file.status === 'AVAILABLE' && file.scanStatus === 'CLEAN' && <Button aria-label={t('下载附件')} disabled={busy} onClick={() => void operate(file, 'download')}>{t('下载附件')}</Button>}
           {!readOnly && (!standard || file.isCurrentUserUploader) && file.status === 'QUARANTINED' && file.scanStatus === 'ERROR' && <Button aria-label={t('重试安全扫描')} disabled={busy} onClick={() => void operate(file, 'retry-scan')}>{t('重试安全扫描')}</Button>}
-          {!readOnly && file.status !== 'DELETED' && <Popconfirm title={`${t('删除附件')} · ${file.originalName}`} description={t('删除后无法继续下载，历史记录和保留对象不受影响。')} okText={t('确认删除附件')} cancelText={t('取消')} okButtonProps={{ danger: true }} onConfirm={() => operate(file, 'delete')}>
-            <Button aria-label={t('删除附件')} disabled={busy} danger>{t('删除附件')}</Button>
+          {!readOnly && onDetach && <Button disabled={busy || requiredFile(file)} title={requiredFile(file) ? requiredTitle : undefined} onClick={() => {
+            setLocalIds(current => current.filter(id => id !== file.id));
+            onDetach(file.id);
+          }}>{detachLabel}</Button>}
+          {!readOnly && !onDetach && file.status !== 'DELETED' && <Popconfirm title={`${t('删除附件')} · ${file.originalName}`} description={t('删除后无法继续下载，历史记录和保留对象不受影响。')} okText={t('确认删除附件')} cancelText={t('取消')} okButtonProps={{ danger: true }} disabled={requiredFile(file)} onConfirm={() => { if (!requiredFile(file)) void operate(file, 'delete'); }}>
+            <Button aria-label={t('删除附件')} disabled={busy || requiredFile(file)} title={requiredFile(file) ? requiredTitle : undefined} danger>{t('删除附件')}</Button>
           </Popconfirm>}
         </Space>
       </Card>)}
     </Space>
-    {standard && previewFile && <AttachmentPreviewDialog file={previewFile} downloading={busy} onDownload={() => operate(previewFile, 'download')} onClose={() => setPreview(undefined)} onDenied={reportError} />}
+    {standard && previewFile && <AttachmentPreviewDialog file={previewFile} downloadUrl={downloadUrl} downloading={busy} onDownload={() => operate(previewFile, 'download')} onClose={() => setPreview(undefined)} onDenied={reportError} />}
     {standard && !readOnly && cameraOpen && <AttachmentCameraDialog onClose={() => setCameraOpen(false)} onConfirm={photo => { setCameraOpen(false); void upload(photo); }} />}
   </Card>;
 }

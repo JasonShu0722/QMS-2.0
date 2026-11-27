@@ -236,6 +236,11 @@ describe.each(domains)('$name eight-d HTTP boundary', domain => {
     const query = { action: 'ISSUE' as const, page: 1, pageSize: 20 };
     expect(await service.assignmentOptions(actor, query)).toBe(options);
     expect(assignments).toHaveBeenCalledWith(actor, query);
+    const team = { items: [], total: 0, page: 2, pageSize: 10 };
+    const teamOptions = jest.spyOn(core, 'teamOptions').mockResolvedValue(team);
+    const teamQuery = { search: 'team', page: 2, pageSize: 10 };
+    expect(await service.teamOptions(actor, problemId, teamQuery)).toBe(team);
+    expect(teamOptions).toHaveBeenCalledWith(actor, problemId, teamQuery);
     const denied = new HttpException({ code: 'FEATURE_PERMISSION_DENIED' }, 403);
     jest.spyOn(core, 'read').mockRejectedValue(denied);
     await expect(service.read(actor, problemId)).rejects.toBe(denied);
@@ -256,11 +261,15 @@ describe.each(domains)('$name eight-d HTTP boundary', domain => {
     const app = module.createNestApplication();
     try {
       const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
-      expect(Object.keys(document.paths)).toHaveLength(13);
+      expect(Object.keys(document.paths)).toHaveLength(14);
       expect(Object.keys(document.paths).every(path => path.startsWith(`/api/v1/${domain.path}/eight-d`))).toBe(true);
+      const team = document.paths[`/api/v1/${domain.path}/eight-d/{id}/team-options`]!.get!;
+      expect(team.responses['200']).toMatchObject({ content: { 'application/json': { schema: { $ref: '#/components/schemas/EightDTeamOptionsDto' } } } });
       const schemas = document.components!.schemas! as Record<string, SchemaObject>;
       const report = schemas[`${domain.name}EightDReportDto`]!;
       expect(report.properties!.document).toEqual({ $ref: '#/components/schemas/ProcessEightDDocumentDto' });
+      expect(report.properties!.submissionIssues).toMatchObject({ type: 'array', items: { $ref: '#/components/schemas/ProcessEightDSubmissionIssueDto' } });
+      expect(report.required).not.toContain('submissionIssues');
       const source = schemas.InternalEightDHttpSourceDto!;
       expect(source.properties).toHaveProperty('sourceId');
       expect(source.properties).not.toHaveProperty('defectId');

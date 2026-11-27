@@ -16,8 +16,12 @@ export function administrativeUserDisplayName(userId: Prisma.Sql): Prisma.Sql {
 export class AdministrativeIdentityReadModel {
   // Compose inside the caller's query so eligibility bounds both its page and count.
   workflowEligibleUsers(organizationId: string): Prisma.Sql {
+    return this.activeDirectoryUsers(organizationId, 'INTERNAL');
+  }
+
+  activeDirectoryUsers(organizationId: string, accountType: 'INTERNAL' | 'SUPPLIER'): Prisma.Sql {
     return Prisma.sql`SELECT id, username, full_name FROM users
-      WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE' AND account_type = 'INTERNAL'
+      WHERE organization_id = ${organizationId}::uuid AND status = 'ACTIVE' AND account_type = ${accountType}::"AccountType"
         AND deleted_at IS NULL AND NOT configuration_required`;
   }
 

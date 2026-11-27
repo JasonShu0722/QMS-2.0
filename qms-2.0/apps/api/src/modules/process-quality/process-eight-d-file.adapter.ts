@@ -3,6 +3,7 @@ import { isUUID } from 'class-validator';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { FileResourceAccess, type FileActor, type FileResourceAccessAdapter, type FileResourceAction, type FileResourceRef } from '../file-management/file-resource-access.js';
 import { workflowError } from '../workflow/workflow-runtime-policy.js';
+import { completedD7EvidenceRows } from './process-eight-d-document.js';
 import { ProcessEightDService } from './process-eight-d.service.js';
 
 @Injectable()
@@ -17,6 +18,7 @@ export class ProcessEightDFileAdapter implements FileResourceAccessAdapter, OnMo
     if (action === 'read') await this.service.authorizeRead(tx, reader, record);
     else await this.service.authorizeEdit(tx, actor, record);
     // FileLifecycle checks this adapter before every delete: review and closed evidence stay protected.
-    return { organizationId: record.problem.organizationId, version: record.report.version };
+    return { organizationId: record.problem.organizationId, version: record.report.version,
+      ...(action === 'delete' ? { requiredEvidenceRows: completedD7EvidenceRows(record.report.document) } : {}) };
   }
 }

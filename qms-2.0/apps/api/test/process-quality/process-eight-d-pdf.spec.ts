@@ -78,6 +78,36 @@ it('rejects a missing required image instead of producing a success with a blank
   await expect(renderProcessEightDPdf(sampleReport(), new Map())).rejects.toThrow('PROCESS_EIGHT_D_REPORT_IMAGE_MISSING');
 });
 
+it('renders the selected document roster and saved chapter details, without promoting the report owner to a team member', async () => {
+  const report = sampleReport();
+  const document = report.snapshot.document;
+  document.temporaryMeasures = [];
+  Object.assign(document, {
+    title: '选定版本标题', riskAssessment: '批次停线风险', okDescription: '光滑样件说明', ngDescription: '裂纹样件说明',
+    team: [{ id: 'member-1', name: '实际组员陈工', department: '工艺室', jobTitle: '工程师', isLeader: true,
+      responsibility: '分析故障模式', collaborationScope: '协调验证样本', userId: 'internal-member-key' }],
+    optionalAffectedScope: '潜在受影响订单', effectTracking: { startDate: '2026-10-29', startOrderNumber: 'TRACK-ORDER-001',
+      productionQuantity: 100, defectQuantity: 0, result: '追踪无再发', judgement: '观察达标' },
+    horizontalDeployment: [{ id: 'rollout-1', scope: '其他产线', inspectionResult: '', action: '', owner: '吴工', completion: '排查完成', completed: true, fileIds: [] }],
+    lessonsLearned: '经验纳入设计复核',
+  });
+  Object.assign(document.correctiveActions[0]!, { selectionReason: '可降低定位偏差', implementer: '执行人沈工', verifier: '验证人杨工' });
+  const loading = getDocument({ data: new Uint8Array(await renderProcessEightDPdf(report, new Map([[imageId, png]]))), useSystemFonts: false });
+  try {
+    const pdf = await loading.promise; let text = '';
+    for (let index = 1; index <= pdf.numPages; index++) {
+      text += (await (await pdf.getPage(index)).getTextContent()).items.map(item => 'str' in item ? item.str : '').join('');
+    }
+    expect(text).toContain('选定版本标题');
+    const roster = text.slice(text.indexOf('D1 团队'), text.indexOf('D2 问题描述'));
+    for (const value of ['实际组员陈工', '工艺室', '工程师', '组长', '分析故障模式', '协调验证样本']) expect(roster).toContain(value);
+    expect(roster).not.toMatch(/owner|professional|section|internal-member-key/);
+    for (const value of ['批次停线风险', '光滑样件说明', '裂纹样件说明', '潜在受影响订单', '可降低定位偏差', '执行人沈工',
+      '验证人杨工', '2026-10-29', 'TRACK-ORDER-001', '追踪无再发', '观察达标', '其他产线', '已完成', '经验纳入设计复核']) expect(text).toContain(value);
+    expect(text).toContain('不良数量：0');
+  } finally { await loading.destroy(); }
+}, 30000);
+
 it.each(['process-quality', 'customer-quality', 'new-product-quality'])('keeps %s closed-supplement approvals factual without adding supplier base fields', async domain => {
   const report = sampleReport(); report.status = 'CLOSED_SUPPLEMENT'; report.snapshot.document.temporaryMeasures = [];
   Object.assign(report.snapshot.problem, { title: 'SUPPLIER_ONLY_TITLE', materialCode: 'SUPPLIER_ONLY_PART', materialCategory: 'SUPPLIER_ONLY_CATEGORY',

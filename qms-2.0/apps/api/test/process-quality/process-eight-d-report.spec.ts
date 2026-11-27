@@ -65,6 +65,25 @@ it('defaults to explicit current snapshot and rechecks scope before returning JS
   expect(s.audit.record).toHaveBeenCalledTimes(1);
 });
 
+it.each(['CURRENT', 'APPROVED'] as const)('exports the previewed %s snapshot or rejects a moved alias before reading image bytes', async view => {
+  const s = setup(true);
+  if (view === 'APPROVED') {
+    Object.assign(s.result, { revision: { id: revisionId } });
+    Object.assign(s.result.snapshot, { evidence: [s.ref] });
+  }
+  const preview = await s.service.read(actor, id, { view }, 'preview');
+  expect(preview).toHaveProperty('previewFingerprint', expect.stringMatching(/^[a-f0-9]{64}$/));
+  const query = { view, previewFingerprint: Reflect.get(preview, 'previewFingerprint') };
+  const pdf = await s.service.pdf(actor, id, query, 'pdf');
+  expect(pdf.content.subarray(0, 5).toString()).toBe('%PDF-');
+  if (view === 'APPROVED') Object.assign(s.result, { revision: { id: randomUUID() } });
+  else s.result.snapshot.document.description = 'A new draft after preview';
+  s.storage.readVersion.mockClear();
+  await expect(s.service.pdf(actor, id, query, 'stale')).rejects.toMatchObject({ status: 409,
+    response: { code: 'PROCESS_EIGHT_D_REPORT_VERSION_CONFLICT' } });
+  expect(s.storage.readVersion).not.toHaveBeenCalled();
+});
+
 it('rejects unsupported or mixed server descriptors rather than falling back to process resources', () => {
   for (const domain of [
     { ...INTERNAL_EIGHT_D_DOMAINS.CUSTOMER, resourceType: 'process-eight-d' },
@@ -114,6 +133,17 @@ it('reads 100 distinct authorized attachments while counting cross-section reuse
   expect(s.files.readReportEvidence).toHaveBeenCalledTimes(2);
   expect(s.files.readReportEvidence).toHaveBeenNthCalledWith(1, s.tx, actor,
     [{ resource: { resourceType: 'process-eight-d', resourceId: id }, fileIds: ids }], undefined);
+});
+
+it('binds saved D7 standardization evidence to the preview and PDF', async () => {
+  const s = setup(true);
+  s.result.snapshot.document.okFileIds = [];
+  const standard = s.result.snapshot.document.standardization[0]!;
+  standard.fileIds = [fileId];
+  const preview = await s.service.read(actor, id, {}, 'preview');
+  expect(preview.attachments).toEqual([expect.objectContaining({ id: fileId, uses: [`D7 标准化 ${standard.id}`] })]);
+  const pdf = await s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'pdf');
+  expect(pdf.content.subarray(0, 5).toString()).toBe('%PDF-');
 });
 
 it('converts malformed historical documents into a safe snapshot error rather than leaking domain validation', async () => {

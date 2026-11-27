@@ -108,16 +108,21 @@ it('keeps the legacy internal problem route on its original read and does not by
   expect(requests.some(({ path }) => path.startsWith(base))).toBe(false);
 });
 
-it('keeps the portal problem route reading its legacy parent before mounting its real controlled workspace', async () => {
+it('reads the authorized portal parent and clears all facts when controlled disclosure is lost', async () => {
   useWorkTabsStore.getState().bindSession('SUPPLIER:vendor:user');
   const requests = api(({ path }) => path.startsWith(`/api/v1/supplier-portal/problems/${id}?`) ? json({
     id, version: 1, title: '门户原问题', supplierName: '供应商', materialCode: 'PART', defectDescription: '原事实', defectQuantity: 1,
     severity: 'HIGH', responseForm: 'EIGHT_D', replyMode: 'SUPPLIER', stage: 'ISSUED', canEditFacts: false, canEditResponse: false,
     controlledEightD: true, responseDraft: {}, updatedAt: '2026-10-28T00:00:00Z',
-  }) : path === `/api/v1/supplier-portal/eight-d/${id}` ? json({ ...report, allowedActions: ['read'] }) : undefined);
+  }) : path === `/api/v1/supplier-portal/eight-d/${id}` ? json({ ...report, allowedActions: ['read'] })
+    : path === `/api/v1/supplier-portal/eight-d/${id}/approval-history` ? json({ code: 'SUPPLIER_RECORD_NOT_FOUND' }, 404) : undefined);
   mount(`/supplier/corrections/problems/${id}`, true);
   expect(await screen.findByDisplayValue('受控整改机密正文')).toBeDisabled();
   expect(screen.getByText('门户原问题')).toBeVisible();
   expect(requests[0].path).toMatch(`/api/v1/supplier-portal/problems/${id}?`);
   expect(requests.some(({ path }) => path.startsWith('/api/v1/supplier-quality'))).toBe(false);
+  fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
+  expect(await screen.findByText(/当前会话或权限已失效，敏感资料已清除/)).toBeVisible();
+  for (const fact of ['门户原问题', 'PART', '原事实', '受控整改机密标题']) expect(screen.queryByText(fact)).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue('受控整改机密正文')).not.toBeInTheDocument();
 });

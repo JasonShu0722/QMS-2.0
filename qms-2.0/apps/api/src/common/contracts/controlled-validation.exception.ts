@@ -10,13 +10,14 @@ const SAFE_MESSAGES = new Set([
   '请填写实际实施及验证记录', '请填写实际跟进批数或时长', '请填写验证记录或提供受控验证文件',
   '必须人工明确确认措施验证有效', '需要更新的项目须记录实际完成日期', '需要更新的项目尚未完成',
   '请说明不适用原因', '需由负责人先确认分析完成并明确完整提交计划',
+  '已完成的项目须关联本行通过安全扫描的附件',
 ]);
 
 export class ControlledValidationException extends HttpException {
   readonly fields: ErrorFields = Object.create(null);
 
-  constructor(code: PlatformErrorCode, issues: readonly { path: string; message: string }[]) {
-    super({ code }, HttpStatus.BAD_REQUEST);
+  constructor(code: PlatformErrorCode, issues: readonly { path: string; message: string }[], status: HttpStatus.BAD_REQUEST | HttpStatus.CONFLICT = HttpStatus.BAD_REQUEST) {
+    super({ code }, status);
     if (!PLATFORM_ERROR_CODES.includes(code)) return;
     for (const issue of issues.slice(0, 100)) {
       const path = issue?.path;

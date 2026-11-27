@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ConfigProvider } from 'antd';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { components } from '@qms/contracts';
@@ -27,7 +27,7 @@ const outer: Report = {
 function fixture(view: Controlled['view'], month: string, contentVersion: number): Controlled {
   const timestamp = (day: string) => `2026-${month}-${day}T08:00:00Z`;
   const status = view === 'APPROVED' ? 'APPROVED' : view === 'HISTORICAL' ? 'HISTORICAL' : 'CLOSED_SUPPLEMENT';
-  return {
+  return Object.assign({
     supplierProblemId: 'supplier-1', problemId: 'problem-1', reportNumber: `SQ-${view}`, view,
     revisionId: view === 'CURRENT' ? null : `revision-${view}`, status, label: `所选${view}版`, contentVersion, rowVersion: contentVersion + 10,
     generatedAt: '2026-10-28T09:10:11Z', attachments: [],
@@ -45,7 +45,7 @@ function fixture(view: Controlled['view'], month: string, contentVersion: number
         duties: [{ id: `duty-${view}`, duty: 'PROFESSIONAL', status: view === 'HISTORICAL' ? 'CANCELLED' : 'APPROVED',
           userId: `assignee-${view}`, decidedBy: `decider-${view}`, decidedAt: timestamp('09'), comment: `${view}内部意见` }] }],
     },
-  };
+  } satisfies Controlled, { previewFingerprint: 'd'.repeat(64) });
 }
 
 let values: Record<string, Controlled>;
@@ -73,13 +73,44 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetcher);
 });
 
+it('includes the approved preview fingerprint in the portal PDF request and requires refresh on conflict', async () => {
+  const initialFetch = fetcher.getMockImplementation()!;
+  fetcher.mockImplementation((path: string) => path.includes('/report/pdf?')
+    ? Promise.resolve(new Response(JSON.stringify({ code: 'SUPPLIER_EIGHT_D_REPORT_VERSION_CONFLICT', message: 'Snapshot changed' }), {
+      status: 409, headers: { 'content-type': 'application/json' },
+    })) : initialFetch(path));
+  values.CURRENT = values.APPROVED;
+  mount(true);
+  fireEvent.change(screen.getByLabelText('报告版本'), { target: { value: 'APPROVED' } });
+  const button = screen.getByRole('button', { name: '授权下载 PDF' });
+  await waitFor(() => expect(button).toBeEnabled());
+  fireEvent.click(button);
+  await screen.findByText('报告版本已变化，请刷新预览后下载。');
+  expect(fetcher.mock.calls.find(([path]) => path.includes('/report/pdf?'))?.[0])
+    .toBe(`/api/v1/supplier-portal/eight-d/supplier-1/report/pdf?view=APPROVED&previewFingerprint=${'d'.repeat(64)}`);
+  expect(button).toBeDisabled();
+  expect(screen.getByRole('article', { name: 'SQ-APPROVED' })).toBeVisible();
+  fireEvent.click(screen.getByRole('button', { name: '刷新报告' }));
+  expect(button).toBeDisabled();
+  await waitFor(() => expect(button).toBeEnabled());
+});
+
 it.each([false, true])('keeps saved-version guidance in the portal only (portal=%s)', async portal => {
   if (portal) values.CURRENT = values.APPROVED;
   mount(portal);
-  await screen.findByDisplayValue(portal ? 'APPROVED版正文' : 'CURRENT版正文');
+  await screen.findByText(portal ? 'APPROVED版正文' : 'CURRENT版正文');
   expect(screen.queryByText(/报告只含服务端已保存内容/) !== null).toBe(portal);
   expect(screen.getByRole('region', { name: '所选版本基础事实' })).toBeVisible();
   expect(screen.getByRole('button', { name: '授权下载 PDF' })).toBeEnabled();
+});
+
+it('does not show or download a current snapshot returned for the approved selector', async () => {
+  values.APPROVED = values.CURRENT;
+  mount(); await screen.findByText('CURRENT版正文');
+  fireEvent.change(screen.getByLabelText('报告版本'), { target: { value: 'APPROVED' } });
+  await screen.findByText('报告读取或下载失败，请检查版本与权限后刷新。');
+  expect(screen.queryByText('CURRENT版正文')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '授权下载 PDF' })).toBeDisabled();
 });
 
 it('binds CURRENT, APPROVED and historical facts, dates and closure duties to the selected snapshot, never the outer current report', async () => {
@@ -87,7 +118,7 @@ it('binds CURRENT, APPROVED and historical facts, dates and closure duties to th
   for (const selection of ['CURRENT', 'APPROVED', 'revision-HISTORICAL']) {
     if (selection !== 'CURRENT') fireEvent.change(screen.getByLabelText('报告版本'), { target: { value: selection } });
     const selected = values[selection], snapshot = selected.snapshot;
-    expect(await screen.findByDisplayValue(`${selected.view}版正文`)).toBeDisabled();
+    expect(await screen.findByText(`${selected.view}版正文`)).toBeVisible();
     const facts = screen.getByRole('region', { name: '所选版本基础事实' });
     fact(facts, '报告单号', selected.reportNumber); fact(facts, '标题', `${selected.view}版问题`);
     fact(facts, '物料编码', `MAT-${selected.view}`); fact(facts, '物料类别', 'ELECTRONIC');
@@ -126,7 +157,7 @@ it('shows unapproved and unrecorded values honestly instead of borrowing the out
   current.status = 'DRAFT'; current.snapshot.approvalRounds = [];
   current.snapshot.deadlines = { analysisDueAt: null, submissionDueAt: null, closureDueAt: null };
   current.snapshot.analysisCompletedAt = null; current.snapshot.submittedAt = null; current.snapshot.problem.closedAt = null;
-  mount(); await screen.findByDisplayValue('CURRENT版正文');
+  mount(); await screen.findByText('CURRENT版正文');
   expect(screen.getByText('本版无批准记录（未批准）')).toBeVisible();
   const dates = screen.getByRole('region', { name: '所选版本阶段时间' });
   expect(within(dates).getAllByText('未记录')).toHaveLength(6);
@@ -137,7 +168,7 @@ it('shows unapproved and unrecorded values honestly instead of borrowing the out
 it('accepts a saved approval record when approvalRounds is absent and does not substitute present-day rounds', async () => {
   values.CURRENT.snapshot.approval = values.CURRENT.snapshot.approvalRounds![0];
   delete values.CURRENT.snapshot.approvalRounds;
-  mount(); await screen.findByDisplayValue('CURRENT版正文');
+  mount(); await screen.findByText('CURRENT版正文');
   const round = screen.getByRole('region', { name: '审批轮次 7' });
   fact(round, '固定正文版本', '7');
   expect(within(round).getByText('CURRENT内部意见')).toBeVisible();
@@ -145,7 +176,7 @@ it('accepts a saved approval record when approvalRounds is absent and does not s
 
 it('does not use generatedAt as a missing supplement update time', async () => {
   values.CURRENT.snapshot.problem.supplementUpdatedAt = null;
-  mount(); await screen.findByDisplayValue('CURRENT版正文');
+  mount(); await screen.findByText('CURRENT版正文');
   const supplement = screen.getByRole('region', { name: '内部补充版本说明' });
   fact(supplement, '补充更新时间', '未记录');
   expect(supplement).not.toHaveTextContent(values.CURRENT.generatedAt);
@@ -158,7 +189,7 @@ it('shows only portal-safe returned facts and duty results without internal iden
   selected.snapshot.instance.internalMemo = '未白名单内部流程';
   selected.snapshot.sources = [{ sourceDomain: 'process', sourceType: 'internal', sourceId: 'secret-source', sourceVersion: 1, sourceSnapshot: { note: '内部来源' } }];
   values.CURRENT = selected;
-  mount(true); await screen.findByDisplayValue('APPROVED版正文');
+  mount(true); await screen.findByText('APPROVED版正文');
   fact(screen.getByRole('region', { name: '所选版本基础事实' }), '物料编码', 'MAT-APPROVED');
   const duty = screen.getByRole('region', { name: '审批职责 1' });
   fact(duty, '职责结果', 'APPROVED'); fact(duty, '确认时间', '2026-09-09T08:00:00Z');
@@ -181,11 +212,11 @@ it('clears old metadata immediately on selection change and ignores a late abort
     }
     return normal(path, init);
   });
-  mount(); await screen.findByDisplayValue('CURRENT版正文');
+  mount(); await screen.findByText('CURRENT版正文');
   fireEvent.change(screen.getByLabelText('报告版本'), { target: { value: 'APPROVED' } });
   expect(screen.queryByRole('region', { name: '所选版本基础事实' })).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('报告版本'), { target: { value: 'revision-HISTORICAL' } });
-  await screen.findByDisplayValue('HISTORICAL版正文');
+  await screen.findByText('HISTORICAL版正文');
   expect(approvedSignal?.aborted).toBe(true);
   await act(async () => { resolveApproved(json(values.APPROVED)); });
   expect(screen.getByRole('region', { name: '所选版本基础事实' })).toHaveTextContent('MAT-HISTORICAL');

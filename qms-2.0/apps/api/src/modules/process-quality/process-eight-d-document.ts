@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { validateSync, type ValidationError } from 'class-validator';
 import {
   PROCESS_EIGHT_D_MAX_FILES, PROCESS_EIGHT_D_MAX_ROWS, ProcessEightDContainmentDto, ProcessEightDCorrectiveActionDto,
-  ProcessEightDDocumentDto, ProcessEightDHorizontalDeploymentDto,
+  ProcessEightDDocumentDto, ProcessEightDEffectTrackingDto, ProcessEightDHorizontalDeploymentDto,
   ProcessEightDStandardizationDto, ProcessEightDTeamMemberDto, ProcessEightDTemporaryMeasureDto,
 } from './process-eight-d-document.dto.js';
 
@@ -78,7 +78,7 @@ function evidenceLimitIssues(document: ProcessEightDDocument): ProcessEightDDocu
 }
 
 export function emptyProcessEightDDocument(): ProcessEightDDocument {
-  return normalizeProcessEightDDocument({});
+  return normalizeProcessEightDDocument({ horizontalDeployment: [{ id: 'horizontal-default' }] });
 }
 
 export function normalizeProcessEightDDocument(input: unknown): ProcessEightDDocument {
@@ -86,6 +86,9 @@ export function normalizeProcessEightDDocument(input: unknown): ProcessEightDDoc
   if (!Object.hasOwn(input as object, 'standardization')) {
     document.standardization = standardizationPresets.map(([key, documentName]) =>
       Object.assign(new ProcessEightDStandardizationDto(), { id: key, key, documentName }));
+  }
+  if (document.effectTracking !== undefined) {
+    document.effectTracking = readObject(document.effectTracking, ProcessEightDEffectTrackingDto, 'effectTracking');
   }
   for (const key of Object.keys(rowTypes) as (keyof typeof rowTypes)[]) {
     const rows = document[key] as unknown[] | undefined;
@@ -102,6 +105,8 @@ export function normalizeProcessEightDDocument(input: unknown): ProcessEightDDoc
   }
   const issues = validationIssues(validateSync(document, { whitelist: true, forbidNonWhitelisted: true, forbidUnknownValues: true }));
   if (issues.length) throw new ProcessEightDDocumentError(issues);
+  const leaders = (document.team ?? []).flatMap((member, index) => member.isLeader === true ? [index] : []);
+  if (leaders.length > 1) reject(`team[${leaders[1]}].isLeader`, '只能指定一名组长');
   const evidenceIssues = evidenceLimitIssues(document);
   if (evidenceIssues.length) throw new ProcessEightDDocumentError(evidenceIssues);
 
@@ -130,14 +135,15 @@ export function analysisCompletionIssues(document: ProcessEightDDocument): Proce
   }
   document.correctiveActions.forEach((row, index) => {
     if (row.causeKind === 'SYSTEM') return;
-    for (const field of ['action', 'owner', 'plannedAt', 'verificationMethod'] as const) {
+    for (const field of ['action', 'owner', 'plannedAt'] as const) {
       if (!row[field]?.trim()) issues.push({ path: `correctiveActions[${index}].${field}`, message: '请完善对策计划' });
     }
   });
   return issues;
 }
 
-export function submissionIssues(document: ProcessEightDDocument): ProcessEightDDocumentIssue[] {
+export function submissionIssues(document: ProcessEightDDocument, deadlines?: { analysisCompletedAt: Date | null; submissionDueAt: Date | null },
+  availableIds?: ReadonlySet<string>): ProcessEightDDocumentIssue[] {
   const issues = [...evidenceLimitIssues(document), ...analysisCompletionIssues(document)];
   document.correctiveActions.forEach((row, index) => {
     if (row.causeKind === 'SYSTEM') return;
@@ -157,11 +163,62 @@ export function submissionIssues(document: ProcessEightDDocument): ProcessEightD
       if (!row.completedAt) issues.push({ path: `standardization[${index}].completedAt`, message: '需要更新的项目须记录实际完成日期' });
       if (row.status !== 'COMPLETED') issues.push({ path: `standardization[${index}].status`, message: '需要更新的项目尚未完成' });
     }
-    if (row.status === 'NOT_APPLICABLE' && !row.reason.trim()) {
-      issues.push({ path: `standardization[${index}].reason`, message: '请说明不适用原因' });
-    }
   });
-  return issues;
+  const d7 = completedD7EvidenceIssues(document, availableIds);
+  if (deadlines && (!deadlines.analysisCompletedAt || !deadlines.submissionDueAt)) {
+    issues.push({ path: 'analysisCompletedAt', message: '需由负责人先确认分析完成并明确完整提交计划' });
+  }
+  if (availableIds && !d7.length && documentFileIds(document).some(id => !availableIds.has(id))) {
+    issues.push({ path: 'fileIds', message: '正文关联的附件须通过安全扫描且可用' });
+  }
+  return [...issues, ...d7];
+}
+
+export function completedD7EvidenceIssues(document: ProcessEightDDocument, availableIds?: ReadonlySet<string>, previous?: ProcessEightDDocument): ProcessEightDDocumentIssue[] {
+  const message = '已完成的项目须关联本行通过安全扫描的附件';
+  return [
+    ...d7EvidenceReferenceIssues(document),
+    ...completedD7EvidenceRows(document, previous).filter(row => !row.fileIds.some(id => !availableIds || availableIds.has(id)))
+      .map(row => ({ path: row.path, message })),
+  ];
+}
+
+function d7EvidenceReferenceIssues(document: ProcessEightDDocument): ProcessEightDDocumentIssue[] {
+  const references = new Map<string, string>();
+  const conflicts = new Set<string>();
+  for (const { path, fileIds } of d7EvidenceRows(document)) {
+    for (const fileId of fileIds) {
+      const id = fileId.toLowerCase();
+      const firstPath = references.get(id);
+      if (firstPath === undefined) references.set(id, path);
+      else if (firstPath !== path) {
+        conflicts.add(firstPath);
+        conflicts.add(path);
+      }
+    }
+  }
+  return [...conflicts].map(path => ({ path, message: '同一附件不得跨 D7 行复用' }));
+}
+
+function d7EvidenceRows(document: ProcessEightDDocument) {
+  return [
+    ...document.horizontalDeployment.map((row, index) => ({ key: `horizontalDeployment:${row.id}`,
+      path: `horizontalDeployment[${index}].fileIds`, fileIds: row.fileIds, completed: row.completed === true })),
+    ...document.standardization.map((row, index) => ({ key: `standardization:${row.id}`,
+      path: `standardization[${index}].fileIds`, fileIds: row.fileIds ?? [], completed: row.status === 'COMPLETED' })),
+  ];
+}
+
+export function completedD7EvidenceRows(document: ProcessEightDDocument, previous?: ProcessEightDDocument) {
+  const completedRows = (edition: ProcessEightDDocument) => d7EvidenceRows(edition)
+    .filter(row => row.completed).map(({ key, path, fileIds }) => ({ key, path, fileIds }));
+  const rows = completedRows(document);
+  if (!previous) return rows;
+  const previousFiles = new Map(completedRows(previous).map(row => [row.key, new Set(row.fileIds)]));
+  return rows.filter(row => {
+    const before = previousFiles.get(row.key);
+    return !before || before.size !== row.fileIds.length || row.fileIds.some(id => !before.has(id));
+  });
 }
 
 export function documentFileIds(document: ProcessEightDDocument): string[] {
@@ -170,5 +227,6 @@ export function documentFileIds(document: ProcessEightDDocument): string[] {
     ...document.temporaryMeasures.flatMap((row) => row.fileIds),
     ...document.correctiveActions.flatMap((row) => [...row.fileIds, ...row.verificationFileIds]),
     ...document.horizontalDeployment.flatMap((row) => row.fileIds),
+    ...document.standardization.flatMap((row) => row.fileIds ?? []),
   ])];
 }

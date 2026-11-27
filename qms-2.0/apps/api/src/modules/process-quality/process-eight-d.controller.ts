@@ -7,6 +7,7 @@ import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guar
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { ProcessIssueResultDto } from './process-quality.dto.js';
 import { ProcessEightDService } from './process-eight-d.service.js';
+import { EightDTeamOptionsDto, InternalEightDTeamOptionsQueryDto } from './process-eight-d-document-team.dto.js';
 import { IssueProcessEightDDto, ProcessEightDActivationDto, ProcessEightDAnalysisCompleteDto, ProcessEightDAssignmentOptionsDto, ProcessEightDAssignmentOptionsQueryDto, ProcessEightDBindingDto, ProcessEightDBindingResultDto,
   ProcessEightDCollaboratorsDto, ProcessEightDDeadlinesDto, ProcessEightDFlowRecordDto, ProcessEightDReportDto, ProcessEightDRiskDto, ProcessEightDScopeDto,
   ProcessEightDSourcesDto, ProcessEightDSourcePreviewDto, ProcessEightDSourcePreviewInputDto, ProcessEightDVersionDto, ReassignProcessEightDDto, SaveProcessEightDDto } from './process-eight-d.dto.js';
@@ -58,6 +59,10 @@ export class ProcessEightDController {
   @Get(':id') @ApiOkResponse({ type: ProcessEightDReportDto })
   @RequireAccess({ featurePermission: 'process-quality:issues:read', organizationScope: queryScope })
   read(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() _query: ProcessEightDScopeDto) { return this.service.read(actor(request), id); }
+
+  @Get(':id/team-options') @ApiOkResponse({ type: EightDTeamOptionsDto })
+  @RequireAccess({ featurePermission: 'process-quality:issues:read', organizationScope: queryScope })
+  teamOptions(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Query() query: InternalEightDTeamOptionsQueryDto) { return this.service.teamOptions(actor(request), id, query); }
 
   @Get(':id/flow-records') @ApiOkResponse({ type: [ProcessEightDFlowRecordDto] })
   @RequireAccess({ featurePermission: 'process-quality:issues:read', organizationScope: queryScope })

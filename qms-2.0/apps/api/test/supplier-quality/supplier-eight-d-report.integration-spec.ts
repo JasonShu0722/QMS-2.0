@@ -64,6 +64,7 @@ describe('supplier controlled report / actual PostgreSQL, HTTP, storage, scanner
     const f = await supplierEightDFixture(app);
     await f.http(f.sqe.cookie, 'get', `${f.prefix}/report`).expect(403);
     await f.http(f.vendor.cookie, 'get', `${f.portal}/report`).expect(404);
+    await f.http(f.vendor.cookie, 'get', `${f.portal}/approval-history`).expect(404);
     await grantReport(f);
     const current = await f.http(f.sqe.cookie, 'get', `${f.prefix}/report`).expect(200);
     expect(current.headers['cache-control']).toBe('no-store'); expect(current.headers['x-content-type-options']).toBe('nosniff');
@@ -74,17 +75,25 @@ describe('supplier controlled report / actual PostgreSQL, HTTP, storage, scanner
     await release(f);
     const portal = await f.http(f.vendor.cookie, 'get', `${f.portal}/report`).expect(200);
     expect(portal.body.snapshot.sources).toEqual([]); expect(portal.headers['cache-control']).toBe('no-store');
+    expect((await f.http(f.vendor.cookie, 'get', `${f.portal}/approval-history`).expect(200)).body).toEqual([]);
     const internalGrants = await f.db.rolePermission.count({ where: { roleId: f.vendor.role.id, permission: { code: { startsWith: 'supplier-quality:issues:' } } } });
     expect(internalGrants).toBe(0);
     await f.http(f.otherVendor.cookie, 'get', `${f.portal}/report`).expect(404);
+    await f.http(f.otherVendor.cookie, 'get', `${f.portal}/approval-history`).expect(404);
     await f.http(f.otherVendor.cookie, 'get', `${f.portal}/report/pdf`).expect(404);
   }, 60_000);
 
   it('preserves Chinese long tables, OK/NG image bytes, immutable approved/history and private closed supplements', async () => {
     const f = await supplierEightDFixture(app); await grantReport(f); await release(f);
+    const beforeEdit = (await f.http(f.vendor.cookie, 'get', `${f.portal}/report`).expect(200)).body;
+    expect(beforeEdit.previewFingerprint).toMatch(/^[a-f0-9]{64}$/);
     const { document, ok, ng } = await saveImages(f, true);
     let current = await f.read();
-    const draftPdf = await f.http(f.vendor.cookie, 'get', `${f.portal}/report/pdf`).expect(200);
+    const afterEdit = (await f.http(f.vendor.cookie, 'get', `${f.portal}/report`).expect(200)).body;
+    expect(afterEdit.previewFingerprint).not.toBe(beforeEdit.previewFingerprint);
+    const stale = await f.http(f.vendor.cookie, 'get', `${f.portal}/report/pdf?previewFingerprint=${beforeEdit.previewFingerprint}`).expect(409);
+    expect(stale.body.code).toBe('SUPPLIER_EIGHT_D_REPORT_VERSION_CONFLICT');
+    const draftPdf = await f.http(f.vendor.cookie, 'get', `${f.portal}/report/pdf?previewFingerprint=${afterEdit.previewFingerprint}`).expect(200);
     expect(draftPdf.headers['content-type']).toContain('application/pdf'); expect(draftPdf.headers['cache-control']).toBe('no-store');
     const bytes = draftPdf.body as Buffer; expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
     const pdf = getDocument({ data: new Uint8Array(bytes), useSystemFonts: false }); let pdfText = '';
@@ -102,6 +111,9 @@ describe('supplier controlled report / actual PostgreSQL, HTTP, storage, scanner
     current = (await f.http(f.vendor.cookie, 'post', `${f.portal}/analysis-complete`, { ...f.version(current), submissionDueAt: '2026-11-03T00:00:00Z' }).expect(201)).body;
     current = (await f.http(f.vendor.cookie, 'post', `${f.portal}/submit`, f.version(current)).expect(201)).body;
     expect((await f.http(f.sqe.cookie, 'get', `${f.prefix}/report`).expect(200)).body.status).toBe('IN_REVIEW');
+    expect((await f.decide(f.sqe, current.closure, ['PROFESSIONAL'], 'RETURN')).status).toBe(200);
+    current = await f.read();
+    current = (await f.http(f.vendor.cookie, 'post', `${f.portal}/submit`, f.version(current)).expect(201)).body;
     expect((await f.decide(f.sqe, current.closure, ['PROFESSIONAL'])).status).toBe(200); current = await f.read();
     expect((await f.decide(f.manager, current.closure, ['SECTION_MANAGER'])).status).toBe(200); current = await f.read();
     const approved = (await f.http(f.sqe.cookie, 'get', `${f.prefix}/report?view=APPROVED`).expect(200)).body;
@@ -111,6 +123,20 @@ describe('supplier controlled report / actual PostgreSQL, HTTP, storage, scanner
     const historicalInternal = (await f.http(f.sqe.cookie, 'get', `${f.prefix}/report?revisionId=${current.approvedRevisionId}`).expect(200)).body;
     expect(historical).toMatchObject({ status: 'HISTORICAL', contentVersion: approved.contentVersion });
     expect(historical.snapshot.document).toEqual(approved.snapshot.document);
+    expect(historical.snapshot).not.toHaveProperty('approvalRounds');
+    const published = (await f.http(f.vendor.cookie, 'get', `${f.portal}/report`).expect(200)).body;
+    const history = await f.http(f.vendor.cookie, 'get', `${f.portal}/approval-history`).expect(200);
+    expect(history.headers['cache-control']).toBe('no-store');
+    expect(history.body.map((round: { status: string }) => round.status)).toEqual(['APPROVED', 'RETURNED']);
+    expect(history.body[0].duties).toEqual(published.snapshot.approvalRounds[0].duties);
+    for (const [index, duty] of published.snapshot.approvalRounds[0].duties.entries()) {
+      const internalDuty = approved.snapshot.approvalRounds[0].duties[index];
+      expect(duty).toMatchObject({ duty: internalDuty.duty, status: internalDuty.status, decidedAt: internalDuty.decidedAt });
+      for (const privateField of ['userId', 'userDisplayName', 'decidedBy', 'comment']) {
+        expect(duty).not.toHaveProperty(privateField);
+        expect(history.body[1].duties[index]).not.toHaveProperty(privateField);
+      }
+    }
     const beforeSupplement = (await f.http(f.sqe.cookie, 'get', `${f.prefix}/report`).expect(200)).body;
     expect(beforeSupplement.snapshot.problem.supplementUpdatedAt).toBeNull();
     const privateFile = await upload(f, f.sqe.cookie, 'supplier-eight-d-supplement');
@@ -126,7 +152,8 @@ describe('supplier controlled report / actual PostgreSQL, HTTP, storage, scanner
     try {
       const parsed = await internalLoading.promise; let text = '';
       for (let i = 1; i <= parsed.numPages; i++) text += (await (await parsed.getPage(i)).getTextContent()).items.map(item => 'str' in item ? item.str : '').join('');
-      expect(text).toContain('原版本实际批准，未覆盖本次补充'); expect(text).not.toContain('旧轮已失效');
+      expect(text).toContain('审批轮 2 / APPROVED / 原版本实际批准，未覆盖本次补充');
+      expect(text).toContain('审批轮 1 / RETURNED / 旧轮已失效');
       for (const duty of approved.snapshot.approvalRounds[0].duties) {
         expect(text).toContain(`${duty.duty} / APPROVED`);
         expect(text).toContain(`实际签批 ${duty.decidedBy} / ${duty.decidedAt}`);
@@ -154,7 +181,9 @@ describe('supplier controlled report / actual PostgreSQL, HTTP, storage, scanner
     expect(external.snapshot.document).toEqual(approved.snapshot.document); expect(external.attachments.map((file: any) => file.id).sort()).toEqual([ok.id, ng.id].sort());
     expect(JSON.stringify(external)).not.toContain(supplement.description); expect(JSON.stringify(external)).not.toContain(privateFile.id);
     expect(external.snapshot.problem).not.toHaveProperty('supplementUpdatedAt');
-    const closedPdf = (await f.http(f.vendor.cookie, 'get', `${f.portal}/report/pdf`).expect(200)).body as Buffer;
+    const fixedExternalHistory = (await f.http(f.vendor.cookie, 'get', `${f.portal}/report?revisionId=${current.approvedRevisionId}`).expect(200)).body;
+    expect(fixedExternalHistory.previewFingerprint).toBe(historical.previewFingerprint);
+    const closedPdf = (await f.http(f.vendor.cookie, 'get', `${f.portal}/report/pdf?previewFingerprint=${external.previewFingerprint}`).expect(200)).body as Buffer;
     const closedLoading = getDocument({ data: new Uint8Array(closedPdf), useSystemFonts: false });
     try {
       const parsed = await closedLoading.promise; let text = '';
@@ -162,6 +191,10 @@ describe('supplier controlled report / actual PostgreSQL, HTTP, storage, scanner
       expect(text).toContain(document.description); expect(text).not.toContain(supplement.description); expect(text).not.toContain(privateFile.id);
       expect(text).toContain('原批准版');
       expect(text).not.toContain('补充更新时间'); expect(text).not.toContain(supplements[0]!.recordedAt.toISOString());
+      for (const duty of approved.snapshot.approvalRounds[0].duties) {
+        expect(text).toContain(`${duty.duty} / APPROVED：${duty.decidedAt}`);
+        expect(text).not.toContain(duty.decidedBy);
+      }
     } finally { await closedLoading.destroy(); }
     await f.http(f.vendor.cookie, 'post', `files/${privateFile.id}/download`, {}).expect(403);
     const fixed = (await f.http(f.sqe.cookie, 'get', `${f.prefix}/report?view=APPROVED`).expect(200)).body;

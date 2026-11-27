@@ -43,6 +43,56 @@ describe('supplier 8D actual domain lifecycle / HTTP / PostgreSQL', () => {
     const { current, person, path } = await prepare(f);
     return (await f.http(person.cookie, 'post', `${path}/submit`, f.version(current)).expect(201)).body;
   }
+
+  it('isolates portal team options to the released company and keeps directory access separate from report reading', async () => {
+    const f = await supplierEightDFixture(app);
+    const path = `${f.portal}/team-options`, internalPath = `${f.prefix}/team-options`;
+    await f.http(f.vendor.cookie, 'get', path).expect(404);
+    await release(f);
+    await f.http(f.otherVendor.cookie, 'get', path).expect(404);
+    await f.http(f.sqe.cookie, 'get', f.prefix).expect(200);
+    await f.http(f.sqe.cookie, 'get', internalPath).expect(403);
+    const { body } = await f.http(f.vendor.cookie, 'get', path).expect(200);
+    expect(body).toMatchObject({ total: 1, items: [{ userId: f.vendor.user.id, assignmentId: null, department: null, jobTitle: null }] });
+  }, 30_000);
+
+  it('projects D8 readiness to the supplier and locates a D7 evidence failure at formal submit', async () => {
+    const f = await supplierEightDFixture(app);
+    const { current, person, path } = await prepare(f);
+    expect(current).toMatchObject({ submissionIssues: [] });
+    const sha256 = 'a'.repeat(64), now = new Date();
+    const file = await f.db.fileObject.create({ data: { organizationId: f.vendor.org.id, uploadedById: person.user.id,
+      resourceType: 'supplier-quality', resourceId: f.draft.id, resourceVersion: current.contentVersion, objectKey: randomUUID(),
+      originalName: 'D7 evidence.pdf', contentType: 'application/pdf', sizeBytes: 1, sha256, objectVersionId: 'd7-test',
+      uploadCompletedAt: now, scannedAt: now, scannerEngine: 'test fixture', status: 'AVAILABLE', scanStatus: 'CLEAN',
+      verifiedSha256: sha256, verifiedContentType: 'application/pdf', verifiedSizeBytes: 1 } });
+    const document = supplierEightDDocument();
+    document.standardization = [{ ...document.standardization[0]!, status: 'COMPLETED', fileIds: [file.id] }];
+    const saved = (await f.http(person.cookie, 'put', path, { ...f.version(current), document }).expect(200)).body;
+    expect(saved).toMatchObject({ submissionIssues: [] });
+    const shared = { ...document, horizontalDeployment: [{ id: 'rollout', completed: false, fileIds: [file.id] }] };
+    await f.http(person.cookie, 'put', path, { ...f.version(saved), document: shared }).expect(400).expect(({ body }) => {
+      expect(body).toMatchObject({ code: 'SUPPLIER_EIGHT_D_DOCUMENT_INVALID', fields: {
+        'horizontalDeployment[0].fileIds': expect.any(Array), 'standardization[0].fileIds': expect.any(Array),
+      } });
+    });
+    await f.http(f.otherVendor.cookie, 'post', `files/${file.id}/delete`, { expectedVersion: file.version }).expect(404);
+    await f.http(person.cookie, 'post', `files/${file.id}/delete`, { expectedVersion: file.version }).expect(409).expect(({ body }) => {
+      expect(body).toMatchObject({ code: 'FILE_REQUIRED_EVIDENCE', fields: { 'standardization[0].fileIds': expect.any(Array) } });
+    });
+    await f.db.fileObject.update({ where: { id: file.id }, data: { status: 'QUARANTINED', scanStatus: 'PENDING' } });
+    const issues = [{ path: 'standardization[0].fileIds', message: '已完成的项目须关联本行通过安全扫描的附件' }];
+    const updated = await f.http(person.cookie, 'get', path).expect(200);
+    expect(updated.body).toMatchObject({ contentVersion: saved.contentVersion, submissionIssues: issues });
+    await f.http(person.cookie, 'post', `${path}/submit`, f.version(saved)).expect(400).expect(({ body }) => {
+      expect(body).toMatchObject({ code: 'SUPPLIER_EIGHT_D_SUBMISSION_INCOMPLETE', fields: { 'standardization[0].fileIds': [issues[0]!.message] } });
+    });
+    document.standardization[0]!.fileIds = [];
+    await f.http(person.cookie, 'put', path, { ...f.version(saved), document }).expect(400).expect(({ body }) => {
+      expect(body).toMatchObject({ code: 'SUPPLIER_EIGHT_D_DOCUMENT_INVALID', fields: { 'standardization[0].fileIds': [issues[0]!.message] } });
+    });
+    expect(await f.read()).toMatchObject({ rowVersion: saved.rowVersion, submittedRevisionId: null });
+  }, 30_000);
   async function upload(f: Fixture, cookie: string, resourceType: string) {
     const upload = (await f.http(cookie, 'post', 'files/uploads', { resourceType, resourceId: f.draft.id, originalName: 'actual-evidence.png', contentType: 'image/png',
       sizeBytes: png.length, sha256: createHash('sha256').update(png).digest('hex') }).expect(201)).body;

@@ -34,7 +34,7 @@ export function reportImageSize(bytes: Buffer, contentType: string): { width: nu
   return { width, height };
 }
 
-export async function renderProcessEightDPdf(report: ProcessEightDControlledReportDto, images: ReadonlyMap<string, Buffer>, domainCode = String(report.snapshot.problem.domainCode ?? 'process-quality')): Promise<Buffer> {
+export async function renderProcessEightDPdf(report: ProcessEightDControlledReportDto, images: ReadonlyMap<string, Buffer>, domainCode = String(report.snapshot.problem.domainCode ?? 'process-quality'), supplierPortal = false): Promise<Buffer> {
   const document = report.snapshot.document;
   const references = [...document.okFileIds, ...document.ngFileIds, ...document.analysisFileIds,
     ...document.temporaryMeasures.flatMap(row => row.fileIds),
@@ -58,7 +58,7 @@ export async function renderProcessEightDPdf(report: ProcessEightDControlledRepo
   const workerUrl = new URL(import.meta.url.endsWith('.ts') ? './process-eight-d-pdf.worker.ts' : './process-eight-d-pdf.worker.js', import.meta.url);
   return new Promise((resolve, reject) => {
     const domainLabel = ({ 'process-quality': '过程', 'customer-quality': '客户', 'new-product-quality': '新品', 'supplier-quality': '供应商' } as Record<string, string>)[domainCode] ?? '';
-    const worker = new Worker(workerUrl, { workerData: { report, images: embedded, dimensions, domainLabel }, execArgv: [],
+    const worker = new Worker(workerUrl, { workerData: { report, images: embedded, dimensions, domainLabel, supplierPortal }, execArgv: [],
       resourceLimits: { maxOldGenerationSizeMb: 192, maxYoungGenerationSizeMb: 32, stackSizeMb: 4 } });
     let settled = false;
     const finish = (error?: Error, content?: Buffer) => {

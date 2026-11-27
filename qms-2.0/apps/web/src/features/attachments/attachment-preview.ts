@@ -1,5 +1,5 @@
 import { inflateZipEntry, readXlsxPreview } from '../imports/read-xlsx';
-import { attachmentDownload, type Attachment } from './attachments';
+import type { Attachment } from './attachments';
 
 const maxAttachmentSize = 25 * 1024 * 1024;
 const maxWordXmlSize = 8 * 1024 * 1024;
@@ -14,9 +14,10 @@ export const canDownloadAttachment = (file: Attachment) => file.status === 'AVAI
 export const canPreviewAttachment = (file: Attachment) => canDownloadAttachment(file) &&
   ['image/png', 'image/jpeg', 'application/pdf', 'text/plain', wordType, excelType].includes(file.contentType);
 
-async function verifiedBytes(file: Attachment, signal: AbortSignal) {
+async function verifiedBytes(file: Attachment, signal: AbortSignal, downloadUrl: (id: string, signal: AbortSignal) => Promise<string>) {
   if (!canPreviewAttachment(file) || !Number.isSafeInteger(file.sizeBytes) || file.sizeBytes < 1 || file.sizeBytes > maxAttachmentSize || !/^[a-f0-9]{64}$/.test(file.sha256)) throw new Error('PREVIEW_METADATA_INVALID');
-  const url = await attachmentDownload(file.id, signal);
+  const url = await downloadUrl(file.id, signal);
+  signal.throwIfAborted();
   const response = await fetch(url, { signal, credentials: 'omit', cache: 'no-store', referrerPolicy: 'no-referrer', redirect: 'error' });
   const mime = response.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase();
   if (!response.ok || (mime !== file.contentType && mime !== 'application/octet-stream') || Number(response.headers.get('content-length')) > file.sizeBytes) {
@@ -117,8 +118,8 @@ function wordText(xml: string) {
   return parts.join('');
 }
 
-export async function readAttachmentPreview(file: Attachment, signal: AbortSignal): Promise<Preview> {
-  const bytes = await verifiedBytes(file, signal);
+export async function readAttachmentPreview(file: Attachment, signal: AbortSignal, downloadUrl: (id: string, signal: AbortSignal) => Promise<string>): Promise<Preview> {
+  const bytes = await verifiedBytes(file, signal, downloadUrl);
   if (file.contentType === 'text/plain') return textPreview('text', new TextDecoder('utf-8', { fatal: true }).decode(bytes));
   if (file.contentType === wordType) return textPreview('word', wordText(await wordXml(bytes, signal)));
   if (file.contentType === excelType) {
