@@ -7,6 +7,7 @@ jest.unstable_mockModule('../../src/modules/process-quality/process-eight-d-docu
   analysisCompletionIssues: () => [], documentFileIds: (document: { okFileIds: string[] }) => document.okFileIds,
   emptyProcessEightDDocument: () => ({}), normalizeProcessEightDDocument: (document: unknown) => document,
   ProcessEightDDocumentError: class extends Error {}, submissionIssues: () => [], completedD7EvidenceIssues: () => [],
+  completedD7EvidenceRows: () => [],
 }));
 jest.unstable_mockModule('../../src/modules/process-quality/process-eight-d-reminder.service.js', () => ({ ProcessEightDReminderService: class {} }));
 const { ProcessEightDService } = await import('../../src/modules/process-quality/process-eight-d.service.js');

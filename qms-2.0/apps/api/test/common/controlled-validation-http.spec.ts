@@ -1,5 +1,5 @@
 import 'reflect-metadata';
-import { Controller, Get, HttpException, Param, type INestApplication } from '@nestjs/common';
+import { Controller, Get, HttpException, HttpStatus, Param, type INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { GlobalExceptionFilter } from '../../src/common/contracts/global-exception.filter.js';
@@ -26,6 +26,13 @@ const service = Object.assign(Object.create(ProcessEightDService.prototype), {
 
 @Controller('validation')
 class ValidationController {
+  @Get('required-evidence')
+  requiredEvidence(): never {
+    throw new ControlledValidationException('FILE_REQUIRED_EVIDENCE', [
+      { path: 'horizontalDeployment[0].fileIds', message: '已完成的项目须关联本行通过安全扫描的附件' },
+    ], HttpStatus.CONFLICT);
+  }
+
   @Get('controlled/:status')
   controlled(@Param('status') status: string): never {
     const exception = new ControlledValidationException('PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE', [
@@ -115,5 +122,12 @@ describe('controlled validation HTTP seam (no database)', () => {
     const { body } = await request(app.getHttpServer()).get(`/validation/controlled/${status}`).expect(status);
     expect(body.fields).toEqual({});
     expect(body.code).toBe(status === 500 ? 'INTERNAL_ERROR' : 'PROCESS_EIGHT_D_SUBMISSION_INCOMPLETE');
+  });
+
+  it('locates required evidence conflicts in the completed D7 row', async () => {
+    const { body } = await request(app.getHttpServer()).get('/validation/required-evidence').expect(409);
+    expect(body).toMatchObject({ code: 'FILE_REQUIRED_EVIDENCE', fields: {
+      'horizontalDeployment[0].fileIds': ['已完成的项目须关联本行通过安全扫描的附件'],
+    } });
   });
 });

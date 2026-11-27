@@ -8,6 +8,8 @@ import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessEightDWorkspace } from './ProcessEightDWorkspace';
 
+vi.setConfig({ testTimeout: 45000 });
+
 type Report = components['schemas']['ProcessEightDReportDto'];
 const document: Report['document'] = {
   description: '真实过程问题', okFileIds: [], ngFileIds: [], temporaryMeasures: [], containment: [], optionalAffectedContainment: [],

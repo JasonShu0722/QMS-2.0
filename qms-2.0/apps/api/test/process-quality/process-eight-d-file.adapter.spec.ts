@@ -2,12 +2,13 @@ import 'reflect-metadata';
 import { HttpException } from '@nestjs/common';
 import { jest } from '@jest/globals';
 import { randomUUID } from 'node:crypto';
+import { emptyProcessEightDDocument } from '../../src/modules/process-quality/process-eight-d-document.js';
 import { ProcessEightDFileAdapter } from '../../src/modules/process-quality/process-eight-d-file.adapter.js';
 
 function fixture() {
   const actor = { id: randomUUID(), organizationId: randomUUID(), accountType: 'INTERNAL' as const, sessionId: randomUUID(), scopeOrganizationId: randomUUID() };
   const target = randomUUID(), resource = { resourceType: 'process-eight-d', resourceId: randomUUID() };
-  const record = { problem: { organizationId: target }, report: { version: 3 } };
+  const record = { problem: { organizationId: target }, report: { version: 3, document: emptyProcessEightDDocument() } };
   const tx = {};
   const service = {
     readResourceOrganizationId: jest.fn(async () => target),

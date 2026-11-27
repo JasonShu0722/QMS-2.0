@@ -1,6 +1,7 @@
 import { createHash, webcrypto } from 'node:crypto';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import type { components } from '@qms/contracts';
 import { LanguageProvider } from '../../i18n/Language';
 import { EightDEvidence } from './EightDEvidence';
 import { EightDControlledReport } from './EightDControlledReport';
@@ -150,11 +151,21 @@ it.each(['image/png', 'application/pdf'])('opens authorized %s bytes in a modal 
 
 it('routes a real controlled-report raw attachment denial through the same scope', async () => {
   const scope = { onAccessDenied: vi.fn(), onPendingChange: vi.fn() };
-  vi.stubGlobal('fetch', vi.fn(async () => json({ code: 'FILE_RESOURCE_DENIED', traceId: 'raw-denied' }, 401)));
-  const read: EightDRead = async <T,>() => ({ reportNumber: '8D-1', attachments: [{ ...file, uses: [] }], snapshot: { document, sources: [] } }) as T;
+  const fetchMock = vi.fn(async () => json({ code: 'FILE_RESOURCE_DENIED', traceId: 'raw-denied' }, 401));
+  vi.stubGlobal('fetch', fetchMock);
   const report = { organizationId: 'org-1', problemId: 'problem-1', version: 1, revisions: [] } as unknown as EightDReport;
+  const controlled: components['schemas']['ProcessEightDControlledReportDto'] = {
+    problemId: report.problemId, reportNumber: '8D-1', view: 'CURRENT', revisionId: null, status: 'DRAFT', label: 'CURRENT',
+    contentVersion: 1, rowVersion: report.version, generatedAt: '2026-10-25T10:00:00Z', previewFingerprint: 'a'.repeat(64),
+    snapshot: { document, sources: [], problem: {}, instance: {}, deadlines: {}, contentVersion: 1, rowVersion: report.version,
+      ownerUserId: null, professionalUserId: 'quality-1', responsibleSectionDepartmentId: 'section-1', collaboratorUserIds: [],
+      analysisCompletedAt: null, submittedAt: null },
+    attachments: [{ ...file, objectVersionId: 'object-version-1', uses: [], rendering: 'LISTED', note: '' }],
+  };
+  const read: EightDRead = async <T,>() => controlled as T;
   render(<LanguageProvider><EightDEvidenceScopeContext.Provider value={scope}><EightDControlledReport report={report} read={read} download={vi.fn()} /></EightDEvidenceScopeContext.Provider></LanguageProvider>);
   await screen.findByText('raw-denied');
+  expect(fetchMock).toHaveBeenCalledWith(`/api/v1/files/${file.id}`, expect.anything());
   expect(scope.onAccessDenied).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
 });
 

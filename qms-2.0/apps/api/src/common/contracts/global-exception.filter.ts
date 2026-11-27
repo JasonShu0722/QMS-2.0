@@ -36,6 +36,8 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       ? exception.getStatus()
       : isOversizedBody ? HttpStatus.PAYLOAD_TOO_LARGE : isUnsupportedEncoding ? HttpStatus.UNSUPPORTED_MEDIA_TYPE : HttpStatus.INTERNAL_SERVER_ERROR;
     const code = isHttp && status < 500 ? safeErrorCode(exception) : undefined;
+    const exposesValidationFields = status === HttpStatus.BAD_REQUEST
+      || (status === HttpStatus.CONFLICT && code === 'FILE_REQUIRED_EVIDENCE');
     const message = status >= 500 ? '服务暂时不可用'
       : code ? PLATFORM_ERROR_MESSAGES[code] : '请求无法处理';
     const traceId = requestTraceId(host.switchToHttp().getRequest?.());
@@ -45,7 +47,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       toErrorResponse({
         code: status >= 500 ? 'INTERNAL_ERROR' : (code ?? `HTTP_${status}`),
         message,
-        fields: code && exception instanceof ControlledValidationException ? exception.fields : undefined,
+        fields: exposesValidationFields && code && exception instanceof ControlledValidationException ? exception.fields : undefined,
         traceId,
         cause: exception,
       }),

@@ -39,20 +39,19 @@ it('renders the injected process source summary before D2 description and eviden
   const source = screen.getByText('来源事实');
   const description = screen.getByLabelText('D2 问题描述');
   expect(source.compareDocumentPosition(description)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-  expect(source.closest('section')).toContainElement(screen.getByText('OK 附件（可选） (0)'));
+  expect(source.closest('section')).toContainElement(screen.getByLabelText('OK 图片说明'));
 });
 
-it('compares D3 containment in rows and expands the targeted row details', () => {
+it('edits targeted D3 containment in its row without expanding details', () => {
   mount({ containment: [{ ...containment, quantity: 0, measure: '批次隔离', owner: '值班员', completion: '已隔离' }] }, { chapterTarget: { section: 'D3', row: 'containment[0]' } });
   const list = screen.getByRole('region', { name: '本次问题围堵' });
-  const row = within(list).getByRole('button', { name: '详情 本次问题围堵 1' }).closest('tr')!;
+  const row = within(list).getByRole('textbox', { name: '本次问题围堵 1 措施' }).closest('tr')!;
   expect(within(row).getByDisplayValue('0')).toBeVisible();
-  expect(within(row).getByText('批次隔离')).toBeVisible();
+  expect(within(row).getByDisplayValue('批次隔离')).toBeVisible();
   expect(within(row).getByDisplayValue('值班员')).toBeVisible();
   expect(within(row).getByDisplayValue('已隔离')).toBeVisible();
   expect(within(list).getByRole('textbox', { name: '本次问题围堵 1 措施' })).toBeVisible();
-  fireEvent.click(within(row).getByRole('button', { name: '详情 本次问题围堵 1' }));
-  expect(within(list).queryByRole('textbox', { name: '本次问题围堵 1 措施' })).not.toBeInTheDocument();
+  expect(within(list).queryByRole('button', { name: /详情/ })).not.toBeInTheDocument();
 });
 
 it('removes a default-only containment row and dismisses an unselected suggestion without saving it', () => {
@@ -71,7 +70,10 @@ it('removes a default-only containment row and dismisses an unselected suggestio
 it('keeps zero as containment content and guards removal through the selection checkbox', async () => {
   const changed = mount({ optionalAffectedContainment: [{ ...containment, quantity: 0 }] });
   chapter('D3');
-  const selection = screen.getByRole('checkbox', { name: '潜在影响围堵（可选） PCBA 在制品' });
+  const disclosure = screen.getByText('潜在影响围堵（可选）').closest('details')!;
+  expect(disclosure).not.toHaveAttribute('open');
+  fireEvent.click(within(disclosure).getByText('潜在影响围堵（可选）'));
+  const selection = screen.getByRole('checkbox', { name: '潜在影响围堵 PCBA 在制品' });
   fireEvent.click(selection);
   await screen.findByText('此条目已有内容，确定删除？');
   fireEvent.click(button('取消'));
@@ -90,7 +92,6 @@ it('suggests current team names in D3 and D5 without overwriting previous owner 
   expect(containmentOwner.value).toBe('原责任人');
   expect(containmentOwner.list?.options[0]?.value).toBe('林工');
   chapter('D5');
-  fireEvent.click(button('详情 措施 1'));
   const actionOwner = screen.getByLabelText('措施 1 责任人') as HTMLInputElement;
   expect(actionOwner.value).toBe('原措施责任人');
   expect(actionOwner.list?.options[0]?.value).toBe('林工');
@@ -109,7 +110,6 @@ it('removes an unchanged D5 action directly and confirms an explicit D6 conclusi
   fireEvent.click(button('取消'));
   expect(changed).toHaveBeenCalledTimes(1);
   chapter('D6');
-  fireEvent.click(button('详情 措施 1'));
   expect(screen.getByLabelText('措施 1 人工有效性结论')).toHaveValue('false');
 });
 
@@ -121,21 +121,18 @@ it('compares D5 plans and D6 results by action, and opens only the selected comp
   chapter('D5');
   const plans = within(screen.getByRole('region', { name: '措施计划清单' }));
   expect(plans.getByRole('columnheader', { name: '计划完成日期' })).toBeVisible();
-  expect(plans.getByRole('cell', { name: '计划负责人' })).toBeVisible();
-  expect(plans.getByRole('cell', { name: '批次负责人' })).toBeVisible();
-  const firstPlan = within(plans.getByRole('button', { name: '详情 措施 1' }).closest('tr')!);
-  expect(firstPlan.getByText(/待填写：.*验证方法/)).toBeVisible();
-  expect(plans.getByText('措施附件 (1)')).not.toBeVisible();
-  fireEvent.click(plans.getByRole('button', { name: '详情 措施 1' }));
+  expect(plans.getByRole('textbox', { name: '措施 1 责任人' })).toHaveValue('计划负责人');
+  expect(plans.getByRole('textbox', { name: '措施 2 责任人' })).toHaveValue('批次负责人');
+  expect(plans.queryByText(/验证方法|选择依据|措施附件/)).not.toBeInTheDocument();
+  expect(plans.queryByRole('button', { name: /详情/ })).not.toBeInTheDocument();
   fireEvent.change(plans.getByRole('textbox', { name: '措施 1 对策' }), { target: { value: '更换治具' } });
-  expect(plans.getByText('措施附件 (1)')).toBeVisible();
-  expect(plans.queryByRole('textbox', { name: '措施 2 对策' })).not.toBeInTheDocument();
+  expect(plans.getByRole('textbox', { name: '措施 2 对策' })).toHaveValue('复查批次');
 
   chapter('D6');
   const results = within(screen.getByRole('region', { name: '措施实绩清单' }));
   expect(results.getByRole('columnheader', { name: '有效性结论' })).toBeVisible();
   expect(results.getByRole('heading', { name: '措施 1 · 更换治具' })).toBeVisible();
-  expect(results.getByRole('cell', { name: '无效' })).toBeVisible();
+  expect(results.getByRole('combobox', { name: '措施 2 人工有效性结论' })).toHaveValue('false');
   const secondResult = within(results.getByRole('button', { name: '详情 措施 2' }).closest('tr')!);
   expect(secondResult.getByText(/待填写：.*实施结果.*改善前.*改善后.*实际首批断点/)).toBeVisible();
   expect(results.getByText('验证附件 (1)')).not.toBeVisible();
@@ -157,24 +154,23 @@ it('opens a targeted D6 detail and keeps historical comparison and row evidence 
   expect(results.getByDisplayValue('历史批次')).toBeVisible();
   expect(results.getByDisplayValue('历史改善前')).toBeDisabled();
   expect(results.getByDisplayValue('历史改善后')).toBeDisabled();
-  expect(results.getByLabelText('措施 1 人工有效性结论')).toHaveValue('false');
-  expect(within(results.getByRole('region', { name: '措施 1' })).getByRole('combobox', { name: '措施 1 人工有效性结论' })).toBeVisible();
+  expect(results.getByRole('cell', { name: '无效' })).toBeVisible();
+  expect(results.queryByRole('combobox', { name: '措施 1 人工有效性结论' })).not.toBeInTheDocument();
   expect(results.getByText('验证附件 (1)')).toBeVisible();
   expect(screen.queryByRole('button', { name: /移除措施|增加永久措施/ })).not.toBeInTheDocument();
   expect(changed).not.toHaveBeenCalled();
 });
 
-it('keeps D7 reason and evidence in their respective row details and only unlinks after confirmation', async () => {
+it('shows D7 evidence in each row without detail or reason and only unlinks after confirmation', async () => {
   const changed = mount({ standardization: [standard], horizontalDeployment: [deployment] });
   chapter('D7');
   expect(screen.queryByRole('textbox', { name: /理由/ })).not.toBeInTheDocument();
-  fireEvent.click(button('详情 SOP 标准作业指导书'));
-  expect(screen.getByRole('textbox', { name: 'SOP 标准作业指导书 理由' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: /详情/ })).not.toBeInTheDocument();
+  expect(within(screen.getByRole('region', { name: '标准化文件' })).getByText('标准化附件 (0)')).toBeVisible();
+  expect(within(screen.getByRole('region', { name: '横向展开' })).getByText('展开附件 (1)')).toBeVisible();
   fireEvent.click(button('移除标准化文件 1'));
   expect(changed).toHaveBeenCalledTimes(1);
   expect(screen.queryByText(standard.documentName)).not.toBeInTheDocument();
-  expect(screen.getByText('展开附件 (1)')).not.toBeVisible();
-  fireEvent.click(button('详情 横向展开 1'));
   expect(screen.getByText('展开附件 (1)')).toBeVisible();
   fireEvent.click(button('移除横向展开 1'));
   await screen.findByText(/从当前报告移除该条目的附件关联/);
@@ -187,10 +183,9 @@ it('keeps D7 reason and evidence in their respective row details and only unlink
   expect(screen.queryByText('展开附件 (1)')).not.toBeInTheDocument();
 });
 
-it('allows historical row details to expand without editing or removing records', () => {
+it('presents historical D7 rows and evidence without editing or removing records', () => {
   const changed = mount({ horizontalDeployment: [{ ...deployment, inspectionResult: '历史排查' }] }, { disabled: true });
   chapter('D7');
-  fireEvent.click(button('详情 横向展开 1'));
   expect(screen.getByDisplayValue('历史排查')).toBeDisabled();
   expect(screen.getByText('展开附件 (1)')).toBeVisible();
   expect(screen.queryByRole('button', { name: /移除|增加/ })).not.toBeInTheDocument();
@@ -202,20 +197,21 @@ it.each([
   { domain: 'new-product' as const },
   { portal: true, resource: { resourceType: 'supplier-quality', resourceId: 'entry-test' } },
   { resource: { resourceType: 'supplier-eight-d-supplement', resourceId: 'entry-test' } },
-])('retains the previous editor layout and field behavior for %j', props => {
+])('shares the chapter layouts but does not use process-specific owner suggestions for %j', props => {
   mount({
     team: [{ id: 'member', name: '林工', department: '', responsibility: '', collaborationScope: '' }],
     correctiveActions: [action],
     horizontalDeployment: [deployment],
     standardization: [standard],
-  }, { ...props, sourceSummary: <p>制程来源事实</p> });
+  }, { ...props, mode: 'workspace', sourceSummary: <p>制程来源事实</p> });
   expect(screen.queryByText('制程来源事实')).not.toBeInTheDocument();
   chapter('D5');
   expect(screen.getByLabelText('措施 1 责任人')).not.toHaveAttribute('list');
   chapter('D7');
-  const table = within(screen.getByRole('region', { name: '标准化七列表' }));
-  expect(table.getAllByRole('columnheader')).toHaveLength(7);
-  expect(table.getByRole('textbox', { name: /理由/ })).toBeVisible();
+  const table = within(screen.getByRole('region', { name: '标准化文件' }));
+  expect(table.getByRole('columnheader', { name: '附件' })).toBeVisible();
+  expect(table.queryByRole('textbox', { name: /理由/ })).not.toBeInTheDocument();
   expect(screen.getByText('展开附件 (1)')).toBeVisible();
-  expect(screen.queryByRole('button', { name: /移除横向展开|移除标准化文件/ })).not.toBeInTheDocument();
+  expect(button('移除横向展开 1')).toBeVisible();
+  expect(button('移除标准化文件 1')).toBeVisible();
 });

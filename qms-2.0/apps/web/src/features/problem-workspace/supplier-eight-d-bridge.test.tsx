@@ -73,8 +73,10 @@ it.each([401, 403])('clears all parent and child sensitive state on a real suppl
   refreshing = true;
   fireEvent.click(screen.getByRole('button', { name: '刷新工作空间' }));
   await waitFor(() => expect(release).toBeTypeOf('function'));
-  fireEvent.click(screen.getByText('D4 分析过程附件 (1)'));
+  const directory = within(screen.getByRole('navigation', { name: '8D 内容分区' }));
+  fireEvent.click(directory.getByRole('button', { name: 'D4 · 根因分析' }));
   await screen.findByText(/当前会话失效或无权访问/);
+  expect(fetcher).toHaveBeenCalledWith('/api/v1/files/inner-file', expect.anything());
   expect(signal.aborted).toBe(true);
   await act(async () => release(json(workspace)));
   for (const value of ['INDEX-SECRET', 'SUPPLIER-SECRET', 'Outer sensitive description', 'Sensitive-outer.txt', /Sensitive upgrade/]) expect(screen.queryByText(value)).not.toBeInTheDocument();
