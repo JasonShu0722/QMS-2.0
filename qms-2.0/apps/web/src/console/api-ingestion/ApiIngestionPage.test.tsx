@@ -634,12 +634,16 @@ it.each([
   fireEvent.click(openJob); const dialog = within(await screen.findByRole('dialog', { name: '供应商接收 · #1' }));
   await dialog.findByText('接收编号'); expect(dialog.queryByText('准备中')).not.toBeInTheDocument(); expect(dialog.getByText('取消任务', { selector: 'button span' }).closest('button')).toBeDisabled();
 });
-it('locates a failed preview using its controlled source field without displaying raw error codes', async () => {
+it('shows the controlled source field and error details in a failed preview', async () => {
   mocks.mutate.mockResolvedValue({ previewId: 'preview-invalid', receiptCount: 1, rowCount: 1, expiresAt: '2099-11-14T03:00:00Z', action: 'VALIDATION_FAILED', errorCode: 'INGESTION_FIELD_MISSING', errorField: 'supplier.code', differences: [] });
   const dialog = previewView();
   fireEvent.mouseDown(dialog.getByRole('combobox', { name: '接收记录' })); fireEvent.click(await screen.findByText(/MSG001/, { selector: '.ant-select-item-option-content' })); fireEvent.click(dialog.getByRole('button', { name: '生成预览' }));
   const preview = within(await dialog.findByRole('region', { name: '入库预览' }));
-  expect(preview.getByText('supplier.code')).toBeVisible(); expect(preview.getByText('缺少必需来源字段')).toBeVisible(); expect(preview.getByText('INGESTION_FIELD_MISSING')).toBeVisible();
+  await waitFor(() => {
+    expect(preview.getByText('supplier.code')).toBeVisible();
+    expect(preview.getByText('缺少必需来源字段')).toBeVisible();
+    expect(preview.getByText('INGESTION_FIELD_MISSING')).toBeVisible();
+  });
   expect(preview.getByRole('button', { name: '确认导入' })).toBeDisabled(); expect(mocks.mutate).toHaveBeenCalledTimes(1);
 });
 it.each(['validation', 'duplicate'])('shows the %s item location or existing confirmation link without creating another confirmation', async kind => {
