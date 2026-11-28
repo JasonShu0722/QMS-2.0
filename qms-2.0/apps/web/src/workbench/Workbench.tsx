@@ -2,6 +2,7 @@ import { Button } from 'antd';
 import { ArrowRight, ChevronDown, ClipboardCheck, Network, ShieldAlert, UserCircle } from 'lucide-react';
 import { lazy, Suspense, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { QmsLoading } from '../components/QmsLoading';
 import { useLanguage } from '../i18n/Language';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { WorkbenchGraphBoundary } from './WorkbenchGraphBoundary';
@@ -39,7 +40,7 @@ function GraphDisclosure({ sessionScope }: { sessionScope: string }) {
     </h2>
     <div id="workbench-graph-panel" hidden={!open}>
       {open && <WorkbenchGraphBoundary fallback={<p role="alert">{locale === 'en-US' ? 'The capability graph could not start. Reload the page to try again.' : '功能图谱无法打开，请刷新页面重试。'}</p>}>
-        <Suspense fallback={<p role="status">{locale === 'en-US' ? 'Loading capability graph…' : '正在加载功能图谱…'}</p>}>
+        <Suspense fallback={<QmsLoading label={locale === 'en-US' ? 'Loading capability graph…' : '正在加载功能图谱…'} />}>
           <GraphPanel sessionScope={sessionScope} keepOpen={() => setExpanded(true)} onSavingChange={setSaving} />
         </Suspense>
       </WorkbenchGraphBoundary>}

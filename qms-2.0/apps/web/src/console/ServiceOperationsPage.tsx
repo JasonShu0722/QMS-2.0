@@ -1,4 +1,5 @@
-import { Alert, Button, Select, Skeleton, Tag } from 'antd';
+import { Alert, Button, Select, Tag } from 'antd';
+import { QmsLoading } from '../components/QmsLoading';
 import { Clock3, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -112,7 +113,7 @@ function ServiceScope({ context, session, refresh, invalidate }: { context: Cons
           { value: 'ORGANIZATION', label: text('当前目标组织', 'Current target organization') }, { value: 'PLATFORM', label: text('平台执行回执', 'Platform execution receipts') },
         ]} onChange={value => { active.current?.controller.abort(); setData(undefined); setScope(value); }} /></label>}</div>
       {error === 'network' && <Alert role="alert" type="error" showIcon title={text('运行服务事实读取失败，请重试。', 'Service operation facts could not be read. Retry.')} />}
-      {loading && <div role="status" aria-label={text('读取运行服务事实中', 'Reading service operation facts')}><Skeleton active paragraph={{ rows: 5 }} /></div>}
+      {loading && <QmsLoading label={text('读取运行服务事实中', 'Reading service operation facts')} size="region" />}
       {data && <><div className="qms-services-time"><Clock3 size={15} aria-hidden="true" /><span>{text('服务器查询时间：', 'Server query time: ')}{clock(data.asOf)}</span></div>
         {!data.sources.length ? <div className="qms-services-empty"><strong>{text('当前没有可展示的服务事实', 'No service facts are available')}</strong></div> : <div className="qms-services-grid">{data.sources.map(source => <section key={source.key} className="qms-services-source" aria-label={text(...labels[source.key])}>
           <header><h3>{text(...labels[source.key])}</h3><Tag color={source.status === 'UNAVAILABLE' || source.status === 'STALE' ? 'warning' : undefined}>{text(...statuses[source.status])}</Tag></header>

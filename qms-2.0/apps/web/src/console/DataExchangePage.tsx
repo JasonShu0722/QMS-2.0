@@ -1,4 +1,5 @@
-import { Alert, Button, Input, Modal, Select, Skeleton, Tag, type TableProps } from 'antd';
+import { Alert, Button, Input, Modal, Select, Tag, type TableProps } from 'antd';
+import { QmsLoading } from '../components/QmsLoading';
 import { LedgerTable, useLedgerPageSize } from '../ui/ledger';
 import { Clock3, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -195,12 +196,12 @@ function ExchangeScope({ context, session, refresh, invalidate }: { context: Con
       </>}
       <section className="qms-exchange-records" aria-label={text('交换尝试记录', 'Exchange attempt records')}><h3>{text('交换尝试记录', 'Exchange attempts')}</h3>
         <LedgerTable<Attempt> ledgerId="console-data-exchanges" organizationId={context.targetOrganization.id} viewId={filters.scope} actionBar={actionBar} toolbarContent={pagination} requiredColumnKeys={['record', 'details']} size="small" columns={columns} dataSource={data?.items} rowKey="id" pagination={false} scroll={{ x: 1200 }} bodyFallback={data?.items.length ? undefined : loading
-          ? <div role="status" aria-label={text('读取交换观测中', 'Reading exchange observations')}><Skeleton active paragraph={{ rows: 4 }} /></div>
+          ? <QmsLoading label={text('读取交换观测中', 'Reading exchange observations')} size="region" />
           : error === 'network' ? <Alert role="alert" type="error" showIcon title={text('交换观测读取失败，请重试。', 'Exchange observations could not be read. Retry.')} action={<Button onClick={restart}>{text('重试读取', 'Retry read')}</Button>} />
           : <div className="qms-exchange-empty"><strong>{text('当前范围没有交换观测记录', 'No exchange observations in this scope')}</strong></div>} />
       </section>
       <Modal title={text('交换尝试详情', 'Exchange attempt details')} open={!!selected} onCancel={closeDetail} footer={<Button onClick={closeDetail}>{text('关闭', 'Close')}</Button>} destroyOnHidden width={720}>
-        {selected && (!detail && !detailError ? <div role="status" aria-label={text('读取交换详情中', 'Reading exchange details')}><Skeleton active paragraph={{ rows: 3 }} /></div> : detailError ? <Alert type="error" showIcon title={text('交换详情不可用或已过期，请重新查询。', 'Exchange details are unavailable or expired. Query again.')} /> : detail && <div className="qms-exchange-detail">
+        {selected && (!detail && !detailError ? <QmsLoading label={text('读取交换详情中', 'Reading exchange details')} size="region" /> : detailError ? <Alert type="error" showIcon title={text('交换详情不可用或已过期，请重新查询。', 'Exchange details are unavailable or expired. Query again.')} /> : detail && <div className="qms-exchange-detail">
           <dl><div><dt>{text('来源', 'Source')}</dt><dd>{sourceLabel(detail.sourceKey)}</dd></div><div><dt>{text('关联标识', 'Correlation')}</dt><dd>{detail.correlationId}</dd></div><div><dt>{text('批次 / 记录', 'Batch / record')}</dt><dd>{detail.batchId ?? '—'}{detail.recordId ? ` / ${detail.recordId}` : ''}</dd></div><div><dt>{text('尝试', 'Attempt')}</dt><dd>{detail.attemptNumber}</dd></div><div><dt>{text('开始时间', 'Started')}</dt><dd>{clock(detail.startedAt)}</dd></div><div><dt>{text('完成时间', 'Completed')}</dt><dd>{detail.finishedAt ? clock(detail.finishedAt) : text('未全部报告终态', 'Not all stages have terminal results')}</dd></div></dl>
           <div className="qms-exchange-stage-list">{stages.map(stage => <section key={stage}><h4>{stageLabel[stage]}</h4>{badge(detail.stages[stage])}{detail.stages[stage].errorCode && <code>{detail.stages[stage].errorCode}</code>}{detail.stages[stage].observedAt && clock(detail.stages[stage].observedAt!)}</section>)}</div>
         </div>)}

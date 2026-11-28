@@ -15,6 +15,7 @@ import { preferenceKey } from '../../ui/ledger/model';
 import { useLedgerScope, usePreference } from '../../ui/ledger/preferences';
 import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { ProcessEightDIssueDrawer } from './ProcessEightDIssueDrawer';
+import { ProcessExistingEightDDialog } from './ProcessExistingEightDDialog';
 import { ProcessDefectEditor } from './ProcessDefectEditor';
 import { ProcessDefectDeletionDialog } from './ProcessDefectDeletionDialog';
 import { boardLabels, dispositionLabels, maintenanceLimit, ProcessDefectBoardDialog, type MaintenanceBoard, type MaintenanceTarget } from './ProcessDefectBoardDialog';
@@ -26,6 +27,14 @@ type Defect = components['schemas']['ProcessDefectDto'];
 type DefectDetail = components['schemas']['ProcessDefectDetailDto'];
 type DefectPage = components['schemas']['ProcessDefectPageDto'];
 type IssueResult = components['schemas']['ProcessIssueResultDto'];
+type ExistingEightD = Pick<components['schemas']['ProcessEightDReportDto'], 'problemId' | 'reportNumber' | 'organizationId'>;
+
+async function searchExistingEightD(keyword: string, organizationId: string, signal: AbortSignal) {
+  const query = new URLSearchParams({ organizationId, domainCode: 'process-quality', sourceType: 'process-defect', responseForm: 'EIGHT_D', search: keyword, pageSize: '100' });
+  const result = await apiRequest<components['schemas']['ProblemIndexPageResponseDto']>(`/api/v1/problem-index?${query}`, { signal });
+  return result.items.filter(item => item.organizationId === organizationId && item.status !== 'ARCHIVED')
+    .map(item => ({ problemId: item.id, reportNumber: item.reportNumber, title: item.summary.title }));
+}
 type LinkedProblem = components['schemas']['ProcessIssueProblemDto'];
 type BoardCapabilities = components['schemas']['ProcessLedgerWorkflowCapabilitiesDto'];
 
@@ -165,6 +174,8 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   const [detailError, setDetailError] = useState<unknown>();
   const [linked, setLinked] = useState<LinkedProblem[]>([]);
   const [issued, setIssued] = useState<IssueResult>();
+  const [existingSources, setExistingSources] = useState<Defect[]>();
+  const [linkedEightD, setLinkedEightD] = useState<ExistingEightD>();
   const [permissions, setPermissions] = useState<string[]>([]);
   const [permissionsChecked, setPermissionsChecked] = useState(false);
   const [accessLost, setAccessLost] = useState(false);
@@ -198,6 +209,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   const boards = capabilities?.revision === revision && Array.isArray(capabilities.value?.boards) ? capabilities.value.boards : [];
   const canRegister = canWrite && boards.includes('REGISTRATION');
   const canIssue = permissions.includes('process-quality:issues:issue');
+  const canLinkExisting = canRead && !!targetOrganizationId && ['problem-index:read', 'process-quality:issues:read', 'process-quality:issues:sources'].every(permission => permissions.includes(permission));
   const canReadSuppliers = permissions.includes('supplier-quality:profiles:read');
   function revoke(cause?: unknown) {
     if (!alive.current) return;
@@ -205,6 +217,7 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
     detailRequest.current += 1; setAccessLost(true); setResult(undefined); setSelected({}); setDetail(undefined); setLinked([]);
     setDetailOpen(false); setFormalOpen(false); setEditor(undefined); setBoardTarget(undefined); setSuppliers([]);
     setDeletionTargets(undefined); setDeletionOpen(false);
+    setExistingSources(undefined); setLinkedEightD(undefined);
     if (cause instanceof ApiError && cause.status === 401) setUnauthorized(true);
   }
   useEffect(() => {
@@ -349,13 +362,26 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   const selectedCount = Object.keys(selected).length;
   const exceedsFormalIssueLimit = selectedCount > formalIssueLimit;
   const staleSelected = (result?.items ?? []).filter(item => selected[item.id] && selected[item.id].version !== item.version);
-  const locked = formalOpen || deletionOpen || !!boardTarget;
+  const locked = formalOpen || deletionOpen || !!boardTarget || !!existingSources;
   const selectablePage = (result?.items ?? []).filter(record => !record.archivedAt);
   const selectedOnPage = selectablePage.filter(record => selected[record.id]);
   const selectedRecords = Object.values(selected);
   const selectedArchived = result?.items.some(record => selected[record.id] && record.archivedAt);
   const exceedsMaintenanceLimit = selectedCount > maintenanceLimit;
   const boardBatchDisabled = locked || filterOpen || !!deletionTargets || loading || !!listError || !!staleSelected.length || !!selectedArchived || exceedsMaintenanceLimit;
+  function validExistingSources(records: Defect[]) {
+    return records.length > 0 && records.length <= formalIssueLimit && records.every(record => !record.archivedAt && record.organizationId === targetOrganizationId);
+  }
+  function openExistingEightD(records: Defect[]) {
+    if (canLinkExisting && validExistingSources(records)) requestLeave(() => setExistingSources(records));
+  }
+  function refreshAfterExistingLink(ids: string[]) {
+    const affected = new Set(ids);
+    setExistingSources(undefined);
+    setSelected(current => Object.fromEntries(Object.entries(current).filter(([id]) => !affected.has(id))));
+    setRevision(value => value + 1);
+    if (detailOpen && detail && affected.has(detail.id)) void openDetail(detail.id, true);
+  }
   const canReviewMaterial = (item: Defect['materials'][number]) => !!sessionUserId && !!item.id && item.sqeUserId === sessionUserId;
   function openBoard(board: MaintenanceBoard, records: Defect[], materialId?: string) {
     if (!boards.includes(board) || !targetOrganizationId || !records.length || records.length > maintenanceLimit || records.some(record => record.archivedAt || record.organizationId !== targetOrganizationId)) return;
@@ -513,11 +539,13 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
   return <main className="process-quality-page">
     <h1 className="sr-only">不良品台账</h1>
     {issued ? <Alert type="success" showIcon title={`问题 ${issued.problem.reportNumber} 已发起`} action={<Link to={`/app/problem-workspace/${issued.problem.id}`}>查看问题</Link>} /> : null}
+    {linkedEightD && canLinkExisting ? <Alert type="success" showIcon title={`已关联到 8D ${linkedEightD.reportNumber}`} action={<Link to={`/app/problem-workspace/${linkedEightD.problemId}?organizationId=${encodeURIComponent(linkedEightD.organizationId)}`}>查看 8D</Link>} /> : null}
     <section className="process-quality-card process-quality-compact-ledger">
       {selectedCount ? <div className="process-quality-selection-bar" role="toolbar" aria-label="台账批量操作">
         <span aria-live="polite">已选择 {selectedCount} 条来源</span>
         {canIssue && exceedsFormalIssueLimit ? <span>发起 8D 最多选择 {formalIssueLimit} 条</span> : null}
         <Button disabled={locked || !!deletionTargets} onClick={() => requestLeave(() => setSelected({}))}>取消选择</Button>
+        {canLinkExisting ? <Button disabled={locked || filterOpen || !!deletionTargets || loading || !!listError || !!staleSelected.length || !!selectedArchived || !validExistingSources(selectedRecords)} onClick={() => openExistingEightD(selectedRecords)}>关联已有问题</Button> : null}
         {boards.some(board => board !== 'REGISTRATION') && exceedsMaintenanceLimit ? <span>板块维护最多选择 {maintenanceLimit} 条</span> : null}
         {(Object.keys(boardLabels) as MaintenanceBoard[]).filter(board => boards.includes(board) && (board !== 'MATERIAL_REVIEW' || selectedRecords.some(record => record.materials?.some(canReviewMaterial)))).map(board =>
           <Button key={board} disabled={boardBatchDisabled} onClick={() => openBoard(board, selectedRecords)}>{boardLabels[board]}</Button>)}
@@ -607,7 +635,8 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
           onUploadCompleted={() => { void openDetail(detail.id, true); }} onRemoved={() => { void openDetail(detail.id, true); }} onAccessDenied={revoke} onWriteAccessDenied={denyBoard} />
         <section className="process-quality-detail-section">
           <Typography.Title level={5}>已关联问题</Typography.Title>
-          <RecordList items={linked} itemKey={problem => problem.id} renderItem={problem => <Link to={`/app/problem-workspace/${problem.id}`}>{problem.reportNumber}</Link>} empty={<Typography.Text type="secondary">尚未关联正式问题</Typography.Text>} />
+          {canLinkExisting && validExistingSources([detail]) ? <Button size="small" disabled={locked || !!deletionTargets || !!detailError} onClick={() => openExistingEightD([detail])}>关联已有问题</Button> : null}
+          <RecordList items={linked} itemKey={problem => problem.id} renderItem={problem => <Link to={scoped(`/app/problem-workspace/${problem.id}`)}>{problem.reportNumber}</Link>} empty={<Typography.Text type="secondary">尚未关联正式问题</Typography.Text>} />
         </section>
         <section className="process-quality-detail-section">
           <Typography.Title level={5}>更新记录</Typography.Title>
@@ -626,6 +655,10 @@ function ProcessLedgerContent({ organizationId, targetOrganizationId, initialDef
     </Drawer>
     {deletionTargets ? <ProcessDefectDeletionDialog sources={deletionTargets} organizationId={organizationId} open={deletionOpen} onClose={uncertain => { setDeletionOpen(false); if (!uncertain) setDeletionTargets(undefined); }} onDenied={revoke} onRefresh={() => refreshAfterDeletion(deletionTargets.map(record => record.id))} onDeleted={response => refreshAfterDeletion(response.deletedIds)} /> : null}
     {formalOpen ? <ProcessEightDIssueDrawer sources={Object.values(selected)} onClose={() => setFormalOpen(false)} onDenied={revoke} onIssued={response => { setIssued(response); setFormalOpen(false); setSelected({}); setRevision(value => value + 1); }} /> : null}
+    {existingSources && canLinkExisting && targetOrganizationId ? <ProcessExistingEightDDialog sources={existingSources} organizationId={targetOrganizationId} loadTargets={searchExistingEightD}
+      onClose={() => setExistingSources(undefined)} onSessionExpired={revoke}
+      onRefreshSources={() => refreshAfterExistingLink(existingSources.map(record => record.id))}
+      onLinked={(report, ids) => { setLinkedEightD(report); refreshAfterExistingLink(ids); }} /> : null}
     {editor ? <ProcessDefectEditor key={editor === 'new' ? 'new' : editor.id} record={editor === 'new' ? undefined : editor} organizationId={organizationId} onClose={() => setEditor(undefined)} onSaved={saved} onDenied={revoke} onWriteDenied={denyBoard} /> : null}
     {boardTarget && targetOrganizationId ? <ProcessDefectBoardDialog {...boardTarget} organizationId={targetOrganizationId} userId={sessionUserId} suppliers={suppliers} canReadSuppliers={canReadSuppliers}
       onClose={() => setBoardTarget(undefined)} onSaved={result => saveBoard(result.items)} onDenied={denyBoard} /> : null}

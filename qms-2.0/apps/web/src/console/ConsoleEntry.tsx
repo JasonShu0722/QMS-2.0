@@ -1,8 +1,9 @@
 import type { AccountProfile } from '@qms/contracts';
-import { Alert, Button, Typography } from 'antd';
+import { Alert, Button } from 'antd';
 import { ExternalLink } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../api/client';
+import { QmsLoading } from '../components/QmsLoading';
 import { useLanguage } from '../i18n/Language';
 import { useWorkTabsStore } from '../work-tabs/workTabsStore';
 import { getConsoleContext } from './console-api';
@@ -70,7 +71,7 @@ export function ConsoleEntry({ profile }: { profile: AccountProfile }) {
   }, [status]);
 
   if (!eligible || status === 'denied') return null;
-  if (!status) return <Typography.Text type="secondary" role="status">{text('正在验证管理入口', 'Verifying management access')}</Typography.Text>;
+  if (!status) return <QmsLoading label={text('正在验证管理入口', 'Verifying management access')} />;
   if (status === 'network') return <Alert type="error" showIcon title={text('无法验证管理入口，请重试', 'Unable to verify management access. Retry.')} action={<Button ref={retry} aria-label={text('重试', 'Retry')} style={{ minHeight: 44, minWidth: 44 }} onClick={() => { restoreFocus.current = true; setRevision(value => value + 1); }}>{text('重试', 'Retry')}</Button>} />;
   return <><Button ref={entry} href="/console" target="_blank" rel="noopener noreferrer" title={text('在新窗口打开', 'Opens in a new window')} aria-description={text('在新窗口打开', 'Opens in a new window')} icon={<ExternalLink size={16} aria-hidden="true" />} style={{ minHeight: 44, minWidth: 44 }}>{text('管理控制台', 'Management console')}</Button>{resumeError === key && <Alert role="alert" type="warning" showIcon title={text('无法验证管理入口，请重试', 'Unable to verify management access. Retry.')} action={<Button aria-label={text('重试', 'Retry')} onClick={() => resume.current()}>{text('重试', 'Retry')}</Button>} />}</>;
 }

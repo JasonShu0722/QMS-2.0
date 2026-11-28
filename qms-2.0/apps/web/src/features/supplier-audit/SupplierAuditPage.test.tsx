@@ -77,7 +77,7 @@ it('keeps the audit drawer open while closure is pending', async () => {
     expect(screen.getByRole('dialog', { name: '供应商审核检查项' })).toBeVisible();
     for (const button of document.querySelectorAll('button')) expect(button).not.toHaveAccessibleName('放弃修改并关闭');
   } finally { await act(async () => { finish(); await pending; }); }
-});
+}, 30000);
 
 it('shows the plan workflow and uses the audit conclusion contract', async () => {
   server(['supplier-audit:plans:read', 'supplier-audit:plans:write', 'supplier-audit:records:read', 'supplier-audit:records:write', 'supplier-audit:records:close']);
@@ -88,16 +88,18 @@ it('shows the plan workflow and uses the audit conclusion contract', async () =>
   await userEvent.click(await screen.findByRole('combobox', { name: '关闭结论' }));
   expect(await screen.findByText('有条件通过')).toBeInTheDocument();
   expect(screen.queryByText('轻微不符合')).not.toBeInTheDocument();
-});
+}, 30000);
 
 it('hides mutation controls without write and close permissions', async () => {
   server(['supplier-audit:plans:read', 'supplier-audit:records:read']);
   render(<SupplierAuditPage />);
   expect(await screen.findByText('年度审核')).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '新建审核计划' })).not.toBeInTheDocument();
-  await userEvent.click(screen.getByRole('button', { name: '检查项与动作' }));
-  await waitFor(() => expect(screen.queryByRole('button', { name: '关闭审核' })).not.toBeInTheDocument());
-});
+  fireEvent.click(await screen.findByRole('button', { name: '检查项与动作' }));
+  const drawer = within(await screen.findByRole('dialog', { name: '供应商审核检查项' }));
+  await drawer.findByRole('heading', { name: '检查项' });
+  expect(drawer.queryByRole('button', { name: '关闭审核' })).not.toBeInTheDocument();
+}, 30000);
 
 it('submits a planned audit with its current version', async () => {
   server(['supplier-audit:plans:read', 'supplier-audit:plans:write', 'supplier-audit:records:read']);

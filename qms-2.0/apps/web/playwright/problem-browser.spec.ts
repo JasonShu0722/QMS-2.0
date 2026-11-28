@@ -160,9 +160,9 @@ test('real neutral problem supports saved views, evidence, immutable revisions, 
     expect(completedResponse.status()).toBe(202);
     const file = await completedResponse.json() as components['schemas']['FileDto'];
     expect(file.status).toBe('QUARANTINED');
-    await expect(page.getByText('等待安全扫描', { exact: true })).toBeVisible();
+    await expect(page.getByRole('img', { name: '等待安全扫描', exact: true })).toBeVisible();
     scan();
-    await expect(page.getByText('扫描通过，可作为证据', { exact: true })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('img', { name: '扫描通过，可作为证据', exact: true })).toBeVisible({ timeout: 20000 });
 
     await page.getByLabel('中性处理结论').fill('真实浏览器验收已完成并保留证据');
     const processed = page.waitForResponse((response) => new RegExp(`/api/v1/test/neutral-problems/${fixture.problem.id}/process`).test(response.url()));

@@ -89,6 +89,20 @@ describe('audit log foundation', () => {
     expect(service.safeMetadata({ changedFields: 'factoryCode' }, { ...event, resourceType: 'Profile' })).toEqual({});
   });
 
+  it('allows bounded 8D change facts only on matching successful report events', () => {
+    const service = new AuditLogService({} as never);
+    const risk = { action: 'PROCESS_EIGHT_D_RISK', resourceType: 'ProcessEightDReport', outcome: 'SUCCESS' };
+    const source = { ...risk, action: 'PROCESS_EIGHT_D_SOURCES' };
+    const id = '10000000-0000-4000-8000-000000000001';
+    expect(service.safeMetadata({ previousSeverity: 'LOW', severity: 'HIGH', reason: 'Private input' }, risk))
+      .toEqual({ previousSeverity: 'LOW', severity: 'HIGH' });
+    expect(service.safeMetadata({ previousSeverity: 'unknown', severity: ['HIGH'] }, risk)).toEqual({});
+    expect(service.safeMetadata({ addedSourceIds: [id], removedSourceIds: [] }, source)).toEqual({ addedSourceIds: [id], removedSourceIds: [] });
+    expect(service.safeMetadata({ addedSourceIds: ['Private input'], removedSourceIds: Array(101).fill(id) }, source)).toEqual({});
+    expect(service.safeMetadata({ addedSourceIds: [id] }, { ...source, resourceType: 'CustomerEightDReport' })).toEqual({});
+    expect(service.safeMetadata({ addedSourceIds: [id] }, { ...source, outcome: 'DENIED' })).toEqual({});
+  });
+
   it('allowlists only bounded trial metadata on completed application audit outcomes', () => {
     const service = new AuditLogService({} as never);
     const event = { action: 'AI_APPLICATION_TESTED', resourceType: 'AiApplication', outcome: 'SUCCESS' };

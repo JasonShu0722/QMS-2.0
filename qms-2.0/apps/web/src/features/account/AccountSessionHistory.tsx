@@ -65,11 +65,12 @@ export function AccountSessionHistory() {
   const date = (value: string | null) => value ? new Date(value).toLocaleString(locale) : '—';
   const lifetime = { STANDARD: '标准会话', REMEMBERED_ADMIN: '管理员记住登录', REMEMBERED_USER: '用户记住登录' };
   const status = { ACTIVE: '有效', REVOKED: '已撤销', EXPIRED: '已过期' };
+  const loadingLabel = t('正在加载登录会话');
   return <section aria-label={t('登录会话')}><Card title={t('登录会话')} className="qms-account-history">
     <GovernanceFeedback error={error} retry={() => void load()} />
     {success ? <Alert type="success" showIcon title={t('会话已撤销')} role="status" /> : null}
-    {loading ? <p role="status" aria-label={t('正在加载登录会话')}>{t('加载中')}</p> : null}
-    <Table<HistoryItem> rowKey="id" size="small" loading={loading} dataSource={error ? [] : data?.items ?? []} scroll={{ x: 800, y: 320 }} locale={{ emptyText: loading || error ? '—' : t('暂无会话') }} columns={[
+    <span className="sr-only" role="status">{loading ? loadingLabel : ''}</span>
+    <Table<HistoryItem> rowKey="id" size="small" loading={loading ? { description: <span aria-hidden="true">{loadingLabel}</span> } : false} dataSource={error ? [] : data?.items ?? []} scroll={{ x: 800, y: 320 }} locale={{ emptyText: loading || error ? '—' : t('暂无会话') }} columns={[
       { title: t('登录于'), dataIndex: 'createdAt', render: date },
       { title: t('有效期至'), dataIndex: 'expiresAt', render: date },
       { title: t('撤销于'), dataIndex: 'revokedAt', render: date },

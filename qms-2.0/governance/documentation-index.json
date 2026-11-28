@@ -172,7 +172,7 @@
           },
           {
             "path": "docs/ATTACHMENTS.md",
-            "sha256": "94bf24e3f2e0ca17d88e9023ce4c0334178304f984c0442c33de3e931d33d892"
+            "sha256": "f87d0bfba6316f1b3f331bb7dfe10c18bca0650cc3ac7440d45a4ff93c02c339"
           }
         ]
       }
@@ -228,7 +228,7 @@
           },
           {
             "path": "docs/ATTACHMENTS.md",
-            "sha256": "94bf24e3f2e0ca17d88e9023ce4c0334178304f984c0442c33de3e931d33d892"
+            "sha256": "f87d0bfba6316f1b3f331bb7dfe10c18bca0650cc3ac7440d45a4ff93c02c339"
           }
         ]
       }
@@ -414,7 +414,7 @@
           },
           {
             "path": "../docs/superpowers/specs/2026-09-21-qms-frontend-design-standard.md",
-            "sha256": "a2eb8e9082855f51cef29ab0dde7a9e75d5250fa5ad14296f55b7acde8af0b72"
+            "sha256": "0fada4affef42a3839bcd26cf03154f96c009d4ae0dc1734fcb801372ec52eae"
           },
           {
             "path": "docs/DELIVERY-MAINTENANCE-PROCESS.md",
@@ -518,7 +518,7 @@
           },
           {
             "path": "apps/web/src/features/governance/PositionRolesDrawer.tsx",
-            "sha256": "28fd12e88aeeff15e6c6498099f409aa8505308fabfa5bd6a4c8378010277bb7"
+            "sha256": "f64072d2a8acc612f62072a84900a13f876c48aa8eac58bcb9e31efd500fd55d"
           },
           {
             "path": "apps/web/src/features/governance/StructureAdministration.test.tsx",
@@ -558,7 +558,7 @@
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.tsx",
-            "sha256": "6a83724f8a5c03978f074eec4fbe5e2beddc1fa55c668e6f6e085f088032a5dc"
+            "sha256": "cfe82d33a0f696cbb9b9b73152744a5900471275558be8793fb82036f2732667"
           },
           {
             "path": "apps/web/src/features/governance/ComponentProjectAdministration.test.tsx",
@@ -618,7 +618,7 @@
           },
           {
             "path": "apps/web/src/features/supplier-audit/SupplierAuditPage.test.tsx",
-            "sha256": "5ba2044d4bc795dc0e56df36202a775fa0c49a5dd38aa7145c56f1bdc0bc7a86"
+            "sha256": "052d87c3ac15b5cffe5ba54b18655eeff93d47dc6f5e5e2ee6755bf63f9b772d"
           },
           {
             "path": "apps/web/src/features/supplier-pcn/SupplierPcnPage.test.tsx",
@@ -630,7 +630,7 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/CustomerQualityPage.tsx",
-            "sha256": "c57f29b95a5dd6e61c2aa4c10e0b8cec0d51cc42076ef6dcbdfa52bcda3fc61a"
+            "sha256": "c09a35aff86cf8b46087073b967a908a2a3866ef82fe5c5430ac94472c168606"
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-analysis-panel.tsx",
@@ -654,7 +654,7 @@
           },
           {
             "path": "apps/web/src/features/customer-quality/customer-ledger-editor.tsx",
-            "sha256": "fdc60e0cf71915d338a8a00fa9f4c356ad9c8319d080237638b04b29dfb25f3f"
+            "sha256": "97730a20205484b47784f4d532a2a876721de39c3560b24586323b91bbce9a0d"
           },
           {
             "path": "../docs/superpowers/specs/2026-10-29-qms-management-console-design.md",
@@ -714,7 +714,7 @@
           },
           {
             "path": "apps/web/src/console/ConsoleLayout.tsx",
-            "sha256": "0c6a86d097733fbe0f9de0b99b6ee7c978f28bfe621ed20c17e140e2f350e15c"
+            "sha256": "263d6f9ddeb5d8a806f13db12a8b5908f744ec9960b4cc3832d724d0edb33443"
           },
           {
             "path": "apps/web/src/styles/global.css",
@@ -1158,7 +1158,7 @@
           },
           {
             "path": "docs/ATTACHMENTS.md",
-            "sha256": "94bf24e3f2e0ca17d88e9023ce4c0334178304f984c0442c33de3e931d33d892"
+            "sha256": "f87d0bfba6316f1b3f331bb7dfe10c18bca0650cc3ac7440d45a4ff93c02c339"
           },
           {
             "path": "docs/ENGINEERING-TOOLS.md",

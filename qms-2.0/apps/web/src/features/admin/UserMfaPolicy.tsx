@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Descriptions, Modal, Popconfirm, Skeleton, Space, Switch, Tag, Typography } from 'antd';
+import { Alert, Button, Descriptions, Modal, Popconfirm, Space, Switch, Tag, Typography } from 'antd';
+import { QmsLoading } from '../../components/QmsLoading';
 import { useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
@@ -94,7 +95,7 @@ export function UserMfaPolicy({ user, organizationId, canWrite, onSaved, onClose
       <Space orientation="vertical" className="admin-form-stack">
         {error && <Alert type="error" showIcon title={t(error)} description={traceId ? <span>{t('追踪标识')}: <code>{traceId}</code></span> : undefined} />}
         {unknown && <Alert type="warning" showIcon title={t('原请求结果尚未确认，请重试原请求或明确放弃。')} />}
-        {loading ? <Skeleton active paragraph={{ rows: 3 }} /> : policy && <>
+        {loading ? <QmsLoading label={t('加载中')} size="region" /> : policy && <>
           <Descriptions column={1} size="small" items={[
             { key: 'required', label: t('MFA 生效状态'), children: <Tag color={policy.required ? 'green' : 'default'}>{t(policy.required ? '启用' : '停用')}</Tag> },
             { key: 'bound', label: t('验证器绑定'), children: t(policy.bound ? '已绑定' : '未绑定') },

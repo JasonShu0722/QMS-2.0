@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Result } from 'antd';
 import { createBrowserRouter, Navigate, Route, RouterProvider, Routes } from 'react-router-dom';
 import { ThemeProvider } from './theme/ThemeProvider';
+import { QmsLoading } from './components/QmsLoading';
 import { LoginPage } from './features/auth/LoginPage';
 import { AuthenticatedRoute } from './features/auth/AuthenticatedRoute';
 import { InternalLayout } from './layouts/InternalLayout';
@@ -31,7 +32,12 @@ export function App() {
     setRouter(next);
     return () => next.dispose();
   }, []);
-  return <LanguageProvider><ThemeProvider>{router && <RouterProvider router={router} />}</ThemeProvider></LanguageProvider>;
+  return <LanguageProvider><ThemeProvider>{router ? <RouterProvider router={router} /> : <AppLoading />}</ThemeProvider></LanguageProvider>;
+}
+
+function AppLoading() {
+  const { t } = useLanguage();
+  return <main><QmsLoading size="page" label={t('加载中')} /></main>;
 }
 
 function AppRoutes() {

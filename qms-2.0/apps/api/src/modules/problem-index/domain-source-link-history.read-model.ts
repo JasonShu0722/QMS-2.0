@@ -1,5 +1,14 @@
 import { Prisma } from '../../generated/prisma/client.js';
 
+export function domainSourceLinkChanges(tx: Prisma.TransactionClient, scope: {
+  organizationId: string; problemIndexId: string; sourceDomain: string; sourceType: string;
+}, ids: string[]) {
+  return tx.domainSourceIssueLinkHistory.findMany({
+    where: { ...scope, id: { in: ids }, action: { in: ['LINKED', 'UNLINKED'] } },
+    select: { id: true, action: true, sourceId: true, sourceSnapshot: true },
+  });
+}
+
 export function recentDomainSourceLinkChanges(tx: Prisma.TransactionClient, scope: {
   organizationId: string; sourceDomain: string; sourceType: string; sourceId: string;
 }, limit: number) {

@@ -189,7 +189,7 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
         </div></details>
         </>} bodyFallback={loading ? <div className="customer-quality-loading"><Spin /></div> : error ? <Button onClick={refresh}>重试台账读取</Button> : undefined} ledgerId="customer-quality-ledger" organizationId={targetOrganizationId} viewId={view} requiredColumnKeys={['eight-d-select', 'complaintNumber']} className="customer-ledger-table" tableLayout="fixed" rowKey="id" dataSource={result?.items ?? []} columns={columns} scroll={{ x: view === 'ALL' ? 1350 : 1650 }} locale={{ emptyText: <Empty description="权限范围内暂无符合条件的客诉" /> }} pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], onChange: (next, size) => requestLeave(() => { setPage(size === pageSize ? next : 1); setPageSize(size); }) }} />
       </section>
-      {detailLoading && !detail ? <Spin /> : null}<LedgerError cause={detailError} />
+      {detailLoading && !detail ? <Spin aria-label="正在加载客诉详情" /> : null}<LedgerError cause={detailError} />
       {detailError && selectedId.current ? <Button onClick={() => { void openDetail(selectedId.current!).catch(() => undefined); }}>重试详情读取</Button> : null}
       {detail ? <CustomerLedgerDetail key={detail.id} record={detail} candidates={candidates} customers={customers} userId={session?.userId} permissions={permissions} organizationId={organizationId} onDenied={revoke} onSaved={saved} refreshDetail={() => openDetail(detail.id, true)} renderAnalysis={renderAnalysis} /> : null}
       <section className="customer-quality-card"><details><summary>客户主数据</summary><CustomerMasterSection organizationId={organizationId} organizationPermissions={permissions} embedded /></details></section>
@@ -197,6 +197,6 @@ function CustomerLedgerContent({ organizationId, initialComplaintId, renderAnaly
       {importOpen ? <CustomerLedgerImportPanel organizationId={organizationId} existing={result?.items ?? []} customers={customers} candidates={candidates} onDenied={revoke} onClose={() => setImportOpen(false)} onCommitted={() => setRevision(current => current + 1)} /> : null}
       {issueOpen ? <InternalEightDIssueDrawer domain="customer-quality" organizationId={organizationId} sources={selectedSources.map(row => ({ id: row.id, version: row.version, organizationId: row.organizationId, description: `${row.complaintNumber} · ${row.normalized.defectDescription ?? '待补正'}` }))} onClose={() => setIssueOpen(false)} onDenied={revoke} onIssued={value => { setIssued(value); setIssueOpen(false); setSelectedSources([]); setRevision(current => current + 1); }} /> : null}
       {canCopy && copyOpen ? <SupplierSourceCopyDialog organizationId={organizationId} sources={selectedSources.map(row => ({ kind: 'CUSTOMER_LEDGER', sourceId: row.id, sourceVersion: row.version }))} onClose={() => setCopyOpen(false)} onDenied={revoke} /> : null}
-    </> : loading ? <Spin /> : <Typography.Paragraph>权限读取未完成，台账未加载。请重新进入页面重试。</Typography.Paragraph>}
+    </> : loading ? <Spin aria-label="正在读取客诉台账权限" /> : <Typography.Paragraph>权限读取未完成，台账未加载。请重新进入页面重试。</Typography.Paragraph>}
   </main>;
 }

@@ -155,7 +155,7 @@ describe('process 8D real domain transactions with managed workflow configuratio
       ] }, randomUUID(), randomUUID());
     };
     if (configure) await configureManaged(0);
-    const source = () => ledger.create(issuer.actor, { description: '真实原台账来源，未知分类保留空', factoryCode: 'FACTORY_1', productCode: 'EIGHT-D-PRODUCT', traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
+    const source = (description = '真实原台账来源，未知分类保留空') => ledger.create(issuer.actor, { description, factoryCode: 'FACTORY_1', productCode: 'EIGHT-D-PRODUCT', traceCode: randomUUID(), occurredAt: new Date('2026-11-16T00:30:00Z') }, randomUUID(), randomUUID());
     const input = (sources: { id: string; version: number }[]) => ({ sources: sources.map(s => ({ defectId: s.id, expectedVersion: s.version })), severity: 'LOW' as const,
       processBoardCode: '0' as const, sourceConfirmations: sources.map(source => ({ defectId: source.id, recurrence: 'NOT_RECURRENCE' as const, relatedProblemIds: [] })),
       ownerUserId: owner.user.id, responsibleSectionDepartmentId: section.id, analysisDueAt: new Date('2026-11-01T00:00:00Z'), closureDueAt: new Date('2026-12-01T00:00:00Z') });
@@ -682,6 +682,41 @@ describe('process 8D real domain transactions with managed workflow configuratio
       { status: 'fulfilled', value: { domainUiKey: 'process-eight-d' } },
     ]);
   });
+
+  it('audits batch appends and removals in the 8D flow without rewriting authored D2', async () => {
+    const f = await fixture(), primary = await f.source(), first = await f.source(`原始批次压伤 ${randomUUID()}`), second = await f.source('端面裂纹');
+    const problemId = String((await service.issue(f.issuer.actor, f.input([primary]), randomUUID(), randomUUID())).problem.id);
+    const initial = await f.read(problemId);
+    const doc = { ...initial.document, description: '人工填写的 D2 正文' };
+    const saved = await service.save(f.owner.actor, problemId, { expectedVersion: initial.version, document: doc }, randomUUID(), randomUUID());
+    const input = { expectedVersion: saved.version, add: f.input([first, second]).sources, removeDefectIds: [] };
+    const key = randomUUID();
+    const appended = await service.sources(f.issuer.actor, problemId, input, randomUUID(), key);
+    expect(await service.sources(f.issuer.actor, problemId, input, randomUUID(), key)).toEqual(appended);
+    expect(appended.document).toEqual(saved.document);
+    expect(appended.sources.map(source => source.defectId).sort()).toEqual([primary.id, first.id, second.id].sort());
+
+    await ledger.update(f.issuer.actor, first.id, { expectedVersion: first.version, description: '台账后续修改' }, randomUUID(), randomUUID());
+    const removed = await service.sources(f.issuer.actor, problemId, { expectedVersion: appended.version, add: [], removeDefectIds: [first.id] }, randomUUID(), randomUUID());
+    expect(removed.document).toEqual(saved.document);
+    expect(removed.sources.map(source => source.defectId).sort()).toEqual([primary.id, second.id].sort());
+    const audits = await prisma.auditEvent.findMany({ where: { resourceId: problemId, action: 'PROCESS_EIGHT_D_SOURCES' } });
+    expect(audits.map(event => event.metadata)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ addedSourceIds: [first.id, second.id].sort(), removedSourceIds: [] }),
+      expect.objectContaining({ addedSourceIds: [], removedSourceIds: [first.id] }),
+    ]));
+    expect(audits).toHaveLength(2);
+    const flow = await service.flowRecords(f.owner.actor, problemId);
+    expect(flow).toEqual(expect.arrayContaining([
+      expect.objectContaining({ person: f.issuer.user.username, content: `新增关联来源（2 条）：${[first.id, second.id].sort().map(id => id === first.id ? '原始批次压伤' : '端面裂纹').join('、')}` }),
+      expect.objectContaining({ person: f.issuer.user.username, content: '移除关联来源（1 条）：原始批次压伤' }),
+    ]));
+    expect(flow.map(entry => entry.content).join('\n')).not.toMatch(/台账后续修改|[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}/i);
+    await prisma.rolePermission.deleteMany({ where: { roleId: f.role.id, permission: { code: 'process-quality:defects:read' } } });
+    const countOnly = await service.flowRecords(f.owner.actor, problemId);
+    expect(countOnly.map(entry => entry.content)).toEqual(expect.arrayContaining(['新增关联来源（2 条）', '移除关联来源（1 条）']));
+    expect(countOnly.map(entry => entry.content).join('\n')).not.toMatch(/原始批次压伤|端面裂纹|[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}/i);
+  }, 120_000);
 
   it('allocates across selected boards without writing back and rejects mixed recurrence before allocating', async () => {
     const fixtureData = await fixture();
@@ -1389,9 +1424,13 @@ describe('process 8D real domain transactions with managed workflow configuratio
     await expect(service.reassign(f.owner.actor, id, { expectedVersion: current.version, ownerUserId: f.manager.user.id, responsibleSectionDepartmentId: f.section.id }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     await expect(service.risk(f.issuer.actor, id, { expectedVersion: current.version, severity: 'HIGH' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     expect((await rounds.readProjection(prisma, f.organization.id, id))!.status).toBe('PENDING');
+    expect((await service.flowRecords(f.owner.actor, id)).map(event => event.content)).not.toContain('调整风险：低风险 → 高风险');
     await service.risk(f.issuer.actor, id, { expectedVersion: current.version, severity: 'HIGH', confirmCancelApproval: true }, randomUUID(), randomUUID());
     expect((await rounds.readProjection(prisma, f.organization.id, id))!.status).toBe('CANCELLED');
     expect(await f.read(id)).toMatchObject({ severity: 'HIGH', status: 'PROCESSING' });
+    expect((await service.flowRecords(f.owner.actor, id)).map(event => event.content)).toEqual(expect.arrayContaining([
+      '取消本轮关闭审核', '调整风险：低风险 → 高风险',
+    ]));
   }, 120_000);
 
   it('closes only after both actual N2 duties, creates immutable complete revision, and never rewrites it on closed source append', async () => {
@@ -1417,7 +1456,10 @@ describe('process 8D real domain transactions with managed workflow configuratio
     ]));
     const snapshot = await prisma.$transaction(tx => service.readReport(tx, f.owner.actor, id, closed.closedRevisionId!));
     const additional = await f.source();
-    await service.sources(f.issuer.actor, id, { expectedVersion: closed.version, add: [{ defectId: additional.id, expectedVersion: additional.version }], removeDefectIds: [] }, randomUUID(), randomUUID());
+    const supplemented = await service.sources(f.issuer.actor, id, { expectedVersion: closed.version, add: [{ defectId: additional.id, expectedVersion: additional.version }], removeDefectIds: [] }, randomUUID(), randomUUID());
+    expect((await service.flowRecords(f.owner.actor, id)).map(event => event.content)).toContain('关闭后补充关联来源（1 条）：真实原台账来源，未知分类保留空');
+    await expect(service.sources(f.issuer.actor, id, { expectedVersion: supplemented.version, add: [], removeDefectIds: [additional.id] }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
+    await expect(service.risk(f.issuer.actor, id, { expectedVersion: supplemented.version, severity: 'HIGH' }, randomUUID(), randomUUID())).rejects.toMatchObject({ status: 409 });
     expect((await f.read(id)).contentVersion).toBe(closed.contentVersion);
     const historical = await prisma.$transaction(tx => service.readReport(tx, f.owner.actor, id, closed.closedRevisionId!));
     expect(historical.snapshot).toEqual(snapshot.snapshot);
@@ -1573,6 +1615,10 @@ describe('process 8D real domain transactions with managed workflow configuratio
       riskChange: { actorUserId: f.issuer.user.id, previousSeverity: 'LOW', severity: 'HIGH', reason } });
     const audited = await prisma.auditEvent.findFirstOrThrow({ where: { resourceId: id, action: 'PROCESS_EIGHT_D_RISK' } });
     expect(audited.metadata).not.toHaveProperty('reason');
+    expect(audited.metadata).toMatchObject({ previousSeverity: 'LOW', severity: 'HIGH' });
+    expect(await service.flowRecords(f.owner.actor, id)).toContainEqual(expect.objectContaining({
+      person: f.issuer.user.username, content: '调整风险：低风险 → 高风险',
+    }));
     expect(await service.risk(f.issuer.actor, id, input, randomUUID(), key)).toEqual(changed);
     expect(await prisma.outboxEvent.count({ where: { aggregateId: id, eventType: 'PROCESS_EIGHT_D_CHANGED' } })).toBe(1);
     await service.risk(f.issuer.actor, id, { expectedVersion: changed.version, severity: 'CRITICAL', reason: 'New independently recorded assessment' }, randomUUID(), randomUUID());

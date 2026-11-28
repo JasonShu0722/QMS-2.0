@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Button, Drawer, Modal, Skeleton, Space, Switch, Table, Typography } from 'antd';
+import { Alert, Button, Drawer, Modal, Space, Switch, Table, Typography } from 'antd';
+import { QmsLoading } from '../../components/QmsLoading';
 import { useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, createAdminMutation } from '../../api/client';
@@ -117,7 +118,7 @@ export function PositionRolesDrawer({ organization, position, canWrite, onClose,
         {sourcesOpen && open && <AuthorizationSources organization={organization} positionId={position.id} onDenied={cause => {
           completed.current = true; generation.current++; reading.current?.abort(); setSourcesOpen(false); setOpen(false); setDiscard(false); setConfiguration(undefined); setCatalog([]); setSelected([]); setDetails(undefined); setBusy(false); onDenied?.(cause);
         }} />}
-        {loading ? <Skeleton active paragraph={{ rows: 3 }} /> : configuration && <>
+        {loading ? <QmsLoading label={t('加载中')} size="region" /> : configuration && <>
           <span>{t('角色版本')}：{configuration.roleVersion}</span>
           <span>{t('当前有效任职人数')}：{configuration.effectiveAssigneeCount}</span>
           <Typography.Title level={4}>{t('岗位自有权限')}</Typography.Title>

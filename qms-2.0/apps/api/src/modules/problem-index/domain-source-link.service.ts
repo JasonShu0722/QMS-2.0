@@ -25,6 +25,7 @@ export interface ChangeDomainSourcesCommand {
 export interface DomainSourceLinkAdapters {
   authorize(transaction: Prisma.TransactionClient, command: ChangeDomainSourcesCommand): Promise<void>;
   lockAndResolve: DomainSourceIssueAdapters['lockAndResolve'];
+  collectHistoryIds?(ids: string[]): void;
 }
 
 function fail(code: string, status: number): never { throw new HttpException({ code, message: code }, status); }
@@ -78,15 +79,18 @@ export class DomainSourceLinkService {
       const currentPrimary = { sourceDomain: problem.domainCode, sourceType: problem.sourceType, sourceId: problem.sourceId ?? '' };
       const primary = command.primary ?? (active.has(key(currentPrimary)) ? currentPrimary : null);
       if (!primary || !active.has(key(primary))) fail('SOURCE_PRIMARY_REQUIRED', 409);
+      const historyIds: string[] = [];
       for (const reference of command.add) {
         const old = await transaction.domainSourceIssueLink.findFirst({ where: { organizationId: command.organizationId, problemIndexId: command.problemIndexId, sourceDomain: reference.sourceDomain, sourceType: reference.sourceType, sourceId: reference.sourceId } });
         if (old) await transaction.domainSourceIssueLink.update({ where: { id: old.id }, data: { sourceVersion: reference.sourceVersion, sourceSnapshot: reference.sourceSnapshot, createdBy: reference.createdBy, removedAt: null, removedBy: null, linkedAt: new Date() } });
         else await transaction.domainSourceIssueLink.create({ data: { organizationId: command.organizationId, problemIndexId: command.problemIndexId, ...reference } });
-        await transaction.domainSourceIssueLinkHistory.create({ data: { organizationId: command.organizationId, problemIndexId: command.problemIndexId, sourceDomain: reference.sourceDomain, sourceType: reference.sourceType, sourceId: reference.sourceId, sourceVersion: reference.sourceVersion, sourceSnapshot: reference.sourceSnapshot, action: 'LINKED', actorUserId: command.actor.id } });
+        const history = await transaction.domainSourceIssueLinkHistory.create({ data: { organizationId: command.organizationId, problemIndexId: command.problemIndexId, sourceDomain: reference.sourceDomain, sourceType: reference.sourceType, sourceId: reference.sourceId, sourceVersion: reference.sourceVersion, sourceSnapshot: reference.sourceSnapshot, action: 'LINKED', actorUserId: command.actor.id }, select: { id: true } });
+        historyIds.push(history.id);
       }
       for (const reference of command.remove) {
         const removed = await transaction.domainSourceIssueLink.update({ where: { organizationId_problemIndexId_sourceDomain_sourceType_sourceId: { organizationId: command.organizationId, problemIndexId: command.problemIndexId, ...reference } }, data: { removedAt: new Date(), removedBy: command.actor.id } });
-        await transaction.domainSourceIssueLinkHistory.create({ data: { organizationId: command.organizationId, problemIndexId: command.problemIndexId, sourceDomain: reference.sourceDomain, sourceType: reference.sourceType, sourceId: reference.sourceId, sourceVersion: removed.sourceVersion, sourceSnapshot: removed.sourceSnapshot as Prisma.InputJsonObject, action: 'UNLINKED', actorUserId: command.actor.id } });
+        const history = await transaction.domainSourceIssueLinkHistory.create({ data: { organizationId: command.organizationId, problemIndexId: command.problemIndexId, sourceDomain: reference.sourceDomain, sourceType: reference.sourceType, sourceId: reference.sourceId, sourceVersion: removed.sourceVersion, sourceSnapshot: removed.sourceSnapshot as Prisma.InputJsonObject, action: 'UNLINKED', actorUserId: command.actor.id }, select: { id: true } });
+        historyIds.push(history.id);
       }
       if (key(primary) !== key(currentPrimary)) {
         const selected = await transaction.domainSourceIssueLink.findFirstOrThrow({ where: { organizationId: command.organizationId, problemIndexId: command.problemIndexId, sourceDomain: primary.sourceDomain, sourceType: primary.sourceType, sourceId: primary.sourceId, removedAt: null } });
@@ -98,6 +102,7 @@ export class DomainSourceLinkService {
       const response = JSON.parse(JSON.stringify(updated)) as Record<string, unknown>;
       await this.audit.record({ organizationId: command.organizationId, actorUserId: command.actor.id, action: 'DOMAIN_SOURCES_CHANGED', resourceType: 'ProblemIndex', resourceId: command.problemIndexId, outcome: 'SUCCESS', traceId: command.traceId, metadata: { resourceVersion: updated.version } }, transaction);
       await this.outbox.enqueue({ eventKey, aggregateType: 'DomainSourceIssue', aggregateId: command.problemIndexId, eventType: 'DOMAIN_SOURCES_CHANGED', payload: { digest, problem: response as Prisma.InputJsonObject, organizationId: command.organizationId } }, transaction);
+      adapters.collectHistoryIds?.(historyIds);
       return response;
     };
     return outerTransaction ? work(outerTransaction) : this.prisma.$transaction(work, { isolationLevel: 'ReadCommitted' });

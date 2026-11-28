@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../i18n/Language';
 import { SupplierResponseHistory } from './SupplierResponseHistory';
@@ -28,6 +28,8 @@ it('shows retained evidence status without claiming a scan or download succeeded
   vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ id: fileId, resourceType: 'supplier-quality', resourceId: record.id, originalName: 'report.pdf', sizeBytes: 8, status: 'QUARANTINED', scanStatus: 'PENDING', version: 2 }), { headers: { 'content-type': 'application/json' } })));
   render(<LanguageProvider><SupplierResponseHistory record={record} page={1} changePage={vi.fn()} /></LanguageProvider>);
   expect(screen.getByText('等待安全扫描')).toBeInTheDocument();
-  expect(await screen.findByText('report.pdf', { selector: '.ant-card-head-title' })).toBeInTheDocument();
-  expect(screen.queryByRole('button', { name: '下载附件' })).not.toBeInTheDocument();
+  const scanStatus = await screen.findByRole('img', { name: '等待安全扫描' });
+  const file = within(scanStatus.closest('li')!);
+  expect(file.getByText('report.pdf')).toBeVisible();
+  expect(file.queryByRole('button', { name: '下载附件' })).not.toBeInTheDocument();
 });

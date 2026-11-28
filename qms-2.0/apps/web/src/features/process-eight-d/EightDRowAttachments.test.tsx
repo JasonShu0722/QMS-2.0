@@ -7,9 +7,10 @@ import { EightDRowAttachments } from './EightDRowAttachments';
 import type { EightDEvidence } from './EightDEvidence';
 
 vi.mock('./EightDEvidence', () => ({
-  EightDEvidence: ({ fileIds, readOnly, onChange, onLocalPendingChange }: ComponentProps<typeof EightDEvidence>) => <>
+  EightDEvidence: ({ fileIds, readOnly, onChange, onLocalPendingChange, onDeletedFiles }: ComponentProps<typeof EightDEvidence>) => <>
     <input aria-label="Selected file" defaultValue="" />
     <output>{fileIds.join(', ')}</output>
+    {onDeletedFiles && <button onClick={() => onDeletedFiles(['deleted-file'])}>Refresh metadata</button>}
     {!readOnly && <>
       <button onClick={() => onLocalPendingChange?.(true)}>Start upload</button>
       <button onClick={() => { onChange(['row-file']); onLocalPendingChange?.(false); }}>Finish upload</button>
@@ -89,4 +90,15 @@ it('opens read-only evidence with its existing file references', async () => {
   const dialog = await screen.findByRole('dialog', { name: '临时措施附件 (1)' });
   await waitFor(() => expect(within(dialog).getByText('readonly-file')).toBeVisible());
   expect(within(dialog).queryByRole('button', { name: 'Remove file' })).not.toBeInTheDocument();
+});
+
+it('excludes deleted metadata from the dialog count and paperclip status', async () => {
+  const user = userEvent.setup();
+  render(<LanguageProvider><EightDRowAttachments {...props} readOnly fileIds={['deleted-file']} /></LanguageProvider>);
+  const trigger = screen.getByRole('button', { name: '临时措施附件 · 有附件' });
+  await user.click(trigger);
+  const dialog = await screen.findByRole('dialog', { name: '临时措施附件 (1)' });
+  await user.click(within(dialog).getByRole('button', { name: 'Refresh metadata' }));
+  expect(dialog).toHaveAccessibleName('临时措施附件 (0)');
+  expect(trigger).toHaveAccessibleName('临时措施附件 · 无附件');
 });

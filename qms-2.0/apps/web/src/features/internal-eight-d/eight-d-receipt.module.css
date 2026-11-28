@@ -1,0 +1,10 @@
+.receipt {
+  position: fixed;
+  inset-block-start: max(12px, env(safe-area-inset-top));
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  inline-size: max-content;
+  max-inline-size: calc(100% - 24px);
+  pointer-events: none;
+  z-index: 1050;
+}

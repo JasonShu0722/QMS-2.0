@@ -3,6 +3,7 @@ import { Alert, Button, Spin, Tag } from 'antd';
 import type { components } from '@qms/contracts';
 import { Link } from 'react-router-dom';
 import { ApiError } from '../../api/client';
+import { QmsLoading } from '../../components/QmsLoading';
 import { canDownloadAttachment, readAttachmentPreview } from '../attachments/attachment-preview';
 import { attachmentDownload, readAttachment } from '../attachments/attachments';
 import { EightDField } from './EightDDocumentEditor';
@@ -229,7 +230,8 @@ function ReportImage({ file }: { file: ReportAttachment }) {
   return <figure ref={figure} className={previewStyles.figure}>
     {typeof preview === 'object' && <a href={preview.url} target="_blank" rel="noopener noreferrer"
       aria-label={`${text('查看原图', 'Open original image')} ${file.originalName}`}><img src={preview.url} alt={file.originalName} /></a>}
-    <figcaption>{file.originalName}{preview === 'loading' && ` · ${text('正在加载图片', 'Loading image')}`}
+    {preview === 'loading' && <QmsLoading label={text('正在加载图片', 'Loading image')} />}
+    <figcaption>{file.originalName}
       {preview === 'unavailable' && ` · ${text('图片预览不可用', 'Image preview unavailable')}`}</figcaption>
   </figure>;
 }

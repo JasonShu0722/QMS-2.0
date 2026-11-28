@@ -165,6 +165,79 @@ function sourceReadResponse(path: string) {
   return baseResponse(url.pathname);
 }
 
+it.each(['single', 'batch'] as const)('links existing 8D from the %s ledger entry', async mode => {
+  const other = { ...defect, id: '55555555-5555-4555-8555-555555555555', description: '压合偏移', version: 4 };
+  const targetId = '66666666-6666-4666-8666-666666666666';
+  const report = { problemId: targetId, reportNumber: 'PQ-EXISTING', organizationId, version: 8, status: 'PROCESSING', allowedActions: ['sources'], sources: [] };
+  let linked = false;
+  let listReads = 0;
+  let relationshipReads = 0;
+  vi.mocked(apiRequest).mockImplementation(async (path, init) => {
+    const url = new URL(path, 'https://qms.invalid');
+    if (url.pathname.endsWith('/my-permissions')) return { permissions: [...permissions, 'problem-index:read', 'process-quality:issues:sources'] };
+    if (url.pathname.endsWith('/defects')) { listReads++; return { ...list, items: [defect, other], total: 2 }; }
+    if (url.pathname.endsWith(`/defects/${defect.id}/issues`)) {
+      relationshipReads++;
+      return linked ? [{ id: targetId, reportNumber: report.reportNumber }] : [];
+    }
+    if (url.pathname === '/api/v1/problem-index') return { ...list, items: [{ id: targetId, organizationId, domainCode: 'process-quality', sourceType: 'process-defect', status: 'IN_PROGRESS', reportNumber: report.reportNumber, summary: { title: '压合异常' } }] };
+    if (url.pathname.endsWith(`/eight-d/${targetId}`)) return report;
+    if (url.pathname.endsWith('/sources/preview')) return JSON.parse(String(init?.body)).sources.map((source: { defectId: string }) => ({ defectId: source.defectId, relatedProblems: [], hasHiddenRelations: false }));
+    if (url.pathname.endsWith(`/eight-d/${targetId}/sources`)) { linked = true; return { ...report, version: 9 }; }
+    return baseResponse(url.pathname);
+  });
+  const { container } = mount(`/app/process-quality?organizationId=${organizationId}`);
+  fireEvent.click(await screen.findByLabelText(`选择制程不良 ${other.description}`));
+  if (mode === 'single') {
+    const row = screen.getByLabelText(`选择制程不良 ${defect.description}`).closest('tr')!;
+    fireEvent.click(within(row).getByLabelText('查看详情'));
+    const relations = (await screen.findByText('尚未关联正式问题')).closest('section')!;
+    fireEvent.click(within(relations).getByText('关联已有问题'));
+  } else {
+    fireEvent.click(screen.getByLabelText(`选择制程不良 ${defect.description}`));
+    fireEvent.click(within(screen.getByLabelText('台账批量操作')).getByText('关联已有问题'));
+  }
+  const dialog = within(await screen.findByRole('dialog', { name: '关联已有问题' }));
+  const search = dialog.getByLabelText('搜索已有 8D');
+  fireEvent.change(search, { target: { value: '  PQ-EXISTING  ' } });
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.startsWith('/api/v1/problem-index'))).toBe(false);
+  fireEvent.click(dialog.getByLabelText('搜索'));
+  fireEvent.click(await dialog.findByRole('radio', { name: 'PQ-EXISTING · 压合异常' }));
+  await waitFor(() => expect(dialog.getByText('确认关联').closest('button')).toBeEnabled());
+  const readsBeforeWrite = listReads;
+  fireEvent.click(dialog.getByText('确认关联'));
+  expect(await screen.findByText('已关联到 8D PQ-EXISTING')).toBeVisible();
+  expect(within(container).getByRole('link', { name: '查看 8D' })).toHaveAttribute('href', `/app/problem-workspace/${targetId}?organizationId=${organizationId}`);
+  const calls = vi.mocked(apiRequest).mock.calls;
+  const searchPath = calls.find(([path]) => path.startsWith('/api/v1/problem-index?'))![0];
+  expect(Object.fromEntries(new URL(searchPath, 'https://qms.invalid').searchParams)).toMatchObject({ organizationId, domainCode: 'process-quality', sourceType: 'process-defect', responseForm: 'EIGHT_D', search: 'PQ-EXISTING' });
+  const writes = calls.filter(([path, init]) => path.endsWith(`/eight-d/${targetId}/sources`) && init?.method === 'PUT');
+  expect(writes).toHaveLength(1);
+  const sources = mode === 'single' ? [defect] : [other, defect];
+  const refs = sources.map(source => ({ defectId: source.id, expectedVersion: source.version }));
+  expect(JSON.parse(String(writes[0][1]?.body))).toMatchObject({ organizationId, expectedVersion: 8, add: refs, removeDefectIds: [] });
+  const previewCall = calls.find(([path]) => path.endsWith('/eight-d/sources/preview'))!;
+  expect(JSON.parse(String(previewCall[1]?.body))).toEqual({ organizationId, problemId: targetId, sources: refs });
+  await waitFor(() => expect(listReads).toBeGreaterThan(readsBeforeWrite));
+  if (mode === 'single') {
+    expect(await screen.findByRole('link', { name: report.reportNumber })).toHaveAttribute('href', `/app/problem-workspace/${targetId}?organizationId=${organizationId}`);
+    expect(relationshipReads).toBe(2);
+    expect(screen.getByLabelText(`选择制程不良 ${other.description}`)).toBeChecked();
+  } else expect(screen.queryByLabelText('台账批量操作')).not.toBeInTheDocument();
+}, 20000);
+
+it('hides existing 8D link actions without source permissions', async () => {
+  mount(`/app/process-quality?organizationId=${organizationId}`);
+  const selection = await screen.findByLabelText(`选择制程不良 ${defect.description}`);
+  fireEvent.click(selection);
+  expect(within(screen.getByLabelText('台账批量操作')).queryByText('关联已有问题')).not.toBeInTheDocument();
+  expect(screen.getByLabelText('发起 8D')).toBeEnabled();
+  fireEvent.click(within(selection.closest('tr')!).getByLabelText('查看详情'));
+  const relations = (await screen.findByText('尚未关联正式问题')).closest('section')!;
+  expect(within(relations).queryByText('关联已有问题')).not.toBeInTheDocument();
+  expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.startsWith('/api/v1/problem-index'))).toBe(false);
+}, 15000);
+
 it('opens a source deep-link only after scoped READ authorization, without selecting or issuing and without reopening on refresh', async () => {
   let authorize!: (value: { permissions: string[] }) => void;
   let permissionReads = 0;

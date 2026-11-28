@@ -168,8 +168,8 @@ test('internal issue and supplier submission use live HTTP with isolated Postgre
     await otherPage.goto(supplierPage.url());
     await expect(otherPage.getByText('记录不存在或当前账号无权查看', { exact: true })).toBeVisible();
     await supplierPage.getByLabel('选择附件').setInputFiles({ name: 'supplier-response-evidence.txt', mimeType: 'text/plain', buffer: Buffer.from('真实供应商回复证据') });
-    await expect(supplierPage.getByText('等待安全扫描', { exact: true })).toBeVisible({ timeout: 10000 });
-    await expect(supplierPage.getByText('扫描通过，可作为证据', { exact: true })).toBeVisible({ timeout: 60000 });
+    await expect(supplierPage.getByRole('img', { name: '等待安全扫描', exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(supplierPage.getByRole('img', { name: '扫描通过，可作为证据', exact: true })).toBeVisible({ timeout: 60000 });
     await expect(supplierPage.getByText('已选 1 个可提交证据；等待扫描或扫描未通过的附件不会加入本次提交。未提交附件在离开或刷新页面后不能自动恢复，请保持当前页面直到扫描完成。', { exact: true })).toBeVisible();
     const submitting = supplierPage.waitForResponse((response) => response.url().endsWith(`/problems/${problemId}/actions`) && response.request().method() === 'POST');
     await supplierPage.getByRole('button', { name: '正式提交回复', exact: true }).click();

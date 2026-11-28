@@ -10,7 +10,9 @@ export function EightDRowAttachments({ label, ...evidence }: ComponentProps<type
   const { token } = theme.useToken();
   const contentId = useId();
   const [open, setOpen] = useState(false);
-  const count = evidence.fileIds.length;
+  const [deleted, setDeleted] = useState<string[]>([]);
+  const count = evidence.fileIds.filter(id => !deleted.includes(id)).length;
+  const title = `${label} (${count})`;
   const status = count ? text('有附件', 'Has attachments') : text('无附件', 'No attachments');
   const name = `${label} · ${status}`;
 
@@ -22,9 +24,9 @@ export function EightDRowAttachments({ label, ...evidence }: ComponentProps<type
         aria-label={name} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? contentId : undefined}
         onClick={() => setOpen(true)} />
     </Tooltip>
-    <Modal open={open} title={`${label} (${count})`} onCancel={() => setOpen(false)}
+    <Modal open={open} title={<span className="attachment-panel__sr-only">{title}</span>} onCancel={() => setOpen(false)} classNames={{ header: styles.dialogHeader }}
       width="min(560px, calc(100vw - 32px))" footer={null} destroyOnHidden={false}>
-      <div id={contentId} className={styles.content}><EightDEvidence {...evidence} /></div>
+      <div id={contentId} className={styles.content}><EightDEvidence {...evidence} heading={title} onDeletedFiles={setDeleted} /></div>
     </Modal>
   </>;
 }

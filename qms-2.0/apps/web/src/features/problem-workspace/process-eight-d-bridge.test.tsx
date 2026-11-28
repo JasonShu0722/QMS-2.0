@@ -32,6 +32,27 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetcher);
 });
 function mount() { return render(<MemoryRouter><LanguageProvider><UnsavedChangesProvider><ProblemDomainUiProvider registry={{ 'process-quality': () => <p>旧通用处理</p> }}><ProblemWorkspacePage problemId="p" /></ProblemDomainUiProvider></UnsavedChangesProvider></LanguageProvider></MemoryRouter>); }
+it('shows one page loading state without either toolbar during 8D entry', async () => {
+  let resolveOuter!: (result: Response) => void;
+  let resolveReport!: (result: Response) => void;
+  const outerPending = new Promise<Response>(resolve => { resolveOuter = resolve; });
+  const reportPending = new Promise<Response>(resolve => { resolveReport = resolve; });
+  fetcher.mockImplementation((path: string) => path.includes('/workspace?') ? outerPending
+    : path.includes('/rounds') || path.includes('/requests') ? response([]) : reportPending);
+
+  mount();
+  expect(screen.getByRole('status', { name: '正在加载工作区' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: '专注处理' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '刷新工作空间' })).not.toBeInTheDocument();
+
+  await act(async () => { resolveOuter(response(workspace)); });
+  expect(screen.getByRole('status', { name: '正在加载工作区' })).toBeVisible();
+  expect(screen.queryByRole('button', { name: '刷新工作区' })).not.toBeInTheDocument();
+
+  await act(async () => { resolveReport(response(report)); });
+  expect(await screen.findByRole('button', { name: '刷新工作区' })).toBeVisible();
+  expect(screen.queryByRole('status', { name: '正在加载工作区' })).not.toBeInTheDocument();
+});
 it('bridges PROCESS_DEFECT using the actual domainUiKey, suppressing legacy claim and act', async () => {
   mount();
   expect(await screen.findByRole('region', { name: '正式过程 8D 工作区' })).toBeVisible();

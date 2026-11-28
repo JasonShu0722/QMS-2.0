@@ -3,6 +3,7 @@ import { Alert, Button, Card, Checkbox, Form, Input, InputNumber, Modal, Select,
 import { Link } from 'react-router-dom';
 import { ArrowDown, ArrowUp, Minus, Plus } from 'lucide-react';
 import type { components } from '@qms/contracts';
+import { QmsLoading } from '../../components/QmsLoading';
 import { factoryLabel } from '../../features/process-quality/process-factory';
 import { useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useScopedIntegrationRequests, type IntegrationScope } from '../api-integrations/integration-ui';
@@ -188,7 +189,7 @@ export function RuleEditor({ scope, rule, endpoints, endpointsLoading, close, sa
           </div>
           {latest && publishedVersion && latest > publishedVersion ? <Alert type="info" title={text(`已有新发布版本v${latest}，保存切换后新任务使用所选版本。`, `Published v${latest} is available. Save the selected version to use it for new jobs.`)} /> : null}
           {canReadAi ? <Link to={`/console/ai-applications?organizationId=${encodeURIComponent(scope.organizationId)}`} onClick={event => { if (mutation.locked) event.preventDefault(); }}>{text('管理提示词应用', 'Manage prompt applications')}</Link> : null}
-          {revisionLoading && !snapshot ? <p role="status">{text('读取发布版本', 'Loading published version')}</p> : null}
+          {revisionLoading && !snapshot ? <QmsLoading label={text('读取发布版本', 'Loading published version')} /> : null}
           {snapshot ? <><Form.Item label={text('有效提示词', 'Effective prompt')}><Input.TextArea aria-label={text('有效提示词', 'Effective prompt')} readOnly value={snapshot.prompt} autoSize={{ minRows: 2, maxRows: 6 }} /></Form.Item>
             <div className="qms-ingestion-grid">
               <Form.Item label={text('有效模型', 'Effective model')}><Input aria-label={text('有效模型', 'Effective model')} readOnly value={snapshot.model} /></Form.Item>

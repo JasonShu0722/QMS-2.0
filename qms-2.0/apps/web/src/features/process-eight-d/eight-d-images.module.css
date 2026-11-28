@@ -1,0 +1,8 @@
+.category { display: flex; min-width: 0; }
+.category > .surface { width: 100%; }
+.surface.ok { background: color-mix(in srgb, var(--qms-success) 9%, var(--qms-surface)); }
+.surface.ng { background: color-mix(in srgb, var(--qms-danger) 9%, var(--qms-surface)); }
+.surface h4 { margin: 0; }
+.caption { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.captionButton { display: block; width: 100%; padding: 6px 8px; border: 1px dashed var(--qms-border); border-radius: 6px; background: transparent; color: var(--qms-text); font: inherit; text-align: start; cursor: text; }
+.captionButton:hover, .captionButton:focus-visible { border-color: var(--qms-accent); }

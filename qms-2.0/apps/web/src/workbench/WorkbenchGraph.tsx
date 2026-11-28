@@ -4,6 +4,7 @@ import { GitBranch, Network, RotateCcw, Search } from 'lucide-react';
 import { lazy, Suspense, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ApiError, apiRequest, csrfToken } from '../api/client';
+import { QmsLoading } from '../components/QmsLoading';
 import { sessionSignalVersion } from '../features/auth/session-invalidation';
 import { useLanguage } from '../i18n/Language';
 import { WorkbenchGraphDetail } from './WorkbenchGraphDetail';
@@ -99,7 +100,7 @@ export function WorkbenchGraph({ sessionScope, keepOpen, onSavingChange }: {
     }
   };
 
-  if (!state) return <p role="status">{text('正在加载功能图谱…', 'Loading capability graph…')}</p>;
+  if (!state) return <QmsLoading label={text('正在加载功能图谱…', 'Loading capability graph…')} />;
   if ('error' in state) return <Alert type="error" showIcon title={state.error === 'denied'
     ? text('当前会话无法读取功能图谱', 'This session cannot read the capability graph')
     : text('功能图谱加载失败', 'Could not load the capability graph')}
@@ -265,7 +266,7 @@ function GraphExplorer({ graph, sessionScope, keepOpen, locale, saveStatus, savi
     <div className="qms-workbench-graph__body">
       <div className="qms-workbench-graph__scene">
         <WorkbenchGraphBoundary fallback={sceneFallback}>
-          <Suspense fallback={<p role="status">{text('正在加载三维视图…', 'Loading the 3D view…')}</p>}>
+          <Suspense fallback={<QmsLoading label={text('正在加载三维视图…', 'Loading the 3D view…')} />}>
             <GraphScene graph={graph} selection={selection} depth={depth} resetKey={resetKey}
               relationKind={relationKind || undefined}
               visibleNodeIds={visibility?.visibleNodeIds} visibleRelationIds={visibility?.visibleRelationIds} fallback={sceneFallback}

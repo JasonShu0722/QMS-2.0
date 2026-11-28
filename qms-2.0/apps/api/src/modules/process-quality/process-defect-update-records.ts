@@ -34,7 +34,7 @@ export async function recordProcessDefectUpdate(audit: AuditLogService, tx: Pris
 
 export async function processDefectUpdateRecords(audit: AuditLogService, tx: Prisma.TransactionClient, organizationId: string, resourceId: string) {
   const [events, links] = await Promise.all([
-    audit.recentSuccessfulResourceEvents(tx, { organizationId, action: PROCESS_DEFECT_MANUAL_UPDATE, resourceType: 'ProcessDefect', resourceId }),
+    audit.readSuccessfulResourceEvents(tx, { organizationId, action: PROCESS_DEFECT_MANUAL_UPDATE, resourceType: 'ProcessDefect', resourceId }, updateRecordLimit),
     recentDomainSourceLinkChanges(tx, { organizationId, sourceDomain: 'process-quality', sourceType: 'process-defect', sourceId: resourceId }, updateRecordLimit),
   ]);
   const records = events.flatMap(event => {

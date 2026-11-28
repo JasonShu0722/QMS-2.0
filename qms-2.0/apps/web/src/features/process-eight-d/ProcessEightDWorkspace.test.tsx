@@ -115,7 +115,7 @@ it('groups process header actions by node and keeps the responsibility summary s
   expect(header.getByRole('button', { name: '刷新工作区' })).toBeVisible();
   expect(header.getByRole('button', { name: '流程日志' })).toBeVisible();
   const actions = within(header.getByRole('group', { name: '办理操作' }));
-  expect(actions.getAllByRole('button').map(button => button.textContent)).toEqual(['确认分析完成并设置正式提交期限', '保存草稿', '更多']);
+  expect(actions.getAllByRole('button').map(button => button.textContent)).toEqual(['确认分析完成', '保存草稿', '更多']);
   const summary = await openPlans();
   expect(summary.getByText('原因分析')).toBeVisible();
   expect(summary.getByText('工艺负责人')).toBeVisible();
@@ -130,7 +130,7 @@ it('groups process header actions by node and keeps the responsibility summary s
   const menu = within(await screen.findByRole('menu'));
   expect(menu.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['专业重派 / 科室内转派', '调整风险', '调整来源', '设置期限', '申请延期']);
   fireEvent.change(description, { target: { value: '未保存的说明' } });
-  expect(actions.getByRole('button', { name: '确认分析完成并设置正式提交期限' })).toBeDisabled();
+  expect(actions.getByRole('button', { name: '确认分析完成' })).toBeDisabled();
   expect(actions.getByRole('button', { name: '保存草稿' })).toBeEnabled();
   expect(menu.getByRole('menuitem', { name: '调整风险' })).toHaveAttribute('aria-disabled', 'true');
   fireEvent.click(menu.getByRole('menuitem', { name: '调整风险' }));
@@ -161,25 +161,30 @@ it('shows the process record with time, person and content without requesting au
   expect(fetcher.mock.calls.some(([path]) => String(path).includes('/audit-trail'))).toBe(false);
 });
 
-it('keeps the process draft and flow records when optional round history is denied', async () => {
-  intercept(path => path.endsWith('/rounds') ? response({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }, 403)
-    : path.includes('/flow-records?') ? response([{ occurredAt: '2026-11-26T02:00:00.000Z', person: '系统', content: '管理审核已记录' }]) : undefined);
+it('keeps the process draft when retrying a failed flow log request', async () => {
+  let failFlowLog = true;
+  intercept(path => {
+    if (!path.includes('/flow-records?')) return undefined;
+    return failFlowLog ? response({ message: 'unavailable' }, 500)
+      : response([{ occurredAt: '2026-11-26T02:00:00.000Z', person: '系统', content: '管理审核已记录' }]);
+  });
   mount();
   fireEvent.change(await screen.findByDisplayValue('真实过程问题'), { target: { value: '制程未保存正文' } });
   fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
-  await waitFor(() => expect(screen.getByText('轮次加载失败')).toBeVisible());
-  expect(await screen.findByText('管理审核已记录')).toBeVisible();
+  const dialog = within(await screen.findByRole('dialog', { name: '流程日志' }));
+  await waitFor(() => expect(dialog.getByText('流程记录加载失败')).toBeVisible());
+  expect(screen.getByDisplayValue('制程未保存正文')).toBeInTheDocument();
+  failFlowLog = false;
+  fireEvent.click(dialog.getByRole('button', { name: /^重\s*试$/ }));
+  expect(await dialog.findByText('管理审核已记录')).toBeVisible();
   expect(screen.getByDisplayValue('制程未保存正文')).toBeInTheDocument();
 });
 
-it('clears the process draft when optional history denial reveals loss of workspace access', async () => {
-  let denyWorkspace = false;
-  const denied = () => response({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }, 403);
-  intercept(path => path.endsWith('/rounds') || denyWorkspace && path.includes('/eight-d/problem-1?') ? denied()
-    : path.includes('/flow-records?') ? response([]) : undefined);
+it('clears the process draft when workspace access is revoked while loading the flow log', async () => {
+  intercept(path => path.includes('/flow-records?')
+    ? response({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }, 403) : undefined);
   mount();
   fireEvent.change(await screen.findByDisplayValue('真实过程问题'), { target: { value: '制程未保存正文' } });
-  denyWorkspace = true;
   fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
   await screen.findByText(/当前会话失效或无权访问/);
   expect(screen.queryByDisplayValue('制程未保存正文')).not.toBeInTheDocument();
@@ -456,6 +461,8 @@ it('uses exact source preview sets and the opaque token, with explicit non-recur
   intercept(path => path.includes('/defects?') ? response({ items: [defect], total: 1, page: 1, pageSize: 20 }) : path.endsWith('/sources/preview') ? response([{ defectId: defect.id, relatedProblems: [{ problemId: 'related-1', reportNumber: '8D-OLD', title: '关联问题', status: 'CLOSED', primary: true }], hasHiddenRelations: true, relatedSetToken: 'opaque-proof-v6' }]) : undefined);
   mount(); await screen.findByDisplayValue('真实过程问题'); await chooseMore('调整来源');
   const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('搜索来源台账'), { target: { value: '划伤' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '搜索' }));
   fireEvent.click(await within(dialog).findByRole('checkbox', { name: /台账真实划伤/ }));
   fireEvent.click(within(dialog).getByRole('button', { name: '预览并核对来源关联' }));
   fireEvent.change(await within(dialog).findByLabelText('复发关联结论'), { target: { value: 'NOT_RECURRENCE' } });
@@ -471,7 +478,10 @@ it('appends closed sources without sending a forbidden primary-source rewrite', 
   current.sources = [{ defectId: 'old-defect', sourceVersion: 2, primary: true, snapshot: { description: '既有来源' } }];
   intercept(path => path.includes('/defects?') ? response({ items: [defect], total: 1, page: 1, pageSize: 20 }) : path.endsWith('/sources/preview') ? response([{ defectId: defect.id, relatedProblems: [], hasHiddenRelations: false, relatedSetToken: 'opaque-no-relations' }]) : undefined);
   mount(); await screen.findByDisplayValue('真实过程问题'); await chooseMore('调整来源');
-  const dialog = await screen.findByRole('dialog'); fireEvent.click(await within(dialog).findByRole('checkbox', { name: /台账真实划伤/ }));
+  const dialog = await screen.findByRole('dialog');
+  fireEvent.change(within(dialog).getByLabelText('搜索来源台账'), { target: { value: '划伤' } });
+  fireEvent.click(within(dialog).getByRole('button', { name: '搜索' }));
+  fireEvent.click(await within(dialog).findByRole('checkbox', { name: /台账真实划伤/ }));
   fireEvent.click(within(dialog).getByRole('button', { name: '预览并核对来源关联' }));
   await within(dialog).findByText('未发现其他关联');
   fireEvent.change(within(dialog).getByLabelText('变更 / 申请理由'), { target: { value: '闭后补充证据来源' } });
@@ -581,7 +591,7 @@ it('locates analysis field errors while preserving the explicitly entered submis
   const error: components['schemas']['ErrorResponse'] = { code: 'VALIDATION_FAILED', message: 'incomplete', fields: { occurrenceCause: ['请核对发生因'] }, traceId: 'trace-2' };
   intercept((path, init) => path.endsWith('/analysis-complete') && init.method === 'POST' ? response(error, 400) : undefined);
   mount(); await screen.findByDisplayValue('真实过程问题');
-  fireEvent.click(actions().getByRole('button', { name: '确认分析完成并设置正式提交期限' }));
+  fireEvent.click(actions().getByRole('button', { name: '确认分析完成' }));
   let dialog = await screen.findByRole('dialog');
   fireEvent.change(within(dialog).getByLabelText('正式提交期限'), { target: { value: '2026-11-03T09:30' } });
   fireEvent.click(within(dialog).getByRole('button', { name: '确认提交' }));
@@ -650,10 +660,10 @@ it('loads the standard attachment panel when the analysis chapter is first selec
   expect(fetcher.mock.calls.some(([url]) => url === '/api/v1/files/file-1')).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: /^D4 ·/ }));
   const evidence = analysisPanel();
-  expect(await evidence.findByRole('button', { name: 'analysis.png' })).toBeVisible();
+  expect(await evidence.findByRole('button', { name: '预览附件 analysis.png' })).toBeVisible();
 });
 
-it('shows both parallel duties and prior returned rounds with business names and without versions or UUIDs', async () => {
+it('shows approval decisions in the process log without a separate rounds section', async () => {
   current.status = 'IN_REVIEW';
   current.allowedActions = ['read'];
   const professionalId = '92769cde-bfd8-4e35-8f05-f2a9684ffcd9';
@@ -662,15 +672,15 @@ it('shows both parallel duties and prior returned rounds with business names and
     { id: 'duty-p', duty: 'PROFESSIONAL', status: 'APPROVED', userId: professionalId, userDisplayName: '专业审核员', decidedBy: professionalId, comment: '专业侧核实有效', decidedAt: '2026-10-25T10:00:00Z', version: 2 },
     { id: 'duty-m', duty: 'SECTION_MANAGER', status: 'CANCELLED', userId: managerId, decidedBy: managerId, comment: '请补充验证时长', decidedAt: '2026-10-25T10:00:00Z', version: 2 },
   ] };
-  intercept(path => path.includes('/rounds') ? response([round]) : undefined);
+  intercept(path => path.includes('/flow-records?') ? response(round.duties.map(duty => ({ occurredAt: duty.decidedAt, person: duty.userDisplayName, content: duty.comment }))) : undefined);
   mount(); await screen.findByDisplayValue('真实过程问题');
   expect(screen.queryByRole('region', { name: '并行审核与轮次历史' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
-  const history = within(await screen.findByRole('region', { name: '并行审核与轮次历史' }));
+  const history = within(await screen.findByRole('table', { name: '流程记录' }));
   await waitFor(() => expect(history.getByText('专业侧核实有效')).toBeVisible());
   expect(history.getByText('专业审核员', { exact: false })).toBeVisible();
   expect(history.getByText('请补充验证时长')).toBeVisible();
-  expect(history.getByText('已退回')).toBeVisible();
+  expect(screen.queryByRole('region', { name: '并行审核与轮次历史' })).not.toBeInTheDocument();
   expect(history.queryByText(/固定内容版本|轮次版本/)).not.toBeInTheDocument();
   expect(history.queryByText(professionalId, { exact: false })).not.toBeInTheDocument();
   expect(history.queryByText(managerId, { exact: false })).not.toBeInTheDocument();
@@ -705,7 +715,7 @@ it('previews only actually clean available image evidence through an authorized 
   mount(); await screen.findByDisplayValue('真实过程问题');
   fireEvent.click(screen.getByRole('button', { name: /^D4 ·/ }));
   const evidence = analysisPanel();
-  fireEvent.click(await evidence.findByRole('button', { name: 'analysis.png' }));
+  fireEvent.click(await evidence.findByRole('button', { name: '预览附件 analysis.png' }));
   expect(await screen.findByAltText('analysis.png')).toHaveAttribute('src', 'blob:verified-image');
   expect(fetcher).toHaveBeenCalledWith('/api/v1/files/file-1/download', expect.objectContaining({ method: 'POST', credentials: 'include', headers: expect.objectContaining({ 'x-csrf-token': 'csrf' }) }));
 });
@@ -717,7 +727,7 @@ it('does not preview quarantined evidence or fabricate CLEAN from an id', async 
   fireEvent.click(within(screen.getByLabelText('8D 内容分区')).getByRole('button', { name: /^D4 ·/ }));
   const evidence = analysisPanel();
   await evidence.findByText('扫描暂不可用，附件仍隔离');
-  expect(evidence.queryByRole('button', { name: 'analysis.png' })).not.toBeInTheDocument();
+  expect(evidence.queryByRole('button', { name: '预览附件 analysis.png' })).not.toBeInTheDocument();
   expect(screen.queryByAltText('analysis.png')).not.toBeInTheDocument();
 });
 
@@ -734,13 +744,13 @@ it('merges caller preview cancellation with the workspace lifetime AbortSignal',
   mount(); await screen.findByDisplayValue('真实过程问题');
   fireEvent.click(screen.getByRole('button', { name: /^D4 ·/ }));
   const evidence = analysisPanel();
-  fireEvent.click(await evidence.findByRole('button', { name: 'analysis.png' }));
+  fireEvent.click(await evidence.findByRole('button', { name: '预览附件 analysis.png' }));
   await waitFor(() => expect(signals).toHaveLength(1));
   const preview = await screen.findByRole('dialog', { name: 'analysis.png' });
   fireEvent.click(within(preview).getByRole('button', { name: '关闭' }));
   expect(signals[0].aborted).toBe(true);
   await waitFor(() => expect(preview).not.toBeVisible());
-  fireEvent.click(await evidence.findByRole('button', { name: 'analysis.png' }));
+  fireEvent.click(await evidence.findByRole('button', { name: '预览附件 analysis.png' }));
   await waitFor(() => expect(signals).toHaveLength(2));
   act(() => useWorkTabsStore.getState().bindSession('INTERNAL:other:org-2'));
   expect(signals[1].aborted).toBe(true);
@@ -986,7 +996,7 @@ it('ignores late extension eligibility after the session scope changes', async (
 
 it('posts analysis completion with an explicitly chosen complete-submission plan', async () => {
   current.allowedActions = ['read', 'save', 'analysis-complete'];
-  mount(); await screen.findByDisplayValue('真实过程问题'); fireEvent.click(actions().getByRole('button', { name: '确认分析完成并设置正式提交期限' }));
+  mount(); await screen.findByDisplayValue('真实过程问题'); fireEvent.click(actions().getByRole('button', { name: '确认分析完成' }));
   const dialog = await screen.findByRole('dialog');
   fireEvent.change(within(dialog).getByLabelText('正式提交期限'), { target: { value: '2026-11-03T09:30' } });
   fireEvent.click(within(dialog).getByRole('button', { name: '确认提交' })); await waitFor(() => expect(writes).toHaveLength(1));
@@ -998,7 +1008,7 @@ it('opens the existing closure inbox and never submits review decisions through 
   intercept(path => path.includes('/tasks/closure?') || path.includes('/notifications/closure?') ? response({ items: [], total: 0 }) : undefined);
   mount(); await screen.findByDisplayValue('真实过程问题');
   fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
-  const history = within(await screen.findByRole('region', { name: '并行审核与轮次历史' }));
+  const history = within(await screen.findByRole('dialog', { name: '流程日志' }));
   fireEvent.click(history.getByRole('button', { name: '打开关闭职责待办' }));
   const inbox = within(await screen.findByRole('dialog', { name: '关闭职责待办' }));
   await inbox.findByText('暂无关闭职责待办');
@@ -1012,6 +1022,8 @@ it('invalidates a source preview after explicit conflict-baseline refresh', asyn
   intercept(path => path.includes('/defects?') ? response({ items: [defect], total: 1, page: 1, pageSize: 20 }) : path.endsWith('/sources/preview') ? response([{ defectId: defect.id, relatedProblems: [], hasHiddenRelations: false, relatedSetToken: 'opaque-before-conflict' }]) : undefined);
   mount(); await screen.findByDisplayValue('真实过程问题'); await chooseMore('调整来源');
   const dialog = within((await screen.findByText('8D-001 · 调整来源')).closest('[role="dialog"]')!);
+  fireEvent.change(dialog.getByLabelText('搜索来源台账'), { target: { value: '划伤' } });
+  fireEvent.click(dialog.getByRole('button', { name: '搜索' }));
   fireEvent.click(await dialog.findByLabelText(/台账真实划伤/));
   fireEvent.click(dialog.getByRole('button', { name: '预览并核对来源关联' }));
   await dialog.findByText('未发现其他关联');
@@ -1021,7 +1033,7 @@ it('invalidates a source preview after explicit conflict-baseline refresh', asyn
   await waitFor(() => expect(writes).toHaveLength(1));
   current.version = 12;
   fireEvent.click(await dialog.findByRole('button', { name: '刷新基线并保留草稿' }));
-  expect(await dialog.findByText(/记录版本.*12/)).toBeVisible();
+  expect(dialog.queryByText(/记录版本/)).not.toBeInTheDocument();
   await waitFor(() => {
     expect(dialog.queryByText('未发现其他关联')).not.toBeInTheDocument();
     expect(submit).toBeInTheDocument();

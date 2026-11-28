@@ -467,7 +467,9 @@ describe('account center', () => {
     let reject!: (error: unknown) => void;
     api.getAccountSessionHistory.mockReturnValueOnce(new Promise((_, fail) => { reject = fail; }));
     render(<MemoryRouter><AccountCenterPage /></MemoryRouter>);
-    expect(screen.getByLabelText('正在加载登录会话')).toBeVisible();
+    const loadingStatus = screen.getByRole('status');
+    expect(loadingStatus).toHaveTextContent('正在加载登录会话');
+    expect(loadingStatus.closest('[aria-busy="true"]')).toBeNull();
     expect(screen.queryByText('暂无会话')).not.toBeInTheDocument();
     await act(async () => reject(new Error('private')));
     const sessions = within(screen.getByRole('region', { name: '登录会话' }));

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Alert, Button, Card, Descriptions, Space, Tag, Typography } from 'antd';
 import { getAccountOverview, getAccountProfile } from '../../api/client';
+import { QmsLoading } from '../../components/QmsLoading';
 import { GovernanceFeedback } from '../governance/GovernanceFeedback';
 import { useLanguage } from '../../i18n/Language';
 import type { AccountProfile, components } from '@qms/contracts';
@@ -89,7 +90,7 @@ function AccountCenterContent() {
         <section className="qms-account-identity" aria-label={t('身份资料')}>
           <div className="qms-account-identity-header"><div className="qms-account-avatar-heading"><AccountAvatar profile={profile} size={76} /><div><Typography.Text strong>{profile.fullName || profile.username}</Typography.Text>{profile.fullName && <p>{profile.username}</p>}<p>{profile.organization.name} · {t(profile.accountType === 'INTERNAL' ? '内部账号' : '供应商账号')}</p></div></div><Button ref={settingsTrigger} onClick={() => setSettingsOpen(true)}>{t('个人信息设置')}</Button></div>
           <Descriptions size="small" column={1} items={[{ key: 'name', label: t('姓名'), children: profile.fullName || t('未填写') }, { key: 'phone', label: t('电话'), children: profile.phone || t('未填写') }]} />
-          {overview ? overview.assignments.length ? <details open={overview.assignments.length <= 2}><summary>{t('当前任职')}</summary>{overview.assignments.map(item => <p key={item.id}>{item.department?.name ?? t('组织直属')} · {item.position.name}</p>)}</details> : <p>{t('暂无当前任职')}</p> : overviewError ? <Alert type="error" title={t('任职与授权加载失败')} action={<Button onClick={() => void loadOverview()}>{t('重试')}</Button>} /> : <p role="status">{t('正在加载任职与授权')}</p>}
+          {overview ? overview.assignments.length ? <details open={overview.assignments.length <= 2}><summary>{t('当前任职')}</summary>{overview.assignments.map(item => <p key={item.id}>{item.department?.name ?? t('组织直属')} · {item.position.name}</p>)}</details> : <p>{t('暂无当前任职')}</p> : overviewError ? <Alert type="error" title={t('任职与授权加载失败')} action={<Button onClick={() => void loadOverview()}>{t('重试')}</Button>} /> : <QmsLoading label={t('正在加载任职与授权')} />}
         </section>
         <section className="qms-account-security-summary" aria-label={t('账号与授权')}>
           <Descriptions size="small" column={1} items={[

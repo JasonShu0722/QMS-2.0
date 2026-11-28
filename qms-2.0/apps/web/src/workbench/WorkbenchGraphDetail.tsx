@@ -4,6 +4,7 @@ import { ArrowRight, ExternalLink, X } from 'lucide-react';
 import { useEffect, useState, type ReactNode, type Ref } from 'react';
 import { Link } from 'react-router-dom';
 import { ApiError, apiRequest } from '../api/client';
+import { QmsLoading } from '../components/QmsLoading';
 import { getConsoleContext } from '../console/console-api';
 import { consoleRoute } from '../console/console-navigation';
 import { subscribeSessionSignals } from '../features/auth/session-invalidation';
@@ -49,12 +50,13 @@ function GraphEntry({ node, sessionScope, text }: { node: GraphNode; sessionScop
 
   const allowed = verifiesAccess ? access === 'allowed' : isBusiness && !isPlaceholder;
   const explanation = isSupplier ? text('供应商门户入口，须使用供应商账号', 'Supplier portal entry; a supplier account is required')
-    : verifiesAccess && access === 'loading' ? text('正在核验入口权限…', 'Checking entry access…')
     : verifiesAccess && access === 'denied' ? text('当前账号无此入口权限', 'Your account cannot access this entry')
     : verifiesAccess && access === 'unavailable' ? text('暂时无法核验入口权限', 'Entry access could not be verified')
     : text('暂无可打开的入口', 'No entry is available');
   return <div className="qms-workbench-graph__entry">
-    {allowed ? <Link to={entry}>{accessCheckedByDestination ? text('前往业务页', 'Go to business page') : text('打开入口', 'Open entry')} <ExternalLink size={14} aria-hidden="true" /></Link> : <span>{explanation}</span>}
+    {allowed ? <Link to={entry}>{accessCheckedByDestination ? text('前往业务页', 'Go to business page') : text('打开入口', 'Open entry')} <ExternalLink size={14} aria-hidden="true" /></Link>
+      : !isSupplier && verifiesAccess && access === 'loading' ? <QmsLoading label={text('正在核验入口权限…', 'Checking entry access…')} />
+      : <span>{explanation}</span>}
   </div>;
 }
 

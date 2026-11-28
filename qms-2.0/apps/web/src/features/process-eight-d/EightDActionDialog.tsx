@@ -47,7 +47,7 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
     if (value) onDirty();
   }, [sourceBaseline, onDirty]);
   const titles: Record<EightDAction, string> = {
-    submit: text('完整提交', 'Submit complete report'), 'analysis-complete': text('确认分析完成并设置正式提交期限', 'Confirm analysis and set the final submission deadline'),
+    submit: text('完整提交', 'Submit complete report'), 'analysis-complete': text('确认分析完成', 'Confirm analysis complete'),
     collaborators: text('维护协作者', 'Manage collaborators'), reassign: text('专业重派 / 科室内转派', 'Professional / within-section reassignment'),
     risk: text('调整风险', 'Change risk'), sources: text('调整来源', 'Change sources'), deadlines: text('设置期限', 'Set deadlines'), extension: text('申请延期', 'Request extension'),
   };
@@ -94,7 +94,6 @@ export function EightDActionDialog({ action, report, read, write, frozen, busy, 
   return <Modal open={open} afterClose={afterClose} focusable={{ focusTriggerAfterClose: open }} title={`${report.reportNumber} · ${titles[action]}`} onCancel={() => { if (!disabled) onClose(); }} footer={null} closable={!disabled} mask={{ closable: false }} keyboard={!disabled} width={720}>
     <form style={css} className={styles.modal} onChange={onDirty} onSubmit={event => { event.preventDefault(); if (valid && validAction) void submit(); }}>
       {recovery}
-      <p>{text('固定内容版本', 'Fixed content version')} {report.contentVersion} · {text('记录版本', 'Row version')} {report.version}</p>
       {action === 'submit' && <Alert type="info" title={text('提交后锁定正文，进入关闭审核。', 'Submission locks the content and starts closure review.')} />}
       {action === 'analysis-complete' && <>{datetime(text('正式提交期限', 'Final submission deadline'), submissionDueAt, setSubmissionDueAt, true)}<p>{text('这是整份 8D 报告的提交期限。正式提交前须完成对策实施及验证。', 'This deadline applies to the full 8D report. Implement and verify corrective actions before final submission.')}</p></>}
       {(action === 'collaborators' || action === 'reassign') && <EightDAssignmentPicker report={report} domain={domain} read={read} collaborators={action === 'collaborators'} disabled={disabled} section={section} onSection={value => { onDirty(); setSection(value); }} selected={selected} onSelect={value => { onDirty(); setSelected(value); }} />}

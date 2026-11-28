@@ -25,9 +25,9 @@
 .problem-center__query { padding: var(--qms-card-padding); }
 .problem-center__query > summary { cursor: pointer; font-weight: 600; margin-block-end: var(--qms-section-gap); }
 .problem-center .ant-alert + .ant-alert { margin-top: var(--qms-section-gap); }
-.problem-center__popup .ant-space-compact { max-width: 100%; }
-.problem-center__popup .problem-center__view-row label { min-width: min(220px, 100%); }
-.problem-center__popup .problem-center__filters { grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); }
+.problem-center__sort-fields { display: flex; flex-wrap: wrap; gap: 8px; }
+.problem-center__sort-fields label { display: grid; gap: 4px; min-width: 0; }
+.problem-center__sort-fields select { max-width: 100%; }
 .problem-center__popup-filter-rows { max-height: min(28dvh, 270px); overflow: auto; padding: 3px; margin: -3px; }
 @media (max-width: 760px) {
   .problem-center__heading { align-items: stretch; flex-direction: column; gap: var(--qms-section-gap); }

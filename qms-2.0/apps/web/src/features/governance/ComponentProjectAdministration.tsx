@@ -5,6 +5,7 @@ import { CircleAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, createAdminMutation } from '../../api/client';
+import { QmsLoading } from '../../components/QmsLoading';
 import { useLanguage } from '../../i18n/Language';
 import { useCompletedSessionNavigation, useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
@@ -161,7 +162,7 @@ function EngineerPicker({ organizationId, id, value, onChange, disabled, onReady
       options={[
         ...choices.map(item => ({ value: item.assignmentId!, label: assignmentLabel(item, t), disabled: !item.valid })),
         ...(value && !choices.some(item => item.assignmentId === value) ? [{ value, label: t('已选任职待确认'), disabled: true }] : []),
-      ]} notFoundContent={loading ? t('加载中') : error ? t('加载失败') : t('无匹配结果')} />
+      ]} notFoundContent={loading ? <QmsLoading label={t('加载中')} /> : error ? t('加载失败') : t('无匹配结果')} />
     {value && <Button disabled={disabled} aria-label={`${t('清空')}${label}`} onClick={() => change(null)}>{t('清空')}</Button>}
     {invalid && <Typography.Text type="warning">{t('已选任职失效，请重新选择或清空')} <Tooltip trigger={['hover', 'focus', 'click']} title={t('已选任职失效，请重新选择或清空')}><Button type="text" size="small" aria-label={t('已选任职失效，请重新选择或清空')} icon={<CircleAlert size={16} aria-hidden="true" />} /></Tooltip></Typography.Text>}
     <GovernanceFeedback error={error} retry={disabled ? undefined : () => setRevision(next => next + 1)} />
@@ -227,7 +228,7 @@ function ProjectPicker({ organizationId, id, value, onChange, disabled, onReady,
         ...(onUseCode && typedCode ? [{ value: useTypedProjectCode, label: t('使用项目编码 {code}').replace('{code}', () => typedCode) }] : []),
         ...choices.map(item => ({ value: item.id, label: projectLabel(item, t), disabled: !includeDisabled && item.status !== 'ACTIVE' })),
         ...(value && !choices.some(item => item.id === value) ? [{ value, label: t('已选项目待确认'), disabled: true }] : []),
-      ]} notFoundContent={loading ? t('加载中') : error ? t('加载失败') : t('无匹配结果')} />
+      ]} notFoundContent={loading ? <QmsLoading label={t('加载中')} /> : error ? t('加载失败') : t('无匹配结果')} />
     {!!selectedError && <Typography.Text type="warning">{t('已选项目不可用，请重试或重新选择')}</Typography.Text>}
     {!includeDisabled && !selectedError && selected && selected.id === value && selected.status !== 'ACTIVE' && <Typography.Text type="warning">{t('项目已停用，请重新选择')}</Typography.Text>}
     <GovernanceFeedback error={selectedError || error} retry={disabled ? undefined : () => setRevision(next => next + 1)} />

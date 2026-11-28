@@ -1,4 +1,5 @@
-import { Alert, Button, Drawer, Dropdown, Skeleton } from 'antd';
+import { Alert, Button, Drawer, Dropdown } from 'antd';
+import { QmsLoadingMark } from '../components/QmsLoading';
 import { ChevronDown, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck } from 'lucide-react';
 import { createContext, useCallback, useContext, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -163,7 +164,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
     </nav>;
 
   const verification = value?.error ? <div className="qms-console-state"><Alert type="error" showIcon title={value.error === 'denied' ? text('管理访问已失效或无权限', 'Management access expired or denied') : text('无法验证管理权限，请重试', 'Unable to verify management access. Retry.')} /><Button aria-label={text('重试', 'Retry')} onClick={refresh}>{text('重试', 'Retry')}</Button></div>
-    : <div className="qms-console-state" role="status" aria-label={text('验证管理权限中', 'Verifying management access')}><Skeleton active /></div>;
+    : <div className="qms-console-state" role="status" aria-label={text('验证管理权限中', 'Verifying management access')}><QmsLoadingMark /></div>;
   return <>
     <SessionVerificationGate open={blocked} onUnavailable={discardPreserved}>{verification}</SessionVerificationGate>
     <div className={`qms-console-layout${collapsed ? ' qms-console-collapsed' : ''}`}>
@@ -188,7 +189,7 @@ function ConsoleShell({ children }: { children?: ReactNode }) {
       </header>
       <main id="qms-console-content" className="qms-console-content" tabIndex={-1}>
         {!sessionScope || value?.error && !context ? <div className="qms-console-state"><Alert type="error" showIcon title={!sessionScope || value?.error === 'denied' ? text('管理访问已失效或无权限', 'Management access expired or denied') : text('无法验证管理权限，请重试', 'Unable to verify management access. Retry.')} /><Button aria-label={text('重试', 'Retry')} onClick={refresh}>{text('重试', 'Retry')}</Button></div>
-          : !context ? <div className="qms-console-state" role="status" aria-label={text('验证管理权限中', 'Verifying management access')}><Skeleton active /></div>
+          : !context ? <div className="qms-console-state" role="status" aria-label={text('验证管理权限中', 'Verifying management access')}><QmsLoadingMark /></div>
             : <>
               {resumeError === scope && <Alert className="qms-session-resume-error qms-console-resume-error" role="alert" type="warning" showIcon title={text('无法验证管理权限，请重试', 'Unable to verify management access. Retry.')} action={<Button aria-label={text('重试', 'Retry')} onClick={() => verify(true)}>{text('重试', 'Retry')}</Button>} />}
               <h1 ref={heading} className="sr-only" tabIndex={-1}>{route?.item ? label(route.item) : text('管理页面', 'Management page')}</h1>
