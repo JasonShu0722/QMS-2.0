@@ -2,13 +2,6 @@ import 'reflect-metadata';
 import { jest } from '@jest/globals';
 import { HttpException } from '@nestjs/common';
 
-// Keep this projection-only suite independent of the concurrently edited document/report sources.
-jest.unstable_mockModule('../../src/modules/process-quality/process-eight-d-document.js', () => ({
-  analysisCompletionIssues: () => [], documentFileIds: (document: { okFileIds: string[] }) => document.okFileIds,
-  emptyProcessEightDDocument: () => ({}), normalizeProcessEightDDocument: (document: unknown) => document,
-  ProcessEightDDocumentError: class extends Error {}, submissionIssues: () => [], completedD7EvidenceIssues: () => [],
-  completedD7EvidenceRows: () => [],
-}));
 jest.unstable_mockModule('../../src/modules/process-quality/process-eight-d-reminder.service.js', () => ({ ProcessEightDReminderService: class {} }));
 const { ProcessEightDService } = await import('../../src/modules/process-quality/process-eight-d.service.js');
 const { ProcessEightDTaskService } = await import('../../src/modules/process-quality/process-eight-d-task.service.js');
