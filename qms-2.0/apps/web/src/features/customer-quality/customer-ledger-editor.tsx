@@ -2,6 +2,8 @@ import type { components } from '@qms/contracts';
 import { Alert, Button, Input, Modal } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest } from '../../api/client';
+import { QmsLoading } from '../../components/QmsLoading';
+import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ledgerFields, rawText, type LedgerFields } from './customer-ledger-import';
@@ -22,6 +24,7 @@ export function CustomerLedgerEditor({ record, organizationId, candidates, custo
   onDenied: (cause: unknown) => void; onSaved: (record: LedgerItem) => void; onClose: () => void;
   refreshDetail: () => Promise<LedgerDetail | undefined>;
 }) {
+  const { locale } = useLanguage();
   const [fields, setFields] = useState<LedgerFields>({ ...record?.raw });
   const [baseline, setBaseline] = useState(record);
   const [assignment, setAssignment] = useState<string | undefined>();
@@ -110,7 +113,7 @@ export function CustomerLedgerEditor({ record, organizationId, candidates, custo
   }
   return <Modal open title={title} width={820} onCancel={close} keyboard={!writer.busy} mask={{ closable: !writer.busy }} closable={!writer.busy} footer={<div className="qms-dialog-actions"><Button onClick={close} disabled={writer.busy || refreshing}>取消</Button><Button aria-label={record ? '保存台账' : '登记'} type="primary" loading={writer.busy} disabled={refreshing || conflictPending || sourcePending || candidatesPending || assignmentInvalid || !!record && version === undefined} onClick={() => void save()}>{writer.uncertain ? '核对并重试原请求' : record ? '保存台账' : '登记'}</Button></div>}>
     <LedgerError cause={error} />
-    {scopedCandidatesRequired && currentCandidates?.status === 'error' ? <><LedgerError cause={currentCandidates.error} /><Button onClick={() => setCandidateRetry(value => value + 1)}>重试组件候选人员</Button></> : candidatesPending ? <Alert type="info" showIcon title="正在读取组件候选人员，请稍候；原草稿保留。" /> : null}
+    {scopedCandidatesRequired && currentCandidates?.status === 'error' ? <><LedgerError cause={currentCandidates.error} /><Button onClick={() => setCandidateRetry(value => value + 1)}>重试组件候选人员</Button></> : candidatesPending ? <QmsLoading label={locale === 'en-US' ? 'Loading component candidates. Your draft is preserved.' : '正在读取组件候选人员，原草稿保留。'} /> : null}
     {assignmentInvalid && !candidatesPending ? <Alert type="warning" showIcon title="草稿选择不在当前候选人员中，请重新选择或保留映射分配；原草稿未清除。" /> : null}
     {conflict ? <Alert type="warning" showIcon title="已刷新服务器版本，草稿保留；请核对变更后再次保存。" /> : null}
     <LedgerConflicts conflicts={conflicts} confirmed={confirmed} onConfirm={setConfirmed} disabled={writer.busy || writer.uncertain || refreshing} />

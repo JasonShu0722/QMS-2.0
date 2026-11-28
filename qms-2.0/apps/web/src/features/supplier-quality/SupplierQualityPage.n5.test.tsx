@@ -40,6 +40,18 @@ it('mounts the complete issued workspace and never the legacy response/history a
   expect(screen.queryByText('legacy response history')).not.toBeInTheDocument();
 });
 
+it.each([false, true])('keeps the issued workspace visible during detail refresh and clears it on refusal (portal %s)', async portal => {
+  scene(fixture(), portal);
+  const workspace = await screen.findByText(/完整供应商工作区/);
+  let finishRefresh: (response: Response) => void = () => {};
+  vi.mocked(fetch).mockImplementationOnce(() => new Promise(resolve => { finishRefresh = resolve; }));
+  fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+  expect(screen.getByText(/完整供应商工作区/)).toBe(workspace);
+  finishRefresh(new Response(JSON.stringify({ code: 'HTTP_403', message: 'denied' }), { status: 403, headers: { 'content-type': 'application/json' } }));
+  await waitFor(() => expect(workspace).not.toBeInTheDocument());
+  expect(screen.queryByText('供应商测试机密标题')).not.toBeInTheDocument();
+});
+
 it('keeps a controlled draft on facts plus the new issue path rather than the legacy issue button', async () => {
   scene(fixture({ stage: 'DRAFT', canEditFacts: true }));
   expect(await screen.findByText('完整8D新发单入口')).toBeVisible();

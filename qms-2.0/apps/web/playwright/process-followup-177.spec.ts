@@ -54,7 +54,7 @@ test('#177: anchored follow-up filters, names, overdue organization scope and de
   });
 
   const toolbarFilter = page.getByRole('button', { name: '筛选条件', exact: true });
-  const stageFilter = page.getByRole('button', { name: '按当前环节筛选', exact: true });
+  const stageFilter = page.getByRole('button', { name: '按跟进状态筛选', exact: true });
   const filter = page.getByRole('dialog', { name: '筛选面板', exact: true });
   const field = (index: number) => filter.getByLabel(`筛选字段 ${index}`, { exact: true });
   const value = (index: number) => filter.getByLabel(`筛选值 ${index}`, { exact: true });
@@ -76,6 +76,9 @@ test('#177: anchored follow-up filters, names, overdue organization scope and de
     expect.soft(popup.y - (anchor.y + anchor.height)).toBeLessThan(28);
     expect.soft(Math.abs((await homeReport.boundingBox())!.y - original.y)).toBeLessThanOrEqual(2);
     await expect(filter.getByLabel('搜索报告编号或问题标题', { exact: true })).toHaveCount(0);
+    await expect(filter.getByLabel('组织上下文', { exact: true })).toHaveCount(0);
+    await expect(filter.getByLabel('保存视图', { exact: true })).toHaveCount(0);
+    await expect(filter.getByLabel('排序字段', { exact: true })).toHaveCount(0);
     await add();
     await expect(field(1)).toHaveValue('stage');
     await stage.selectOption('ANALYSIS');
@@ -89,9 +92,8 @@ test('#177: anchored follow-up filters, names, overdue organization scope and de
   });
 
   await test.step('Use the real organization and overdue filters', async () => {
-    await filter.getByLabel('组织上下文', { exact: true }).fill(fixture.targetId);
     const switched = followupResponse(page, query => query.get('organizationId') === fixture.targetId);
-    await filter.getByRole('button', { name: '切换组织', exact: true }).click();
+    await page.goto(`${path}?organizationId=${fixture.targetId}`);
     expect((await switched).status()).toBe(200);
     await expect(oldReport).toBeVisible();
     await expect(futureReport).toBeVisible();
@@ -113,7 +115,7 @@ test('#177: anchored follow-up filters, names, overdue organization scope and de
     await oldReport.click();
     await expect(page).toHaveURL(/\/app\/problem-workspace\//);
     expect((await workspace).status()).toBe(200);
-    await page.getByRole('link', { name: '返回制程问题跟进', exact: true }).click();
+    await page.goBack();
     await expect(page).toHaveURL(new RegExp(`/app/process-quality/problems\\?organizationId=${fixture.targetId}$`));
     await expect(oldReport).toBeVisible();
     await expect(futureReport).toHaveCount(0);
@@ -144,7 +146,7 @@ test('#177: anchored follow-up filters, names, overdue organization scope and de
     await expect(futureReport).toBeVisible();
     await expect(sectionPeer).toHaveCount(0);
 
-    await page.getByRole('button', { name: '按责任科室筛选', exact: true }).click();
+    await page.getByRole('button', { name: '按责任板块筛选', exact: true }).click();
     await expect(field(2)).toBeFocused();
     await expect(field(2)).toHaveValue('responsibleSectionName');
     await expect(value(1)).toHaveValue('liang');
@@ -172,6 +174,16 @@ test('#177: anchored follow-up filters, names, overdue organization scope and de
     const popup = (await filter.boundingBox())!;
     expect(popup.x).toBeGreaterThanOrEqual(0);
     expect(popup.x + popup.width).toBeLessThanOrEqual(800);
+    await page.getByRole('button', { name: '排序', exact: true }).click();
+    const sort = page.getByRole('dialog', { name: '排序', exact: true });
+    await expect(sort.getByLabel('排序字段', { exact: true })).toBeFocused();
+    await expect(filter).toBeHidden();
+    const sorted = followupResponse(page, query => query.get('sortBy') === 'dueAt' && query.get('sortDirection') === 'asc'
+      && query.get('search') === 'A3-FOREIGN-FUTURE' && hasCondition(query, 'responsibleSectionName', 'machining'));
+    await sort.getByLabel('排序字段', { exact: true }).selectOption('dueAt');
+    await sort.getByLabel('排序方向', { exact: true }).selectOption('asc');
+    await sort.getByRole('button', { name: '应用排序' }).click();
+    expect((await sorted).status()).toBe(200);
   });
   console.log(`Chromium ${browser.version()}; real gateway and PostgreSQL, no request interception`);
 });

@@ -1,5 +1,6 @@
 import { ConfigProvider, theme } from 'antd';
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { QmsLoadingMark } from '../components/QmsLoading';
 import { defaultPreferences, parsePreferences, preferenceKey, resolveTokens, type Preferences } from './tokens';
 import './theme.css';
 
@@ -29,7 +30,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [dark, preferences.accent, tokens]);
   useEffect(() => { try { localStorage.setItem(preferenceKey, JSON.stringify(preferences)); } catch { /* Storage may be disabled; the active preference still works. */ } }, [preferences]);
   return <AppearanceContext.Provider value={{ preferences, setPreferences, dark }}>
-    <ConfigProvider theme={{
+    <ConfigProvider spin={{ indicator: <QmsLoadingMark announce /> }} theme={{
       algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
       token: {
         colorPrimary: tokens['accent-action'], colorInfo: tokens['accent-action'], colorSuccess: tokens.success,

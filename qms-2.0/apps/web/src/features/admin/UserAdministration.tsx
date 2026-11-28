@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useLanguage } from '../../i18n/Language';
+import { QmsLoading } from '../../components/QmsLoading';
 import { Alert, Button, Descriptions, Form, Input, Modal, Select, Space, Tabs, Tag, Typography } from 'antd';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
 import type { components } from '@qms/contracts';
@@ -410,7 +411,7 @@ export function UserAdministration({ organization, organizations, targetUserId, 
       <Typography.Title level={4}>{t('目标账号')}</Typography.Title>
       <Descriptions column={1} items={[{ key: 'username', label: t('用户名'), children: target.user.username }, { key: 'name', label: t('姓名'), children: target.user.fullName || t('未填写') }, { key: 'phone', label: t('电话'), children: target.user.phone || t('未填写') }, { key: 'email', label: t('邮箱'), children: target.user.email ?? '—' }, { key: 'type', label: t('账号类型'), children: target.user.accountType === 'INTERNAL' ? t('内部账号') : t('供应商账号') }, { key: 'organization', label: t('主组织'), children: target.user.organization.name }, { key: 'status', label: t('状态'), children: target.user.status === 'ACTIVE' ? t('启用') : t('停用') }]} />
       <Button disabled={busy || mutationUnknown || !!bulk} onClick={() => edit(target.user!)}>{t('管理用户')}</Button>
-    </section> : <Typography.Text role="status">{t('正在加载目标账号')}</Typography.Text>)}
+    </section> : <QmsLoading label={t('正在加载目标账号')} />)}
     {error && !editing && !assignment && !reset && <Alert type="error" title={t(error)} description={errorDescription} showIcon />}
     {success && <Alert type="success" title={t(success)} showIcon />}
     {!canRead && actionBar}

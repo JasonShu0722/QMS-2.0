@@ -42,19 +42,78 @@ it('renders the injected process source summary before D2 description and eviden
   const description = screen.getByLabelText('D2 问题描述');
   expect(screen.queryByText('D2 问题描述')).not.toBeInTheDocument();
   expect(source.compareDocumentPosition(description)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-  expect(source.closest('section')).toContainElement(screen.getByLabelText('OK 图片说明'));
+  expect(source.closest('section')).toContainElement(screen.getByRole('region', { name: 'OK 图片' }));
 });
 
 it('keeps the D6 tracking example in the confirmation input only', () => {
   const changed = mount({});
   chapter('D6');
   const result = screen.getByRole('textbox', { name: '确认结果' });
+  const judgement = screen.getByRole('textbox', { name: '判断' });
+  expect(judgement.tagName).toBe('TEXTAREA');
+  expect(judgement.parentElement?.parentElement).toBe(result.parentElement?.parentElement);
+  expect(result.parentElement?.parentElement).not.toContainElement(screen.getByLabelText('开始日期'));
+  expect(judgement).not.toHaveAttribute('placeholder');
   expect(result).toHaveValue('');
   expect(result).toHaveAttribute('placeholder', expect.stringContaining('三个月'));
   expect(screen.queryByText(/持续监控三个月/)).not.toBeInTheDocument();
   expect(changed).not.toHaveBeenCalled();
   fireEvent.change(result, { target: { value: '跟踪两周，无复发' } });
   expect(result).toHaveValue('跟踪两周，无复发');
+  fireEvent.change(judgement, { target: { value: '通过\n继续跟踪' } });
+  chapter('D5');
+  chapter('D6');
+  expect(screen.getByLabelText('判断')).toHaveValue('通过\n继续跟踪');
+  expect(screen.getByLabelText('确认结果')).toHaveValue('跟踪两周，无复发');
+});
+
+it.each([false, true])('provides independent column resize controls in all eight chapter tables (portal %s)', portal => {
+  const changed = mount({}, { portal });
+  for (const [id, labels] of [
+    ['D1', ['团队建立']], ['D3', ['临时措施', '本次问题围堵', '潜在影响围堵']],
+    ['D5', ['措施计划清单']], ['D6', ['措施实绩清单']], ['D7', ['横向展开', '标准化文件']],
+  ] as const) {
+    chapter(id);
+    if (id === 'D3') fireEvent.click(screen.getByText('潜在影响围堵（可选）'));
+    for (const label of labels) {
+      const table = within(screen.getByRole('region', { name: label }));
+      expect(table.getAllByRole('separator', { name: /^调整列宽/ })).toHaveLength(table.getAllByRole('columnheader').length);
+    }
+  }
+  chapter('D3');
+  const temporary = within(screen.getByRole('region', { name: '临时措施' }));
+  const containmentTable = within(screen.getByRole('region', { name: '本次问题围堵' }));
+  const handle = temporary.getByRole('separator', { name: '调整列宽 措施' });
+  const adjacent = containmentTable.getByRole('separator', { name: '调整列宽 措施' });
+  const original = adjacent.getAttribute('aria-valuenow');
+  fireEvent.keyDown(handle, { key: 'ArrowRight' });
+  expect(Number(handle.getAttribute('aria-valuenow'))).toBeGreaterThan(Number(handle.getAttribute('aria-valuemin')));
+  expect(adjacent.getAttribute('aria-valuenow')).toBe(original);
+  expect(changed).not.toHaveBeenCalled();
+});
+
+it.each([false, true])('places the saved D8 summary before checks (read-only %s)', disabled => {
+  const refresh = vi.fn();
+  const changed = mount({ closureSummary: '已有总结' }, { disabled, onRefreshChecks: refresh });
+  chapter('D8');
+  const summary = screen.getByRole('textbox', { name: '结案总结' });
+  const checks = screen.getByRole('heading', { name: '结案自动检查' });
+  expect(summary).toHaveValue('已有总结');
+  expect(summary.compareDocumentPosition(checks)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  if (disabled) {
+    expect(summary).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'AI 总结' })).not.toBeInTheDocument();
+  } else {
+    const ai = button('AI 总结');
+    expect(ai).toBeDisabled();
+    expect(ai.compareDocumentPosition(checks)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    fireEvent.change(summary, { target: { value: '更新总结' } });
+    expect(changed).toHaveBeenCalledTimes(1);
+  }
+  fireEvent.click(button('重新检查'));
+  expect(refresh).toHaveBeenCalled();
+  fireEvent.click(button('经验教训'));
+  expect(screen.getByRole('region', { name: '经验教训' })).toBeVisible();
 });
 
 it('selects D7 completion without discarding an existing completion note', () => {

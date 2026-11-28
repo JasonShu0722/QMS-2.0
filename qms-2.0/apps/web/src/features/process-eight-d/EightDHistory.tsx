@@ -51,8 +51,6 @@ export function EightDRounds({ problemId, read, revision, blocked, onInboxClosed
   const [rounds, setRounds] = useState<Round[]>();
   const [error, setError] = useState(false);
   const [retry, setRetry] = useState(0);
-  const [inboxOpen, setInboxOpen] = useState(false);
-  const requestLeave = useNavigationGuard();
   useEffect(() => {
     let active = true; setError(false); setRounds(undefined);
     read<Round[]>(roundPath(problemId)).then(value => { if (active) setRounds(value); }).catch(cause => { if (active && !aborted(cause)) setError(true); });
@@ -62,13 +60,22 @@ export function EightDRounds({ problemId, read, revision, blocked, onInboxClosed
   const status = (value: string) => ({ PENDING: text('待处理', 'Pending'), WAITING: text('等待前序', 'Waiting'), APPROVED: text('已通过', 'Approved'), RETURNED: text('已退回', 'Returned'), CANCELLED: text('已取消', 'Cancelled'), SKIPPED_SAME_PERSON: text('同人跳过并留痕', 'Skipped: same person, audited') })[value] ?? value;
   return <section className={styles.section} aria-label={text('并行审核与轮次历史', 'Parallel review and round history')}><h3>{text('并行审核与轮次历史', 'Parallel review and round history')}</h3>
 
-    <Space wrap><Button disabled={blocked} onClick={() => setInboxOpen(true)}>{text('打开关闭职责待办', 'Open closure duty inbox')}</Button><Link to="/app/my-tasks">{text('前往我的待办', 'Go to my tasks')}</Link></Space>
-    {inboxOpen && <Modal open title={text('关闭职责待办', 'Closure duty inbox')} width={1000} footer={null} mask={{ closable: false }} onCancel={() => requestLeave(() => { setInboxOpen(false); setRetry(value => value + 1); onInboxClosed(); }, true)}><ClosureTaskInbox /></Modal>}
+    <EightDClosureInbox blocked={blocked} onClosed={() => { setRetry(value => value + 1); onInboxClosed(); }} />
     {error ? <Alert type="error" title={text('轮次加载失败', 'Round history failed')} action={<Button onClick={() => setRetry(value => value + 1)}>{text('重试', 'Retry')}</Button>} /> : !rounds ? <Spin /> : !rounds.length ? <p>{text('暂无审批轮次', 'No approval rounds')}</p> : rounds.map(round => <article className={styles.row} key={round.id}>
       <h4>{text('轮次', 'Round')} {round.roundNumber} · <Tag>{status(round.status)}</Tag></h4>
       <div className={styles.parallel}>{[true, false].map(professional => <section key={String(professional)} aria-label={professional ? text('专业侧', 'Professional side') : text('管理侧', 'Management side')}><h4>{professional ? text('专业侧', 'Professional side') : text('管理侧', 'Management side')}</h4>{round.duties.filter(item => (item.duty === 'PROFESSIONAL') === professional).map(item => <div key={item.id}><p>{duty(item.duty)} · {status(item.status)} · <span>{item.userDisplayName ?? text('名称未记录', 'Name not recorded')}</span></p><p className={styles.pre}>{item.comment ?? text('暂无意见', 'No comment')}</p>{item.decidedAt && <time dateTime={item.decidedAt}>{item.decidedAt}</time>}</div>)}</section>)}</div>
     </article>)}
   </section>;
+}
+
+export function EightDClosureInbox({ blocked, onClosed }: { blocked: boolean; onClosed: () => void }) {
+  const text = useEightDText();
+  const [open, setOpen] = useState(false);
+  const requestLeave = useNavigationGuard();
+  return <>
+    <Space wrap><Button disabled={blocked} onClick={() => setOpen(true)}>{text('打开关闭职责待办', 'Open closure duty inbox')}</Button><Link to="/app/my-tasks">{text('前往我的待办', 'Go to my tasks')}</Link></Space>
+    {open && <Modal open title={text('关闭职责待办', 'Closure duty inbox')} width={1000} footer={null} mask={{ closable: false }} onCancel={() => requestLeave(() => { setOpen(false); onClosed(); }, true)}><ClosureTaskInbox /></Modal>}
+  </>;
 }
 
 export function EightDHistory({ report, read }: { report: EightDReport; read: EightDRead }) {

@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Form, Input, Space, Spin, Typography } from 'antd';
+import { Alert, Button, Card, Form, Input, Space, Typography } from 'antd';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
+import { QmsLoading } from '../../components/QmsLoading';
 import { authRedirect } from './return-to';
 
 export function RequiredPasswordChangePage() {
@@ -62,7 +63,7 @@ export function RequiredPasswordChangePage() {
     <Typography.Title level={2}>{t('首次登录修改密码')}</Typography.Title>
     <Typography.Paragraph>{t('请设置个人密码，完成前不能访问业务功能。')}</Typography.Paragraph>
     {error && <Alert type="error" showIcon title={t(error)} description={traceId ? <code>{traceId}</code> : undefined} />}
-    {!ready && !error && <Spin />}
+    {!ready && !error && <QmsLoading label={t('加载中')} />}
     {ready && <Form form={form} layout="vertical" onFinish={submit} autoComplete="off" disabled={busy}>
       <Form.Item name="newPassword" label={t('新密码')} rules={[{ required: true }, { min: 12, max: 256, message: t('密码须为 12–256 位') }]}><Input.Password autoComplete="new-password" /></Form.Item>
       <Form.Item name="confirmation" label={t('确认新密码')} dependencies={['newPassword']} rules={[{ required: true }, ({ getFieldValue }) => ({ validator: (_, value) => value === getFieldValue('newPassword') ? Promise.resolve() : Promise.reject(new Error(t('两次密码不一致'))) })]}><Input.Password autoComplete="new-password" /></Form.Item>

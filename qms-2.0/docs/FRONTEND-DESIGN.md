@@ -12,6 +12,8 @@
 
 工作台从左侧排布已打开的工作标签，窄屏由「全部已打开」收纳。问题标题来自当前授权响应，缺少标题时使用报告编号。加载、权限重验期间显示通用名称。实际验收状态见[本轮实施计划](../../docs/superpowers/plans/2026-11-27-qms-eight-d-and-account-optimization.md)。
 
+正式应用的页面及区域使用 `apps/web/src/components/QmsLoading.tsx`，按空间选择 `page`、`region` 或 `inline`，沿用原有双语加载名称。主题提供器统一配置 Ant Design `Spin` 指示器，表格与带遮罩的区域沿用已有加载容器。8D 首屏通过 `EightDWorkspaceLoading` 复用点阵并控制旧工具栏的出现时机。局部刷新沿用区域原有内容和交互保护。系统开启「减少动态效果」时显示静态字形。
+
 ## 多维台账本地化标准（2026-11-18，设计沉淀）
 
 本标准将 Teable、APITable、NocoDB、VisActor/VTable 及 pxcharts 提供的公开交互思路，转化为 QMS 可复用的台账实现规则。参考项目只用于观察工具栏、筛选条件、表头快捷入口、视图状态和大数据表格的产品交互；不复制其业务代码、CSS、图标、品牌资源或完整运行时，不把 AGPL/GPL 或其他非 permissive 许可项目作为 QMS 运行依赖。MIT 项目也必须先证明当前性能问题确实需要，才能进入独立依赖评估；实际引入前重新核对当前仓库 LICENSE、依赖树和供应链审查结果。

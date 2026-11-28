@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Alert, Button, Modal, Space, Spin } from 'antd';
 import type { components } from '@qms/contracts';
 import { ApiError } from '../../api/client';
@@ -7,6 +7,7 @@ import { fileUrl, type Attachment, type FileResource } from '../attachments/atta
 import { aborted, useEightDText, type EightDRead } from './eight-d';
 import { useEightDEvidenceScope } from './EightDEvidenceScope';
 import styles from './eight-d.module.css';
+import imageStyles from './eight-d-images.module.css';
 
 const previewTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'application/pdf'];
 const clean = (file: Attachment) => file.status === 'AVAILABLE' && file.scanStatus === 'CLEAN';
@@ -57,11 +58,12 @@ async function fetchPreviewBlob(url: string, file: Attachment, signal: AbortSign
 
 export function EightDEvidenceSection({ label, ...props }: Parameters<typeof EightDEvidence>[0] & { label: string }) {
   const [opened, setOpened] = useState(false);
-  if (props.inlineImages) return <section aria-label={label}><h4>{label}</h4><EightDEvidence {...props} /></section>;
+  const [deleted, setDeleted] = useState<string[]>([]);
+  if (props.inlineImages) return <section aria-label={label} className={imageStyles.category}><EightDEvidence {...props} heading={<h4>{label}</h4>} /></section>;
   return <details className={styles.evidence} onToggle={event => { if (event.currentTarget.open) setOpened(true); }}>
-    <summary>{label} ({props.fileIds.length})</summary>
+    <summary>{label} ({props.fileIds.filter(id => !deleted.includes(id)).length})</summary>
     {/* Keep an opened panel mounted so collapsing it cannot interrupt an upload. */}
-    {opened && <EightDEvidence {...props} />}
+    {opened && <EightDEvidence {...props} heading={null} onDeletedFiles={setDeleted} />}
   </details>;
 }
 
@@ -93,12 +95,16 @@ function InlineImage({ file, read, denied }: { file: Attachment; read: EightDRea
   return <Spin size="small" aria-label={text('正在加载图片预览', 'Loading image preview')} />;
 }
 
-export function EightDEvidence({ problemId, resource, fileIds, readOnly, read, onChange, onLocalPendingChange, onFileReady, inlineImages, preserveAvailableFile }: {
+export function EightDEvidence({ problemId, resource, fileIds, readOnly, read, onChange, onLocalPendingChange, onFileReady, inlineImages, preserveAvailableFile, heading, imageTone, children, onDeletedFiles }: {
   problemId: string; fileIds: string[]; readOnly: boolean; read: EightDRead; onChange: (ids: string[]) => void;
   resource?: FileResource; onLocalPendingChange?: (pending: boolean) => void;
   onFileReady?: (file: Attachment) => boolean | void;
   inlineImages?: boolean;
   preserveAvailableFile?: boolean;
+  heading?: ReactNode;
+  imageTone?: 'ok' | 'ng';
+  children?: ReactNode;
+  onDeletedFiles?: (ids: string[]) => void;
 }) {
   const text = useEightDText();
   const scope = useEightDEvidenceScope();
@@ -129,7 +135,8 @@ export function EightDEvidence({ problemId, resource, fileIds, readOnly, read, o
     const selected = previewFile.current;
     if (selected && !values.some(file => file.id === selected.id && file.version === selected.version && clean(file))) close();
     setFiles(values);
-  }, [close]);
+    onDeletedFiles?.(values.filter(file => file.status === 'DELETED').map(file => file.id));
+  }, [close, onDeletedFiles]);
   async function grant(file: Attachment, signal: AbortSignal) {
     const value = await read<components['schemas']['FileDownloadDto']>(`/api/v1/files/${encodeURIComponent(file.id)}/download`, { method: 'POST', body: '{}', signal });
     signal.throwIfAborted();
@@ -171,12 +178,17 @@ export function EightDEvidence({ problemId, resource, fileIds, readOnly, read, o
     } finally { if (version === generation.current) setBusy(false); }
   }
   return <>
-    <AttachmentPanel variant={inlineImages || preserveAvailableFile !== undefined ? 'standard' : undefined} imagesOnly={inlineImages} preserveAvailableFile={preserveAvailableFile} resource={targetResource} fileIds={fileIds} readOnly={readOnly || revoked.current} onFilesChanged={changed}
+    <AttachmentPanel heading={heading} className={imageTone ? `${imageStyles.surface} ${imageStyles[imageTone]}` : undefined}
+      previewFile={file => !inlineImages && fileIds.includes(file.id) && previewTypes.includes(file.contentType) ? () => void open(file) : undefined}
+      imagesOnly={inlineImages} preserveAvailableFile={preserveAvailableFile} resource={targetResource} fileIds={fileIds} readOnly={readOnly || revoked.current} onFilesChanged={changed}
       onDetach={preserveAvailableFile === undefined ? undefined : id => { if (!readOnly && !revoked.current) onChange(fileIds.filter(file => file !== id)); }}
       onAccessDenied={denied} onPendingChange={onLocalPendingChange ? undefined : scope.onPendingChange} onLocalPendingChange={onLocalPendingChange}
-      onReady={file => { if (revoked.current) return false; if (onFileReady) return onFileReady(file); if (readOnly) return false; if (!fileIds.includes(file.id)) onChange([...fileIds, file.id]); return true; }} onRemoved={id => { if (!readOnly && !revoked.current) onChange(fileIds.filter(file => file !== id)); }} />
-    {inlineImages && <div className={styles.imageList}>{files.filter(file => fileIds.includes(file.id) && clean(file) && ['image/png', 'image/jpeg'].includes(file.contentType)).map(file => <InlineImage key={`${file.id}:${file.version}`} file={file} read={read} denied={denied} />)}</div>}
-    {!inlineImages && <Space wrap>{files.filter(file => fileIds.includes(file.id) && clean(file) && previewTypes.includes(file.contentType)).map(file => <Button key={file.id} disabled={busy} aria-label={`${text('预览附件', 'Preview attachment')} ${file.originalName}`} onClick={() => void open(file)}>{text('预览附件', 'Preview attachment')} · {file.originalName}</Button>)}</Space>}
+      onReady={file => { if (revoked.current) return false; if (onFileReady) return onFileReady(file); if (readOnly) return false; if (!fileIds.includes(file.id)) onChange([...fileIds, file.id]); return true; }} onRemoved={id => { if (!readOnly && !revoked.current) onChange(fileIds.filter(file => file !== id)); }}>
+      {inlineImages && !revoked.current && <>
+        <div className={styles.imageList}>{files.filter(file => fileIds.includes(file.id) && clean(file) && ['image/png', 'image/jpeg'].includes(file.contentType)).map(file => <InlineImage key={`${file.id}:${file.version}`} file={file} read={read} denied={denied} />)}</div>
+        {children}
+      </>}
+    </AttachmentPanel>
     <Modal open={!!preview} title={preview?.file.originalName} onCancel={close} destroyOnHidden width="min(1000px, 95vw)" footer={<Space wrap>
       {preview && <Button disabled={busy} onClick={() => void download(preview.file)}>{text('授权下载附件', 'Download authorized attachment')}</Button>}
       <Button onClick={close}>{text('关闭预览', 'Close preview')}</Button>

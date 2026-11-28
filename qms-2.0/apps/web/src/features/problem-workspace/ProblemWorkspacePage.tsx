@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { Alert, Button, Space, Spin, Tabs, Tag } from 'antd';
+import { Alert, Button, Space, Tabs, Tag } from 'antd';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../../i18n/Language';
 import { mutateInbox } from '../tasks/task-inbox';
@@ -14,6 +14,7 @@ import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { ProcessEightDWorkspace } from '../process-eight-d/ProcessEightDWorkspace';
 import { SupplierEightDWorkspace } from '../supplier-eight-d/SupplierEightDWorkspace';
 import { InternalEightDSourcePicker } from '../internal-eight-d/InternalEightDSourcePicker';
+import { EightDWorkspaceLoading } from '../internal-eight-d/EightDWorkspaceLoading';
 import './problem-workspace.css';
 
 export function ProblemWorkspacePage({ problemId }: { problemId?: string }) {
@@ -85,15 +86,16 @@ function Workspace({ problemId, organizationId, instanceId }: { problemId: strin
   const instanceSelector = workspace && <label>{t('流程实例')} <select aria-label={t('流程实例')} value={selected?.id ?? ''} onChange={(event) => { const id = event.target.value; requestLeave(() => choose(id)); }}>
     {!workspace.instances.length ? <option value={selected?.id ?? ''}>{selected?.id ?? t('暂无流程实例')}</option> : workspace.instances.map((instance) => <option key={instance.id} value={instance.id}>{instance.current ? t('当前实例') : t('历史实例')} · {new Date(instance.createdAt).toLocaleString(locale)} · {instance.id}</option>)}
   </select></label>;
+  if (state.loading && !workspace && !denied) return <main className="problem-workspace"><EightDWorkspaceLoading /></main>;
   if (workspace && processEightD && current) {
     return <main className="problem-workspace"><ProcessEightDWorkspace problemId={problemId} title={problemTitle}
       back={workspace.instances.some(instance => !instance.current) ? instanceSelector : undefined}
       renderSourcePicker={props => <InternalEightDSourcePicker {...props} />} onRefresh={state.refresh} onAccessDenied={revoke} /></main>;
   }
-  return <main className={`problem-workspace${focused ? ' is-focused' : ''}`}><h1 className="sr-only">{t('问题处理工作空间')}</h1><div className="problem-workspace__heading"><Button disabled={denied} aria-pressed={focused} onClick={() => setFocused((value) => !value)}>{t(focused ? '退出专注' : '专注处理')}</Button></div><ProblemError cause={state.error ?? error} />
+  return <main data-eight-d-loading-shell className={`problem-workspace${focused ? ' is-focused' : ''}`}><h1 className="sr-only">{t('问题处理工作空间')}</h1><div className="problem-workspace__heading"><Button disabled={denied} aria-pressed={focused} onClick={() => setFocused((value) => !value)}>{t(focused ? '退出专注' : '专注处理')}</Button></div><ProblemError cause={state.error ?? error} />
     {denied && <Alert role="alert" type="error" title={t('当前会话失效或无权访问，敏感内容已清除，请重新登录或联系授权人员。')} />}
     <Button disabled={denied || state.loading || pending} onClick={() => { setError(undefined); requestLeave(() => { setUpgrading(false); state.refresh(); }); }}>{t('刷新工作空间')}</Button>
-    {state.loading && !workspace ? <Spin aria-label={t('正在加载')} /> : workspace ? <>
+    {workspace ? <>
       <header className="problem-header"><div><Tag>{workspace.problem.reportNumber}</Tag>{tab === 'overview' ? <h2>{current ? workspace.problem.summary.title : workspace.domain?.summary.title ?? t('历史数据不可用')}</h2> : null}</div>
         <Link to={returnToProcessFollowup ? { pathname: '/app/process-quality/problems', search: returnScope === 'explicit' ? problemScope(workspace.problem.organizationId).toString() : '' } : `/app/problem-center?${problemScope(workspace.problem.organizationId)}`}>{t(returnToProcessFollowup ? '返回制程问题跟进' : '返回问题中心')}</Link></header>
       {instanceSelector}

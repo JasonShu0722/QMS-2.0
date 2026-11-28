@@ -11,12 +11,18 @@
 .chapterNav button:focus-visible, .chapterToggle:focus-visible { outline: 2px solid var(--ed-primary); outline-offset: -2px; }
 .chapterToggle { display: none; }
 .chapterContent { min-width: 0; }
+.chapterLayout { align-items: stretch; }
+[data-eight-d-chapter-viewport] .chapterLayout {
+  height: max(88px, calc(100dvh - var(--eight-d-chapter-top, 190px) - var(--qms-page-padding, 12px)));
+}
 @media (min-width: 761px) {
-  .chapterLayout { align-items: stretch; height: clamp(320px, calc(100dvh - 325px), 1200px); }
   .chapterDirectory, .chapterContent { position: static; min-height: 0; max-height: none; overflow: auto; scrollbar-gutter: stable; }
 }
 @media (max-width: 760px) {
   .chapterLayout { grid-template-columns: minmax(0, 1fr); }
+  [data-eight-d-chapter-viewport] .chapterLayout { grid-template-rows: fit-content(clamp(38px, 35%, 180px)) minmax(0, 1fr); }
+  [data-eight-d-chapter-viewport] .chapterDirectory { min-block-size: 0; overflow: auto; }
+  [data-eight-d-chapter-viewport] .chapterContent { min-height: 0; overflow: auto; }
   .chapterDirectory { position: static; max-height: none; }
   .chapterToggle { display: block; width: 100%; border-color: var(--ed-border); }
   .chapterNav[data-open='false'] { display: none; }
@@ -37,6 +43,11 @@
 .entryTable { min-width: 0; }
 .entryTable th, .entryTable td { min-width: 76px; vertical-align: middle; overflow-wrap: anywhere; }
 .entryTable th { white-space: nowrap; }
+.resizableTable th { position: relative; padding-inline-end: 14px; white-space: normal; }
+.columnResize { position: absolute; inset-block: 0; inset-inline-end: 0; width: 10px; cursor: col-resize; touch-action: none; }
+.columnResize::after { content: ''; position: absolute; inset-block: 25%; inset-inline-end: 2px; border-inline-start: 2px solid var(--ed-muted, var(--ed-text)); }
+.columnResize:hover::after, .columnResize:focus-visible::after { border-color: var(--ed-primary); }
+.columnResize:focus-visible { outline-offset: -2px; }
 .entryGroup, .inputGroup { margin-block: var(--qms-section-gap); border: 1px solid var(--ed-border); border-radius: 8px; padding: var(--qms-card-padding); }
 .entryGroup h4, .inputGroup h4 { color: var(--ed-text); font-weight: 650; }
 .entryGroup small, .inputGroup .field > span, .factGrid li > span { color: var(--ed-muted, var(--ed-text)); }
@@ -48,12 +59,17 @@
 .groupHeading h4 { margin-block: 0; }
 .groupHeading button { flex: none; }
 .measureTable th:first-child { width: 45%; }
-.measureTable td:first-child textarea, .containmentTable textarea { box-sizing: border-box; min-width: 9rem; min-height: 40px; }
+.measureTable td:first-child textarea { box-sizing: border-box; min-width: 9rem; min-height: 40px; }
+.temporaryTable td:first-child textarea, .containmentTable textarea { min-width: 0; min-height: var(--d3-control-height); height: var(--d3-control-height); }
+.temporaryTable, .containmentTable { --d3-control-height: 36px; }
+.temporaryTable td, .containmentTable td { vertical-align: top; }
+.temporaryTable input, .containmentTable input:not([type='checkbox']) { min-height: var(--d3-control-height); height: var(--d3-control-height); }
 .containmentTable th:nth-child(4), .containmentTable th:nth-child(6) { width: 22%; }
 .entryTable input[type='date'] { min-width: 126px; }
 .entryTable select { min-width: 94px; }
 .entryTable tr:not(.entryDetails) td > .field > span, .positionGroup > .field > span { display: none; }
 .entryActions, .positionGroup { display: flex; align-items: center; gap: 4px; }
+.entryActions { flex-wrap: wrap; }
 .positionGroup > .field { flex: 1; min-width: 70px; }
 .entryActions > button { flex: none; }
 .entryPreview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-width: 80px; white-space: pre-wrap; }
@@ -66,6 +82,10 @@
 .correctiveDetails { position: sticky; inset-inline-start: var(--qms-card-padding); max-inline-size: calc(100cqi - 2 * var(--qms-card-padding)); }
 .correctiveDetails:focus-visible { outline: 2px solid var(--ed-primary); outline-offset: 2px; }
 .correctiveActionText { white-space: pre-wrap; overflow-wrap: anywhere; }
+.effectTracking { container-type: inline-size; }
+.trackingFacts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--qms-section-gap); margin-block-end: var(--qms-section-gap); }
+@container (max-width: 640px) { .trackingFacts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (max-width: 360px) { .trackingFacts { grid-template-columns: minmax(0, 1fr); } }
 .improvementPair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--qms-section-gap); min-inline-size: 0; margin: var(--qms-section-gap) 0 0; border: 1px solid var(--ed-border); border-radius: 6px; }
 .responsibility { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: var(--qms-card-padding); align-items: start; }
 .responsibility dl { margin: 0; display: grid; gap: var(--qms-section-gap); }
@@ -103,3 +123,4 @@
 @media (max-width: 600px) { .header { align-items: stretch; } }
 @media (pointer: coarse) { .field input, .field select, .table input:not([type='checkbox']), .table select { min-height: 44px; } }
 @media (pointer: coarse) { .entryActions > button { min-height: 44px; min-width: 44px; } }
+@media (pointer: coarse) { .temporaryTable, .containmentTable { --d3-control-height: 44px; } }

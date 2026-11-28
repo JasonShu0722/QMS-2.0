@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { isUUID } from 'class-validator';
 import { PrismaService } from '../../database/prisma.service.js';
 import type { Prisma } from '../../generated/prisma/client.js';
 import { aiApplicationTestMetadata } from './ai-application-test.read-model.js';
@@ -57,6 +58,9 @@ const configurationIdKeys = new Set([
   'ministerAssignmentId', 'previousMinisterAssignmentId', 'previousSectionDepartmentId', 'bindingId',
 ]);
 const configurationDateKeys = new Set(['validFrom', 'validTo', 'previousValidFrom', 'previousValidTo']);
+const eightDReportPrefixes: Readonly<Record<string, string>> = {
+  ProcessEightDReport: 'PROCESS_EIGHT_D', CustomerEightDReport: 'CUSTOMER_EIGHT_D', NewProductEightDReport: 'NEW_PRODUCT_EIGHT_D',
+};
 const SAFE_METADATA_KEYS = new Set([
   'protocol', 'publishedVersion',
   'materialId', 'materialVersion', 'materialMatched',
@@ -103,12 +107,13 @@ export class AuditLogService {
     return event?.metadata;
   }
 
-  recentSuccessfulResourceEvents(transaction: Prisma.TransactionClient, scope: { organizationId: string; action: string; resourceType: string; resourceId: string }) {
+  readSuccessfulResourceEvents(transaction: Prisma.TransactionClient,
+    scope: { organizationId: string; action: string | string[]; resourceType: string; resourceId: string }, take?: number) {
     return transaction.auditEvent.findMany({
-      where: { ...scope, outcome: 'SUCCESS' },
+      where: { ...scope, action: typeof scope.action === 'string' ? scope.action : { in: scope.action }, outcome: 'SUCCESS' },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: 100,
-      select: { id: true, createdAt: true, metadata: true, actor: { select: { fullName: true, username: true } } },
+      ...(take === undefined ? {} : { take }),
+      select: { id: true, action: true, actorUserId: true, createdAt: true, metadata: true, actor: { select: { fullName: true, username: true } } },
     });
   }
 
@@ -141,9 +146,17 @@ export class AuditLogService {
     const processDefectWrite = event?.resourceType === 'ProcessDefect' && event.outcome === 'SUCCESS'
       && ['PROCESS_DEFECT_CREATED', 'PROCESS_DEFECT_UPDATED', 'PROCESS_DEFECT_INGESTION_CREATED', 'PROCESS_DEFECT_INGESTION_UPDATED'].includes(event.action);
     const manualProcessDefectUpdate = event?.action === PROCESS_DEFECT_MANUAL_UPDATE && event.resourceType === 'ProcessDefect' && event.outcome === 'SUCCESS';
+    const eightDReportPrefix = event?.outcome === 'SUCCESS' && Object.hasOwn(eightDReportPrefixes, event.resourceType)
+      ? eightDReportPrefixes[event.resourceType] : undefined;
     return Object.fromEntries(
       Object.entries(metadata)
         .filter(([key, value]) => {
+          if (eightDReportPrefix && event?.action === `${eightDReportPrefix}_RISK` && (key === 'previousSeverity' || key === 'severity')) {
+            return typeof value === 'string' && ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(value);
+          }
+          if (eightDReportPrefix && event?.action === `${eightDReportPrefix}_SOURCES` && ['addedSourceIds', 'removedSourceIds', 'sourceHistoryIds'].includes(key)) {
+            return Array.isArray(value) && value.length <= (key === 'sourceHistoryIds' ? 200 : 100) && value.every(id => typeof id === 'string' && isUUID(id));
+          }
           if (workbenchStatusChange) {
             if (key === 'status' || key === 'previousStatus') return value === 'idea' || value === 'development' || value === 'live';
             if (key === 'evidence') return typeof value === 'string' && value === value.trim() && value.length > 0 && [...value].length <= 500 && !value.includes('\u0000');

@@ -8,6 +8,7 @@ import { LanguageProvider } from '../../i18n/Language';
 import { UnsavedChangesProvider } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { apiRequest } from '../../api/client';
+import { SupplierQualityPage } from '../supplier-quality/SupplierQualityPage';
 import { SupplierEightDWorkspace } from './SupplierEightDWorkspace';
 import { SupplierControlledReport } from './SupplierControlledReport';
 
@@ -101,7 +102,7 @@ it.each([false, true])('shows authorized approval history and preserves the curr
   const log = await openFlowLog();
   expect(await log.findByRole('heading', { name: '轮次 3 待处理' })).toBeVisible();
   expect(log.getByRole('heading', { name: '轮次 2 已退回' })).toBeVisible();
-  expect(log.getByText(/内容版本 5/)).toBeVisible();
+  expect(log.queryByText(/内容版本 5/)).not.toBeInTheDocument();
   const requestedPaths = fetcher.mock.calls.map(([path]) => path);
   expect(requestedPaths).toContain(portal ? portalHistory : internalHistory);
   expect(requestedPaths).not.toContain(portal ? internalHistory : portalHistory);
@@ -208,7 +209,7 @@ it.each([false, true])('loads the issued document and saves all D2-D8 to the cor
 
 it('requires explicit submission plan on analysis-complete and never invents a deadline', async () => {
   mount(); await screen.findByDisplayValue('供应商实际问题');
-  fireEvent.click(screen.getByRole('button', { name: '确认分析完成并设置正式提交期限' }));
+  fireEvent.click(screen.getByRole('button', { name: '确认分析完成' }));
   const form = within(screen.getByRole('region', { name: '操作表单' }));
   expect(form.getByRole('button', { name: '确认提交' })).toBeDisabled();
   fireEvent.change(form.getByLabelText('正式提交期限'), { target: { value: '2026-11-10T12:00' } });
@@ -268,6 +269,39 @@ it('protects unsaved edits on refresh and can keep editing', async () => {
   const dialog = within(await screen.findByRole('dialog'));
   fireEvent.click(dialog.getByRole('button', { name: '继续编辑' }));
   expect(screen.getByLabelText('D2 问题描述')).toHaveValue('未保存正文');
+});
+
+it('locks the issued workspace through both stages of a detail reload', async () => {
+  const id = '11111111-1111-4111-8111-111111111111';
+  const detail = { id, title: '供应商详情', stage: 'ISSUED', controlledEightD: true };
+  current.supplierProblemId = id;
+  const original = fetcher.getMockImplementation()!;
+  let reloading = false;
+  let finishDetail: ((response: Response) => void) | undefined;
+  let finishReport: ((response: Response) => void) | undefined;
+  fetcher.mockImplementation((path: string, init?: RequestInit) => {
+    if (path.includes(`/problems/${id}?revisionPage=`)) {
+      return reloading ? new Promise<Response>(resolve => { finishDetail = resolve; }) : Promise.resolve(json(detail));
+    }
+    if (reloading && path === `/api/v1/supplier-quality/eight-d/${id}`) return new Promise<Response>(resolve => { finishReport = resolve; });
+    return original(path, init);
+  });
+  render(<ConfigProvider theme={{ token: { motion: false } }}><LanguageProvider><MemoryRouter initialEntries={[`/app/supplier-quality/problems/${id}`]}>
+    <UnsavedChangesProvider><SupplierQualityPage /></UnsavedChangesProvider>
+  </MemoryRouter></LanguageProvider></ConfigProvider>);
+  const description = await screen.findByRole('textbox', { name: 'D2 问题描述' });
+  expect(description).toBeEnabled();
+  reloading = true;
+  fireEvent.click(screen.getByRole('button', { name: '重新加载' }));
+  expect(description).toBeVisible();
+  expect(description).toBeDisabled();
+  expect(screen.getByRole('button', { name: '确认分析完成' })).toBeDisabled();
+  await act(async () => finishDetail!(json(detail)));
+  await waitFor(() => expect(finishReport).toBeTypeOf('function'));
+  expect(description).toBeDisabled();
+  await act(async () => finishReport!(json({ ...current, document: { ...current.document, description: '刷新后的正文' } })));
+  expect(description).toHaveValue('刷新后的正文');
+  expect(description).toBeEnabled();
 });
 
 it('guards unsaved edits when switching to report preview and restores the saved workspace after discard', async () => {
@@ -515,7 +549,11 @@ it.each([1440, 375])('keeps the complete editable document reachable at simulate
   expect(openChapter('D1').getByRole('button', { name: '增加团队成员' })).toBeEnabled();
   const problem = openChapter('D2');
   expect(problem.getByRole('textbox', { name: 'D2 问题描述' })).toBeEnabled();
-  for (const name of ['OK 图片说明', 'NG 图片说明']) expect(problem.getByRole('textbox', { name })).toBeEnabled();
+  for (const tone of ['OK', 'NG']) {
+    const card = within(problem.getByRole('region', { name: `${tone} 图片` }));
+    fireEvent.click(card.getByRole('button', { name: '添加图片描述' }));
+    expect(card.getByRole('textbox', { name: `${tone} 图片说明` })).toBeEnabled();
+  }
   expect(openChapter('D3').getByRole('button', { name: '增加临时措施' })).toBeEnabled();
   const analysis = openChapter('D4');
   for (const name of ['分析过程描述', '发生因', '流出因']) expect(analysis.getByRole('textbox', { name })).toBeEnabled();

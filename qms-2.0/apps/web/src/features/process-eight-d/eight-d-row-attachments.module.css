@@ -7,3 +7,6 @@
   overflow: auto;
   overflow-wrap: anywhere;
 }
+
+.dialogHeader:global(.ant-modal-header) { margin-bottom: 0; }
+.content :global(.attachment-panel > .ant-card-head) { padding-inline-end: 36px; }

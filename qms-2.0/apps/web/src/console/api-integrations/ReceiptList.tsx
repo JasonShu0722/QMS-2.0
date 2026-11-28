@@ -3,6 +3,7 @@ import { Alert, Button, Input, InputNumber, Modal, Popover, Select, Space, Tag, 
 import { Copy } from 'lucide-react';
 import type { components } from '@qms/contracts';
 import { ApiError } from '../../api/client';
+import { QmsLoading } from '../../components/QmsLoading';
 import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy } from '../../layouts/UnsavedChanges';
 import { LedgerTable, useLedgerPageSize } from '../../ui/ledger';
@@ -310,7 +311,7 @@ function ReceiptDetail({ scope, row, close }: { scope: IntegrationScope; row: Ro
     <dl className="qms-integration-detail">{entries.map(([label, value]) => <div key={String(label)}><dt>{label}</dt><dd>{detailValue(label, value)}</dd></div>)}</dl>
     {'bodyAvailable' in row && !row.bodyAvailable && <Alert type="info" title={text('正文已按保留期限清理', 'The payload has been removed under its retention policy')} />}
     {error ? <Alert role="alert" type="error" title={text(integrationError(error), 'Unable to read the payload. Retry.')} action={<Button aria-label={text('重试读取正文', 'Retry payload read')} onClick={() => void loadPayload()}>{text('重试', 'Retry')}</Button>} /> : null}
-    {loading && !payload && <Alert type="info" title={text('正在读取接收正文', 'Reading payload')} />}
+    {loading && !payload && <QmsLoading label={text('正在读取接收正文', 'Reading payload')} />}
     {payload && <div className="qms-integration-payload-frame"><Button className="qms-integration-payload-copy" size="small" type="text" icon={<Copy size={15} aria-hidden="true" />} aria-label={text('复制接收正文', 'Copy payload')} onClick={() => void copyPayload()} /><pre className="qms-integration-payload" aria-label={text('接收正文', 'Payload')} tabIndex={0}>{payload.text}</pre>{copyState === 'success' && <span role="status" className="qms-integration-copy-feedback">{text('已复制接收正文', 'Payload copied')}</span>}{copyState === 'error' && <span role="alert" className="qms-integration-copy-feedback qms-integration-copy-error">{text('复制失败，请重试', 'Copy failed. Retry.')}</span>}</div>}
   </Modal>;
 }

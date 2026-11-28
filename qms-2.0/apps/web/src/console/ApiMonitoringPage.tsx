@@ -1,4 +1,5 @@
-import { Alert, Button, Input, Select, Skeleton } from 'antd';
+import { Alert, Button, Input, Select } from 'antd';
+import { QmsLoading } from '../components/QmsLoading';
 import { LedgerTable, useLedgerPageSize } from '../ui/ledger';
 import { Clock3, RefreshCw } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -177,7 +178,7 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
       </>}
       <section aria-label={text('分钟聚合明细', 'Minute aggregate details')} className="qms-api-details"><h3>{text('分钟聚合明细', 'Minute aggregate details')}</h3>
         <LedgerTable<Bucket> ledgerId="console-api-monitoring" organizationId={context.targetOrganization.id} viewId={filters.scope} actionBar={actionBar} toolbarContent={pagination} requiredColumnKeys={['route']} size="small" columns={columns} dataSource={data?.items} pagination={false} rowKey={row => JSON.stringify([row.minute, row.scopeKey, row.method, row.route, row.statusClass])} scroll={{ x: data?.scope === 'PLATFORM' ? 1170 : 950 }} bodyFallback={data?.items.length ? undefined : loading
-          ? <div role="status" aria-label={text('读取 API 观测中', 'Reading API observations')}><Skeleton active paragraph={{ rows: 4 }} /></div>
+          ? <QmsLoading label={text('读取 API 观测中', 'Reading API observations')} size="region" />
           : error === 'network' ? <Alert role="alert" type="error" showIcon title={text('API 观测读取失败，请重试。', 'API observations could not be read. Retry.')} />
           : <div className="qms-api-empty"><strong>{text('当前查询范围没有观测记录', 'No observations in this query window')}</strong></div>} />
       </section>

@@ -1,5 +1,6 @@
 import type { components } from '@qms/contracts';
-import { Alert, Button, Card, Checkbox, Empty, Input, Pagination, Popconfirm, Select, Space, Tag, Typography, type TableColumnsType } from 'antd';
+import { Alert, Button, Card, Checkbox, Empty, Input, Pagination, Popconfirm, Popover, Select, Space, Tag, Typography, type TableColumnsType } from 'antd';
+import { ArrowDownUp } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ApiError, safeAccountError } from '../../api/client';
@@ -11,7 +12,8 @@ import { normalizePreferences, preferenceKey } from '../../ui/ledger/model';
 import { useLedgerScope, usePreference } from '../../ui/ledger/preferences';
 import { ProcessProblemDeadlines, ProcessProblemTitle, processSummaryValue } from '../process-quality/ProcessProblemSummary';
 import { useEightDSeverityText } from '../process-eight-d/eight-d';
-import { emptyFollowupGroup, followupFields, followupFiltersTooLong, followupMaxItems, followupOperators, followupSeverities, followupStageLabels, normalizeFollowupFilters, withoutValue, type FollowupCondition, type FollowupField, type FollowupGroup } from './process-followup-filters';
+import { EightDRiskBadge } from '../internal-eight-d/EightDRiskBadge';
+import { emptyFollowupGroup, followupFields, followupFilterError, followupMaxItems, followupOperators, followupSeverities, followupStageGroups, followupStageLabel, normalizeFollowupFilters, toServerFollowupFilters, withoutValue, type FollowupCondition, type FollowupField, type FollowupGroup } from './process-followup-filters';
 import {
   createProblemView,
   deleteProblemView,
@@ -41,15 +43,12 @@ type ErrorState = { message: string; traceId?: string; code?: string };
 const statuses: ProblemStatus[] = ['OPEN', 'IN_PROGRESS', 'PENDING', 'RESOLVED', 'CLOSED', 'ARCHIVED'];
 const sortFields: ProblemSort['sortBy'][] = ['createdAt', 'updatedAt', 'dueAt', 'reportNumber', 'status', 'severity'];
 const allColumns: ColumnKey[] = ['reportNumber', 'title', 'domainCode', 'problemType', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt'];
-const processColumns: LayoutKey[] = ['reportNumber', 'title', 'processStage', 'status', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt'];
+const processColumns = ['reportNumber', 'title', 'processStage', 'severity', 'responsibleParty', 'ownerId', 'dueAt', 'updatedAt'] satisfies LayoutKey[];
 const processHeaderFilters: Partial<Record<LayoutKey, FollowupField>> = {
-  processStage: 'stage', status: 'status', severity: 'severity', responsibleParty: 'responsibleSectionName', ownerId: 'ownerName', dueAt: 'dueAt',
+  processStage: 'stage', severity: 'severity', responsibleParty: 'responsibleSectionName', ownerId: 'ownerName', dueAt: 'dueAt',
 };
-function isFollowupStage(value: unknown): value is NonNullable<ProcessFollowupQuery['stage']> {
-  return typeof value === 'string' && Object.hasOwn(followupStageLabels, value);
-}
 const followupPath = '/app/process-quality/problems';
-type FollowupSnapshot = { scope: string; page: number; filters: ProblemFilters; sort: ProblemSort; selectedViewId: string; layout: ColumnLayout };
+type FollowupSnapshot = { scope: string; page: number; filters: ProblemFilters; sort: ProblemSort };
 let followupSnapshot: FollowupSnapshot | undefined;
 useWorkTabsStore.subscribe((next, previous) => {
   if (next.sessionScope !== previous.sessionScope || previous.tabs.some(tab => tab.id === followupPath) && !next.tabs.some(tab => tab.id === followupPath)) followupSnapshot = undefined;
@@ -63,8 +62,7 @@ const defaultConfiguration: ProblemViewConfiguration = {
 };
 function normalizeColumnLayout(input: unknown, processOnly: boolean): ColumnLayout {
   const columns = processOnly ? processColumns : allColumns;
-  const normalized = normalizePreferences(input ?? (processOnly ? { order: processColumns, visible: processColumns.slice(0, -1) } : undefined), columns,
-    false, processOnly ? [['processStage', 'status', true]] : undefined);
+  const normalized = normalizePreferences(input ?? (processOnly ? { order: processColumns, visible: processColumns.slice(0, -1) } : undefined), columns);
   return { order: normalized.order as LayoutKey[], visible: normalized.visible as LayoutKey[] };
 }
 const statusLabels: Record<ProblemStatus, string> = {
@@ -95,18 +93,17 @@ function normalizeFilters(filters: ProblemFilters): ProblemFilters {
   return normalized;
 }
 
-function normalizeConfiguration(configuration: ProblemViewConfiguration, processOnly: boolean): ProblemViewConfiguration {
+function normalizeConfiguration(configuration: ProblemViewConfiguration): ProblemViewConfiguration {
   const visibleColumns = allColumns.filter((column) => configuration.visibleColumns.includes(column));
   const ordered = configuration.columnOrder.filter((column, index, source) => allColumns.includes(column as ColumnKey) && source.indexOf(column) === index);
   const columnOrder = [...ordered, ...allColumns.filter((column) => !ordered.includes(column))];
   const sortBy = sortFields.includes(configuration.sort.sortBy) ? configuration.sort.sortBy : defaultConfiguration.sort.sortBy;
-  const processLayout = processOnly ? normalizeColumnLayout(configuration === defaultConfiguration ? undefined : { order: configuration.columnOrder, visible: configuration.visibleColumns }, true) : undefined;
   return {
     schemaVersion: 1,
-    filters: processOnly ? normalizeFollowupFilters(configuration.filters) : normalizeFilters(configuration.filters),
+    filters: normalizeFilters(configuration.filters),
     sort: { sortBy, sortDirection: configuration.sort.sortDirection === 'asc' ? 'asc' : 'desc' },
-    visibleColumns: processLayout?.visible ?? (visibleColumns.length ? visibleColumns : ['reportNumber']),
-    columnOrder: processLayout?.order ?? columnOrder,
+    visibleColumns: visibleColumns.length ? visibleColumns : ['reportNumber'],
+    columnOrder,
   };
 }
 
@@ -153,9 +150,13 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   const [searchInput, setSearchInput] = useState(restored?.filters.search ?? '');
   const [sort, setSort] = useState<ProblemSort>(restored?.sort ?? defaultConfiguration.sort);
   const [draftSort, setDraftSort] = useState(sort);
-  const [viewLayout, setViewLayout] = useState<ColumnLayout>(() => restored?.layout ?? normalizeColumnLayout(undefined, processOnly));
+  const [viewLayout, setViewLayout] = useState<ColumnLayout>(() => normalizeColumnLayout(undefined, processOnly));
   const [page, setPage] = useState(restored?.page ?? 1);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortTrigger = useRef<HTMLButtonElement>(null);
+  const sortAnchor = useRef<HTMLElement>(undefined);
+  const sortField = useRef<HTMLSelectElement>(null);
   const [filterRow, setFilterRow] = useState<number>();
   const filterAnchor = useRef<HTMLElement>(undefined);
   const filterTrigger = useRef<HTMLButtonElement>(null);
@@ -171,7 +172,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   const [viewOffset, setViewOffset] = useState(0);
   const [viewsError, setViewsError] = useState<ErrorState>();
   const [viewsLoading, setViewsLoading] = useState(false);
-  const [selectedViewId, setSelectedViewId] = useState(restored?.selectedViewId ?? '');
+  const [selectedViewId, setSelectedViewId] = useState('');
   const ledgerScope = useLedgerScope(organizationId);
   const layoutKey = organizationId ? preferenceKey(ledgerScope, ledgerId, 'columns', 'default-layout') : undefined;
   const layoutStateKey = layoutKey ?? JSON.stringify([ledgerScope, ledgerId, 'default-layout']);
@@ -205,9 +206,9 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   }, [followupScope]);
   useEffect(() => {
     if (followupScope && organizationId && !accessLost) {
-      followupSnapshot = { scope: followupScope, page, filters: appliedFilters, sort, selectedViewId, layout: viewLayout };
+      followupSnapshot = { scope: followupScope, page, filters: appliedFilters, sort };
     }
-  }, [followupScope, organizationId, accessLost, page, appliedFilters, sort, selectedViewId, viewLayout]);
+  }, [followupScope, organizationId, accessLost, page, appliedFilters, sort]);
   useEffect(() => {
     scopeActive.current = true;
     return () => {
@@ -273,18 +274,19 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   }, [processQuality, revokeProcessAccess]);
 
   useEffect(() => {
-    if (!organizationId || accessLost) return;
+    if (!organizationId || accessLost || processOnly) return;
     const controller = new AbortController();
     void loadViews(organizationId, viewOffset, controller.signal);
     return () => controller.abort();
-  }, [loadViews, organizationId, viewOffset, accessLost]);
+  }, [loadViews, organizationId, viewOffset, accessLost, processOnly]);
 
   const query = useMemo<ProblemQuery | ProcessFollowupQuery | undefined>(() => {
     if (!organizationId || accessLost) return undefined;
     if (processOnly) {
       const { search, overdueAt, processFollowupFilters } = appliedFilters;
+      const serverFilters = toServerFollowupFilters(processFollowupFilters);
       return { organizationId, page, pageSize, ...(search ? { search } : {}), ...(overdueAt ? { overdueAt } : {}),
-        ...(processFollowupFilters ? { filters: JSON.stringify(processFollowupFilters) } : {}), ...sort };
+        ...(serverFilters ? { filters: JSON.stringify(serverFilters) } : {}), ...sort };
     }
     const value: ProblemQuery = { organizationId, page, pageSize, ...normalizeFilters(appliedFilters), ...sort };
     if (processQuality) {
@@ -335,22 +337,20 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   }
   const configuration = useMemo<ProblemViewConfiguration>(() => ({
     schemaVersion: 1,
-    filters: processOnly ? normalizeFollowupFilters(filters) : { ...filters, ...(eightDDomain ? { domainCode: eightDDomain, problemType: undefined } : {}) },
-    sort: processOnly ? draftSort : sort,
+    filters: { ...filters, ...(eightDDomain ? { domainCode: eightDDomain, problemType: undefined } : {}) },
+    sort,
     visibleColumns,
     columnOrder,
-  }), [columnOrder, filters, draftSort, sort, visibleColumns, processOnly, eightDDomain]);
+  }), [columnOrder, filters, sort, visibleColumns, eightDDomain]);
 
   const applyConfiguration = (next: ProblemViewConfiguration, name?: string) => {
-    const normalized = normalizeConfiguration(next, processOnly);
+    const normalized = normalizeConfiguration(next);
     const nextFilters = normalized.filters;
-    if (processOnly && nextFilters.overdueAt) nextFilters.overdueAt = new Date().toISOString();
     const nextSort = normalized.sort;
     setFilters(nextFilters);
     setSearchInput(nextFilters.search ?? '');
     setAppliedFilters(nextFilters);
     setSort(nextSort);
-    setDraftSort(nextSort);
     changeColumnLayout({ visible: normalized.visibleColumns, order: normalized.columnOrder });
     if (name !== undefined) setViewName(name);
     setPage(1);
@@ -361,8 +361,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
 
   const switchOrganization = () => {
     const selected = organizationInput.trim();
-    if (!selected || processOnly && selected === organizationId) return;
-    if (processOnly) followupSnapshot = undefined;
+    if (!selected) return;
     const next = new URLSearchParams(searchParams);
     next.set('organizationId', selected);
     problemResource.current = `switching:${selected}`;
@@ -378,7 +377,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
 
   const draftGroup = filters.processFollowupFilters ?? emptyFollowupGroup;
   const completeDraft = normalizeFollowupFilters(filters);
-  const draftTooLong = followupFiltersTooLong(completeDraft.processFollowupFilters);
+  const draftFilterError = followupFilterError(completeDraft.processFollowupFilters);
   function setDraftGroup(next: FollowupGroup) {
     setFilters(current => ({ ...current, processFollowupFilters: next }));
   }
@@ -401,6 +400,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     else if (bounds.bottom > bottom) rows.scrollTop += Math.ceil(bounds.bottom - bottom);
   }, []);
   function openFilters(anchor: HTMLElement, field?: FollowupField) {
+    setSortOpen(false);
     filterAnchor.current = anchor;
     const next = filterOpen ? filters : appliedFilters;
     const group = next.processFollowupFilters ?? emptyFollowupGroup;
@@ -409,26 +409,37 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     const row = found >= 0 ? found : append ? group.items.length : undefined;
     setFilterRow(row);
     setFilters(append ? { ...next, processFollowupFilters: { ...group, items: [...group.items, newCondition(field)] } } : next);
-    if (!filterOpen) setDraftSort(sort);
-    else if (row === filterRow) focusFilter();
+    if (filterOpen && row === filterRow) focusFilter();
     setFilterOpen(true);
   }
   useEffect(() => {
     if (filterOpen) focusFilter();
   }, [filterOpen, filterRow, focusFilter]);
 
-  function applyFilters(restoreFocus: boolean, next = completeDraft, nextSort = draftSort, submittedSearch = false) {
-    if (followupFiltersTooLong(next.processFollowupFilters)) return;
-    const changed = JSON.stringify(next) !== JSON.stringify(appliedFilters) || nextSort.sortBy !== sort.sortBy || nextSort.sortDirection !== sort.sortDirection;
+  function applyFilters(restoreFocus: boolean, next = completeDraft, submittedSearch = false) {
+    if (followupFilterError(next.processFollowupFilters)) return;
+    const changed = JSON.stringify(next) !== JSON.stringify(appliedFilters);
     if (changed) {
       setAppliedFilters(next);
-      setSort(nextSort);
       setPage(1);
     }
     setFilters(next);
     if (submittedSearch) setSearchInput(next.search ?? '');
     setFilterOpen(false);
     if (restoreFocus) filterAnchor.current?.focus({ preventScroll: true });
+  }
+
+  function closeSort(restoreFocus: boolean) {
+    setSortOpen(false);
+    if (restoreFocus) sortTrigger.current?.focus({ preventScroll: true });
+  }
+
+  function applySort() {
+    if (draftSort.sortBy !== sort.sortBy || draftSort.sortDirection !== sort.sortDirection) {
+      setSort(draftSort);
+      setPage(1);
+    }
+    closeSort(true);
   }
 
   const mutate = async (operation: () => Promise<void>, message: string) => {
@@ -519,6 +530,8 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       updatedAt: { title: t('更新时间'), dataIndex: 'updatedAt', render: (value: string) => new Date(value).toLocaleString(locale) },
     };
     if (processOnly) {
+      definitions.severity = { title: t('风险'), dataIndex: 'severity', render: (value: string) => <EightDRiskBadge severity={value} /> };
+      definitions.responsibleParty = { ...definitions.responsibleParty, title: t('责任板块') };
       definitions.title = { title: t('问题标题'), ellipsis: { showTitle: false }, render: (_, item: ProblemItem) => {
         const { summary, reportNumber } = item;
         const title = summary.title && summary.title !== reportNumber && summary.title !== summary.description.slice(0, 200) ? summary.title : summary.description || summary.title;
@@ -530,14 +543,14 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
         if (!date || !Number.isFinite(date.getTime())) return '—';
         return <time dateTime={date.toISOString()}>{date.toLocaleString(locale)}</time>;
       } };
-      const widths: Partial<Record<LayoutKey, number>> = { reportNumber: 138, title: 245, processStage: 126, status: 90, severity: 84, responsibleParty: 130, ownerId: 104, dueAt: 170 };
+      const widths: Partial<Record<LayoutKey, number>> = { reportNumber: 138, title: 245, processStage: 126, severity: 84, responsibleParty: 130, ownerId: 104, dueAt: 170 };
       return processColumns.map((key): TableColumnsType<ProblemItem>[number] => {
-        const definition = key === 'processStage' ? { title: t('当前环节'), render: (_: unknown, item: ProblemItem) =>
-          t('stage' in item && isFollowupStage(item.stage) ? followupStageLabels[item.stage] : '—') } : definitions[key];
+        const definition = key === 'processStage' ? { title: t('跟进状态'), render: (_: unknown, item: ProblemItem) =>
+          t(('stage' in item ? followupStageLabel(item.stage) : undefined) ?? '—') } : definitions[key];
         const label = String(definition.title);
         const field = processHeaderFilters[key];
         const triggerLabel = locale === 'en-US' ? `Filter by ${label}` : `按${label}筛选`;
-        return { ...definition, key, width: widths[key] ?? 150, onHeaderCell: () => ({ 'aria-label': label }),
+        return { ...definition, key, width: widths[key] ?? 150, align: key === 'title' ? 'left' : 'center', onHeaderCell: () => ({ 'aria-label': label, style: { textAlign: 'center' } }),
           title: field ? <LedgerFilterHeader aria-label={label} triggerLabel={triggerLabel} active={!!appliedFilters.processFollowupFilters?.items.some(item => item.field === field) || key === 'dueAt' && !!appliedFilters.overdueAt} expanded={filterOpen && filterAnchor.current?.getAttribute('aria-label') === triggerLabel} disabled={!organizationId} onOpen={anchor => openFilters(anchor, field)} /> : label };
       });
     }
@@ -561,11 +574,11 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
           const view = views.find((candidate) => candidate.id === id);
           if (view) setViewName(view.name);
         }} disabled={viewsLoading}><option value="">{t('请选择')}</option>{views.map((view) => <option value={view.id} key={view.id}>{view.name}</option>)}</select></label>
-        <label>{t('视图名称')}<Input aria-label={t('视图名称')} value={viewName || (processOnly && restored?.selectedViewId === selectedViewId ? selectedView?.name : '')} maxLength={80} onChange={(event) => setViewName(event.target.value)} /></label>
+        <label>{t('视图名称')}<Input aria-label={t('视图名称')} value={viewName} maxLength={80} onChange={(event) => setViewName(event.target.value)} /></label>
         <Space wrap>
           <Button disabled={!selectedView} onClick={() => selectedView && applyConfiguration(selectedView.configuration, selectedView.name)}>{t('应用视图')}</Button>
-          <Button type="primary" disabled={disabledWrites || processOnly && draftTooLong} loading={mutating} onClick={saveView}>{t('保存新视图')}</Button>
-          <Button disabled={disabledWrites || !selectedView || processOnly && draftTooLong} loading={mutating} onClick={updateView}>{t('更新视图')}</Button>
+          <Button type="primary" disabled={disabledWrites} loading={mutating} onClick={saveView}>{t('保存新视图')}</Button>
+          <Button disabled={disabledWrites || !selectedView} loading={mutating} onClick={updateView}>{t('更新视图')}</Button>
           <Popconfirm
             title={selectedView ? `${locale === 'en-US' ? 'Delete personal view' : '删除个人视图'} · ${selectedView.name}` : undefined}
             description={locale === 'en-US' ? 'Only the view settings are removed. Problem records are retained.' : '仅移除视图配置，问题记录保留。'}
@@ -573,7 +586,6 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
             cancelText={t('取消')}
             okButtonProps={{ danger: true }}
             disabled={disabledWrites || !selectedView}
-            getPopupContainer={processOnly ? trigger => trigger.parentElement ?? trigger : undefined}
             onConfirm={removeView}
           >
             <Button danger disabled={disabledWrites || !selectedView} loading={mutating}>{t('删除视图')}</Button>
@@ -586,8 +598,9 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
       {viewTotal > 100 ? <Space className="problem-center__view-pages"><Button disabled={viewOffset === 0} onClick={() => setViewOffset(Math.max(0, viewOffset - 100))}>{t('上一页')}</Button><span>{viewOffset + 1}–{Math.min(viewOffset + 100, viewTotal)} / {viewTotal}</span><Button disabled={viewOffset + 100 >= viewTotal} onClick={() => setViewOffset(viewOffset + 100)}>{t('下一页')}</Button></Space> : null}
     </>;
   const statusCounts = result?.statusCounts.length ? <Space wrap className="problem-center__counts">{result.statusCounts.map((entry) => <Tag key={entry.status}>{t(statusLabels[entry.status])}: {entry.count}</Tag>)}</Space> : null;
-  const updateColumnOrder = (keys: string[]) => changeColumnLayout({ order: keys.filter((key): key is LayoutKey => (processOnly ? processColumns : allColumns).includes(key as ColumnKey)) });
-  const updateVisibleColumns = (keys: string[]) => changeColumnLayout({ visible: keys.filter((key): key is LayoutKey => (processOnly ? processColumns : allColumns).includes(key as ColumnKey)) });
+  const isLayoutColumn = (key: string): key is LayoutKey => (processOnly ? processColumns : allColumns).some(column => column === key);
+  const updateColumnOrder = (keys: string[]) => changeColumnLayout({ order: keys.filter(isLayoutColumn) });
+  const updateVisibleColumns = (keys: string[]) => changeColumnLayout({ visible: keys.filter(isLayoutColumn) });
   const emptyText = <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={page > 1 && (result?.total ?? 0) > 0 ? t('本页暂无问题') : t(processOnly && Object.keys(appliedFilters).length ? '没有匹配的问题' : '暂无问题')} />;
   const refresh = () => {
     if (processOnly && appliedFilters.overdueAt) {
@@ -601,12 +614,12 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
   if (processOnly) return <main className="problem-center process-quality-page">
     <h1 className="sr-only">{t(followupTitle)}</h1>
     <Feedback error={organizationError} t={t} />
-    {statusCounts}
     <section aria-label={t('问题列表')} className="process-quality-card process-quality-compact-ledger">
+      <span className="sr-only" role="status">{resultLoading ? t('加载中') : ''}</span>
       <LedgerTable<ProblemItem> compactHeaders compactLayout pinnedHorizontalScroll className="process-quality-ledger"
         actionBar={<div className="process-quality-toolbar-main" role="group" aria-label={t('台账工具栏')}>
           <Input.Search aria-label={t('搜索报告编号或问题标题')} placeholder={t('搜索报告编号或问题标题')} allowClear maxLength={100} disabled={!organizationId} value={searchInput}
-            onChange={event => setSearchInput(event.target.value)} onSearch={search => applyFilters(false, normalizeFollowupFilters({ ...(filterOpen ? filters : appliedFilters), search }), filterOpen ? draftSort : sort, true)} />
+            onChange={event => setSearchInput(event.target.value)} onSearch={search => applyFilters(false, normalizeFollowupFilters({ ...(filterOpen ? filters : appliedFilters), search }), true)} />
           <LedgerFilterPopover open={filterOpen} trigger={filterTrigger} label={t('筛选条件')} count={(appliedFilters.processFollowupFilters?.items.length ?? 0) + Number(!!appliedFilters.overdueAt)} disabled={!organizationId}
             onOpen={openFilters} onDismiss={applyFilters} onFocus={focusFilter}>
             <LedgerFilterPanel anchor={filterAnchor} trigger={filterTrigger} label={t('筛选面板')} title={t('筛选条件')} closeLabel={t('关闭筛选')} onDismiss={applyFilters}>
@@ -620,9 +633,8 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
                 {draftGroup.items.map((item, index) => {
                   const { field, operator } = item;
                   const valueLabel = `${t('筛选值')} ${index + 1}`;
-                  const choices = field === 'stage' ? Object.entries(followupStageLabels).map(([value, text]) => [value, t(text)])
-                    : field === 'status' ? statuses.map(value => [value, t(statusLabels[value])])
-                      : field === 'severity' ? followupSeverities.map(value => [value, severityText(value)]) : undefined;
+                  const choices = field === 'stage' ? followupStageGroups.map(({ value, label }) => [value, t(label)])
+                    : field === 'severity' ? followupSeverities.map(value => [value, severityText(value)]) : undefined;
                   const updateValue = (value?: string) => updateCondition(index, { ...item, value });
                   return <LedgerFilterCondition key={index} index={index} field={field} operator={operator} label={t}
                     fieldRef={filterRow === index ? filterControl : undefined}
@@ -638,28 +650,38 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
                   </LedgerFilterCondition>;
                 })}
               </div>
-              {draftTooLong ? <Alert type="warning" showIcon title={t('筛选内容过长，请缩短文字或减少条件。')} /> : null}
+              {draftFilterError ? <Alert type="warning" showIcon title={t(draftFilterError)} /> : null}
               <Space wrap>
                 <Button disabled={draftGroup.items.length >= followupMaxItems} onClick={() => { setFilterRow(draftGroup.items.length); setDraftGroup({ ...draftGroup, items: [...draftGroup.items, newCondition('stage')] }); }}>{t('添加筛选条件')}</Button>
-                <Button onClick={() => { applyFilters(true, {}, defaultConfiguration.sort, true); }}>{t('恢复系统默认筛选')}</Button>
-                <Button aria-label={t('清空')} onClick={() => { setFilterRow(undefined); setFilters(current => ({ search: current.search })); setDraftSort(defaultConfiguration.sort); }}>{t('清空')}</Button>
-                <Button type="primary" disabled={draftTooLong} onClick={() => applyFilters(true)}>{t('应用筛选')}</Button>
+                <Button onClick={() => applyFilters(true, {}, true)}>{t('恢复系统默认筛选')}</Button>
+                <Button aria-label={t('清空')} onClick={() => { setFilterRow(undefined); setFilters(current => ({ search: current.search })); }}>{t('清空')}</Button>
+                <Button type="primary" disabled={!!draftFilterError} onClick={() => applyFilters(true)}>{t('应用筛选')}</Button>
               </Space>
-              <div className="problem-center problem-center__popup">
-                <div className="problem-center__filters">
-                  <label>{t('排序字段')}<select aria-label={t('排序字段')} value={draftSort.sortBy} onChange={event => setDraftSort(current => ({ ...current, sortBy: event.target.value as ProblemSort['sortBy'] }))}>{sortFields.map(value => <option key={value} value={value}>{t(value === 'severity' ? '风险' : value === 'dueAt' ? '办理期限' : sortLabels[value])}</option>)}</select></label>
-                  <label>{t('排序方向')}<select aria-label={t('排序方向')} value={draftSort.sortDirection} onChange={event => setDraftSort(current => ({ ...current, sortDirection: event.target.value === 'asc' ? 'asc' : 'desc' }))}><option value="desc">{t('降序')}</option><option value="asc">{t('升序')}</option></select></label>
-                </div>
-                {organizationControl}
-                {viewControls}
-              </div>
             </LedgerFilterPanel>
           </LedgerFilterPopover>
+          <Popover open={sortOpen} onOpenChange={open => {
+            if (open) {
+              if (filterOpen && draftFilterError) return;
+              if (filterOpen) applyFilters(false);
+              sortAnchor.current = sortTrigger.current ?? undefined;
+              setDraftSort(sort);
+              setSortOpen(true);
+            } else closeSort(false);
+          }} afterOpenChange={open => { if (open) sortField.current?.focus({ preventScroll: true }); }} trigger="click" placement="bottomLeft" align={{ overflow: { shiftX: true } }} destroyOnHidden
+            content={<LedgerFilterPanel anchor={sortAnchor} trigger={sortTrigger} label={t('排序')} title={t('排序')} closeLabel={t('关闭排序')} onDismiss={closeSort}>
+              <div className="problem-center problem-center__sort-fields">
+                <label>{t('排序字段')}<select ref={sortField} aria-label={t('排序字段')} value={draftSort.sortBy} onChange={event => setDraftSort(current => ({ ...current, sortBy: event.target.value as ProblemSort['sortBy'] }))}>{sortFields.filter(value => value !== 'status').map(value => <option key={value} value={value}>{t(value === 'severity' ? '风险' : value === 'dueAt' ? '办理期限' : sortLabels[value])}</option>)}</select></label>
+                <label>{t('排序方向')}<select aria-label={t('排序方向')} value={draftSort.sortDirection} onChange={event => setDraftSort(current => ({ ...current, sortDirection: event.target.value === 'asc' ? 'asc' : 'desc' }))}><option value="desc">{t('降序')}</option><option value="asc">{t('升序')}</option></select></label>
+              </div>
+              <Button type="primary" onClick={applySort}>{t('应用排序')}</Button>
+            </LedgerFilterPanel>}>
+            <Button ref={sortTrigger} aria-label={t('排序')} aria-haspopup="dialog" aria-expanded={sortOpen} disabled={!organizationId} icon={<ArrowDownUp size={14} />}>{t('排序')}</Button>
+          </Popover>
           <Button aria-label={t('刷新')} loading={resultLoading} disabled={!organizationId} onClick={refresh}>{t('刷新')}</Button>
         </div>}
-        ledgerId={ledgerId} organizationId={organizationId} viewId={selectedViewId || 'default'} requiredColumnKeys={['reportNumber']}
+        ledgerId={ledgerId} organizationId={organizationId} viewId="default" requiredColumnKeys={['reportNumber']}
         columnOrder={columnOrder} visibleColumnKeys={visibleColumns} onColumnOrderChange={updateColumnOrder} onVisibleColumnKeysChange={updateVisibleColumns}
-        rowKey="id" loading={resultLoading} columns={columns} dataSource={result?.items ?? []} locale={{ emptyText: resultLoading ? t('加载中') : emptyText }}
+        rowKey="id" loading={resultLoading} columns={columns} dataSource={result?.items ?? []} locale={{ emptyText: resultLoading ? null : emptyText }}
         bodyFallback={resultError ? <Space wrap><Feedback error={resultError} t={t} /><Button onClick={refresh}>{t('重试')}</Button></Space> : undefined}
         pagination={{ current: page, pageSize, total: result?.total ?? 0, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], showTotal: total => <Typography.Text>{t('总数')}: {total}</Typography.Text>,
           onChange: (next, size) => { setPageSize(size); setPage(size === pageSize ? Math.min(10001, next) : 1); } }} />
@@ -678,6 +700,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
     <Card title={t('保存视图')} loading={!organizationId && !organizationError}>{viewControls}</Card>
 
     <section aria-label={t('问题列表')}>
+      <span className="sr-only" role="status">{resultLoading ? t('加载中') : ''}</span>
       {statusCounts}
       <Feedback error={resultError} t={t} />
       <LedgerTable<ProblemItem> actionBar={<details className="problem-center__query" open={true}><summary>{t('筛选与排序')}</summary>
@@ -699,7 +722,7 @@ function ProblemCenterScope({ explicitOrganization, processQuality: processOnly,
         <Button type="primary" onClick={() => { setAppliedFilters({ ...filters }); setPage(1); }}>{t('查询')}</Button>
         <Button onClick={() => applyConfiguration(defaultConfiguration, '')}>{t('重置')}</Button>
       </Space>
-      </details>} ledgerId={ledgerId} organizationId={organizationId} viewId={selectedViewId || 'default'} toolbarContent={!resultError && result ? <><Typography.Text>{t('总数')}: {result.total}</Typography.Text><Pagination current={page} pageSize={pageSize} total={result.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPageSize(nextPageSize); setPage(Math.min(10001, nextPageSize === pageSize ? nextPage : 1)); }} /></> : null} requiredColumnKeys={processQuality ? ['reportNumber', 'processStage', 'processDeadlines'] : ['reportNumber']} columnOrder={columnOrder} visibleColumnKeys={visibleColumns} onColumnOrderChange={keys => changeColumnLayout({ order: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} onVisibleColumnKeysChange={keys => changeColumnLayout({ visible: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} rowKey="id" loading={resultLoading} columns={columns} showHeader={!resultError} dataSource={resultError ? [] : result?.items ?? []} pagination={false} locale={{ emptyText: resultError ? null : resultLoading ? t('加载中') : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={page > 1 && (result?.total ?? 0) > 0 ? t('本页暂无问题') : t('暂无问题')} /> }} scroll={{ x: 'max-content' }} />
+      </details>} ledgerId={ledgerId} organizationId={organizationId} viewId={selectedViewId || 'default'} toolbarContent={!resultError && result ? <><Typography.Text>{t('总数')}: {result.total}</Typography.Text><Pagination current={page} pageSize={pageSize} total={result.total} showSizeChanger pageSizeOptions={[10, 20, 50, 100]} onChange={(nextPage, nextPageSize) => { setPageSize(nextPageSize); setPage(Math.min(10001, nextPageSize === pageSize ? nextPage : 1)); }} /></> : null} requiredColumnKeys={processQuality ? ['reportNumber', 'processStage', 'processDeadlines'] : ['reportNumber']} columnOrder={columnOrder} visibleColumnKeys={visibleColumns} onColumnOrderChange={keys => changeColumnLayout({ order: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} onVisibleColumnKeysChange={keys => changeColumnLayout({ visible: keys.filter((key): key is ColumnKey => allColumns.includes(key as ColumnKey)) })} rowKey="id" loading={resultLoading} columns={columns} showHeader={!resultError} dataSource={resultError ? [] : result?.items ?? []} pagination={false} locale={{ emptyText: resultError || resultLoading ? null : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={page > 1 && (result?.total ?? 0) > 0 ? t('本页暂无问题') : t('暂无问题')} /> }} scroll={{ x: 'max-content' }} />
     </section>
   </main>;
 }

@@ -13,6 +13,7 @@ import { SupplierWorkflowActions } from './SupplierWorkflowActions';
 import { useSupplierData } from './useSupplierData';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { SupplierEightDWorkspace } from '../supplier-eight-d/SupplierEightDWorkspace';
+import { EightDWorkspaceLoading } from '../internal-eight-d/EightDWorkspaceLoading';
 import { isSupplierRecordAccessDenied } from '../supplier-eight-d/supplier-eight-d';
 import { SupplierEightDIssueButton } from './SupplierEightDIssueButton';
 import './supplier-quality.css';
@@ -163,10 +164,14 @@ function ResponseForm({ record, portal, saved }: { record: SupplierProblem; port
   </section>;
 }
 
+function keepIssuedEightD(record: SupplierProblem) {
+  return record.controlledEightD === true && record.stage === 'ISSUED';
+}
+
 function ProblemDetail({ id, portal }: { id: string; portal: boolean }) {
   const leave = useNavigationGuard();
   const [revisionPage, setRevisionPage] = useState(1);
-  const result = useSupplierData<SupplierProblem>(`${supplierApi(portal)}/problems/${id}?revisionPage=${revisionPage}&revisionPageSize=10`);
+  const result = useSupplierData<SupplierProblem>(`${supplierApi(portal)}/problems/${id}?revisionPage=${revisionPage}&revisionPageSize=10`, keepIssuedEightD);
   const [savedRecord, setSavedRecord] = useState<SupplierProblem>();
   const [notice, setNotice] = useState<string>();
   const [accessDenied, setAccessDenied] = useState(false);
@@ -184,10 +189,12 @@ function ProblemDetail({ id, portal }: { id: string; portal: boolean }) {
     if (!isSupplierRecordAccessDenied(cause)) return;
     setAccessDenied(true); setSavedRecord(undefined); setNotice(undefined);
   }
-  return <><div className="supplier-toolbar"><Link to={supplierPath(portal)}>返回台账</Link><Button onClick={() => leave(reload)}>重新加载</Button></div>
+  if (result.loading && !record && !accessDenied && !result.error) return <EightDWorkspaceLoading />;
+  const refreshingEightD = result.refreshing && !!record && keepIssuedEightD(record);
+  return <div data-eight-d-loading-shell><div className="supplier-toolbar"><Link to={supplierPath(portal)}>返回台账</Link><Button loading={!!refreshingEightD} onClick={() => leave(reload)}>重新加载</Button></div>
     <LoadError error={result.error} retry={() => leave(reload)} />
     {accessDenied ? <Alert type="error" showIcon title="当前会话或权限已失效，敏感资料已清除；请重新加载核对。" /> : null}
-    {result.loading ? <Spin /> : null}
+    {result.loading && !refreshingEightD ? <Spin /> : null}
     {notice ? <Alert type="success" showIcon title={notice} /> : null}
     {record && !result.error && !accessDenied ? <div key={record.id}>
       <section className="supplier-card"><Typography.Title level={2}>{record.title}</Typography.Title><Descriptions column={{ xs: 1, sm: 2 }} items={[
@@ -204,13 +211,13 @@ function ProblemDetail({ id, portal }: { id: string; portal: boolean }) {
       {!portal && record.canEditFacts ? <ProblemForm record={record} saved={saved} onDenied={denied} onIssued={() => { reload(); setNotice('正式8D已发起，资料释放需另行确认。'); }} /> : null}
       {!portal && !record.canEditFacts && record.controlledEightD && record.stage === 'DRAFT' ? <SupplierEightDIssueButton id={record.id} version={record.version}
         onIssued={() => { reload(); setNotice('正式8D已发起，资料释放需另行确认。'); }} onDenied={denied} /> : null}
-      {record.controlledEightD ? record.stage === 'ISSUED' ? <SupplierEightDWorkspace supplierProblemId={record.id} portal={portal} onDenied={denied} /> : null : <>
+      {record.controlledEightD ? record.stage === 'ISSUED' ? <SupplierEightDWorkspace supplierProblemId={record.id} portal={portal} onDenied={denied} refreshingDetail={refreshingEightD} refreshRevision={result.loadedRevision} /> : null : <>
         <ResponseForm record={record} portal={portal} saved={saved} />
         {!portal ? <SupplierWorkflowActions record={record} changed={saved} reload={reload} /> : null}
         <SupplierResponseHistory record={record} page={revisionPage} changePage={setRevisionPage} />
       </>}
     </div> : null}
-  </>;
+  </div>;
 }
 
 export function SupplierQualityPage({ portal = false }: { portal?: boolean }) {

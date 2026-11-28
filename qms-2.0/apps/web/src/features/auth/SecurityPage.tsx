@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Form, Input, QRCode, Skeleton, Typography } from 'antd';
+import { Alert, Button, Card, Form, Input, QRCode, Typography } from 'antd';
+import { QmsLoading } from '../../components/QmsLoading';
 import { KeyRound, Mail, ShieldCheck, Smartphone } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type { components } from '@qms/contracts';
@@ -79,7 +80,7 @@ function SecurityContentScope({ embedded = false, onCloseStateChange }: Security
   }
   return <div className="qms-security-content" aria-busy={busy}>
     <GovernanceFeedback error={error} retry={() => setRevision((value) => value + 1)} />
-    {!status && !error ? <Skeleton active paragraph={{ rows: 5 }} /> : null}
+    {!status && !error ? <QmsLoading label={t('加载中')} size="region" /> : null}
     {codes ? <section className="qms-security-section" aria-label={t('恢复码')}>
       <Alert type="warning" showIcon title={t('请离线保存恢复码，每个仅可使用一次。关闭后无法再次查看。')} />
       <pre className="qms-security-recovery-codes">{codes.join('\n')}</pre>

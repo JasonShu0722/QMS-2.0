@@ -36,7 +36,7 @@ export function SupplierWorkflowLog({ report, base, portal, read }: {
     {!error && !rounds && <Spin aria-label={text('正在加载审批历史', 'Loading approval history')} />}
     {!error && rounds && !rounds.length && <p>{text('暂无审批轮次', 'No approval rounds yet')}</p>}
     {!error && rounds?.map(round => <article className={styles.logRound} key={round.id}>
-      <header><h4>{text('轮次', 'Round')} {round.roundNumber} <Tag>{status(round.status)}</Tag></h4><p>{text('内容版本', 'Content version')} {round.contentVersion} · {text('创建时间', 'Created')} <time dateTime={round.createdAt}>{round.createdAt}</time> · {text('更新时间', 'Updated')} <time dateTime={round.updatedAt}>{round.updatedAt}</time></p></header>
+      <header><h4>{text('轮次', 'Round')} {round.roundNumber} <Tag>{status(round.status)}</Tag></h4><p>{text('创建时间', 'Created')} <time dateTime={round.createdAt}>{round.createdAt}</time> · {text('更新时间', 'Updated')} <time dateTime={round.updatedAt}>{round.updatedAt}</time></p></header>
       <div className={styles.logDuties}>{round.duties.map(item => <div key={item.id}>
         <strong>{duty(item.duty)}</strong><span> · {status(item.status)}</span>
         {!portal && 'userDisplayName' in item && item.userDisplayName && <span> · {item.userDisplayName}</span>}

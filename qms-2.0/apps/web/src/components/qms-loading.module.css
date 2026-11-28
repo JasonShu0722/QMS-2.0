@@ -1,0 +1,75 @@
+.page, .region, .inline {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 12px;
+  color: var(--qms-text, inherit);
+  text-align: center;
+}
+
+.page {
+  --qms-loading-dot: 5px;
+  min-block-size: min(60dvh, 480px);
+  gap: 16px;
+  padding: 24px 12px;
+}
+
+.region {
+  --qms-loading-dot: 3px;
+  min-block-size: 72px;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+}
+
+.matrix[data-qms-loading-mark] {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+  width: max-content;
+  height: auto;
+  gap: calc(var(--qms-loading-dot, 2px) * 2);
+  color: var(--qms-accent-action, currentColor);
+  animation: none;
+}
+
+:global(.ant-spin-sm) .matrix { --qms-loading-dot: 1.5px; }
+:global(.ant-spin-lg) .matrix { --qms-loading-dot: 3px; }
+
+.glyph {
+  display: grid;
+  grid-template-columns: repeat(5, var(--qms-loading-dot, 2px));
+  gap: calc(var(--qms-loading-dot, 2px) * .6);
+}
+
+.glyph > span {
+  block-size: var(--qms-loading-dot, 2px);
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.dim { opacity: .12; }
+.lit { animation: sweep 2s ease-in-out infinite both; }
+
+.screenReaderText {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@keyframes sweep {
+  0%, 75%, 100% { opacity: .58; }
+  28% { opacity: 1; }
+  49% { opacity: .72; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lit { animation: none; }
+}

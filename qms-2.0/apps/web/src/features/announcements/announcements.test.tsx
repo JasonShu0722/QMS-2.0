@@ -15,6 +15,32 @@ beforeEach(() => {
   vi.mocked(csrfToken).mockResolvedValue('csrf-test');
 });
 
+it('retries a failed recipient lookup from the draft and clears the loading state', async () => {
+  let attempts = 0;
+  const draft = { id: 'draft-1', title: '定向公告', content: '正文', audience: 'SELECTED', status: 'DRAFT', recipientUserIds: ['user-1'], version: 1 };
+  vi.mocked(apiRequest).mockImplementation(async path => {
+    if (path.endsWith('/mine')) return { items: [], unreadMustReadCount: 0 };
+    if (path.includes('/manage?')) return { items: [draft], total: 1, page: 1, pageSize: 20 };
+    if (path.endsWith('/audience-users')) {
+      attempts += 1;
+      if (attempts === 1) throw new Error('recipient lookup failed');
+      return { items: [], total: 0 };
+    }
+    throw new Error(path);
+  });
+  render(<AnnouncementsPage />);
+  fireEvent.click(await screen.findByText('公告管理'));
+  fireEvent.click(await screen.findByRole('button', { name: /^编\s*辑$/ }));
+  const dialog = within(await screen.findByRole('dialog', { name: '编辑公告草稿' }));
+  const failure = await dialog.findByText('接收人名单加载失败');
+  await waitFor(() => expect(failure).toBeVisible());
+  expect(dialog.queryByRole('status', { name: '正在加载接收人名单' })).toBeNull();
+  fireEvent.click(dialog.getByRole('button', { name: /^重\s*试$/ }));
+  const empty = await dialog.findByText(/可选 0 位内部用户/);
+  await waitFor(() => expect(empty).toBeVisible());
+  expect(dialog.queryByText('接收人名单加载失败')).toBeNull();
+});
+
 it('reminds the recipient of an unread mandatory announcement and records explicit reading', async () => {
   let read = false;
   vi.mocked(apiRequest).mockImplementation(async (path) => {

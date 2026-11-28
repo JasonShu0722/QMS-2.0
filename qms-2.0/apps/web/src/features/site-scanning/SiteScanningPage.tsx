@@ -1,7 +1,8 @@
-import { Alert, Button, Card, Empty, Input, Select, Space, Spin, Tag } from 'antd';
+import { Alert, Button, Card, Empty, Input, Select, Space, Tag } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { components } from '@qms/contracts';
 import { useLanguage } from '../../i18n/Language';
+import { QmsLoading } from '../../components/QmsLoading';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
 import { useNavigationBusy } from '../../layouts/UnsavedChanges';
 import './site-scanning.css';
@@ -50,7 +51,7 @@ export function SiteScanningPage() {
     } catch (cause) { setError(cause); } finally { pending.current = false; setBusy(false); }
   }
 
-  if (loading) return <main className="site-scanning-page"><Spin /> </main>;
+  if (loading) return <main className="site-scanning-page"><QmsLoading size="page" label={t('加载中')} /></main>;
   if (error && denied(error)) return <main className="site-scanning-page"><Alert type="warning" showIcon title="暂无现场扫码权限" /></main>;
   return <main className="site-scanning-page"><h1 className="sr-only">{t('关键件条码校验')}</h1>
     {error ? <Alert type="error" showIcon title={error instanceof Error ? error.message : safeAccountError(error)} action={retryBody ? <Button disabled={busy} onClick={() => void scan()}>重试扫码</Button> : undefined} /> : null}

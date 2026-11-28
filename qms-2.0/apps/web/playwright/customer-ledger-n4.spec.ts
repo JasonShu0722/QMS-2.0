@@ -167,7 +167,7 @@ test('registers the formal ledger and follows real CQE, FAE and SQE appointments
     expect(completed.status()).toBe(202);
     const pendingFile = await completed.json() as Schema['FileDto'];
     expect(pendingFile).toMatchObject({ id: reservation.file.id, resourceType: 'CustomerComplaint', resourceId: created.id });
-    await expect(sourcePanel.getByText('扫描通过，可作为证据', { exact: true })).toBeVisible({ timeout: 20_000 });
+    await expect(sourcePanel.getByRole('img', { name: '扫描通过，可作为证据', exact: true })).toBeVisible({ timeout: 20_000 });
     const cleanFile = await positionRead<Schema['FileDto']>(qe.page.request, `/api/v1/files/${pendingFile.id}`);
     expect(cleanFile).toMatchObject({ status: 'AVAILABLE', scanStatus: 'CLEAN', resourceType: 'CustomerComplaint', resourceId: created.id,
       originalName: sourceName, sizeBytes: sourceBytes.byteLength, sha256: sourceHash });
@@ -180,7 +180,7 @@ test('registers the formal ledger and follows real CQE, FAE and SQE appointments
     expect(persistedFiles).toHaveLength(1);
     expect(persistedFiles[0]).toMatchObject({ id: cleanFile.id, status: 'AVAILABLE', scanStatus: 'CLEAN', resourceType: 'CustomerComplaint', resourceId: created.id });
     await expect(sourcePanel.getByText(sourceName, { exact: true })).toBeVisible();
-    await expect(sourcePanel.getByText('扫描通过，可作为证据', { exact: true })).toBeVisible();
+    await expect(sourcePanel.getByRole('img', { name: '扫描通过，可作为证据', exact: true })).toBeVisible();
     stage = 'CQE downloads persisted original customer list and verifies exact bytes';
     const downloading = qe.page.waitForEvent('download', { timeout: 15_000 });
     await sourcePanel.getByRole('button', { name: '下载附件', exact: true }).click();

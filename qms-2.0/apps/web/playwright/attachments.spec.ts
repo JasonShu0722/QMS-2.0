@@ -41,22 +41,27 @@ test('real internal and supplier uploads remain isolated until scanned, download
     const completedFiles = [];
     for (const [position, currentPage] of [page, supplierPage].entries()) {
       await login(currentPage, fixtures[position]!);
-      const completion = currentPage.waitForResponse((response) => /\/api\/v1\/files\/[^/]+\/complete$/.test(response.url()));
+      const completion = currentPage.waitForResponse((response) => /\/api\/v1\/files\/[^/]+\/complete$/.test(response.url()), { timeout: 25_000 });
       await currentPage.getByLabel('选择附件').setInputFiles({ name: `evidence-${position}.txt`, mimeType: 'text/plain', buffer: clean });
       const response = await completion;
       expect(response.status()).toBe(202);
       const file = await response.json() as components['schemas']['FileDto'];
       expect(file.status).toBe('QUARANTINED');
       completedFiles.push(file);
-      await expect(currentPage.getByText('等待安全扫描', { exact: true })).toBeVisible();
+      await expect(currentPage.getByRole('img', { name: '等待安全扫描', exact: true })).toBeVisible();
       await expect(currentPage.getByRole('button', { name: '下载附件', exact: true })).toHaveCount(0);
       expect((await post(currentPage.request, `/api/v1/files/${file.id}/download`)).status()).toBe(409);
     }
     expect((await supplierPage.request.get(`/api/v1/files/${completedFiles[0]!.id}`)).status()).toBe(403);
     expect((await post(supplierPage.request, `/api/v1/files/${completedFiles[0]!.id}/download`)).status()).toBe(403);
     scan();
-    for (const currentPage of [page, supplierPage]) {
+    for (const [position, currentPage] of [page, supplierPage].entries()) {
       await expect(currentPage.getByRole('button', { name: '下载附件', exact: true })).toBeVisible({ timeout: 20000 });
+      await currentPage.getByRole('button', { name: `预览附件 evidence-${position}.txt` }).click();
+      const preview = currentPage.getByRole('dialog');
+      await expect(preview.getByText(clean.toString(), { exact: true })).toBeVisible();
+      await currentPage.keyboard.press('Escape');
+      await expect(preview).toBeHidden();
       const pending = currentPage.waitForEvent('download');
       await currentPage.getByRole('button', { name: '下载附件', exact: true }).click();
       const stream = await (await pending).createReadStream();
@@ -67,17 +72,18 @@ test('real internal and supplier uploads remain isolated until scanned, download
     }
     await page.getByRole('button', { name: '删除附件', exact: true }).click();
     await page.getByRole('button', { name: '确认删除附件', exact: true }).click();
-    await expect(page.getByText('已删除，保留历史记录', { exact: true })).toBeVisible();
+    await expect(page.getByRole('listitem').filter({ hasText: 'evidence-0.txt' })).toHaveCount(0);
+    expect((await (await page.request.get(`/api/v1/files/${completedFiles[0]!.id}`)).json()).status).toBe('DELETED');
     expect((await post(page.request, `/api/v1/files/${completedFiles[0]!.id}/download`)).status()).toBe(409);
     const harmlessSignature = Buffer.from(['X5O!P%@AP[4', '\\PZX54(P^)7CC)7}', '$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'].join(''));
     const completion = page.waitForResponse((response) => /\/api\/v1\/files\/[^/]+\/complete$/.test(response.url()));
     await page.getByLabel('选择附件').setInputFiles({ name: 'scanner-test.txt', mimeType: 'text/plain', buffer: harmlessSignature });
     expect((await completion).status()).toBe(202);
     scan();
-    await expect(page.getByText('扫描未通过，附件已隔离', { exact: true })).toBeVisible({ timeout: 20000 });
+    await expect(page.getByRole('img', { name: '扫描未通过，附件已隔离', exact: true })).toBeVisible({ timeout: 20000 });
     await expect(page.getByRole('button', { name: '下载附件', exact: true })).toHaveCount(0);
     await page.getByRole('button', { name: 'Language / 语言' }).click();
     await page.getByRole('menuitemradio', { name: 'English' }).click();
-    await expect(page.getByText('Scan rejected; quarantined', { exact: true })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Scan rejected; quarantined', exact: true })).toBeVisible();
   } finally { await supplierContext.close(); }
 });

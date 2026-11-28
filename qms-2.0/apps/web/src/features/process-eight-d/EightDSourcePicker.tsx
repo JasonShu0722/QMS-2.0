@@ -12,7 +12,9 @@ type Preview = components['schemas']['ProcessEightDSourcePreviewDto'];
 type Confirmation = components['schemas']['ProcessEightDSourceConfirmationDto'];
 export function EightDSourcePicker({ report, read, disabled, onChange }: { report: components['schemas']['ProcessEightDReportDto']; read: EightDRead; disabled: boolean; onChange: (value?: SourceChange) => void }) {
   const text = useEightDText();
+  const [keyword, setKeyword] = useState('');
   const [search, setSearch] = useState('');
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [page, setPage] = useState(1);
   const [data, setData] = useState<{ query: string; result: Defects }>();
   const [selected, setSelected] = useState<Defect[]>([]);
@@ -22,18 +24,31 @@ export function EightDSourcePicker({ report, read, disabled, onChange }: { repor
   const [confirmations, setConfirmations] = useState<Record<string, Confirmation>>({});
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState('');
+  const [searchError, setSearchError] = useState(false);
   const generation = useRef(0);
   const query = new URLSearchParams({ organizationId: report.organizationId, page: String(page), pageSize: '20', search }).toString();
   const defects = data?.query === query ? data.result : undefined;
   const closed = !!report.closedRevisionId;
   const remaining = report.sources.filter(source => !removed.includes(source.defectId));
+  const candidates = defects?.items.filter(item => !report.sources.some(source => source.defectId === item.id));
+  const locked = disabled || checking;
   const invalidated = () => { generation.current++; setPreview(undefined); setConfirmations({}); onChange(undefined); };
+  function submitSearch() {
+    const term = keyword.trim();
+    if (locked || !term) return;
+    setData(undefined);
+    setSearch(term);
+    setPage(1);
+    setSearchAttempt(attempt => attempt + 1);
+  }
   useEffect(() => {
-    let active = true; setError('');
+    if (!search) return;
+    let active = true;
+    setSearchError(false);
     read<Defects>(`/api/v1/process-quality/defects?${query}`).then(result => { if (active) setData({ query, result }); })
-      .catch(cause => { if (active && !aborted(cause)) setError(text('台账加载失败，请重新搜索', 'Ledger could not be loaded. Search again.')); });
+      .catch(cause => { if (active && !aborted(cause)) setSearchError(true); });
     return () => { active = false; };
-  }, [query, read, report.version]);
+  }, [query, read, report.version, search, searchAttempt]);
   useEffect(() => {
     generation.current++; setPreview(undefined); setConfirmations({}); setChecking(false); onChange(undefined);
   }, [report.version, onChange]);
@@ -60,13 +75,18 @@ export function EightDSourcePicker({ report, read, disabled, onChange }: { repor
   return <div className={styles.modal}>
 
     {closed ? <Alert type="info" title={text('关闭后仅补充来源，批准版不随关闭后来源补充改变。', 'Only sources may be supplemented after closure. The approved report stays unchanged.')} /> : null}
-    <EightDField label={text('搜索来源台账', 'Search source ledger')}><input disabled={disabled || checking} value={search} maxLength={100} onChange={event => { setSearch(event.target.value); setPage(1); }} /></EightDField>
+    <Space align="end" wrap>
+      <EightDField label={text('搜索来源台账', 'Search source ledger')}><input disabled={locked} value={keyword} maxLength={100} onChange={event => setKeyword(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) { event.preventDefault(); submitSearch(); } }} /></EightDField>
+      <Button aria-label={text('搜索', 'Search')} disabled={locked || !keyword.trim()} onClick={submitSearch}>{text('搜索', 'Search')}</Button>
+    </Space>
     {error ? <Alert type="error" title={error} /> : null}
-    {!defects ? <Spin /> : <>{!defects.items.length ? <p>{text('无匹配台账', 'No matching ledger records')}</p> : defects.items.filter(item => !report.sources.some(source => source.defectId === item.id)).map(item => <Checkbox key={item.id} disabled={disabled || checking} checked={selected.some(row => row.id === item.id)} onChange={event => { invalidated(); setSelected(previous => event.target.checked ? [...previous, item] : previous.filter(row => row.id !== item.id)); }}>{item.description} · {item.traceCode ?? '—'} · v{item.version}</Checkbox>)}
-      <Pagination size="small" current={page} pageSize={20} showSizeChanger={false} total={defects.total} disabled={disabled || checking} onChange={setPage} /></>}
+    {search && (searchError ? <Alert type="error" title={text('台账加载失败，请重新搜索', 'Ledger could not be loaded. Search again.')} /> : !defects || !candidates ? <Spin aria-label={text('搜索来源中', 'Searching sources')} /> : <>
+      {candidates.length ? candidates.map(item => <Checkbox key={item.id} disabled={locked || remaining.length + selected.length >= 100 && !selected.some(row => row.id === item.id)} checked={selected.some(row => row.id === item.id)} onChange={event => { invalidated(); setSelected(previous => event.target.checked ? [...previous, item] : previous.filter(row => row.id !== item.id)); }}>{item.description} · {item.traceCode ?? '—'}</Checkbox>) : <p>{text('无匹配台账', 'No matching ledger records')}</p>}
+      <Pagination size="small" current={page} pageSize={20} showSizeChanger={false} hideOnSinglePage total={defects.total} disabled={locked} onChange={setPage} />
+    </>)}
     <h4>{text('当前来源 / 主来源', 'Current / primary sources')}</h4>
     {report.sources.map(source => <Space wrap key={source.defectId}><Checkbox disabled={disabled || checking || closed} checked={!removed.includes(source.defectId)} onChange={event => { invalidated(); setRemoved(previous => event.target.checked ? previous.filter(id => id !== source.defectId) : [...previous, source.defectId]); }}>{String(source.snapshot.description ?? source.defectId)}</Checkbox><Radio disabled={disabled || checking || closed || removed.includes(source.defectId)} checked={primary === source.defectId} onChange={() => { invalidated(); setPrimary(source.defectId); }}>{text('主来源', 'Primary source')}</Radio></Space>)}
-    {selected.map(source => <Space wrap key={source.id}><span>{source.description} · v{source.version}</span><Button disabled={disabled || checking} onClick={() => { invalidated(); setSelected(previous => previous.filter(item => item.id !== source.id)); }}>{text('移除待补来源', 'Remove pending source')}</Button><Radio disabled={disabled || checking || closed} checked={primary === source.id} onChange={() => { invalidated(); setPrimary(source.id); }}>{text('主来源', 'Primary source')}</Radio></Space>)}
+    {selected.map(source => <Space wrap key={source.id}><span>{source.description} · {source.traceCode ?? '—'}</span><Button disabled={locked} onClick={() => { invalidated(); setSelected(previous => previous.filter(item => item.id !== source.id)); }}>{text('移除待补来源', 'Remove pending source')}</Button><Radio disabled={locked || closed} checked={primary === source.id} onChange={() => { invalidated(); setPrimary(source.id); }}>{text('主来源', 'Primary source')}</Radio></Space>)}
     {!remaining.length && !selected.length ? <Alert type="warning" title={text('至少保留一条来源', 'At least one source is required')} /> : null}
     <Button disabled={disabled || checking || !remaining.length && !selected.length} loading={checking} onClick={() => void check()}>{text('预览并核对来源关联', 'Preview source relationships')}</Button>
     {preview?.map(item => <div key={item.defectId} className={styles.row}><p>{text('来源关联核对', 'Source relationship check')} · {selected.find(source => source.id === item.defectId)?.description}</p>

@@ -1,4 +1,5 @@
-import { Alert, Button, Skeleton } from 'antd';
+import { Alert, Button } from 'antd';
+import { QmsLoading } from '../components/QmsLoading';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { components } from '@qms/contracts';
@@ -119,7 +120,7 @@ function ObservationScope({ context, session, refresh, invalidate }: { context: 
     <div className="qms-observation-cards">{enabled.map(source => {
       const data = source.key === 'api' ? api : source.key === 'exchanges' ? exchanges : services;
       return <section key={source.key} aria-label={text(source.title[0], source.title[1])} className="qms-observation-card"><h3>{text(source.title[0], source.title[1])}</h3>
-        {loading.includes(source.key) && <div role="status" aria-label={text('读取摘要中', 'Reading summary')}><Skeleton active paragraph={{ rows: 2 }} title={false} /></div>}
+        {loading.includes(source.key) && <QmsLoading label={text('读取摘要中', 'Reading summary')} size="region" />}
         {failed.includes(source.key) && <p className="qms-observation-warning">{text('此来源暂不可读取', 'This source is temporarily unavailable')}</p>}
         {data && <p className="qms-observation-time">{text('服务器查询：', 'Server query: ')}{clock(data.asOf)}</p>}
         {source.key === 'api' && api && <><dl className="qms-observation-metrics"><div><dt>{text('24 小时请求', '24h requests')}</dt><dd>{count(api.summary.requests)}</dd></div><div><dt>{text('错误（4xx / 5xx）', 'Errors (4xx / 5xx)')}</dt><dd>{count(api.summary.errors)}</dd></div></dl><p className="qms-observation-note">{text('实际窗口：', 'Actual window: ')}{clock(api.from)} — {clock(api.to)}</p><p className="qms-observation-note">{api.collector.status === 'UNKNOWN' ? text('采集完整性未知', 'Collection completeness unknown') : text(collectorLabels[api.collector.status][0], collectorLabels[api.collector.status][1])}</p></>}

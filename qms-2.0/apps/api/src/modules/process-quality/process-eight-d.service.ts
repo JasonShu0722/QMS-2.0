@@ -28,6 +28,7 @@ import type { WorkflowDeadlineContext, WorkflowDeadlinePolicy, WorkflowDeadlineS
 import { deadlineDueAt, deadlineStageOpen, parseDeadlinePolicy } from '../workflow/workflow-deadline-extension.policy.js';
 import { WorkflowDeadlineExtensionService } from '../workflow/workflow-deadline-extension.service.js';
 import { canonical, isClosureReviewNode, jsonObject, matchesCondition } from '../workflow/workflow-runtime-policy.js';
+import { domainSourceLinkChanges } from '../problem-index/domain-source-link-history.read-model.js';
 import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 import { persistWorkflowMutation } from '../workflow/workflow-start.js';
 import { ProcessDefectLedgerService } from './process-defect-ledger.service.js';
@@ -52,6 +53,7 @@ const bindingColumns = Prisma.sql`organization_id AS "organizationId", workflow_
 const iso = (date: Date | null) => date?.toISOString() ?? null;
 const json = (value: unknown) => JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
 const flowTransitions: Record<string, string> = { START: '发起制程 8D', SUBMIT: '提交关闭审核', RETURN: '退回处理', CLOSE: '关闭制程 8D', UPGRADE: '升级为制程 8D' };
+const riskLabels: Readonly<Record<string, string>> = { LOW: '低风险', MEDIUM: '中风险', HIGH: '高风险', CRITICAL: '重大风险' };
 const deadlineLabels: Record<WorkflowDeadlineStage, string> = { ANALYSIS: '分析', SUBMISSION: '完整提交', CLOSURE: '关闭' };
 const deadlineFlowActions: Record<string, string> = { REQUESTED: '申请延期', LEADER_SKIPPED_SAME_PERSON: '同人跳过管理审核',
   'LEADER_PENDING:QUALITY_PENDING': '管理审核通过', 'QUALITY_PENDING:APPROVED': '专业审核通过，延期生效',
@@ -309,7 +311,50 @@ export class ProcessEightDService {
       const transitions = await this.runtime.readTransitionProjection(tx, organizationId, problemId);
       const rounds = await this.rounds.readHistoryProjection(tx, organizationId, problemId);
       const extensions = await this.extensions.readProjection(tx, organizationId, problemId);
+      const riskAction = this.auditEvent('RISK'), sourceAction = this.auditEvent('SOURCES');
+      const changes = await this.audit.readSuccessfulResourceEvents(tx, {
+        organizationId, resourceId: problemId, resourceType: this.auditType('Report'), action: [riskAction, sourceAction],
+      });
+      const historyIds = [...new Set(changes.flatMap(change => {
+        const { sourceHistoryIds } = jsonObject(change.metadata);
+        return change.action === sourceAction && Array.isArray(sourceHistoryIds)
+          ? sourceHistoryIds.filter(id => typeof id === 'string' && isUUID(id)) : [];
+      }))];
+      const sourceLabels = new Map<string, string>();
+      if (historyIds.length && actor.organizationId === organizationId
+        && await this.feature(tx, organizationId, actor.id, this.domain.sourceReadPermission)) {
+        const history = await domainSourceLinkChanges(tx, { organizationId, problemIndexId: problemId,
+          sourceDomain: this.domain.sourceDomain, sourceType: this.domain.sourceType }, historyIds);
+        for (const link of history) {
+          const { description, traceCode } = jsonObject(link.sourceSnapshot);
+          const label = [traceCode, description].filter(value => typeof value === 'string')
+            .map(value => value.replace(/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}/gi, ' ').replace(/[\s\p{Cc}\p{Cf}]+/gu, ' ').trim())
+            .find(value => value.length > 0);
+          if (label) sourceLabels.set(`${link.id}:${link.action}:${link.sourceId}`, Array.from(label).slice(0, 80).join(''));
+        }
+      }
       const events: { occurredAt: string; userId: string | null; content: string; order: number }[] = [];
+      for (const change of changes) {
+        const { previousSeverity, severity, addedSourceIds, removedSourceIds, sourceHistoryIds, status } = jsonObject(change.metadata);
+        const details: string[] = [];
+        if (change.action === riskAction && typeof previousSeverity === 'string' && typeof severity === 'string'
+          && previousSeverity !== severity && Object.hasOwn(riskLabels, previousSeverity) && Object.hasOwn(riskLabels, severity)) {
+          details.push(`调整风险：${riskLabels[previousSeverity]} → ${riskLabels[severity]}`);
+        }
+        if (change.action === sourceAction) {
+          const sourceGroups = [
+            { ids: addedSourceIds, action: 'LINKED', title: status === 'CLOSED' ? '关闭后补充关联来源' : '新增关联来源' },
+            { ids: removedSourceIds, action: 'UNLINKED', title: '移除关联来源' },
+          ];
+          for (const { ids, action, title } of sourceGroups) {
+            if (!Array.isArray(ids) || !ids.length) continue;
+            const labels = ids.map(id => Array.isArray(sourceHistoryIds)
+              ? sourceHistoryIds.map(historyId => sourceLabels.get(`${historyId}:${action}:${id}`)).find(Boolean) : undefined);
+            details.push(`${title}（${ids.length} 条）${labels.every(Boolean) ? `：${labels.join('、')}` : ''}`);
+          }
+        }
+        if (details.length) events.push({ occurredAt: change.createdAt.toISOString(), userId: change.actorUserId, order: 3, content: details.join('；') });
+      }
       const returnsWithRound = new Set(rounds.flatMap(round => {
         const hasDecision = round.duties.some(duty => duty.status !== 'APPROVED' && duty.decidedAt && duty.decidedBy);
         return round.status === 'CANCELLED' || (round.status === 'RETURNED' && hasDecision)
@@ -650,6 +695,7 @@ export class ProcessEightDService {
     const add = await Promise.all(input.add.map(async source => ({ ...await this.ledger.sourceReference(actor, source.defectId), sourceVersion: source.expectedVersion })));
     add.forEach((reference, index) => this.assertSourceReference(reference, input.add[index]!.defectId));
     const confirmedSources: ProcessEightDSourceConfirmation[] = [];
+    let sourceHistoryIds: string[] = [];
     let sourceLinksWritten: (() => Promise<void>) | undefined;
     return this.command(actor, problemId, input, 'SOURCES', key, traceId, async (tx, record) => {
       await this.authorizeRead(tx, actor, record); await this.authorize(tx, actor, `${this.domain.permissionPrefix}:sources`);
@@ -669,6 +715,7 @@ export class ProcessEightDService {
           if (confirmed) confirmedSources.push(confirmed);
           return found;
         },
+        collectHistoryIds: ids => { sourceHistoryIds = ids; },
       }, tx);
       await sourceLinksWritten?.();
       await this.confirmations(tx, actor, problemId, confirmedSources);
@@ -682,7 +729,7 @@ export class ProcessEightDService {
         sourceLinksWritten = await this.ledger.prepareSourceLinks(tx, add, actor);
       }
       for (const source of [...add].sort((a, b) => a.sourceId.localeCompare(b.sourceId))) await this.resolveSource(tx, source, actor);
-    });
+    }, () => sourceHistoryIds);
   }
 
   async deadlines(actor: ProcessEightDActor, problemId: string, input: ProcessEightDDeadlinesDto, traceId: string, key: string) {
@@ -1063,7 +1110,7 @@ export class ProcessEightDService {
 
   private async command(actor: ProcessEightDActor, problemId: string, input: ProcessEightDVersionInput, action: string, key: string, traceId: string,
     work: (tx: Prisma.TransactionClient, record: ProcessEightDRecord) => Promise<void | ReassignmentAccess>, additionalUserIds: string[] = [],
-    lockDomain?: (tx: Prisma.TransactionClient, record: ProcessEightDRecord) => Promise<void>) {
+    lockDomain?: (tx: Prisma.TransactionClient, record: ProcessEightDRecord) => Promise<void>, sourceHistoryIds?: () => string[]) {
     this.key(key); this.scope(actor);
     if (!Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1) workflowError('CONCURRENCY_CONFLICT', 400);
     const digest = eightDRequestDigest({ problemId, action, input });
@@ -1085,8 +1132,13 @@ export class ProcessEightDService {
       const current = await this.lockRecord(tx, actor, problemId, 'READ');
       await this.authorizeRead(tx, actor, current);
       const response = await this.reportModel(tx, actor, current);
+      const sourceChange = action === 'SOURCES' ? input as ProcessEightDSourcesDto : undefined;
       await this.audit.record({ organizationId: actor.organizationId, actorUserId: actor.id, action: this.auditEvent(action), resourceType: this.auditType('Report'),
         resourceId: problemId, outcome: 'SUCCESS', traceId, metadata: { resourceVersion: current.report.version, contentVersion: current.report.contentVersion,
+          ...(action === 'RISK' && record.problem.severity !== current.problem.severity
+            ? { previousSeverity: record.problem.severity, severity: current.problem.severity } : {}),
+          ...(sourceChange ? { addedSourceIds: sourceChange.add.map(source => source.defectId).sort(), removedSourceIds: [...sourceChange.removeDefectIds].sort(), sourceHistoryIds: sourceHistoryIds?.(),
+            ...(current.report.closedRevisionId ? { status: 'CLOSED' } : {}) } : {}),
           ...(typeof (input as { reason?: string }).reason === 'string' ? { reason: (input as { reason?: string }).reason! } : {}) } }, tx);
       await this.outbox.enqueue({ eventKey: `${this.domain.resourceType}:${problemId}:${action}:${createHash('sha256').update(key).digest('hex')}`, eventType: this.auditEvent('CHANGED'), aggregateType: this.auditType('Report'), aggregateId: problemId,
         payload: { organizationId: actor.organizationId, problemId, rowVersion: current.report.version, contentVersion: current.report.contentVersion, action,

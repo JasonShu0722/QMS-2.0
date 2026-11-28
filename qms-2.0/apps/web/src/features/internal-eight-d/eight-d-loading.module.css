@@ -1,0 +1,8 @@
+:global(:is([data-eight-d-loading-shell], [data-eight-d-loading-shell] *):has([data-eight-d-loading]))
+  > :global(:not([data-eight-d-loading], :has([data-eight-d-loading]))) {
+  display: none;
+}
+
+:global([data-eight-d-loading-shell]:has([data-eight-d-loading]) .problem-workspace__body) {
+  grid-template-columns: minmax(0, 1fr);
+}

@@ -1,4 +1,5 @@
-import { Alert, Button, Skeleton } from 'antd';
+import { Alert, Button } from 'antd';
+import { QmsLoading, QmsLoadingMark } from '../components/QmsLoading';
 import { ArrowUpRight, Clock3, RefreshCw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -130,7 +131,9 @@ function HomeScope({ context, identity, session, refresh, invalidate }: {
     {denied ? <div className="qms-console-state"><Alert showIcon type="error" role="alert" title={text('管理访问已失效或无权限，请重新核验。', 'Management access expired or denied. Verify authorization again.')} /><Button onClick={refresh}>{text('重新核验权限', 'Verify authorization again')}</Button></div>
       : <>
         {error === 'network' && <Alert showIcon type="error" role="alert" title={text('管理事项读取失败，请重试。', 'Management items could not be read. Retry.')} />}
-        {loading && <div role="status" aria-label={text('读取管理事项中', 'Reading management items')} className="qms-console-home-loading">{data ? text('正在重新读取，以下为上次查询结果。', 'Refreshing; the previous query results remain below.') : <Skeleton active paragraph={{ rows: 3 }} />}</div>}
+        {loading && <div className="qms-console-home-loading">{data
+          ? <><QmsLoading label={text('读取管理事项中', 'Reading management items')} /><div>{text('正在重新读取，以下为上次查询结果。', 'Refreshing; the previous query results remain below.')}</div></>
+          : <div role="status" aria-label={text('读取管理事项中', 'Reading management items')}><QmsLoadingMark /></div>}</div>}
         {data && <>
           <p className="qms-console-home-time"><Clock3 size={15} aria-hidden="true" /><span>{text('服务器查询时间：', 'Server query time: ')}{clock(data.asOf)}</span></p>
           {!data.sources.length && <div className="qms-console-home-empty"><h3>{text('当前无可汇总事项', 'No summarized management items available')}</h3></div>}

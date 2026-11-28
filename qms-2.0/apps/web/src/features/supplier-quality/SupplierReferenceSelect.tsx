@@ -1,11 +1,14 @@
 import { Alert, Button, Select } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest } from '../../api/client';
+import { QmsLoading } from '../../components/QmsLoading';
+import { useLanguage } from '../../i18n/Language';
 import { supplierError, type ReferenceOption, type ReferenceOptions } from './supplierQuality';
 
 export function SupplierReferenceSelect({ path, value, onChange, onDenied, id, disabled, placeholder }: {
   path: string; value?: string; onChange?: (value: string) => void; onDenied?: (cause: unknown) => void; id?: string; disabled?: boolean; placeholder?: string;
 }) {
+  const { t } = useLanguage();
   const deniedCallback = useRef(onDenied); deniedCallback.current = onDenied;
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -54,7 +57,7 @@ export function SupplierReferenceSelect({ path, value, onChange, onDenied, id, d
       onSearch={(text) => { setSearch(text.slice(0, 100)); setPage(1); setItems([]); setTotal(0); }}
       onChange={(next: string) => { onChange?.(next); setSearch(''); setPage(1); }}
       options={options.map((item) => ({ value: item.id, label: item.label }))}
-      notFoundContent={loading ? '加载中…' : error ? '选项加载失败' : '无匹配结果'}
+      notFoundContent={loading ? <QmsLoading label={t('加载中')} /> : error ? '选项加载失败' : '无匹配结果'}
       popupRender={(menu) => <>{menu}{items.length < total ? <Button block type="text" loading={loading} disabled={!!error} onMouseDown={(event) => event.preventDefault()} onClick={() => setPage((current) => current + 1)}>加载更多</Button> : null}</>} />
     {error || selectedError ? <Alert type="error" title={error ?? selectedError} action={<Button size="small" onClick={() => setRevision((current) => current + 1)}>重试加载选项</Button>} /> : null}
   </div>;

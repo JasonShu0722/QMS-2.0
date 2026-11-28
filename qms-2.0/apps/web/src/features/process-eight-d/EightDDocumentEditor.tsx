@@ -3,10 +3,12 @@ import { BookOpen, Plus } from 'lucide-react';
 import type { components } from '@qms/contracts';
 import { Fragment, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { EightDEvidenceSection } from './EightDEvidence';
+import { EightDImageCaption } from './EightDImageCaption';
 import { EightDRowAttachments } from './EightDRowAttachments';
 import { EightDAnalysisAttachments } from './EightDAnalysisAttachments';
 import { EightDDescriptionTools } from './EightDDescriptionTools';
 import { EightDTeamPicker } from './EightDTeamPicker';
+import { EightDChapterTable } from './EightDChapterTable';
 import type { Attachment, FileResource } from '../attachments/attachments';
 import { canDownloadAttachment } from '../attachments/attachment-preview';
 import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/domain';
@@ -147,9 +149,8 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
   };
   const removeEntry = (label: string, change: () => void, hasContent: boolean, hasFiles = false) => !disabled &&
     <Button danger type="text" disabled={removalBlocked} aria-label={label} onClick={() => requestRemoval(change, hasContent, hasFiles)}>{text('移除', 'Remove')}</Button>;
-  const entryTable = (title: string, columns: string[], rows: ReactNode, className = styles.scroll) => <div className={className} role="region" aria-label={title} tabIndex={0}>
-    <table className={`${styles.table} ${styles.entryTable}`}><thead><tr>{columns.map(name => <th key={name} scope="col">{name}</th>)}<th scope="col">{text('操作', 'Actions')}</th></tr></thead><tbody>{rows}</tbody></table>
-  </div>;
+  const entryTable = (title: string, columns: string[], rows: ReactNode, className = styles.scroll, minimums?: number[]) =>
+    <EightDChapterTable title={title} columns={[...columns, text('操作', 'Actions')]} className={className} resizable={chapterView} minimums={minimums}>{rows}</EightDChapterTable>;
   const addButton = (label: string, onClick: () => void) => !disabled && <Button type="primary" icon={<Plus size={16} />} aria-label={label} title={label} onClick={onClick} />;
   const inlineRow = (id: string, path: string | undefined, cells: ReactNode[], actions: ReactNode) => <tr key={id} tabIndex={-1} data-eight-d-path={path}>
     {cells.map((cell, index) => <td key={index}>{cell}</td>)}
@@ -217,7 +218,7 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
           area(`${prefix} ${columns[5]}`, legacyProgress, completion => change({ completion, plannedAt: null })),
           quantity(`${prefix} ${columns[6]}`, row.ngQuantity, ngQuantity => change({ ngQuantity })),
         ], removeEntry(`${text('移除', 'Remove ')}${prefix}`, removeRow, hasContent));
-      }), `${styles.scroll} ${styles.containmentTable}`)}</>;
+      }), `${styles.scroll} ${styles.containmentTable}`, [165])}</>;
     }
     const positions = containmentPositions.map(([group, location], index) => doc[key].find(row => row.group === group && row.location === location) ?? { id: `${key}-suggestion-${index}`, group, location, quantity: null, measure: '', owner: '', plannedAt: null, completion: '', ngQuantity: null });
     const rows = [...positions, ...doc[key].filter(row => !positions.some(position => position.id === row.id))];
@@ -285,10 +286,17 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
         <EightDDescriptionTools value={doc.description} facts={problemFacts} disabled={disabled} onApply={value => update('description', value)} />
       </div>
       <div className={styles.imageGroups}>
-        <div>{evidence(text('OK 图片', 'OK images'), doc.okFileIds, value => update('okFileIds', value), { inlineImages: true })}
-          {area(text('OK 图片说明', 'OK image description'), doc.okDescription ?? '', value => update('okDescription', value))}</div>
-        <div>{evidence(text('NG 图片', 'NG images'), doc.ngFileIds, value => update('ngFileIds', value), { inlineImages: true })}
-          {area(text('NG 图片说明', 'NG image description'), doc.ngDescription ?? '', value => update('ngDescription', value))}</div>
+        {(['ok', 'ng'] as const).map(tone => {
+          const idsKey = `${tone}FileIds` as const;
+          const captionKey = `${tone}Description` as const;
+          const ids = doc[idsKey];
+          return <EightDEvidenceSection key={tone} label={tone === 'ok' ? text('OK 图片', 'OK images') : text('NG 图片', 'NG images')}
+            problemId={problemId} resource={fileResource} fileIds={ids} inlineImages imageTone={tone} readOnly={disabled} read={read}
+            onChange={next => update(idsKey, current => [...current.filter(id => !ids.includes(id) || next.includes(id)), ...next.filter(id => !current.includes(id))])}>
+            <EightDImageCaption label={tone === 'ok' ? text('OK 图片说明', 'OK image description') : text('NG 图片说明', 'NG image description')}
+              value={doc[captionKey] ?? ''} readOnly={disabled} onChange={value => update(captionKey, value)} />
+          </EightDEvidenceSection>;
+        })}
       </div>
     </>)}
     {section('D3', text('临时措施与围堵', 'Temporary measures and containment'), <>
@@ -313,7 +321,7 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
         return <div key={row.id} className={styles.row} tabIndex={-1} data-eight-d-path={`temporaryMeasures[${index}]`}><div className={styles.fields}>{area(`${text('临时措施', 'Temporary measure')} ${index + 1}`, row.description, description => change({ description }))}{input(text('临时措施责任部门 / 人', 'Temporary measure department / owner'), row.departmentOwner, departmentOwner => change({ departmentOwner }))}{input(text('导入日期', 'Introduction date'), row.introducedAt, introducedAt => change({ introducedAt: introducedAt || null }), 'date')}</div>{evidence(text('临时措施附件', 'Temporary measure evidence'), row.fileIds, fileIds => change(current => ({ fileIds: fileIds(current.fileIds) })))}{remove(`${text('移除临时措施', 'Remove temporary measure')} ${index + 1}`, () => update('temporaryMeasures', doc.temporaryMeasures.filter(item => item.id !== row.id)))}</div>;
         });
         return <><div className={styles.groupHeading}><h4>{title}</h4>{addButton(text('增加临时措施', 'Add temporary measure'), () => update('temporaryMeasures', current => [...current, { id: crypto.randomUUID(), description: '', departmentOwner: '', introducedAt: null, fileIds: [] }]))}</div>
-          {modernView ? entryTable(title, columns, rows, `${styles.scroll} ${styles.measureTable}`) : rows}</>;
+          {modernView ? entryTable(title, columns, rows, `${styles.scroll} ${styles.measureTable} ${styles.temporaryTable}`, [120, 120, 150]) : rows}</>;
       })()}</div>
       <div className={styles.entryGroup}>{containment('containment', text('本次问题围堵', 'Current problem containment'))}</div>
       <details className={styles.entryGroup} open={activeTarget?.row?.startsWith('optionalAffectedContainment[') || undefined}>
@@ -421,20 +429,22 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
       return <div key={phase}>{section(modernView ? phaseChapter : 'D5-D6', modernView ? planning ? chapters[5][1] : chapters[6][1] : text('永久措施、实施与有效性验证', 'Corrective actions, implementation and effectiveness'), <>
         {portal && <p>{text('D5 与 D6 使用同一措施；有效性由人工明确判断，附件或日期不代表有效。后续批数或时长选填其一。', 'D5 and D6 use the same action. Effectiveness requires an explicit human decision, not a file or date. Supply follow-up batches or duration.')}</p>}
         {plan && <div className={styles.groupHeading}><h4>{listTitle}</h4>{addButton(text('增加永久措施', 'Add corrective action'), () => update('correctiveActions', rows => [...rows, { id: crypto.randomUUID(), causeKind: 'OCCURRENCE', action: '', owner: '', plannedAt: null, verificationMethod: '', fileIds: [], implementationAt: null, result: '', beforeState: '', afterState: '', firstBatch: '', followUpBatchCount: null, followUpDuration: '', verificationRecord: '', verificationFileIds: [], effective: null }]))}</div>}
-        {useList ? entryTable(listTitle, listColumns, actionRows, `${styles.scroll} ${styles.correctiveList} ${planning ? styles.measureTable : ''}`) : actionRows}
+        {useList ? entryTable(listTitle, listColumns, actionRows, `${styles.scroll} ${styles.correctiveList} ${planning ? styles.measureTable : ''}`, [120, 120, 120, 150, 158]) : actionRows}
         {!planning && (() => {
           const tracking = doc.effectTracking ?? { startDate: null, startOrderNumber: '', productionQuantity: null, defectQuantity: null, result: '', judgement: '' };
           const change = (patch: Partial<typeof tracking>) => update('effectTracking', current => ({ ...tracking, ...current, ...patch }));
-          return <div className={styles.entryGroup}><h4>{text('效果跟踪', 'Effect tracking')}</h4>
-            <div className={styles.fields}>
+          return <div className={`${styles.entryGroup} ${styles.effectTracking}`}><h4>{text('效果跟踪', 'Effect tracking')}</h4>
+            <div className={styles.trackingFacts}>
               {input(text('开始日期', 'Start date'), tracking.startDate, startDate => change({ startDate: startDate || null }), 'date')}
               {input(process ? text('开始订单号', 'Starting order number') : text('跟踪批次或单号', 'Tracking lot or reference'), tracking.startOrderNumber, startOrderNumber => change({ startOrderNumber }))}
               {quantity(process ? text('生产数量', 'Production quantity') : text('跟踪数量', 'Tracked quantity'), tracking.productionQuantity, productionQuantity => change({ productionQuantity }))}
               {quantity(text('不良数量', 'Defect quantity'), tracking.defectQuantity, defectQuantity => change({ defectQuantity }))}
-              {area(text('确认结果', 'Confirmed result'), tracking.result, result => change({ result }), process ? {
+            </div>
+            <div className={styles.parallel}>
+              {area(text('确认结果', 'Confirmed result'), tracking.result, result => change({ result }), {
                 placeholder: text('例如，从措施全部导入后的下一批次起跟踪三个月，记录实际确认结果。', 'For example, monitor for three months from the next batch after implementation and record the actual results.'),
-              } : undefined)}
-              {input(text('判断', 'Judgement'), tracking.judgement, judgement => change({ judgement }))}
+              })}
+              {area(text('判断', 'Judgement'), tracking.judgement, judgement => change({ judgement }))}
             </div>
           </div>;
         })()}
@@ -498,10 +508,14 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
             removeEntry(`${text('移除标准化文件', 'Remove standardization document')} ${index + 1}`, () => update('standardization', current => current.filter(item => item.id !== id)), hasContent, fileIds.length > 0));
         });
         return <><div className={styles.groupHeading}><h4>{title}</h4>{addButton(text('增加标准化文件', 'Add standardization document'), () => update('standardization', current => [...current, { id: crypto.randomUUID(), key: `custom-${crypto.randomUUID()}`, documentName: '', needsUpdate: null, departmentOwner: '', plannedAt: null, completedAt: null, status: '', reason: '', fileIds: [] }]))}</div>
-          {entryTable(title, columns, rows, `${styles.scroll} ${styles.standardizationTable}`)}</>;
+          {entryTable(title, columns, rows, `${styles.scroll} ${styles.standardizationTable}`, [48, 120, 120, 120, 150, 150])}</>;
       })()}</div>
     </>)}
     {section('D8', text('结案总结', 'Closure summary'), <>
+      <div className={styles.entryGroup}>
+        {area(text('结案总结', 'Closure summary'), doc.closureSummary, value => update('closureSummary', value), { hideLabel: true })}
+        {!disabled && <Button size="small" disabled>{text('AI 总结', 'AI summary')}</Button>}
+      </div>
       {mode !== 'report' && <div className={styles.entryGroup}><div className={styles.groupHeading}><h4>{text('结案自动检查', 'Automatic closure checks')}</h4>
         {onRefreshChecks && <Button size="small" loading={checking} onClick={onRefreshChecks}>{text('重新检查', 'Recheck')}</Button>}
       </div>
@@ -523,10 +537,6 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
           </li>;
         })}</ul> : <p role="status">{text('检查通过', 'Checks passed')}</p>)}
       </div>}
-      <div className={styles.entryGroup}>
-        {area(text('结案总结', 'Closure summary'), doc.closureSummary, value => update('closureSummary', value), { hideLabel: true })}
-        {aiPlaceholder}
-      </div>
       {lessonsVisited && <section hidden={!showLessons} className={styles.entryGroup} aria-label={text('经验教训', 'Lessons learned')}>
         {input(text('经验教训标题', 'Lesson title'), doc.lessonsLearnedTitle ?? '', value => update('lessonsLearnedTitle', value))}
         {area(text('经验教训', 'Lessons learned'), doc.lessonsLearned ?? '', value => update('lessonsLearned', value))}

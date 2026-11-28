@@ -1,10 +1,11 @@
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
-import { Alert, Button, Spin } from 'antd';
+import { Alert, Button } from 'antd';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { ApiError, apiRequest, getSession, type AccountType, type LoginResponse, type SessionView } from '../../api/client';
 import { useLanguage } from '../../i18n/Language';
+import { QmsLoading } from '../../components/QmsLoading';
 import { readReturnTo } from './return-to';
 import { SessionVerificationGate } from './SessionVerificationGate';
 import { publishSessionSignal, subscribeSessionSignals, subscribeWindowResume } from './session-invalidation';
@@ -104,7 +105,7 @@ export function AuthenticatedRoute({ accountType, children }: AuthenticatedRoute
   if (state.status === 'loading') {
     status = (
       <main className="route-loading" aria-label={t('正在验证登录状态')}>
-        <Spin size="large" />
+        <QmsLoading size="page" label={t('正在验证登录状态')} />
       </main>
     );
   } else if (state.status === 'error' || state.status === 'denied') {

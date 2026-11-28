@@ -3,6 +3,8 @@ import { Alert, Badge, Button, Card, Drawer, Empty, Form, Input, Modal, Paginati
 import { RecordList, RecordListDetails } from '../../ui/list/RecordList';
 import { useEffect, useRef, useState } from 'react';
 import { ApiError, apiRequest, csrfToken, safeAccountError } from '../../api/client';
+import { QmsLoading } from '../../components/QmsLoading';
+import { useLanguage } from '../../i18n/Language';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useLedgerPageSize } from '../../ui/ledger';
 import './announcements.css';
@@ -146,12 +148,13 @@ export function AnnouncementsPage() {
       <p>接收人将不再看到此公告，阅读记录保留。</p>
       {Boolean(mutationError) && <Alert type={denied(mutationError) ? 'warning' : 'error'} showIcon title={safeAccountError(mutationError)} description={mutationError instanceof ApiError ? mutationError.traceId : undefined} />}
     </Modal>
-    {editor && <AnnouncementEditor key={editor === 'new' ? 'new' : editor.id} initial={editor === 'new' ? undefined : editor} users={users?.items ?? []} totalUsers={users?.total} busy={busy} error={mutationError} close={() => { setEditor(undefined); setMutationError(undefined); }} save={save} />}
+    {editor && <AnnouncementEditor key={editor === 'new' ? 'new' : editor.id} initial={editor === 'new' ? undefined : editor} users={users?.items ?? []} totalUsers={users?.total} audienceReadFailed={!!loadError || (!loading && !managed)} retryAudience={() => setRevision(value => value + 1)} busy={busy} error={mutationError} close={() => { setEditor(undefined); setMutationError(undefined); }} save={save} />}
     <Drawer title="阅读审计" open={!!auditId} onClose={closeReceipts} size={560}>{Boolean(auditError) && <Alert type={denied(auditError) ? 'warning' : 'error'} title={safeAccountError(auditError)} />}{!receipts && !auditError ? <Spin /> : <RecordList items={receipts ?? []} itemKey={receipt => receipt.userId} empty={<Empty description="暂无阅读记录" />} renderItem={(receipt) => <><RecordListDetails title={users?.items.find((user) => user.id === receipt.userId)?.username ?? receipt.userId} description={receipt.readAt ? '已读：' + formatDate(receipt.readAt) : '未读'} />{receipt.readTraceId && <Typography.Text type="secondary" copyable>{String(receipt.readTraceId)}</Typography.Text>}</>} />}</Drawer>
   </section>;
 }
 
-function AnnouncementEditor({ initial, users, totalUsers, busy, error, close, save }: { initial?: ManageItem; users: AudienceUsers['items']; totalUsers?: number; busy: boolean; error: unknown; close: () => void; save: (input: AnnouncementInput) => Promise<void> }) {
+function AnnouncementEditor({ initial, users, totalUsers, audienceReadFailed, retryAudience, busy, error, close, save }: { initial?: ManageItem; users: AudienceUsers['items']; totalUsers?: number; audienceReadFailed: boolean; retryAudience: () => void; busy: boolean; error: unknown; close: () => void; save: (input: AnnouncementInput) => Promise<void> }) {
+  const { locale } = useLanguage();
   const [form] = Form.useForm<AnnouncementInput>();
   const [dirty, setDirty] = useState(false);
   const requestLeave = useNavigationGuard();
@@ -168,7 +171,13 @@ function AnnouncementEditor({ initial, users, totalUsers, busy, error, close, sa
       <Form.Item name="title" label="标题" rules={[{ required: true, message: '请输入标题' }]}><Input maxLength={200} /></Form.Item>
       <Form.Item name="content" label="正文" rules={[{ required: true, message: '请输入正文' }]}><Input.TextArea rows={7} maxLength={20000} /></Form.Item>
       <Space wrap className="announcements-form-options"><Form.Item name="importance" label="级别" rules={[{ required: true }]}><Select options={[{ value: 'NORMAL', label: '普通' }, { value: 'IMPORTANT', label: '重要' }]} style={{ width: 130 }} /></Form.Item><Form.Item name="mustRead" label="必读" valuePropName="checked"><Switch /></Form.Item><Form.Item name="audience" label="发布范围" rules={[{ required: true }]}><Select options={[{ value: 'ALL', label: '本组织全部内部用户' }, { value: 'SELECTED', label: '指定用户' }]} onChange={(value) => { if (value === 'ALL') form.setFieldValue('recipientUserIds', []); }} style={{ width: 220 }} /></Form.Item></Space>
-      {audience === 'SELECTED' && <><Form.Item name="recipientUserIds" label="指定接收人" rules={[{ required: true, type: 'array', min: 1, max: 1000, message: '请选择 1 至 1000 位接收人' }]}><Select mode="multiple" showSearch optionFilterProp="label" options={users.map((user) => ({ value: user.id, label: user.username }))} /></Form.Item><Typography.Paragraph type="secondary">指定接收人最多 1000 位。{totalUsers === undefined ? '正在加载接收人名单。' : totalUsers > 1000 ? '本组织有 ' + totalUsers + ' 位内部用户，此处仅显示前 1000 位；如需覆盖所有人，请选择全组织范围。' : '可选 ' + totalUsers + ' 位内部用户。'}</Typography.Paragraph></>}
+      {audience === 'SELECTED' && <>
+        <Form.Item name="recipientUserIds" label="指定接收人" rules={[{ required: true, type: 'array', min: 1, max: 1000, message: '请选择 1 至 1000 位接收人' }]}><Select mode="multiple" showSearch optionFilterProp="label" options={users.map((user) => ({ value: user.id, label: user.username }))} /></Form.Item>
+        <Typography.Paragraph type="secondary">指定接收人最多 1000 位。{totalUsers === undefined ? null : totalUsers > 1000 ? '本组织有 ' + totalUsers + ' 位内部用户，此处仅显示前 1000 位；如需覆盖所有人，请选择全组织范围。' : '可选 ' + totalUsers + ' 位内部用户。'}</Typography.Paragraph>
+        {totalUsers === undefined && (audienceReadFailed
+          ? <Alert type="error" title={locale === 'en-US' ? 'Could not load recipients' : '接收人名单加载失败'} action={<Button size="small" disabled={busy} onClick={retryAudience}>{locale === 'en-US' ? 'Retry' : '重试'}</Button>} />
+          : <QmsLoading label={locale === 'en-US' ? 'Loading recipients' : '正在加载接收人名单'} />)}
+      </>}
       <Typography.Paragraph type="secondary">发布时锁定接收人名单；发布后正文与名单不可修改。</Typography.Paragraph>
       <div className="qms-dialog-actions" role="group" aria-label={initial ? '编辑公告草稿' : '新建公告'}><Button onClick={requestClose}>取消</Button><Button type="primary" htmlType="submit" loading={busy}>保存草稿</Button></div>
     </Form>

@@ -15,6 +15,28 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 const BrowserFile = File;
+
+it('uses the standard upload area and shows one icon row per active file by default', async () => {
+  const available = { ...file, status: 'AVAILABLE', scanStatus: 'CLEAN', sizeBytes: 1_500_000 };
+  const deleted = { ...available, id: 'deleted-id', originalName: 'deleted.txt', status: 'DELETED' };
+  const changed = vi.fn();
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => json(path.endsWith(deleted.id) ? deleted : available)));
+  render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[available.id, deleted.id]} onFilesChanged={changed} /></LanguageProvider>);
+
+  const upload = within(screen.getByRole('group', { name: '上传附件' }));
+  expect(upload.getByRole('button', { name: '选择附件' })).toBeEnabled();
+  expect(upload.getByRole('button', { name: '拍照上传' })).toBeEnabled();
+  const row = within(await screen.findByRole('listitem'));
+  expect(row.getByText(available.originalName)).toBeVisible();
+  expect(row.getByText('1.50 MB')).toBeVisible();
+  expect(row.getByRole('img', { name: '扫描通过，可作为证据' })).toHaveAttribute('tabindex', '0');
+  for (const name of [`预览附件 ${available.originalName}`, '下载附件', '删除附件']) {
+    expect(row.getByRole('button', { name })).toHaveTextContent(/^$/);
+  }
+  expect(screen.queryByText(deleted.originalName)).not.toBeInTheDocument();
+  expect(changed).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ id: deleted.id, status: 'DELETED' })]));
+});
+
 function installReadableFile() {
   vi.stubGlobal('File', class extends BrowserFile {
     arrayBuffer() {
@@ -61,7 +83,7 @@ function wordDocument(text: string) {
 
 it.each([
   { variant: 'standard', placement: '.ant-card-extra' },
-  { variant: undefined, placement: '.ant-card-body' },
+  { variant: undefined, placement: '.ant-card-extra' },
 ] as const)('refreshes read-only attachments from $placement', async ({ variant, placement }) => {
   const available = { ...file, status: 'AVAILABLE', scanStatus: 'CLEAN' };
   let completeRefresh!: (response: Response) => void;
@@ -157,7 +179,7 @@ it.each([
   });
   vi.stubGlobal('fetch', fetchMock);
   render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} variant="standard" readOnly /></LanguageProvider>);
-  fireEvent.click(await screen.findByRole('button', { name }));
+  fireEvent.click(await screen.findByRole('button', { name: `预览附件 ${name}` }));
   const modal = within(await screen.findByRole('dialog'));
   const contentPreview = await modal.findByText(visible);
   await waitFor(() => expect(contentPreview).toBeVisible());
@@ -184,7 +206,7 @@ it.each([
     return json(available);
   }));
   render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} variant="standard" readOnly /></LanguageProvider>);
-  fireEvent.click(await screen.findByRole('button', { name }));
+  fireEvent.click(await screen.findByRole('button', { name: `预览附件 ${name}` }));
   const modal = within(await screen.findByRole('dialog'));
   if (viewer) {
     const media = mime === 'application/pdf' ? await modal.findByTitle(name) : await modal.findByRole('img', { name });
@@ -212,7 +234,7 @@ it('shows a download fallback and obtains a new grant when preview verification 
   });
   vi.stubGlobal('fetch', fetchMock);
   render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} variant="standard" readOnly /></LanguageProvider>);
-  fireEvent.click(await screen.findByRole('button', { name: file.originalName }));
+  fireEvent.click(await screen.findByRole('button', { name: `预览附件 ${file.originalName}` }));
   const modal = within(await screen.findByRole('dialog'));
   await modal.findByText('此附件无法预览，可下载原文件查看。');
   expect(modal.getByText('文件校验未通过。')).toBeInTheDocument();
@@ -230,7 +252,7 @@ it('never reads object bytes after the live preview authorization is denied', as
   });
   vi.stubGlobal('fetch', fetchMock);
   render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} variant="standard" onAccessDenied={denied} readOnly /></LanguageProvider>);
-  fireEvent.click(await screen.findByRole('button', { name: file.originalName }));
+  fireEvent.click(await screen.findByRole('button', { name: `预览附件 ${file.originalName}` }));
   await waitFor(() => expect(denied).toHaveBeenCalledWith(expect.objectContaining({ status: 403 })));
   expect(fetchMock.mock.calls.some(([path]) => path.startsWith('https:'))).toBe(false);
 });
@@ -248,7 +270,7 @@ it('uses the parent download authorization and cancels a pending preview on clos
   vi.stubGlobal('fetch', fetchMock);
   render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} variant="standard" downloadUrl={downloadUrl} readOnly /></LanguageProvider>);
 
-  fireEvent.click(await screen.findByRole('button', { name: file.originalName }));
+  fireEvent.click(await screen.findByRole('button', { name: `预览附件 ${file.originalName}` }));
   const modal = within(await screen.findByRole('dialog'));
   expect(downloadUrl).toHaveBeenCalledWith(file.id, expect.any(AbortSignal));
   expect(fetchMock.mock.calls).toHaveLength(1);
@@ -273,7 +295,7 @@ it('retires the D4 preview when the workspace authorization changes', async () =
 
   expect(screen.getByText('附件')).toBeVisible();
   expect(screen.queryByRole('group', { name: '上传附件' })).not.toBeInTheDocument();
-  fireEvent.click(await screen.findByRole('button', { name: file.originalName }));
+  fireEvent.click(await screen.findByRole('button', { name: `预览附件 ${file.originalName}` }));
   expect(originalRead).toHaveBeenCalledWith(`/api/v1/files/${file.id}/download`, { method: 'POST', body: '{}', signal: expect.any(AbortSignal) });
   expect(screen.getByRole('dialog')).toBeInTheDocument();
   rerender(view(nextRead));
@@ -374,7 +396,7 @@ it('refreshes after a delete version conflict and displays only a controlled err
   await waitFor(() => expect(confirmation.getByText(`删除附件 · ${file.originalName}`)).toBeVisible());
   await userEvent.click(screen.getByRole('button', { name: '确认删除附件' }));
   expect(await screen.findByText('file-trace')).toBeInTheDocument();
-  expect(await screen.findByText('已删除，保留历史记录')).toBeInTheDocument();
+  await waitFor(() => expect(screen.queryByRole('listitem')).not.toBeInTheDocument());
   expect(screen.queryByText(/private object/)).not.toBeInTheDocument();
   expect(fetchMock.mock.calls.filter(([path]) => path.endsWith('/delete'))).toHaveLength(1);
   expect(JSON.parse(fetchMock.mock.calls.find(([path]) => path.endsWith('/delete'))![1]!.body as string)).toEqual({ expectedVersion: 3 });
@@ -419,12 +441,50 @@ it('detaches a saved attachment from the draft without deleting the file', async
   expect(fetchMock.mock.calls).toHaveLength(1);
 });
 
+it('lets an editor detach a deleted reference without exposing file details or deleting again', async () => {
+  const deleted = { ...file, status: 'DELETED', scanStatus: 'CLEAN' };
+  const fetchMock = vi.fn(async () => json(deleted));
+  vi.stubGlobal('fetch', fetchMock);
+  const detach = vi.fn();
+  const preview = vi.fn();
+  const panel = (fileIds: string[], readOnly = false) => <LanguageProvider><AttachmentPanel resource={resource} fileIds={fileIds} readOnly={readOnly} onDetach={detach} previewFile={preview} /></LanguageProvider>;
+  const { rerender } = render(panel([deleted.id], true));
+  const staleLabel = '移除已删除附件引用';
+  expect(await screen.findByText('暂无附件')).toBeVisible();
+  expect(screen.queryByRole('button', { name: staleLabel })).not.toBeInTheDocument();
+
+  rerender(panel([deleted.id]));
+  const remove = await screen.findByRole('button', { name: staleLabel });
+  expect(screen.queryByText(deleted.originalName)).not.toBeInTheDocument();
+  expect(screen.queryByRole('listitem')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '下载附件' })).not.toBeInTheDocument();
+  expect(preview).not.toHaveBeenCalled();
+  await userEvent.click(remove);
+  expect(detach).toHaveBeenCalledExactlyOnceWith(deleted.id);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+
+  rerender(panel([]));
+  expect(screen.queryByRole('button', { name: staleLabel })).not.toBeInTheDocument();
+});
+
+it('keeps the last CLEAN attachment protected while allowing stale D7 references to be detached', async () => {
+  const available = { ...file, status: 'AVAILABLE', scanStatus: 'CLEAN' };
+  const deleted = { ...available, id: 'deleted-id', status: 'DELETED' };
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => json(path.endsWith(deleted.id) ? deleted : available)));
+  const detach = vi.fn();
+  render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[available.id, deleted.id]} preserveAvailableFile onDetach={detach} /></LanguageProvider>);
+
+  expect(await screen.findByRole('button', { name: '从本项移除附件' })).toBeDisabled();
+  await userEvent.click(screen.getByRole('button', { name: '移除已删除附件引用' }));
+  expect(detach).toHaveBeenCalledExactlyOnceWith(deleted.id);
+});
+
 it('offers scan recovery for an unavailable scanner while keeping the file quarantined', async () => {
   let retried = false;
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
     if (path.endsWith('/retry-scan')) { retried = true; return json({ ...file, version: 2, scanStatus: 'PENDING' }, 202); }
-    return json({ ...file, scanStatus: retried ? 'PENDING' : 'ERROR' });
+    return json({ ...file, isCurrentUserUploader: true, scanStatus: retried ? 'PENDING' : 'ERROR' });
   });
   vi.stubGlobal('fetch', fetchMock);
   render(<LanguageProvider><AttachmentPanel resource={resource} fileIds={[file.id]} /></LanguageProvider>);
@@ -444,7 +504,7 @@ it.each([true, false])('offers standard scan retry only to the uploader (%s)', a
 it.each(['uploads', 'complete', 'download', 'delete', 'retry-scan'].flatMap(stage => [401, 403].map(status => ({ stage, status }))))('forwards $stage $status from the real API call', async ({ stage, status }) => {
   vi.stubGlobal('crypto', webcrypto);
   const denied = vi.fn();
-  const current = { ...file, status: stage === 'retry-scan' ? 'QUARANTINED' : 'AVAILABLE', scanStatus: stage === 'retry-scan' ? 'ERROR' : 'CLEAN' };
+  const current = { ...file, isCurrentUserUploader: true, status: stage === 'retry-scan' ? 'QUARANTINED' : 'AVAILABLE', scanStatus: stage === 'retry-scan' ? 'ERROR' : 'CLEAN' };
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
     if (path.endsWith('/csrf')) return json({ csrfToken: 'csrf' });
     if (path.endsWith(`/${stage}`)) return json({ code: 'FILE_RESOURCE_DENIED', traceId: `${stage}-${status}` }, status);
