@@ -95,11 +95,11 @@ it('includes the approved preview fingerprint in the portal PDF request and requ
   await waitFor(() => expect(button).toBeEnabled());
 });
 
-it.each([false, true])('keeps saved-version guidance in the portal only (portal=%s)', async portal => {
+it.each([false, true])('shows the selected version label on the report cover (portal=%s)', async portal => {
   if (portal) values.CURRENT = values.APPROVED;
   mount(portal);
   await screen.findByText(portal ? 'APPROVED版正文' : 'CURRENT版正文');
-  expect(screen.queryByText(/报告只含服务端已保存内容/) !== null).toBe(portal);
+  expect(screen.getByText(values.CURRENT.label)).toBeVisible();
   expect(screen.getByRole('region', { name: '所选版本基础事实' })).toBeVisible();
   expect(screen.getByRole('button', { name: '授权下载 PDF' })).toBeEnabled();
 });
@@ -120,10 +120,12 @@ it('binds CURRENT, APPROVED and historical facts, dates and closure duties to th
     const selected = values[selection], snapshot = selected.snapshot;
     expect(await screen.findByText(`${selected.view}版正文`)).toBeVisible();
     const facts = screen.getByRole('region', { name: '所选版本基础事实' });
-    fact(facts, '报告单号', selected.reportNumber); fact(facts, '标题', `${selected.view}版问题`);
+    expect(screen.getByRole('heading', { name: `${selected.view}版问题` })).toBeVisible();
+    expect(screen.getByText(`${selected.reportNumber} · 版本 V${selected.contentVersion}`)).toBeVisible();
+    expect(screen.getByText('高风险')).toBeVisible();
     fact(facts, '物料编码', `MAT-${selected.view}`); fact(facts, '物料类别', 'ELECTRONIC');
     fact(facts, '不良描述', `${selected.view}版不良事实`); fact(facts, '不良数量', String(snapshot.problem.defectQuantity));
-    fact(facts, '风险等级', 'HIGH'); fact(facts, '创建时间', String(snapshot.problem.createdAt));
+    fact(facts, '发起时间', String(snapshot.problem.createdAt));
     const dates = screen.getByRole('region', { name: '所选版本阶段时间' });
     for (const [label, value] of [
       ['分析计划', snapshot.deadlines.analysisDueAt], ['分析完成', snapshot.analysisCompletedAt],
@@ -131,17 +133,15 @@ it('binds CURRENT, APPROVED and historical facts, dates and closure duties to th
       ['关闭计划', snapshot.deadlines.closureDueAt], ['实际关闭时间', snapshot.problem.closedAt],
     ]) fact(dates, String(label), String(value));
     const basis = screen.getByRole('region', { name: '所选版本审批与关闭依据' });
-    fact(basis, '修订标识', selected.revisionId ?? '未记录'); fact(basis, '正文版本', String(snapshot.contentVersion));
-    fact(basis, '数据版本', String(snapshot.rowVersion)); fact(basis, '流程版本', String(snapshot.instance.version));
+    expect(within(basis).queryByText(/修订标识|正文版本|数据版本|流程版本|轮次版本/)).not.toBeInTheDocument();
     const round = within(basis).getByRole('region', { name: `审批轮次 ${selected.contentVersion}` });
     const savedRound = snapshot.approvalRounds![0];
-    fact(round, '轮次结果', String(savedRound.status)); fact(round, '固定正文版本', String(savedRound.contentVersion));
-    fact(round, '轮次版本', String(savedRound.version)); fact(round, '发起时间', String(savedRound.createdAt));
+    fact(round, '轮次结果', String(savedRound.status)); fact(round, '发起时间', String(savedRound.createdAt));
     fact(round, '轮次更新时间', String(savedRound.updatedAt));
     const duty = within(round).getByRole('region', { name: '审批职责 1' });
     const savedDuty = (savedRound.duties as Record<string, unknown>[])[0];
     fact(duty, '职责', 'PROFESSIONAL'); fact(duty, '职责结果', String(savedDuty.status)); fact(duty, '确认时间', String(savedDuty.decidedAt));
-    fact(duty, '职责用户标识', String(savedDuty.userId)); fact(duty, '确认用户标识', String(savedDuty.decidedBy)); fact(duty, '意见', `${selected.view}内部意见`);
+    fact(duty, '确认用户标识', String(savedDuty.decidedBy)); fact(duty, '意见', `${selected.view}内部意见`);
     expect(screen.queryByText('外层当前事实不得回填')).not.toBeInTheDocument();
     expect(basis).not.toHaveTextContent('outer-round'); expect(dates).not.toHaveTextContent('2099-');
     for (const other of Object.values(values).filter(value => value !== selected)) expect(facts).not.toHaveTextContent(`MAT-${other.view}`);
@@ -158,10 +158,9 @@ it('shows unapproved and unrecorded values honestly instead of borrowing the out
   current.snapshot.deadlines = { analysisDueAt: null, submissionDueAt: null, closureDueAt: null };
   current.snapshot.analysisCompletedAt = null; current.snapshot.submittedAt = null; current.snapshot.problem.closedAt = null;
   mount(); await screen.findByText('CURRENT版正文');
-  expect(screen.getByText('本版无批准记录（未批准）')).toBeVisible();
-  const dates = screen.getByRole('region', { name: '所选版本阶段时间' });
-  expect(within(dates).getAllByText('未记录')).toHaveLength(6);
-  expect(dates).not.toHaveTextContent(current.generatedAt); expect(dates).not.toHaveTextContent('2099-');
+  expect(screen.getByText('本版无批准记录')).toBeVisible();
+  expect(screen.queryByRole('region', { name: '所选版本阶段时间' })).not.toBeInTheDocument();
+  expect(screen.getByRole('article')).not.toHaveTextContent('2099-');
   expect(screen.queryByRole('region', { name: '内部补充版本说明' })).not.toBeInTheDocument();
 });
 
@@ -170,7 +169,7 @@ it('accepts a saved approval record when approvalRounds is absent and does not s
   delete values.CURRENT.snapshot.approvalRounds;
   mount(); await screen.findByText('CURRENT版正文');
   const round = screen.getByRole('region', { name: '审批轮次 7' });
-  fact(round, '固定正文版本', '7');
+  fact(round, '轮次结果', String(values.CURRENT.snapshot.approval.status));
   expect(within(round).getByText('CURRENT内部意见')).toBeVisible();
 });
 
@@ -178,7 +177,7 @@ it('does not use generatedAt as a missing supplement update time', async () => {
   values.CURRENT.snapshot.problem.supplementUpdatedAt = null;
   mount(); await screen.findByText('CURRENT版正文');
   const supplement = screen.getByRole('region', { name: '内部补充版本说明' });
-  fact(supplement, '补充更新时间', '未记录');
+  expect(within(supplement).queryByText('补充更新时间')).not.toBeInTheDocument();
   expect(supplement).not.toHaveTextContent(values.CURRENT.generatedAt);
 });
 

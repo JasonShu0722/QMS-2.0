@@ -1,10 +1,12 @@
-import { Body, Controller, Get, Header, Headers, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, HttpCode, Param, ParseUUIDPipe, Post, Put, Query, Req } from '@nestjs/common';
 import { ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiOkResponse, ApiResponse } from '@nestjs/swagger';
 import { ErrorResponse } from '../../common/contracts/error-response.js';
 import { requestTraceId } from '../../common/contracts/request-trace.js';
 import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guards/authenticated.guard.js';
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { EightDTeamOptionsDto, EightDTeamOptionsQueryDto } from '../process-quality/process-eight-d-document-team.dto.js';
+import { ProcessEightDSubmissionIssueDto } from '../process-quality/process-eight-d-document.dto.js';
+import { ProcessEightDClosureCheckDto } from '../process-quality/process-eight-d.dto.js';
 import { IssueSupplierEightDDto, SaveSupplierEightDDto, SupplierEightDAnalysisCompleteDto, SupplierEightDDeadlinesDto, SupplierEightDReportDto, SupplierEightDVersionDto, SupplierPortalEightDApprovalRoundDto } from './supplier-eight-d.dto.js';
 import { SupplierEightDService } from './supplier-eight-d.service.js';
 
@@ -39,6 +41,13 @@ export class SupplierEightDController {
   @RequireAccess({ featurePermission: 'supplier-quality:issues:read', organizationScope: { source: 'session', optional: true } })
   save(@Req() request: AuthorizedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() body: SaveSupplierEightDDto, @Headers('idempotency-key') key: string) {
     return this.service.save(actor(request), id, body, requestTraceId(request), key);
+  }
+
+  @Post(':id/closure-check') @HttpCode(200) @ApiOkResponse({ type: [ProcessEightDSubmissionIssueDto] })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'supplier-quality:responses:write', organizationScope: { source: 'session', optional: true } })
+  closureCheck(@Req() request: AuthorizedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() body: ProcessEightDClosureCheckDto) {
+    return this.service.closureCheck(actor(request), id, body.document);
   }
 
   @Post(':id/analysis-complete') @ApiCreatedResponse({ type: SupplierEightDReportDto })
@@ -89,6 +98,13 @@ export class SupplierPortalEightDController {
   @RequireAccess({ featurePermission: 'supplier-quality:responses:write', organizationScope: { source: 'session', optional: true } })
   save(@Req() request: AuthorizedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() body: SaveSupplierEightDDto, @Headers('idempotency-key') key: string) {
     return this.service.save(actor(request), id, body, requestTraceId(request), key);
+  }
+
+  @Post(':id/closure-check') @HttpCode(200) @ApiOkResponse({ type: [ProcessEightDSubmissionIssueDto] })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'supplier-quality:responses:write', organizationScope: { source: 'session', optional: true } })
+  closureCheck(@Req() request: AuthorizedRequest, @Param('id', ParseUUIDPipe) id: string, @Body() body: ProcessEightDClosureCheckDto) {
+    return this.service.closureCheck(actor(request), id, body.document);
   }
 
   @Post(':id/analysis-complete') @ApiCreatedResponse({ type: SupplierEightDReportDto })

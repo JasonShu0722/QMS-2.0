@@ -88,6 +88,7 @@ describe.each(domains)('$name eight-d HTTP boundary', domain => {
     ['activate', 'activation', RequestMethod.PUT, 'configuration:manage', 'body'],
     ['issue', '/', RequestMethod.POST, `${domain.path}:issues:issue`, 'body'],
     ['previewSources', 'sources/preview', RequestMethod.POST, domain.sourceRead, 'body'],
+    ['closureCheck', ':id/closure-check', RequestMethod.POST, `${domain.path}:issues:work`, 'body'],
     ['assignmentOptions', 'assignment-options', RequestMethod.GET, `${domain.path}:issues:read`, 'query'],
     ['read', ':id', RequestMethod.GET, `${domain.path}:issues:read`, 'query'],
     ['save', ':id', RequestMethod.PUT, `${domain.path}:issues:work`, 'body'],
@@ -118,8 +119,9 @@ describe.each(domains)('$name eight-d HTTP boundary', domain => {
     expect(Reflect.getMetadata(ACCESS_CONTEXT_METADATA, handler)).toEqual({ featurePermission, organizationScope: { source, field: 'organizationId', optional: true } });
     const headers = Reflect.getMetadata(DECORATORS.API_PARAMETERS, handler) as { name: string; required: boolean }[] | undefined;
     if (method !== RequestMethod.GET) expect(headers).toContainEqual(expect.objectContaining({ name: 'x-csrf-token', required: true }));
-    if (source === 'body' && name !== 'previewSources') expect(headers).toContainEqual(expect.objectContaining({ name: 'Idempotency-Key', required: true }));
-    if (['previewSources', 'analysis', 'submit'].includes(name)) expect(Reflect.getMetadata(HTTP_CODE_METADATA, handler)).toBe(200);
+    if (source === 'body' && name !== 'previewSources' && name !== 'closureCheck') expect(headers).toContainEqual(expect.objectContaining({ name: 'Idempotency-Key', required: true }));
+    if (name === 'closureCheck') expect(headers).not.toContainEqual(expect.objectContaining({ name: 'Idempotency-Key' }));
+    if (['previewSources', 'closureCheck', 'analysis', 'submit'].includes(name)) expect(Reflect.getMetadata(HTTP_CODE_METADATA, handler)).toBe(200);
   });
 
   it('publishes sourceId DTOs, rejects core-only input names and reuses the exact document DTO', async () => {
@@ -261,10 +263,12 @@ describe.each(domains)('$name eight-d HTTP boundary', domain => {
     const app = module.createNestApplication();
     try {
       const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
-      expect(Object.keys(document.paths)).toHaveLength(14);
+      expect(Object.keys(document.paths)).toHaveLength(15);
       expect(Object.keys(document.paths).every(path => path.startsWith(`/api/v1/${domain.path}/eight-d`))).toBe(true);
       const team = document.paths[`/api/v1/${domain.path}/eight-d/{id}/team-options`]!.get!;
       expect(team.responses['200']).toMatchObject({ content: { 'application/json': { schema: { $ref: '#/components/schemas/EightDTeamOptionsDto' } } } });
+      const check = document.paths[`/api/v1/${domain.path}/eight-d/{id}/closure-check`]!.post!;
+      expect(check.responses['200']).toMatchObject({ content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/ProcessEightDSubmissionIssueDto' } } } } });
       const schemas = document.components!.schemas! as Record<string, SchemaObject>;
       const report = schemas[`${domain.name}EightDReportDto`]!;
       expect(report.properties!.document).toEqual({ $ref: '#/components/schemas/ProcessEightDDocumentDto' });

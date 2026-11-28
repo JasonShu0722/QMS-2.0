@@ -219,13 +219,13 @@ test('#181 制程 8D 保留章节草稿、收纳工作标签并只读预览历�
   const reportChapter = (chapter: number) => historicalArticle.locator('section')
     .filter({ has: page.getByRole('heading', { name: new RegExp(`^D${chapter} ·`) }) });
   await expect(historicalArticle.getByText(preview.label, { exact: true })).toBeVisible();
-  await expect(reportChapter(2).locator('dd').first()).toHaveText(preview.snapshot.document.description);
+  await expect(reportChapter(2).getByText(preview.snapshot.document.description, { exact: true })).toBeVisible();
   await expect(historicalArticle.getByRole('textbox')).toHaveCount(0);
   await expect(main.getByRole('button', { name: '保存草稿', exact: true })).toHaveCount(0);
   const historicalActions = preview.snapshot.document.correctiveActions;
   expect(historicalActions.length).toBeGreaterThanOrEqual(2);
   const reportDirectory = historicalArticle.getByRole('navigation', { name: '8D 内容分区', exact: true });
-  const reportPlans = reportChapter(5).locator('section');
+  const reportPlans = reportChapter(5).getByRole('row').filter({ has: page.getByRole('cell', { name: /.+/ }) });
   const reportResults = reportChapter(6).locator('section');
   await reportDirectory.getByRole('link', { name: 'D5', exact: true }).click();
   await expect(reportChapter(5).getByRole('heading', { name: /^D5 ·/ })).toBeInViewport();

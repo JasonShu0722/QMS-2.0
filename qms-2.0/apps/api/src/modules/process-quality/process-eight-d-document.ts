@@ -125,9 +125,8 @@ export function normalizeProcessEightDDocument(input: unknown): ProcessEightDDoc
 
 export function analysisCompletionIssues(document: ProcessEightDDocument): ProcessEightDDocumentIssue[] {
   const issues: ProcessEightDDocumentIssue[] = [];
-  for (const field of ['occurrenceCause', 'escapeCause'] as const) {
-    if (!document[field].trim()) issues.push({ path: field, message: '请填写原因总结' });
-  }
+  if (!document.occurrenceCause.trim()) issues.push({ path: 'occurrenceCause', message: '请填写发生因总结' });
+  if (!document.escapeCause.trim()) issues.push({ path: 'escapeCause', message: '请填写流出因总结' });
   for (const kind of ['OCCURRENCE', 'ESCAPE'] as const) {
     if (!document.correctiveActions.some((row) => row.causeKind === kind)) {
       issues.push({ path: 'correctiveActions', message: `请填写 ${kind === 'OCCURRENCE' ? '发生因' : '流出因'} 对策计划` });
@@ -140,6 +139,13 @@ export function analysisCompletionIssues(document: ProcessEightDDocument): Proce
     }
   });
   return issues;
+}
+
+export function analysisPlan(document: ProcessEightDDocument) {
+  const { analysisProcess, occurrenceCause, escapeCause, systemCause, analysisFileIds } = document;
+  const correctiveActions = document.correctiveActions.map(({ id, causeKind, action, owner, plannedAt, verificationMethod }) =>
+    ({ id, causeKind, action, owner, plannedAt, verificationMethod }));
+  return { analysisProcess, occurrenceCause, escapeCause, systemCause, analysisFileIds, correctiveActions };
 }
 
 export function submissionIssues(document: ProcessEightDDocument, deadlines?: { analysisCompletedAt: Date | null; submissionDueAt: Date | null },
@@ -228,5 +234,6 @@ export function documentFileIds(document: ProcessEightDDocument): string[] {
     ...document.correctiveActions.flatMap((row) => [...row.fileIds, ...row.verificationFileIds]),
     ...document.horizontalDeployment.flatMap((row) => row.fileIds),
     ...document.standardization.flatMap((row) => row.fileIds ?? []),
+    ...(document.lessonsLearnedFileIds ?? []),
   ])];
 }

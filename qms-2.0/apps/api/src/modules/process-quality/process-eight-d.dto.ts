@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsBoolean, IsDate, IsIn, IsInt, IsObject, IsOptional, IsString, IsUUID, MaxLength, Min, MinLength, ValidateNested } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ProcessEightDDocumentDto, ProcessEightDSubmissionIssueDto } from './process-eight-d-document.dto.js';
 import { WorkflowClosureOptionsDto, WorkflowClosureOptionsQueryDto } from '../workflow/workflow-closure-preview.dto.js';
@@ -20,6 +20,9 @@ export class ProcessEightDFlowRecordDto {
 
 export class ProcessEightDScopeDto {
   @ApiPropertyOptional({ format: 'uuid' }) @IsOptional() @IsUUID() organizationId?: string;
+}
+export class ProcessEightDClosureCheckDto extends ProcessEightDScopeDto {
+  @ApiProperty({ type: ProcessEightDDocumentDto }) @IsObject() @ValidateNested() @Type(() => ProcessEightDDocumentDto) document!: ProcessEightDDocumentDto;
 }
 export class ProcessEightDVersionDto extends ProcessEightDScopeDto {
   @ApiProperty({ minimum: 1 }) @IsInt() @Min(1) expectedVersion!: number;

@@ -34,8 +34,10 @@ it('renders actual Chinese supplier long tables and both OK/NG images without an
       count += (await page.getOperatorList()).fnArray.filter(op => [OPS.paintImageXObject, OPS.paintInlineImageXObject].includes(op)).length;
     }
     expect(text).toContain('供应商中文整改正文'); expect(text).toContain('供应商围堵长表第80行');
-    for (const phrase of ['标题：供应商基础标题', '物料编码：PART-N5', '物料类别：压铸件', '不良描述：基础不良事实与D2正文分别保留', '不良数量：0']) expect(text).toContain(phrase);
-    expect(text).toContain('D2 OK'); expect(text).toContain('D2 NG'); expect(count).toBeGreaterThanOrEqual(2);
+    for (const phrase of ['供应商基础标题', '物料编码：PART-N5', '物料类别：压铸件', '不良描述：基础不良事实与D2正文分别保留', '不良数量：0']) expect(text).toContain(phrase);
+    expect(text.match(/D2 OK · OK检验\.png/g)).toHaveLength(1);
+    expect(text.match(/D2 NG · NG检验\.png/g)).toHaveLength(1);
+    expect(count).toBe(2);
     const title = (await pdf.getMetadata()).info as { Title: string };
     expect(title.Title).toContain('供应商'); expect(title.Title).not.toContain('内部');
     expect(text).toContain('供应商 8D 报告'); expect(text).not.toContain('内部 8D 报告');
@@ -61,7 +63,7 @@ it('preserves actual original approval and duty facts after a closed supplement 
     const pdf = await loading.promise; let text = '';
     for (let i = 1; i <= pdf.numPages; i++) text += (await (await pdf.getPage(i)).getTextContent()).items.map(item => 'str' in item ? item.str : '').join('');
     expect(text).toContain('补充更新时间：2026-10-28T09:12:34.567Z');
-    expect(text).toContain(`生成时间（非审批时间）：${input.generatedAt}`);
+    expect(text).not.toContain(input.generatedAt);
     expect(text.match(/原版本实际批准，未覆盖本次补充/g)).toHaveLength(3);
     expect(text).toContain('PROFESSIONAL / APPROVED'); expect(text).toContain('SECTION_MANAGER / APPROVED');
     expect(text).toContain('实际签批 actual-sqe / 2026-10-28T08:00:00.000Z');
@@ -77,8 +79,8 @@ it('does not substitute generatedAt when no actual supplement is recorded', asyn
   try {
     const pdf = await loading.promise; let text = '';
     for (let i = 1; i <= pdf.numPages; i++) text += (await (await pdf.getPage(i)).getTextContent()).items.map(item => 'str' in item ? item.str : '').join('');
-    expect(text).toContain('补充更新时间：未记录');
-    expect(text).not.toContain(`补充更新时间：${input.generatedAt}`);
+    expect(text).not.toContain('补充更新时间');
+    expect(text).not.toContain(input.generatedAt);
   } finally { await loading.destroy(); }
 });
 

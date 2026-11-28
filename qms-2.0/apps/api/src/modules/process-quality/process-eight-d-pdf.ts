@@ -5,6 +5,38 @@ export const REPORT_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 export const REPORT_TOTAL_IMAGE_BYTES = 32 * 1024 * 1024;
 export const REPORT_TOTAL_IMAGE_PIXELS = 32_000_000;
 
+export function reportImageBudget() {
+  let bytesRead = 0;
+  let embeddedPixels = 0;
+  const list = (attachment: ProcessEightDControlledReportDto['attachments'][number], reason: string) => {
+    attachment.rendering = 'LISTED';
+    attachment.note = `${reason}，未嵌入；请使用正常授权下载`;
+    return false;
+  };
+  return {
+    read(attachment: ProcessEightDControlledReportDto['attachments'][number]) {
+      if (attachment.rendering !== 'EMBEDDED') return false;
+      if (bytesRead + attachment.sizeBytes > REPORT_TOTAL_IMAGE_BYTES) return list(attachment, '报告图像总读取量超过 32 MiB 上限');
+      bytesRead += attachment.sizeBytes;
+      return true;
+    },
+    embed(attachment: ProcessEightDControlledReportDto['attachments'][number], bytes: Buffer) {
+      let size: ReturnType<typeof reportImageSize>;
+      try { size = reportImageSize(bytes, attachment.contentType); }
+      catch (error) {
+        if (error instanceof Error && error.message === 'PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT') {
+          return list(attachment, '图像像素超过 8192 边长或 1600 万像素上限');
+        }
+        throw error;
+      }
+      const pixels = size.width * size.height * attachment.uses.length;
+      if (embeddedPixels + pixels > REPORT_TOTAL_IMAGE_PIXELS) return list(attachment, '报告内嵌图像超过 3200 万像素总量上限');
+      embeddedPixels += pixels;
+      return true;
+    },
+  };
+}
+
 // Inspect dimensions before PDFKit decompresses pixels; never accept a file path or URL.
 export function reportImageSize(bytes: Buffer, contentType: string): { width: number; height: number } {
   let width = 0; let height = 0;
@@ -37,6 +69,7 @@ export function reportImageSize(bytes: Buffer, contentType: string): { width: nu
 export async function renderProcessEightDPdf(report: ProcessEightDControlledReportDto, images: ReadonlyMap<string, Buffer>, domainCode = String(report.snapshot.problem.domainCode ?? 'process-quality'), supplierPortal = false): Promise<Buffer> {
   const document = report.snapshot.document;
   const references = [...document.okFileIds, ...document.ngFileIds, ...document.analysisFileIds,
+    ...(document.lessonsLearnedFileIds ?? []),
     ...document.temporaryMeasures.flatMap(row => row.fileIds),
     ...document.correctiveActions.flatMap(row => [...row.fileIds, ...row.verificationFileIds]),
     ...document.horizontalDeployment.flatMap(row => row.fileIds)];

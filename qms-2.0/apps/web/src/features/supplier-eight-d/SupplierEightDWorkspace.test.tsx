@@ -65,6 +65,7 @@ beforeEach(() => {
   fetcher = vi.fn(async (path: string, init: RequestInit = {}) => {
     if (path === '/api/v1/auth/csrf') return json({ csrfToken: 'csrf' });
     if (path === '/api/v1/auth/session') return json({ user: actor, securityState: 'AUTHENTICATED', landingPath: actor.accountType === 'INTERNAL' ? '/app/workbench' : '/supplier/inbox' });
+    if (path.endsWith('/closure-check') && init.method === 'POST') return json([]);
     if (init.method && init.method !== 'GET') {
       const body = JSON.parse(String(init.body)); writes.push({ path, init, body });
       if (failure === 'network') throw new TypeError('network');
@@ -195,7 +196,7 @@ it.each([false, true])('loads the issued document and saves all D2-D8 to the cor
   expect(verification.getByLabelText('开始日期')).toHaveValue('');
   expect(verification.getByLabelText('跟踪批次或单号')).toHaveValue('');
   fireEvent.change(verification.getByLabelText('跟踪批次或单号'), { target: { value: 'ORDER-1' } });
-  fireEvent.change(openChapter('D8').getByLabelText('D8 结案总结'), { target: { value: '结案总结草稿' } });
+  fireEvent.change(openChapter('D8').getByLabelText('结案总结'), { target: { value: '结案总结草稿' } });
   fireEvent.click(screen.getByRole('button', { name: '保存草稿' }));
   await waitFor(() => expect(writes).toHaveLength(1));
   expect(writes[0].path).toBe(`/api/v1/${portal ? 'supplier-portal' : 'supplier-quality'}/eight-d/supplier-1`);
@@ -316,7 +317,7 @@ it('resubmits the entire saved version after a returned closure round', async ()
 it('saves closed internal supplements only when explicitly allowed', async () => {
   current.closedAt = '2026-10-28T00:00:00Z'; current.allowedActions = ['read', 'supplement'];
   mount(); await screen.findByDisplayValue('供应商实际问题');
-  const summary = openChapter('D8').getByLabelText('D8 结案总结');
+  const summary = openChapter('D8').getByLabelText('结案总结');
   expect(summary).toBeVisible();
   expect(summary).toBeEnabled();
   fireEvent.change(summary, { target: { value: '闭后内部补充' } });
@@ -328,7 +329,7 @@ it('saves closed internal supplements only when explicitly allowed', async () =>
 it('never enables private supplement, disclosure or internal approval in portal even with stray actions', async () => {
   current.closedAt = '2026-10-28T00:00:00Z'; current.allowedActions = ['read', 'supplement', 'disclosure-preview', 'release'];
   mount(true); await screen.findByDisplayValue('供应商实际问题');
-  expect(openChapter('D8').getByLabelText('D8 结案总结')).toBeDisabled();
+  expect(openChapter('D8').getByLabelText('结案总结')).toBeDisabled();
   expect(screen.queryByRole('button', { name: '保存内部补充' })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: '披露预览与释放' })).not.toBeInTheDocument();
   const log = await openFlowLog();
@@ -522,7 +523,7 @@ it.each([1440, 375])('keeps the complete editable document reachable at simulate
   expect(openChapter('D6').getByRole('textbox', { name: '确认结果' })).toBeEnabled();
   const deployment = openChapter('D7');
   for (const name of ['增加横向展开', '增加标准化文件']) expect(deployment.getByRole('button', { name })).toBeEnabled();
-  expect(openChapter('D8').getByRole('textbox', { name: 'D8 结案总结' })).toBeEnabled();
+  expect(openChapter('D8').getByRole('textbox', { name: '结案总结' })).toBeEnabled();
 });
 
 function savedReport(): components['schemas']['SupplierEightDControlledReportDto'] {
@@ -698,7 +699,8 @@ it('clears the scope rather than rehydrating a write receipt from another organi
 
 it('shows business status and risk labels instead of internal codes', async () => {
   mount(); await screen.findByDisplayValue('供应商实际问题');
-  const header = within(screen.getByRole('heading', { name: 'SQ-001' }).closest('header')!);
+  const header = within(screen.getByRole('heading', { name: current.title, level: 2 }).closest('header')!);
+  expect(header.getByText(current.reportNumber)).toBeVisible();
   expect(header.getByText('办理中')).toBeVisible(); expect(header.getByText('高风险')).toBeVisible();
 });
 

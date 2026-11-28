@@ -34,7 +34,7 @@ import { ProcessDefectLedgerService } from './process-defect-ledger.service.js';
 import { ProcessEightDWorkflowConfigurationService } from './process-eight-d-workflow-configuration.service.js';
 import { assertInternalEightDDomain, INTERNAL_EIGHT_D_DOMAIN, INTERNAL_EIGHT_D_DOMAINS, internalEightDSql, type InternalEightDDomainDescriptor } from '../../common/eight-d/internal-eight-d-domain.js';
 import type { InternalEightDSourcePort } from './process-eight-d.types.js';
-import { analysisCompletionIssues, completedD7EvidenceIssues, completedD7EvidenceRows, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from './process-eight-d-document.js';
+import { analysisCompletionIssues, analysisPlan, completedD7EvidenceIssues, completedD7EvidenceRows, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from './process-eight-d-document.js';
 import type { InternalEightDTeamOptionsQueryDto } from './process-eight-d-document-team.dto.js';
 import { PROCESS_EIGHT_D_MAX_FILES } from './process-eight-d-document.dto.js';
 import { assertEightDSources, assertProcessIssueRecurrence, assertSourceConfirmation, eightDError as workflowError, eightDRequestDigest, resolveProcessIssueBoard, resolveProcessIssueTitle } from './process-eight-d-policy.js';
@@ -276,6 +276,19 @@ export class ProcessEightDService {
       const record = await this.lockRecord(tx, actor, problemId, 'READ');
       await this.authorizeRead(tx, actor, record);
       return this.reportModel(tx, actor, record);
+    });
+  }
+
+  async closureCheck(actor: ProcessEightDActor, problemId: string, draft: unknown) {
+    this.scope(actor);
+    return this.transaction(async tx => {
+      const record = await this.lockRecord(tx, actor, problemId, 'READ');
+      await this.authorizeEdit(tx, actor, record);
+      const document = this.normalizeDraft(draft);
+      const available = (await this.evidenceRows(tx, record, documentFileIds(document), true)).filter(this.verifiedEvidence);
+      const { report } = record;
+      const analysisCompletedAt = canonical(analysisPlan(document)) === canonical(analysisPlan(report.document)) ? report.analysisCompletedAt : null;
+      return submissionIssues(document, { analysisCompletedAt, submissionDueAt: report.submissionDueAt }, new Set(available.map(file => file.id)));
     });
   }
 
@@ -549,10 +562,13 @@ export class ProcessEightDService {
     return { problem: result.problem, replayed: result.replayed };
   }
 
-  async save(actor: ProcessEightDActor, problemId: string, input: SaveProcessEightDInput, traceId: string, key: string) {
-    let document;
-    try { document = normalizeProcessEightDDocument(input.document); }
+  private normalizeDraft(input: unknown) {
+    try { return normalizeProcessEightDDocument(input); }
     catch (error) { if (error instanceof ProcessEightDDocumentError) throw new ControlledValidationException('PROCESS_EIGHT_D_DOCUMENT_INVALID', error.issues); throw error; }
+  }
+
+  async save(actor: ProcessEightDActor, problemId: string, input: SaveProcessEightDInput, traceId: string, key: string) {
+    const document = this.normalizeDraft(input.document);
     return this.command(actor, problemId, input, 'SAVE', key, traceId, async (tx, record) => {
       await this.authorizeEdit(tx, actor, record);
       const teamIssues = await resolveOrganizationMemberSnapshots(tx, record.problem.organizationId, 'INTERNAL', document.team, record.report.document.team);
@@ -563,9 +579,7 @@ export class ProcessEightDService {
       if (issues.length) throw new ControlledValidationException('PROCESS_EIGHT_D_DOCUMENT_INVALID', issues);
       await this.assertEvidence(tx, actor, record, documentFileIds(document), false);
       if (canonical(document) === canonical(record.report.document)) return;
-      const plan = (d: typeof document) => ({ analysisProcess: d.analysisProcess, occurrenceCause: d.occurrenceCause, escapeCause: d.escapeCause, systemCause: d.systemCause,
-        analysisFileIds: d.analysisFileIds, correctiveActions: d.correctiveActions.map(a => ({ id: a.id, causeKind: a.causeKind, action: a.action, owner: a.owner, plannedAt: a.plannedAt, verificationMethod: a.verificationMethod })) });
-      const analysisChanged = canonical(plan(document)) !== canonical(plan(record.report.document));
+      const analysisChanged = canonical(analysisPlan(document)) !== canonical(analysisPlan(record.report.document));
       await this.updateReport(tx, actor, record, Prisma.sql`document = ${JSON.stringify(document)}::jsonb,
         analysis_completed_at = ${analysisChanged ? null : record.report.analysisCompletedAt}::timestamptz`, true);
     }, [], tx => this.lockEvidence(tx, documentFileIds(document)));

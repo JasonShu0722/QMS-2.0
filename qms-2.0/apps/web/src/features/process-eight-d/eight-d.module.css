@@ -37,7 +37,12 @@
 .entryTable { min-width: 0; }
 .entryTable th, .entryTable td { min-width: 76px; vertical-align: middle; overflow-wrap: anywhere; }
 .entryTable th { white-space: nowrap; }
-.entryGroup { margin-block: var(--qms-section-gap); border: 1px solid var(--ed-border); border-radius: 8px; padding: var(--qms-card-padding); }
+.entryGroup, .inputGroup { margin-block: var(--qms-section-gap); border: 1px solid var(--ed-border); border-radius: 8px; padding: var(--qms-card-padding); }
+.entryGroup h4, .inputGroup h4 { color: var(--ed-text); font-weight: 650; }
+.entryGroup small, .inputGroup .field > span, .factGrid li > span { color: var(--ed-muted, var(--ed-text)); }
+.inputGroup { margin-block: 0; }
+.inputGroup .field > span { font-weight: 500; }
+.inputGroup details > summary { color: var(--ed-primary); font-weight: 550; cursor: pointer; }
 .entryGroup > summary { cursor: pointer; font-weight: 600; }
 .groupHeading { display: flex; align-items: center; justify-content: space-between; gap: var(--qms-section-gap); }
 .groupHeading h4 { margin-block: 0; }

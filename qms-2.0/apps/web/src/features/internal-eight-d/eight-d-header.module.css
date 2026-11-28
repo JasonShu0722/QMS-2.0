@@ -1,0 +1,33 @@
+.header, .identifiers, .actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.header h2 {
+  flex: 1 1 9rem;
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.actions { max-inline-size: 100%; }
+.actions :global(.ant-space), .actions :global(.ant-space-item) { min-inline-size: 0; max-inline-size: 100%; }
+.actions :global(.ant-btn) { height: auto; min-height: 32px; max-inline-size: 100%; white-space: normal; overflow-wrap: anywhere; }
+.identifiers :global(.ant-tag) { margin-inline-end: 0; }
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 8px 16px;
+  margin: 0 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.details dt { color: var(--qms-muted); }
+.details dd { margin: 0; font-weight: 600; }
+.dates { inline-size: 100%; border-collapse: collapse; overflow-wrap: anywhere; }
+.dates th, .dates td { padding: 5px; text-align: start; border-block-end: 1px solid var(--qms-border); }
+.dates thead th { background: var(--qms-surface-tint); }

@@ -38,7 +38,7 @@ export function EightDDescriptionTools({ value, facts, disabled, onApply }: {
   if (disabled) return null;
   return <>
     <Space wrap>
-      <Button disabled={!facts.length} onClick={() => setProposal(buildFromFacts())}>{text('根据问题输入生成 D2', 'Generate D2 from problem input')}</Button>
+      <Button disabled={!facts.length} onClick={() => setProposal(buildFromFacts())}>{text('根据问题输入生成描述', 'Generate description from problem input')}</Button>
       <Button disabled={!value.trim()} onClick={() => setProposal(polish())}>{text('整理为质量工程表述', 'Format as a quality engineering description')}</Button>
     </Space>
     <Modal open={proposal !== undefined} title={text('预览问题描述', 'Preview problem description')} okText={text('使用此描述', 'Use this description')} cancelText={text('取消', 'Cancel')}
