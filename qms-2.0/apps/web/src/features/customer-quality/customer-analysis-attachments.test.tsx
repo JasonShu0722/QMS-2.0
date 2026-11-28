@@ -12,9 +12,9 @@ const record: components['schemas']['CustomerAnalysisDto'] = { id: 'stable-analy
 const resource = { resourceType: 'customer-complaint-analysis', resourceId: record.id };
 const file: components['schemas']['FileDto'] = { ...resource, id: 'file', originalName: 'analysis.txt', contentType: 'text/plain', sizeBytes: 6, sha256: 'a'.repeat(64), version: 2, status: 'QUARANTINED', scanStatus: 'PENDING', scanReason: null, uploadExpiresAt: '2026-10-27T12:00:00Z', scannedAt: null, deletedAt: null, retainUntil: '2026-11-27T12:00:00Z' };
 let clean: boolean;
-let failInitialization: boolean;
+let initializeUpload: (() => Promise<never>) | undefined;
 beforeEach(() => {
-  useWorkTabsStore.getState().reset(); clean = false; failInitialization = false;
+  useWorkTabsStore.getState().reset(); clean = false; initializeUpload = undefined;
   vi.stubGlobal('crypto', webcrypto);
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null)));
   vi.mocked(getSession).mockReset().mockResolvedValue({ userId: 'fae', organizationId: 'org', accountType: 'INTERNAL', landingPath: '/app/workbench' });
@@ -24,7 +24,7 @@ beforeEach(() => {
     if (path.startsWith('/api/v1/customer-quality/ledger/')) return { id: 'complaint', organizationId: 'org', status: 'FOLLOWING', qualityEngineerId: 'qe', qualityEngineerAssignmentId: 'qe-appointment' } as never;
     if (path.endsWith('/complaints/complaint')) return { complaintId: 'complaint', fae: record, supplier: null } as never;
     if (path === '/api/v1/files/uploads') {
-      if (failInitialization) throw new TypeError('initialization response lost');
+      if (initializeUpload) return initializeUpload();
       return { file: { ...file, version: 1, scanStatus: 'WAITING_UPLOAD' }, uploadUrl: 'https://objects.example.test/upload', headers: {} } as never;
     }
     if (path.endsWith('/complete')) return file as never;
@@ -63,14 +63,23 @@ it('runs the real shared upload/complete/CLEAN lifecycle against the stable anal
 });
 
 it('does not treat a selected file or an unknown reservation response as a successful upload', async () => {
-  failInitialization = true;
+  let loseResponse!: () => void;
+  initializeUpload = () => new Promise((_, reject) => {
+    loseResponse = () => reject(new TypeError('initialization response lost'));
+  });
   mount(); fireEvent.change(await screen.findByLabelText('选择附件'), { target: { files: [sample()] } });
-  await screen.findByRole('button', { name: '重试上传' });
-  expect(screen.getByRole('button', { name: '保存 FAE 解析' })).toBeDisabled();
-  expect(screen.getByRole('button', { name: '刷新解析' })).toBeDisabled();
+  await waitFor(() => expect(apiRequest).toHaveBeenCalledWith('/api/v1/files/uploads', expect.objectContaining({ method: 'POST' })));
+  const save = screen.getByRole('button', { name: '保存 FAE 解析' });
+  const refresh = screen.getByRole('button', { name: '刷新解析' });
+  expect(save).toBeDisabled();
+  expect(refresh).toBeDisabled();
+  await act(async () => loseResponse());
+  expect(screen.getByRole('button', { name: '重试上传' })).toBeEnabled();
+  expect(save).toBeDisabled();
+  expect(refresh).toBeDisabled();
   expect(screen.getByText('未解析')).toBeVisible();
   fireEvent.click(screen.getByRole('button', { name: '放弃未关联附件' }));
-  await waitFor(() => expect(screen.getByRole('button', { name: '保存 FAE 解析' })).toBeEnabled());
+  await waitFor(() => expect(save).toBeEnabled());
   expect(screen.queryByRole('button', { name: '重试上传' })).not.toBeInTheDocument();
   expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path.endsWith('/complete'))).toBe(false);
 });
