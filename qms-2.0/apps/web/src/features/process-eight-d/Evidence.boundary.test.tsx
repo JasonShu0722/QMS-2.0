@@ -164,7 +164,8 @@ it('routes a real controlled-report raw attachment denial through the same scope
   };
   const read: EightDRead = async <T,>() => controlled as T;
   render(<LanguageProvider><EightDEvidenceScopeContext.Provider value={scope}><EightDControlledReport report={report} read={read} download={vi.fn()} /></EightDEvidenceScopeContext.Provider></LanguageProvider>);
-  await screen.findByText('raw-denied');
+  fireEvent.click(await screen.findByRole('button', { name: file.originalName }));
+  await screen.findByText('附件下载失败');
   expect(fetchMock).toHaveBeenCalledWith(`/api/v1/files/${file.id}`, expect.anything());
   expect(scope.onAccessDenied).toHaveBeenCalledWith(expect.objectContaining({ status: 401 }));
 });
