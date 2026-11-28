@@ -618,7 +618,7 @@
           },
           {
             "path": "apps/web/src/features/supplier-audit/SupplierAuditPage.test.tsx",
-            "sha256": "5ba2044d4bc795dc0e56df36202a775fa0c49a5dd38aa7145c56f1bdc0bc7a86"
+            "sha256": "052d87c3ac15b5cffe5ba54b18655eeff93d47dc6f5e5e2ee6755bf63f9b772d"
           },
           {
             "path": "apps/web/src/features/supplier-pcn/SupplierPcnPage.test.tsx",

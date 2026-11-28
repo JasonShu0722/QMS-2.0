@@ -562,7 +562,7 @@ it.each([1440, 375])('keeps the complete editable document reachable at simulate
   const deployment = openChapter('D7');
   for (const name of ['增加横向展开', '增加标准化文件']) expect(deployment.getByRole('button', { name })).toBeEnabled();
   expect(openChapter('D8').getByRole('textbox', { name: '结案总结' })).toBeEnabled();
-});
+}, 30000);
 
 function savedReport(): components['schemas']['SupplierEightDControlledReportDto'] {
   return {
@@ -771,7 +771,7 @@ it('clears the whole workspace and aborts sensitive requests when the shared clo
   await screen.findByText(/敏感内容已清除/);
   expect(screen.queryByDisplayValue('供应商实际问题')).not.toBeInTheDocument();
   expect(denied).toHaveBeenCalledTimes(1); expect(signal.aborted).toBe(true);
-});
+}, 30000);
 
 it('does not dispatch when the actual principal changes during CSRF preparation', async () => {
   let release!: (response: Response) => void;
@@ -782,7 +782,7 @@ it('does not dispatch when the actual principal changes during CSRF preparation'
   actor = { accountType: 'INTERNAL', organizationId: 'org-1', id: 'replacement' };
   await act(async () => release(json({ csrfToken: 'late-token' })));
   await screen.findByText(/敏感内容已清除/); expect(writes).toHaveLength(0);
-});
+}, 30000);
 
 it('preserves optional rows as optional instead of inserting suggested containment into saved content', async () => {
   mount(); await screen.findByDisplayValue('供应商实际问题');

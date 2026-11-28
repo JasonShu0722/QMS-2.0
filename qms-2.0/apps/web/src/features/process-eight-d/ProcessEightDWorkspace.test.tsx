@@ -161,25 +161,30 @@ it('shows the process record with time, person and content without requesting au
   expect(fetcher.mock.calls.some(([path]) => String(path).includes('/audit-trail'))).toBe(false);
 });
 
-it('keeps the process draft and flow records when optional round history is denied', async () => {
-  intercept(path => path.endsWith('/rounds') ? response({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }, 403)
-    : path.includes('/flow-records?') ? response([{ occurredAt: '2026-11-26T02:00:00.000Z', person: '系统', content: '管理审核已记录' }]) : undefined);
+it('keeps the process draft when retrying a failed flow log request', async () => {
+  let failFlowLog = true;
+  intercept(path => {
+    if (!path.includes('/flow-records?')) return undefined;
+    return failFlowLog ? response({ message: 'unavailable' }, 500)
+      : response([{ occurredAt: '2026-11-26T02:00:00.000Z', person: '系统', content: '管理审核已记录' }]);
+  });
   mount();
   fireEvent.change(await screen.findByDisplayValue('真实过程问题'), { target: { value: '制程未保存正文' } });
   fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
-  await waitFor(() => expect(screen.getByText('轮次加载失败')).toBeVisible());
-  expect(await screen.findByText('管理审核已记录')).toBeVisible();
+  const dialog = within(await screen.findByRole('dialog', { name: '流程日志' }));
+  await waitFor(() => expect(dialog.getByText('流程记录加载失败')).toBeVisible());
+  expect(screen.getByDisplayValue('制程未保存正文')).toBeInTheDocument();
+  failFlowLog = false;
+  fireEvent.click(dialog.getByRole('button', { name: /^重\s*试$/ }));
+  expect(await dialog.findByText('管理审核已记录')).toBeVisible();
   expect(screen.getByDisplayValue('制程未保存正文')).toBeInTheDocument();
 });
 
-it('clears the process draft when optional history denial reveals loss of workspace access', async () => {
-  let denyWorkspace = false;
-  const denied = () => response({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }, 403);
-  intercept(path => path.endsWith('/rounds') || denyWorkspace && path.includes('/eight-d/problem-1?') ? denied()
-    : path.includes('/flow-records?') ? response([]) : undefined);
+it('clears the process draft when workspace access is revoked while loading the flow log', async () => {
+  intercept(path => path.includes('/flow-records?')
+    ? response({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }, 403) : undefined);
   mount();
   fireEvent.change(await screen.findByDisplayValue('真实过程问题'), { target: { value: '制程未保存正文' } });
-  denyWorkspace = true;
   fireEvent.click(screen.getByRole('button', { name: '流程日志' }));
   await screen.findByText(/当前会话失效或无权访问/);
   expect(screen.queryByDisplayValue('制程未保存正文')).not.toBeInTheDocument();
@@ -655,7 +660,7 @@ it('loads the standard attachment panel when the analysis chapter is first selec
   expect(fetcher.mock.calls.some(([url]) => url === '/api/v1/files/file-1')).toBe(false);
   fireEvent.click(screen.getByRole('button', { name: /^D4 ·/ }));
   const evidence = analysisPanel();
-  expect(await evidence.findByRole('button', { name: 'analysis.png' })).toBeVisible();
+  expect(await evidence.findByRole('button', { name: '预览附件 analysis.png' })).toBeVisible();
 });
 
 it('shows approval decisions in the process log without a separate rounds section', async () => {
@@ -710,7 +715,7 @@ it('previews only actually clean available image evidence through an authorized 
   mount(); await screen.findByDisplayValue('真实过程问题');
   fireEvent.click(screen.getByRole('button', { name: /^D4 ·/ }));
   const evidence = analysisPanel();
-  fireEvent.click(await evidence.findByRole('button', { name: 'analysis.png' }));
+  fireEvent.click(await evidence.findByRole('button', { name: '预览附件 analysis.png' }));
   expect(await screen.findByAltText('analysis.png')).toHaveAttribute('src', 'blob:verified-image');
   expect(fetcher).toHaveBeenCalledWith('/api/v1/files/file-1/download', expect.objectContaining({ method: 'POST', credentials: 'include', headers: expect.objectContaining({ 'x-csrf-token': 'csrf' }) }));
 });
@@ -722,7 +727,7 @@ it('does not preview quarantined evidence or fabricate CLEAN from an id', async 
   fireEvent.click(within(screen.getByLabelText('8D 内容分区')).getByRole('button', { name: /^D4 ·/ }));
   const evidence = analysisPanel();
   await evidence.findByText('扫描暂不可用，附件仍隔离');
-  expect(evidence.queryByRole('button', { name: 'analysis.png' })).not.toBeInTheDocument();
+  expect(evidence.queryByRole('button', { name: '预览附件 analysis.png' })).not.toBeInTheDocument();
   expect(screen.queryByAltText('analysis.png')).not.toBeInTheDocument();
 });
 
@@ -739,13 +744,13 @@ it('merges caller preview cancellation with the workspace lifetime AbortSignal',
   mount(); await screen.findByDisplayValue('真实过程问题');
   fireEvent.click(screen.getByRole('button', { name: /^D4 ·/ }));
   const evidence = analysisPanel();
-  fireEvent.click(await evidence.findByRole('button', { name: 'analysis.png' }));
+  fireEvent.click(await evidence.findByRole('button', { name: '预览附件 analysis.png' }));
   await waitFor(() => expect(signals).toHaveLength(1));
   const preview = await screen.findByRole('dialog', { name: 'analysis.png' });
   fireEvent.click(within(preview).getByRole('button', { name: '关闭' }));
   expect(signals[0].aborted).toBe(true);
   await waitFor(() => expect(preview).not.toBeVisible());
-  fireEvent.click(await evidence.findByRole('button', { name: 'analysis.png' }));
+  fireEvent.click(await evidence.findByRole('button', { name: '预览附件 analysis.png' }));
   await waitFor(() => expect(signals).toHaveLength(2));
   act(() => useWorkTabsStore.getState().bindSession('INTERNAL:other:org-2'));
   expect(signals[1].aborted).toBe(true);
