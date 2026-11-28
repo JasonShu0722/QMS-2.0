@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
+import type { ReactNode } from 'react';
 import type { InternalEightDDomain } from '../internal-eight-d/domain';
-import { useEightDSeverityText, useEightDText, type EightDReport } from './eight-d';
+import { EightDRiskBadge } from '../internal-eight-d/EightDRiskBadge';
+import { useEightDText, type EightDReport } from './eight-d';
 import styles from './eight-d.module.css';
 
 type Source = EightDReport['sources'][number] | { sourceId: string; sourceVersion: number; sourceSnapshot: Record<string, unknown>; sourceDomain: string; sourceType: string };
@@ -67,13 +69,13 @@ export function EightDSourceSummary({ sources, domain = 'process', organizationI
   </>;
 }
 
-export function EightDProblemInput({ severity, observation, ...props }: SourceProps & { severity?: string; observation?: string }) {
+export function EightDProblemInput({ severity, observation, riskDetails, ...props }: SourceProps & { severity?: string; observation?: string; riskDetails?: ReactNode }) {
   const text = useEightDText();
-  const severityText = useEightDSeverityText();
   return <div className={styles.problemInput}>
-    <section><h4>{text('问题输入', 'Problem input')}</h4>{observation ? <p>{observation}</p> : <EightDSourceSummary {...props} />}</section>
-    <section><h4>{text('风险评估', 'Risk assessment')}</h4>
-      <p>{severity && ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(severity) ? severityText(severity as EightDReport['severity']) : text('未记录', 'Not recorded')}</p>
+    <section className={styles.inputGroup} aria-label={text('问题输入', 'Problem input')}><h4>{text('问题输入', 'Problem input')}</h4>{observation ? <p>{observation}</p> : <EightDSourceSummary {...props} />}</section>
+    <section className={styles.inputGroup} aria-label={text('风险评估', 'Risk assessment')}><h4>{text('风险评估', 'Risk assessment')}</h4>
+      <EightDRiskBadge severity={severity} />
+      {riskDetails}
     </section>
   </div>;
 }

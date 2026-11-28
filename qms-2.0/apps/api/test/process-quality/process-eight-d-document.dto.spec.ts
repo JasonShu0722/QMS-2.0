@@ -145,7 +145,12 @@ describe('process eight-d document DTO', () => {
         'title', 'team', 'riskAssessment', 'description', 'okDescription', 'ngDescription', 'okFileIds', 'ngFileIds', 'temporaryMeasures', 'containment', 'optionalAffectedContainment', 'optionalAffectedScope',
         'analysisProcess', 'analysisFileIds', 'occurrenceCause', 'escapeCause', 'systemCause',
         'correctiveActions', 'effectTracking', 'horizontalDeployment', 'standardization', 'closureSummary', 'lessonsLearned',
+        'lessonsLearnedTitle', 'lessonsLearnedApplicability', 'lessonsLearnedFileIds',
       ]);
+      expect(root.required).not.toContain('lessonsLearnedTitle');
+      expect(root.required).not.toContain('lessonsLearnedApplicability');
+      expect(root.required).not.toContain('lessonsLearnedFileIds');
+      expect(schema(schema(root.properties!.lessonsLearnedFileIds!).items!)).toMatchObject({ type: 'string', format: 'uuid' });
       for (const name of ['temporaryMeasures', 'containment', 'optionalAffectedContainment', 'correctiveActions', 'horizontalDeployment', 'standardization']) {
         const array = schema(root.properties![name]!);
         expect(array.type).toBe('array');

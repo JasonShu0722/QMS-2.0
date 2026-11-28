@@ -20,14 +20,17 @@ context.fillStyle = 'white'; context.font = '42px sans-serif'; context.fillText(
 const png: Buffer = source.toBuffer('image/png');
 const jpeg: Buffer = source.toBuffer('image/jpeg');
 const jpegId = '10000000-0000-4000-8000-000000000003';
+const ngId = '10000000-0000-4000-8000-000000000004';
 const report = sampleReport();
+report.snapshot.document.ngFileIds = [ngId];
 report.snapshot.document.analysisFileIds = [jpegId];
 report.snapshot.document.correctiveActions[0]!.verificationFileIds = [jpegId];
 report.snapshot.document.description += '\n渲染验证样本，图片为人工构造测试图，不是真实业务或扫描验收证据。';
 report.attachments[0] = { ...report.attachments[0]!, sizeBytes: png.length, sha256: createHash('sha256').update(png).digest('hex') };
 report.attachments.push({ ...report.attachments[0]!, id: jpegId, originalName: '分析与验证测试图.jpg', contentType: 'image/jpeg', sizeBytes: jpeg.length,
   sha256: createHash('sha256').update(jpeg).digest('hex'), uses: ['D4 分析', 'D6 验证 action-1'] });
-const bytes = await renderProcessEightDPdf(report, new Map([[imageId, png], [jpegId, jpeg]]));
+report.attachments.push({ ...report.attachments[0]!, id: ngId, originalName: 'NG对照.png', uses: ['D2 NG'] });
+const bytes = await renderProcessEightDPdf(report, new Map([[imageId, png], [ngId, png], [jpegId, jpeg]]));
 await mkdir(output, { recursive: true });
 await writeFile(resolve(output, 'eight-d-long-table.pdf'), bytes);
 await writeFile(resolve(output, 'source-render-sample.png'), png);
@@ -63,7 +66,7 @@ try {
   assert(text.includes('围堵长表第80行'));
   assert(text.includes('旧轮已失效'));
   assert(text.includes('同人跳过（非签批）'));
-  assert(evidence.reduce((sum, page) => sum + page.imageOperators, 0) >= 3);
+  assert(evidence.reduce((sum, page) => sum + page.imageOperators, 0) === 3);
   await writeFile(resolve(output, 'extracted-text.txt'), text);
   await writeFile(resolve(output, 'render-evidence.json'), JSON.stringify({ evidenceKind: 'PURE_RENDER_NOT_SERVICE_INTEGRATION',
     humanVisualAcceptance: 'NOT_RUN', pdfSha256: createHash('sha256').update(bytes).digest('hex'), bytes: bytes.length, pages: evidence }, null, 2));

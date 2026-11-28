@@ -22,6 +22,32 @@ function paths(document: ReturnType<typeof validDocument>) {
 }
 
 describe('process eight-d document policy', () => {
+  it('reports each missing reason summary once and clears it as the draft changes', () => {
+    const summaries = (input: object) => policy.submissionIssues(policy.normalizeProcessEightDDocument(input))
+      .filter(issue => ['occurrenceCause', 'escapeCause'].includes(issue.path));
+    expect(summaries({})).toEqual([
+      { path: 'occurrenceCause', message: '请填写发生因总结' },
+      { path: 'escapeCause', message: '请填写流出因总结' },
+    ]);
+    expect(summaries({ occurrenceCause: 'Fixture drift' })).toEqual([
+      { path: 'escapeCause', message: '请填写流出因总结' },
+    ]);
+    expect(summaries({ occurrenceCause: 'Fixture drift', escapeCause: 'Check missed drift' })).toEqual([]);
+  });
+
+  it('retains structured lessons across a JSON round trip and counts their attachments as evidence', () => {
+    const legacy = policy.normalizeProcessEightDDocument({ lessonsLearned: 'Historical lesson' });
+    expect(legacy.lessonsLearned).toBe('Historical lesson');
+    const lesson = { lessonsLearned: 'Historical lesson', lessonsLearnedTitle: 'Fixture inspection',
+      lessonsLearnedApplicability: 'Similar fixtures', lessonsLearnedFileIds: [fileId] };
+    const document = policy.normalizeProcessEightDDocument({ ...legacy, ...lesson });
+    expect(policy.normalizeProcessEightDDocument(JSON.parse(JSON.stringify(document)))).toMatchObject(lesson);
+    expect(policy.documentFileIds(document)).toEqual([fileId]);
+    expect(policy.submissionIssues(document, undefined, new Set()).map(issue => issue.path)).toContain('fileIds');
+    expect(policy.documentFileIds(legacy)).toEqual([]);
+    expect(() => policy.normalizeProcessEightDDocument({ lessonsLearnedFileIds: ['invalid'] })).toThrow(policy.ProcessEightDDocumentError);
+  });
+
   it('exports the integration surface', () => {
     for (const name of ['emptyProcessEightDDocument', 'normalizeProcessEightDDocument', 'analysisCompletionIssues', 'submissionIssues', 'documentFileIds', 'ProcessEightDDocumentError'] as const) {
       expect(typeof policy[name]).toBe('function');

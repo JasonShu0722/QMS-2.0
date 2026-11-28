@@ -11,7 +11,7 @@ import { OBJECT_STORAGE, type ObjectStorage } from '../file-management/object-st
 import { assertWorkflowFeature } from '../workflow/workflow-access-policy.js';
 import { canonical } from '../workflow/workflow-runtime-policy.js';
 import { documentFileIds } from '../process-quality/process-eight-d-document.js';
-import { REPORT_IMAGE_MAX_BYTES, REPORT_TOTAL_IMAGE_BYTES, REPORT_TOTAL_IMAGE_PIXELS, renderProcessEightDPdf, reportImageSize } from '../process-quality/process-eight-d-pdf.js';
+import { REPORT_IMAGE_MAX_BYTES, renderProcessEightDPdf, reportImageBudget } from '../process-quality/process-eight-d-pdf.js';
 import { SupplierEightDService } from './supplier-eight-d.service.js';
 import { supplierEightDReportModel, supplierReportFail as fail, supplierReportObject, type SupplierEightDReportCore, type SupplierEightDReportRead } from './supplier-eight-d-report.model.js';
 import type { SupplierEightDActor } from './supplier-eight-d.types.js';
@@ -31,6 +31,7 @@ export class SupplierEightDReportService {
     this.validate(actor, id, query);
     const selected = await this.transaction(tx => this.select(tx, actor, id, query));
     const previewFingerprint = this.checkPreview(selected.report, query.previewFingerprint);
+    await this.images(selected, false);
     await this.finish(actor, id, query, selected, traceId, 'READ');
     return { ...selected.report, previewFingerprint };
   }
@@ -39,7 +40,7 @@ export class SupplierEightDReportService {
     this.validate(actor, id, query);
     const selected = await this.transaction(tx => this.select(tx, actor, id, query));
     if (query.previewFingerprint !== undefined) this.checkPreview(selected.report, query.previewFingerprint);
-    const images = await this.images(selected);
+    const images = await this.images(selected, true);
     const executionId = randomUUID(), startedAt = new Date();
     const observe = async (status: 'STARTED' | 'SUCCEEDED' | 'FAILED') => {
       try { await this.operationReceipts?.recordPdf(selected.result.record.control.organizationId, 'supplier-quality', executionId, status, startedAt); }
@@ -101,6 +102,7 @@ export class SupplierEightDReportService {
     document.correctiveActions.forEach(row => { add(row.fileIds, `D5 / D6 措施 ${row.id}`); add(row.verificationFileIds, `D6 验证 ${row.id}`); });
     document.horizontalDeployment.forEach(row => add(row.fileIds, `D7 横展 ${row.id}`));
     document.standardization.forEach(row => add(row.fileIds ?? [], `D7 标准化 ${row.id}`));
+    add(document.lessonsLearnedFileIds ?? [], 'D8 经验教训');
     for (const file of refs) {
       const group = groups.find(group => group.fileIds.includes(file.id));
       if (!group || file.resourceId !== id || file.resourceType !== group.resource.resourceType) fail('EVIDENCE_DENIED', 403);
@@ -126,12 +128,12 @@ export class SupplierEightDReportService {
       versionFingerprint: result.versionFingerprint, record: result.record, privateIds, refs: [...refs].sort((a, b) => a.id.localeCompare(b.id)) }) };
   }
 
-  private async images(selected: Selection): Promise<Map<string, Buffer>> {
-    const images = new Map<string, Buffer>(); let total = 0, pixels = 0;
-    for (const file of selected.refs) {
+  private async images(selected: Selection, retainBytes: boolean): Promise<Map<string, Buffer>> {
+    const images = new Map<string, Buffer>();
+    const budget = reportImageBudget();
+    for (const file of [...selected.refs].sort((left, right) => left.id.localeCompare(right.id))) {
       const attachment = selected.report.attachments.find(value => value.id === file.id)!;
-      if (attachment.rendering !== 'EMBEDDED') continue;
-      if (total + file.sizeBytes > REPORT_TOTAL_IMAGE_BYTES) fail('IMAGE_LIMIT', 413);
+      if (!budget.read(attachment)) continue;
       const chunks: Buffer[] = []; let received = 0;
       try {
         for await (const chunk of this.storage.readVersion(file.objectKey, file.objectVersionId, REPORT_IMAGE_MAX_BYTES)) {
@@ -145,17 +147,11 @@ export class SupplierEightDReportService {
       }
       const bytes = Buffer.concat(chunks);
       if (received !== file.sizeBytes || createHash('sha256').update(bytes).digest('hex') !== file.sha256) fail('OBJECT_INVALID');
-      total += received;
       try {
-        const size = reportImageSize(bytes, file.contentType); pixels += size.width * size.height * attachment.uses.length;
-      } catch (error) {
-        if (error instanceof Error && error.message === 'PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT') {
-          attachment.rendering = 'LISTED'; attachment.note = '图像超过 8192 边长或 1600 万像素，未嵌入；下载原文件仍需授权'; continue;
-        }
+        if (budget.embed(attachment, bytes) && retainBytes) images.set(file.id, bytes);
+      } catch {
         fail('IMAGE_INVALID', 422);
       }
-      if (pixels > REPORT_TOTAL_IMAGE_PIXELS) fail('IMAGE_LIMIT', 413);
-      images.set(file.id, bytes);
     }
     return images;
   }

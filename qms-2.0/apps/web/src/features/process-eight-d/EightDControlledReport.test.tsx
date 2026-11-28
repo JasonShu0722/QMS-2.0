@@ -44,9 +44,11 @@ function mount(read: (path: string) => Promise<Controlled>, download = vi.fn(asy
 it('shows D1–D8 and saved details together as a read-only document', async () => {
   const description = '第一行报告正文\n第二行报告正文';
   const current = saved('CURRENT', description);
+  current.snapshot.problem.closedAt = '2026-10-25T10:00:00Z';
+  Object.assign(current.snapshot, { sourceConfirmations: [{ recurrence: 'RECURRENCE' }, { recurrence: 'NOT_RECURRENCE' }] });
   current.snapshot.document.correctiveActions = [{
     id: 'action-1', causeKind: 'OCCURRENCE', action: '纠正措施', owner: '责任人', plannedAt: null,
-    verificationMethod: '', fileIds: [], implementationAt: null, result: '保存的实施结果', beforeState: '', afterState: '',
+    verificationMethod: '旧版验证方法', selectionReason: '旧版选用原因', fileIds: [], implementationAt: null, result: '保存的实施结果', beforeState: '', afterState: '',
     firstBatch: '', followUpBatchCount: null, followUpDuration: '', verificationRecord: '', verificationFileIds: [], effective: null,
   }];
   current.snapshot.document.optionalAffectedContainment = [{
@@ -59,11 +61,18 @@ it('shows D1–D8 and saved details together as a read-only document', async () 
   }];
   mount(async () => current);
   const article = within(await screen.findByRole('article', { name: '8D-001' }));
+  expect(article.getByText('已关闭')).toBeVisible();
+  const summary = within(article.getByRole('region', { name: '执行摘要' }));
+  expect(summary.getByText(/纠正措施/)).toBeVisible();
+  expect(summary.getByText(/保存的实施结果/)).toBeVisible();
+  expect(article.getByText('复发', { exact: true })).toBeVisible();
+  expect(article.getByText('非复发', { exact: true })).toBeVisible();
   expect(article.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent?.match(/^D[1-8](?=\s)/)?.[0]).filter(Boolean))
     .toEqual(['D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'D8']);
-  expect(article.getByText('第一行报告正文 第二行报告正文').textContent).toBe(description);
-  for (const detail of ['保存的实施结果', '保存的潜在影响围堵', '保存的标准化理由']) expect(article.getByText(detail)).toBeVisible();
+  expect(article.getAllByText('第一行报告正文 第二行报告正文').at(-1)?.textContent).toBe(description);
+  for (const detail of ['保存的实施结果', '保存的潜在影响围堵', '保存的标准化理由']) expect(article.getAllByText(detail).at(-1)).toBeVisible();
   expect(article.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(article.queryAllByText(/旧版验证方法|旧版选用原因|记录版本|未记录/)).toHaveLength(0);
 });
 
 it('shows only images whose attachment metadata matches the selected snapshot', async () => {
@@ -88,6 +97,8 @@ it('shows only images whose attachment metadata matches the selected snapshot', 
   try {
     const view = mount(async () => current);
     expect(await screen.findByRole('img', { name: ok.originalName })).toHaveAttribute('src', 'blob:report-image');
+    expect(screen.getByRole('link', { name: /合格图\.png/ })).toHaveAttribute('href', 'blob:report-image');
+    expect(screen.getByText(ok.originalName).tagName).toBe('FIGCAPTION');
     await screen.findByText('不合格图.png · 图片预览不可用');
     expect(screen.queryByRole('img', { name: ng.originalName })).not.toBeInTheDocument();
     expect(readAttachmentPreview).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ id: ok.id, version: 2 }), expect.any(AbortSignal), expect.any(Function));
@@ -104,8 +115,7 @@ it('links the selected saved source in the authorized report organization', asyn
   current.snapshot.sources = [{ sourceId, sourceVersion: 4, sourceDomain: 'process-quality', sourceType: 'process-defect',
     sourceSnapshot: { traceCode: 'TRACE-SAVED', organizationId: 'untrusted-snapshot-org' } }];
   mount(async () => current);
-  fireEvent.click(await screen.findByText('查看来源明细 (1)'));
-  expect(screen.getByRole('link', { name: 'TRACE-SAVED' })).toHaveAttribute('href',
+  expect(await screen.findByRole('link', { name: 'TRACE-SAVED' })).toHaveAttribute('href',
     `/app/process-quality?organizationId=${report.organizationId}&defectId=${sourceId}`);
 });
 
@@ -125,7 +135,7 @@ it('shows customer source facts from the selected saved report, never live works
   await waitFor(() => expect(screen.queryByText('Current customer')).not.toBeInTheDocument());
   facts = await screen.findByRole('region', { name: '来源基础信息' });
   expect(within(facts).getByText('Approved customer')).toBeVisible();
-  expect(within(facts).getByText('保存来源版本').nextElementSibling).toHaveTextContent('2');
+  expect(within(facts).queryByText('保存来源版本')).not.toBeInTheDocument();
 });
 
 it('keeps the selected snapshot owner and section in report metadata, not in the D1 roster', async () => {

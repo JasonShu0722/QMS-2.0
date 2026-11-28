@@ -39,7 +39,7 @@ it('selects twice with the original actor, scopes real report permission and aud
   const report = await s.service.read(actor, id, {}, 'read-trace');
   expect(report).toMatchObject({ supplierProblemId: id, status: 'DRAFT', view: 'CURRENT' });
   expect(s.core.readReport.mock.calls.map(call => call.slice(1))).toEqual([[actor, id, null], [actor, id, null]]);
-  expect(s.calls).toEqual(['core', 'files', 'core', 'files', 'audit']);
+  expect(s.calls).toEqual(['core', 'files', 'storage', 'core', 'files', 'audit']);
   expect(JSON.stringify(report)).not.toContain(s.ref.objectKey);
   expect(s.audit.record).toHaveBeenCalledWith(expect.objectContaining({ organizationId, resourceType: 'SupplierEightDReport', resourceId: id, action: 'SUPPLIER_EIGHT_D_REPORT_READ' }), s.tx);
 });
@@ -145,6 +145,7 @@ it('groups private supplement files separately and never uses that resource for 
 it('rechecks evidence authorization before reading bytes for an already previewed PDF', async () => {
   const s = setup(true);
   const preview = await s.service.read(actor, id, {}, 'preview');
+  s.storage.readVersion.mockClear();
   s.files.readReportEvidence.mockRejectedValue(new HttpException('FILE_RESOURCE_DENIED', 403));
   await expect(s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'revoked')).rejects.toMatchObject({ status: 403 });
   expect(s.storage.readVersion).not.toHaveBeenCalled();
@@ -192,13 +193,30 @@ it('rejects truncation, SHA mismatch and unavailable fixed versions without a su
   }
 });
 
-it('charges repeated image pixels before worker decoding', async () => {
+it('lists an over-dimension image in the supplier portal preview and its matching PDF', async () => {
+  const s = setup(true);
+  s.tx.user.findUnique = async () => ({ ...supplier, status: 'ACTIVE', organization: { status: 'ACTIVE' } });
+  const oversized = Buffer.from(png);
+  oversized.writeUInt32BE(8193, 16);
+  s.ref.sizeBytes = oversized.length;
+  s.ref.sha256 = createHash('sha256').update(oversized).digest('hex');
+  s.storage.readVersion.mockImplementation(async function* () { yield oversized; });
+
+  const preview = await s.service.read(supplier, id, {}, 'preview');
+  expect(preview.attachments).toEqual([expect.objectContaining({ id: fileId, rendering: 'LISTED' })]);
+  const pdf = await s.service.pdf(supplier, id, { previewFingerprint: preview.previewFingerprint }, 'pdf');
+  expect(pdf.content.subarray(0, 5).toString()).toBe('%PDF-');
+  expect(pdf.content.toString('latin1')).not.toMatch(/\/Subtype\s+\/Image\b/);
+});
+
+it('lists a repeated image that exceeds the cumulative pixel budget', async () => {
   const s = setup(true), header = Buffer.from(png.subarray(0, 33)); header.writeUInt32BE(4000, 16); header.writeUInt32BE(4000, 20);
   s.ref.sizeBytes = header.length; s.ref.sha256 = createHash('sha256').update(header).digest('hex');
   (s.result.snapshot as any).document.temporaryMeasures = Array.from({ length: 3 }, (_, index) => ({ id: `m-${index}`, description: '', departmentOwner: '', introducedAt: null, fileIds: [fileId] }));
   s.storage.readVersion.mockImplementation(async function* () { yield header; });
-  await expect(s.service.pdf(actor, id, {}, 't')).rejects.toMatchObject({ status: 413 });
-  expect(s.core.readReport).toHaveBeenCalledTimes(1);
+  const preview = await s.service.read(actor, id, {}, 'preview');
+  expect(preview.attachments).toEqual([expect.objectContaining({ id: fileId, rendering: 'LISTED' })]);
+  await expect(s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'pdf')).resolves.toMatchObject({ contentType: 'application/pdf' });
 });
 
 it('bounds storage bytes even when oversized decoded images are ultimately listed rather than embedded', async () => {
@@ -207,13 +225,19 @@ it('bounds storage bytes even when oversized decoded images are ultimately liste
   s.ref.sizeBytes = oversized.length; s.ref.sha256 = createHash('sha256').update(oversized).digest('hex');
   s.files.readReportEvidence.mockImplementation(async () => ids.map(id => ({ ...s.ref, id })));
   s.storage.readVersion.mockImplementation(async function* () { yield oversized; });
-  await expect(s.service.pdf(actor, id, {}, 'bounded-input')).rejects.toMatchObject({ status: 413 });
-  expect(s.storage.readVersion).toHaveBeenCalledTimes(4); expect(s.audit.record).not.toHaveBeenCalled();
+  const preview = await s.service.read(actor, id, {}, 'preview');
+  expect(preview.attachments).toHaveLength(5);
+  expect(preview.attachments.every(file => file.rendering === 'LISTED')).toBe(true);
+  expect(s.storage.readVersion).toHaveBeenCalledTimes(4);
+  s.storage.readVersion.mockClear();
+  await expect(s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'bounded-input')).resolves.toMatchObject({ contentType: 'application/pdf' });
+  expect(s.storage.readVersion).toHaveBeenCalledTimes(4);
 });
 
 it('maps actual worker page-budget failure to the registered PDF limit error', async () => {
   const s = setup();
-  Object.assign((s.result.snapshot as any).document, { description: '\n'.repeat(9000), analysisProcess: '\n'.repeat(9000) });
+  const longText = '文\n'.repeat(4800);
+  Object.assign((s.result.snapshot as any).document, { description: longText, analysisProcess: longText, occurrenceCause: longText, escapeCause: longText });
   await expect(s.service.pdf(actor, id, {}, 'page-limit')).rejects.toMatchObject({ status: 413, response: { code: 'SUPPLIER_EIGHT_D_REPORT_PDF_LIMIT' } });
   expect(s.audit.record).not.toHaveBeenCalled();
 }, 30_000);

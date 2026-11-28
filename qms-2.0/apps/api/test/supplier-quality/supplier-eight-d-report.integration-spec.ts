@@ -216,7 +216,8 @@ describe('supplier controlled report / actual PostgreSQL, HTTP, storage, scanner
     await f.db.fileObject.update({ where: { id: ok.id }, data: { version: { increment: 1 } } });
     expect((await f.http(f.sqe.cookie, 'get', `${f.prefix}/report?revisionId=${current.approvedRevisionId}`).expect(409)).body.code).toBe('SUPPLIER_EIGHT_D_REPORT_VERSION_CONFLICT');
     expect(pdfText).toContain('供应商 8D 报告'); expect(pdfText).not.toContain('内部 8D 报告');
-    for (const phrase of ['标题：Supplier defect', '物料编码：PART-N5', '物料类别：未记录', '不良描述：Observed actual nonconformity', '不良数量：2']) expect(pdfText).toContain(phrase);
+    for (const phrase of ['Supplier defect', '物料编码：PART-N5', '不良描述：Observed actual nonconformity', '不良数量：2']) expect(pdfText).toContain(phrase);
+    expect(pdfText).not.toContain('物料类别：未记录');
   }, 120_000);
 
   it.each(['SESSION', 'REPORT_PERMISSION', 'CONTENT'] as const)('rejects %s changed during actual storage streaming before any success PDF audit', async mode => {

@@ -33,6 +33,14 @@ vi.mock('./EightDEvidence', async importOriginal => {
   } };
 });
 
+vi.mock('./EightDRowAttachments', async importOriginal => {
+  const actual = await importOriginal<typeof import('./EightDRowAttachments')>();
+  return { EightDRowAttachments: (props: Parameters<typeof actual.EightDRowAttachments>[0]) => <>
+    <button onClick={() => { props.onChange([...props.fileIds, `${props.label}-clean`]); props.onChange([...props.fileIds, `${props.label}-clean-2`]); }}>ready {props.label}</button>
+    <actual.EightDRowAttachments {...props} />
+  </> };
+});
+
 type Report = components['schemas']['ProcessEightDReportDto'];
 const report: Report = {
   problemId: 'problem-1', reportNumber: '8D-sensitive', organizationId: 'org-1', instanceId: 'instance-1', workflowVersionId: 'flow-1', instanceVersion: 3, problemVersion: 2,
@@ -91,10 +99,15 @@ it('shows each confirmed save briefly', async () => {
   }
 });
 
-it('does not link a saved row check to a changed draft row', async () => {
+it('checks an unsaved draft without saving and links the current row issue', async () => {
   const respond = fetcher.getMockImplementation()!;
   const message = '第 2 条横向展开缺少附件';
+  const draftMessage = '第 1 条横向展开缺少附件';
   fetcher.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/closure-check') && init?.method === 'POST') {
+      const { document } = JSON.parse(String(init.body)) as { document: Report['document'] };
+      return Response.json(document.description === 'changed draft' ? [{ path: 'horizontalDeployment[0].fileIds', message: draftMessage }] : [{ path: 'horizontalDeployment[1].fileIds', message }]);
+    }
     if (url.split('?')[0] !== eightDPath(report.problemId)) return respond(url, init);
     return Response.json({ ...report, submissionIssues: [{ path: 'horizontalDeployment[1].fileIds', message }] });
   });
@@ -106,8 +119,34 @@ it('does not link a saved row check to a changed draft row', async () => {
   fireEvent.click(directory.getByRole('button', { name: 'D2 · 问题描述' }));
   fireEvent.change(description, { target: { value: 'changed draft' } });
   fireEvent.click(directory.getByRole('button', { name: 'D8 · 结案总结' }));
-  expect(await chapter('D8').findByText(message)).toBeVisible();
   expect(chapter('D8').queryByRole('button', { name: message })).not.toBeInTheDocument();
+  expect(await chapter('D8').findByRole('button', { name: draftMessage })).toBeVisible();
+  fireEvent.click(chapter('D8').getByRole('button', { name: '重新检查' }));
+  const check = await waitFor(() => {
+    const requests = fetcher.mock.calls.filter(([url, init]) => url.endsWith('/closure-check') && init?.method === 'POST');
+    expect(requests).toHaveLength(3);
+    const request = requests.at(-1);
+    expect(request).toBeDefined();
+    return request!;
+  });
+  expect(JSON.parse(String(check[1].body))).toMatchObject({ organizationId: report.organizationId, document: { description: 'changed draft' } });
+  expect(await chapter('D8').findByRole('button', { name: draftMessage })).toBeVisible();
+  expect(fetcher.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
+});
+
+it('keeps unsaved edits when closure-check permission is denied but read access remains', async () => {
+  const respond = fetcher.getMockImplementation()!;
+  fetcher.mockImplementation((url: string, init?: RequestInit) => url.endsWith('/closure-check')
+    ? Promise.resolve(Response.json({ code: 'FEATURE_PERMISSION_DENIED', message: 'denied' }, { status: 403 })) : respond(url, init));
+  const onDenied = vi.fn();
+  mount(onDenied);
+  const description = await screen.findByDisplayValue('sensitive body');
+  fireEvent.change(description, { target: { value: 'retain my draft' } });
+  fireEvent.click(chapters().getByRole('button', { name: 'D8 · 结案总结' }));
+  expect(await chapter('D8').findByRole('alert', {}, { timeout: 4000 })).toHaveTextContent('检查失败，请重试。');
+  expect(onDenied).not.toHaveBeenCalled();
+  fireEvent.click(chapters().getByRole('button', { name: 'D2 · 问题描述' }));
+  expect(screen.getByDisplayValue('retain my draft')).toBeVisible();
 });
 
 it('saves the selected appointment when a team member has several appointments', async () => {
@@ -314,7 +353,7 @@ it('retains simultaneous CLEAN receipts across image groups and verification evi
     fireEvent.click(evidenceControl('ready NG 图片'));
     fireEvent.click(evidenceControl('ready 验证附件', 'D6'));
   });
-  expect(chapter('D6').getByText('验证附件 (2)')).toBeInTheDocument();
+  expect(chapter('D6').getByLabelText('验证附件 · 有附件')).toBeInTheDocument();
   fireEvent.click(chapters().getByRole('button', { name: /^D2 ·/ }));
   expect(chapter('D2').getByRole('region', { name: 'OK 图片' })).toBeVisible();
   expect(chapter('D2').getByRole('region', { name: 'NG 图片' })).toBeVisible();

@@ -47,6 +47,7 @@ function rgbaPng(compressed: Buffer, repeatedHeader = false): Buffer {
 
 it('renders Chinese, all sources, real image operators, multipage long rows and versioned page headers', async () => {
   const report = sampleReport();
+  report.snapshot.sourceConfirmations = [{ recurrence: 'RECURRENCE' }, { recurrence: 'NOT_RECURRENCE' }];
   const bytes = await renderProcessEightDPdf(report, new Map([[imageId, png]]));
   expect(bytes.subarray(0, 5).toString()).toBe('%PDF-');
   const loading = getDocument({ data: new Uint8Array(bytes), useSystemFonts: false });
@@ -67,9 +68,11 @@ it('renders Chinese, all sources, real image operators, multipage long rows and 
       imageCount += operators.fnArray.filter(op => op === OPS.paintImageXObject || op === OPS.paintInlineImageXObject).length;
     }
     for (const phrase of ['压装开裂', '第一来源', '第二来源', 'OP10', '壳体', 'TRACE-02', '围堵长表第80行', '先还原生产过程',
-      '压装间隙不合适', '改善前有裂纹', '改善后无裂纹', '首批B-001', '三批实测', 'D7', 'DFMEA', '关闭总结', 'OK对照.png',
-      '草稿（未批准）', '旧轮已失效', '同人跳过（非签批）', 'old-reviewer', '序号']) expect(text).toContain(phrase);
+      '压装间隙不合适', '改善前有裂纹', '改善后无裂纹', '首批B-001', '三批实测', 'D7', '关闭总结', 'OK对照.png',
+      '草稿（未批准）', '旧轮已失效', '同人跳过（非签批）', 'old-reviewer', '序号', '办理中', '执行摘要', '复发确认：复发', '复发确认：非复发']) expect(text).toContain(phrase);
     expect(imageCount).toBe(1);
+    expect(text.match(/OK对照\.png/g)).toHaveLength(1);
+    expect(text).not.toMatch(/验证方法|测量并跟踪|未记录|行 V7|对象版本|DFMEA|RECURRENCE/);
     expect(text).not.toContain('https://');
   } finally { await loading.destroy(); }
 }, 30000);
@@ -77,6 +80,31 @@ it('renders Chinese, all sources, real image operators, multipage long rows and 
 it('rejects a missing required image instead of producing a success with a blank section', async () => {
   await expect(renderProcessEightDPdf(sampleReport(), new Map())).rejects.toThrow('PROCESS_EIGHT_D_REPORT_IMAGE_MISSING');
 });
+
+it('links D3, D5 and D7 evidence to the numbered report rows', async () => {
+  const report = sampleReport();
+  const { document } = report.snapshot;
+  const template = report.attachments[0]!;
+  const attachments = ['D3 临时措施 2', 'D5 措施 1', 'D7 横展 1'].map((purpose, index) => ({
+    ...template, id: `20000000-0000-4000-8000-00000000000${index}`, originalName: `evidence-${index}.png`, uses: [purpose],
+  }));
+  report.attachments.push(...attachments);
+  document.temporaryMeasures = document.temporaryMeasures.slice(0, 2);
+  document.temporaryMeasures[1]!.fileIds = [attachments[0]!.id];
+  document.correctiveActions[0]!.fileIds = [attachments[1]!.id];
+  document.horizontalDeployment = [{ id: 'deployment-1', scope: '邻近产线', inspectionResult: '', action: '', owner: '', completion: '', completed: null, fileIds: [attachments[2]!.id] }];
+  const bytes = await renderProcessEightDPdf(report, new Map(report.attachments.map(file => [file.id, png])));
+  const loading = getDocument({ data: new Uint8Array(bytes), useSystemFonts: false });
+  try {
+    const pdf = await loading.promise;
+    let text = '';
+    for (let index = 1; index <= pdf.numPages; index++) {
+      const content = await (await pdf.getPage(index)).getTextContent();
+      text += content.items.map(item => 'str' in item ? item.str : '').join('');
+    }
+    attachments.forEach(file => expect(text).toContain(`${file.uses[0]} · ${file.originalName}`));
+  } finally { await loading.destroy(); }
+}, 30000);
 
 it('renders the selected document roster and saved chapter details, without promoting the report owner to a team member', async () => {
   const report = sampleReport();
@@ -102,7 +130,8 @@ it('renders the selected document roster and saved chapter details, without prom
     const roster = text.slice(text.indexOf('D1 团队'), text.indexOf('D2 问题描述'));
     for (const value of ['实际组员陈工', '工艺室', '工程师', '组长', '分析故障模式', '协调验证样本']) expect(roster).toContain(value);
     expect(roster).not.toMatch(/owner|professional|section|internal-member-key/);
-    for (const value of ['批次停线风险', '光滑样件说明', '裂纹样件说明', '潜在受影响订单', '可降低定位偏差', '执行人沈工',
+    expect(text).not.toContain('可降低定位偏差');
+    for (const value of ['批次停线风险', '光滑样件说明', '裂纹样件说明', '潜在受影响订单', '执行人沈工',
       '验证人杨工', '2026-10-29', 'TRACK-ORDER-001', '追踪无再发', '观察达标', '其他产线', '已完成', '经验纳入设计复核']) expect(text).toContain(value);
     expect(text).toContain('不良数量：0');
   } finally { await loading.destroy(); }
@@ -130,7 +159,7 @@ it.each(['process-quality', 'customer-quality', 'new-product-quality'])('keeps %
     expect(text).toContain('审批轮 2 / RETURNED / 旧轮已失效'); expect(text).toContain('审批轮 3 / CANCELLED / 旧轮已失效');
     expect(text.match(/旧轮已失效，不作为本版批准/g)).toHaveLength(2);
     expect(text).toContain('审批轮 4 / PENDING / 非本版审批，不作为本版批准');
-    expect(text).not.toContain('SUPPLIER_ONLY_'); expect(text).not.toContain('物料类别：'); expect(text).not.toContain('补充更新时间');
+    expect(text).not.toMatch(/SUPPLIER_ONLY_(PART|CATEGORY|DEFECT)|物料类别：|补充更新时间/);
   } finally { await loading.destroy(); }
 });
 
@@ -182,7 +211,8 @@ it('lists nonimage attachments by purpose without merging original PDF pages', a
       text += (await page.getTextContent()).items.map(item => 'str' in item ? item.str : '').join('');
     }
     expect(text).toContain('原始检验报告.pdf');
-    expect(text).toContain('正常授权下载');
+    expect(text).toContain('原始检验报告.pdf · D2 OK');
+    expect(text.match(/原始检验报告\.pdf/g)).toHaveLength(1);
   } finally { await loading.destroy(); }
 }, 30000);
 
@@ -238,6 +268,6 @@ it.each(['extra scanlines', 'truncated scanlines', 'repeated header'])('bounds P
 });
 
 it('rejects excessive page counts instead of exhausting buffered-page memory or silently truncating', async () => {
-  const report = sampleReport(); report.snapshot.document.description = '\n'.repeat(18000);
+  const report = sampleReport(); report.snapshot.document.description = '长文\n'.repeat(18000);
   await expect(renderProcessEightDPdf(report, new Map([[imageId, png]]))).rejects.toThrow('PROCESS_EIGHT_D_REPORT_PDF_LIMIT');
 }, 30000);

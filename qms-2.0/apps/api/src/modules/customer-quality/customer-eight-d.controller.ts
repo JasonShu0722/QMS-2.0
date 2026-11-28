@@ -7,6 +7,8 @@ import { AUTHENTICATED_SESSION, type AuthorizedRequest } from '../../common/guar
 import { RequireAccess } from '../authorization/access.decorator.js';
 import { CustomerEightDService } from './customer-eight-d.service.js';
 import { EightDTeamOptionsDto, InternalEightDTeamOptionsQueryDto } from '../process-quality/process-eight-d-document-team.dto.js';
+import { ProcessEightDSubmissionIssueDto } from '../process-quality/process-eight-d-document.dto.js';
+import { ProcessEightDClosureCheckDto } from '../process-quality/process-eight-d.dto.js';
 import { CustomerEightDIssueResultDto, IssueCustomerEightDDto, CustomerEightDActivationDto, CustomerEightDAnalysisCompleteDto, CustomerEightDAssignmentOptionsDto, CustomerEightDAssignmentOptionsQueryDto, CustomerEightDBindingDto, CustomerEightDBindingResultDto,
   CustomerEightDCollaboratorsDto, CustomerEightDDeadlinesDto, CustomerEightDReportDto, CustomerEightDRiskDto, CustomerEightDScopeDto,
   CustomerEightDSourcesDto, CustomerEightDSourcePreviewDto, CustomerEightDSourcePreviewInputDto, CustomerEightDVersionDto, ReassignCustomerEightDDto, SaveCustomerEightDDto } from './customer-eight-d.dto.js';
@@ -67,6 +69,11 @@ export class CustomerEightDController {
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'customer-quality:issues:work', organizationScope: bodyScope })
   save(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: SaveCustomerEightDDto, @Headers('idempotency-key') key: string) { return this.service.save(actor(request), id, body, requestTraceId(request), key); }
+
+  @Post(':id/closure-check') @HttpCode(200) @ApiOkResponse({ type: [ProcessEightDSubmissionIssueDto] })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'customer-quality:issues:work', organizationScope: bodyScope })
+  closureCheck(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: ProcessEightDClosureCheckDto) { return this.service.closureCheck(actor(request), id, body.document); }
 
   @Post(':id/analysis-complete') @HttpCode(200) @ApiOkResponse({ type: CustomerEightDReportDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })

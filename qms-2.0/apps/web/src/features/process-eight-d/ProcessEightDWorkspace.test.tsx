@@ -48,6 +48,12 @@ function mount(id = 'problem-1', title?: string) {
 const actions = (name: string | RegExp = '办理操作') => within(screen.getByLabelText(name, { selector: '[role="group"]' }));
 const chapters = () => within(screen.getByLabelText('8D 内容分区', { selector: 'nav' }));
 const analysisPanel = () => within(screen.getByRole('heading', { name: /^D4 ·/ }).closest('section')!.querySelector<HTMLElement>('.attachment-panel')!);
+async function openPlans() {
+  fireEvent.click(screen.getByRole('button', { name: '责任与计划' }));
+  const dialog = await screen.findByRole('dialog', { name: '责任与计划' });
+  await waitFor(() => expect(dialog).toBeVisible());
+  return within(dialog);
+}
 function openOptionalContainment() {
   const summary = screen.getByText('潜在影响围堵（可选）', { selector: 'summary' });
   expect(summary.parentElement).not.toHaveAttribute('open');
@@ -67,6 +73,7 @@ beforeEach(() => {
   current = structuredClone(report); writes = []; failWrite = undefined;
   fetcher = vi.fn(async (path: string, init: RequestInit = {}) => {
     if (path === '/api/v1/auth/csrf') return response({ csrfToken: 'csrf' });
+    if (path.endsWith('/closure-check') && init.method === 'POST') return response([]);
     if (init.method && init.method !== 'GET') {
       writes.push({ path, init, body: JSON.parse(String(init.body)) });
       if (failWrite === 'network') throw new TypeError('Failed to fetch');
@@ -104,16 +111,20 @@ it('groups process header actions by node and keeps the responsibility summary s
   const description = await screen.findByDisplayValue('真实过程问题');
   const header = within(screen.getByRole('heading', { name: '组装划伤' }).closest('header')!);
   expect(screen.getAllByText('8D-001')).toHaveLength(1);
-  expect(header.getByText('当前环节 · 原因分析')).toBeVisible();
+  expect(header.queryByText('原因分析')).not.toBeInTheDocument();
   expect(header.getByRole('button', { name: '刷新工作区' })).toBeVisible();
   expect(header.getByRole('button', { name: '流程日志' })).toBeVisible();
   const actions = within(header.getByRole('group', { name: '办理操作' }));
   expect(actions.getAllByRole('button').map(button => button.textContent)).toEqual(['确认分析完成并设置正式提交期限', '保存草稿', '更多']);
-  const summary = within(screen.getByRole('heading', { name: '当前责任与计划' }).closest('section')!);
+  const summary = await openPlans();
+  expect(summary.getByText('原因分析')).toBeVisible();
   expect(summary.getByText('工艺负责人')).toBeVisible();
   expect(summary.getByText('制程质量科')).toBeVisible();
-  expect(summary.queryByRole('button')).not.toBeInTheDocument();
+  const closePlans = summary.getByRole('button', { name: '关闭' });
+  expect(summary.getAllByRole('button')).toEqual([closePlans]);
   expect(screen.queryByText(/owner-1|section-1|内容版本|记录版本/)).not.toBeInTheDocument();
+  fireEvent.click(closePlans);
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
 
   fireEvent.click(actions.getByRole('button', { name: '更多' }));
   const menu = within(await screen.findByRole('menu'));
@@ -485,7 +496,7 @@ it('shows planned and actual analysis and submission dates in separate columns',
   current.analysisDueAt = '2026-10-26T09:00:00Z'; current.analysisCompletedAt = '2026-10-26T08:00:00Z';
   current.submissionDueAt = '2026-10-28T09:00:00Z'; current.submittedAt = '2026-10-27T08:00:00Z';
   mount(); await screen.findByDisplayValue('真实过程问题');
-  const table = screen.getByRole('table', { name: '计划与实际' });
+  const table = (await openPlans()).getByRole('table', { name: '计划与实际' });
   expect(within(table).getAllByRole('columnheader').map(cell => cell.textContent)).toEqual(['阶段', '计划', '实际']);
   const analysis = within(table).getByRole('row', { name: /分析/ });
   expect(within(analysis).getAllByRole('cell').map(cell => cell.textContent)).toEqual([current.analysisDueAt, current.analysisCompletedAt]);
@@ -538,9 +549,12 @@ it('keeps D7 attachments on each numbered row and requires one to complete the i
   expect(within(row).getAllByRole('cell')).toHaveLength(9);
   expect(within(row).getAllByRole('cell')[0]).toHaveTextContent('1');
   expect(within(row).queryByRole('button', { name: /详情/ })).not.toBeInTheDocument();
-  expect(within(row).getByText('标准化附件 (0)')).toBeVisible();
-  expect(within(row).getByRole('option', { name: '已完成' })).toBeDisabled();
-  fireEvent.change(within(row).getByLabelText('受控文件 1 状态'), { target: { value: 'NOT_APPLICABLE' } });
+  expect(within(row).getByRole('button', { name: '标准化附件 · 无附件' })).toBeVisible();
+  const status = within(row).getByLabelText('受控文件 1 状态');
+  fireEvent.change(status, { target: { value: 'COMPLETED' } });
+  expect(await within(row).findByRole('alert')).toHaveTextContent('完成前请上传附件');
+  expect(status).not.toHaveValue('COMPLETED');
+  fireEvent.change(status, { target: { value: 'NOT_APPLICABLE' } });
   fireEvent.click(actions().getByRole('button', { name: '保存草稿' }));
   await waitFor(() => expect(writes).toHaveLength(1));
   expect((writes[0].body.document as Report['document']).standardization[0].status).toBe('NOT_APPLICABLE');

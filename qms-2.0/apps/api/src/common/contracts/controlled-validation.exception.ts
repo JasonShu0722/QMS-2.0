@@ -6,7 +6,7 @@ const SAFE_PATH = /^[A-Za-z][A-Za-z0-9_]*(?:\[(?:0|[1-9]\d{0,3})\]|\.[A-Za-z][A-
 const UNSAFE_KEY = /__proto__|prototype|constructor|password|passphrase|secret|token|session|authorization|cookie|objectkey|accesskey|privatekey|apikey|credential|connectionstring|databaseurl/i;
 // These are server-authored validation instructions, never interpolated submitted values.
 const SAFE_MESSAGES = new Set([
-  '请填写原因总结', '请填写 发生因 对策计划', '请填写 流出因 对策计划', '请完善对策计划',
+  '请填写原因总结', '请填写发生因总结', '请填写流出因总结', '请填写 发生因 对策计划', '请填写 流出因 对策计划', '请完善对策计划',
   '请填写实际实施及验证记录', '请填写实际跟进批数或时长', '请填写验证记录或提供受控验证文件',
   '必须人工明确确认措施验证有效', '需要更新的项目须记录实际完成日期', '需要更新的项目尚未完成',
   '请说明不适用原因', '需由负责人先确认分析完成并明确完整提交计划',

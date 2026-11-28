@@ -8,8 +8,9 @@ import { RequireAccess } from '../authorization/access.decorator.js';
 import { ProcessIssueResultDto } from './process-quality.dto.js';
 import { ProcessEightDService } from './process-eight-d.service.js';
 import { EightDTeamOptionsDto, InternalEightDTeamOptionsQueryDto } from './process-eight-d-document-team.dto.js';
+import { ProcessEightDSubmissionIssueDto } from './process-eight-d-document.dto.js';
 import { IssueProcessEightDDto, ProcessEightDActivationDto, ProcessEightDAnalysisCompleteDto, ProcessEightDAssignmentOptionsDto, ProcessEightDAssignmentOptionsQueryDto, ProcessEightDBindingDto, ProcessEightDBindingResultDto,
-  ProcessEightDCollaboratorsDto, ProcessEightDDeadlinesDto, ProcessEightDFlowRecordDto, ProcessEightDReportDto, ProcessEightDRiskDto, ProcessEightDScopeDto,
+  ProcessEightDClosureCheckDto, ProcessEightDCollaboratorsDto, ProcessEightDDeadlinesDto, ProcessEightDFlowRecordDto, ProcessEightDReportDto, ProcessEightDRiskDto, ProcessEightDScopeDto,
   ProcessEightDSourcesDto, ProcessEightDSourcePreviewDto, ProcessEightDSourcePreviewInputDto, ProcessEightDVersionDto, ReassignProcessEightDDto, SaveProcessEightDDto } from './process-eight-d.dto.js';
 
 function actor(request: Request) {
@@ -72,6 +73,11 @@ export class ProcessEightDController {
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })
   @RequireAccess({ featurePermission: 'process-quality:issues:work', organizationScope: bodyScope })
   save(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: SaveProcessEightDDto, @Headers('idempotency-key') key: string) { return this.service.save(actor(request), id, body, requestTraceId(request), key); }
+
+  @Post(':id/closure-check') @HttpCode(200) @ApiOkResponse({ type: [ProcessEightDSubmissionIssueDto] })
+  @ApiHeader({ name: 'x-csrf-token', required: true })
+  @RequireAccess({ featurePermission: 'process-quality:issues:work', organizationScope: bodyScope })
+  closureCheck(@Req() request: Request, @Param('id', ParseUUIDPipe) id: string, @Body() body: ProcessEightDClosureCheckDto) { return this.service.closureCheck(actor(request), id, body.document); }
 
   @Post(':id/analysis-complete') @HttpCode(200) @ApiOkResponse({ type: ProcessEightDReportDto })
   @ApiHeader({ name: 'Idempotency-Key', required: true }) @ApiHeader({ name: 'x-csrf-token', required: true })

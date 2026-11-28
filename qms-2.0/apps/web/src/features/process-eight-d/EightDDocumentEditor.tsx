@@ -1,24 +1,26 @@
 import { Button, Modal, Popconfirm, Space, Tag } from 'antd';
-import { Plus } from 'lucide-react';
+import { BookOpen, Plus } from 'lucide-react';
 import type { components } from '@qms/contracts';
-import { Fragment, useId, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { EightDEvidenceSection } from './EightDEvidence';
+import { EightDRowAttachments } from './EightDRowAttachments';
 import { EightDAnalysisAttachments } from './EightDAnalysisAttachments';
 import { EightDDescriptionTools } from './EightDDescriptionTools';
 import { EightDTeamPicker } from './EightDTeamPicker';
-import type { FileResource } from '../attachments/attachments';
+import type { Attachment, FileResource } from '../attachments/attachments';
+import { canDownloadAttachment } from '../attachments/attachment-preview';
 import { eightDDomain, type InternalEightDDomain } from '../internal-eight-d/domain';
 import { eightDFieldLocation, useEightDText, type EightDDocument, type EightDRead } from './eight-d';
 import styles from './eight-d.module.css';
 
 type Props = {
   problemId: string; portal?: boolean; domain?: InternalEightDDomain; resource?: FileResource; anchorId?: string;
-  document: EightDDocument; disabled: boolean; removalBlocked?: boolean; read: EightDRead; overview?: ReactNode; sourceSummary?: ReactNode; mode?: 'workspace' | 'report';
+  document: EightDDocument; disabled: boolean; removalBlocked?: boolean; read: EightDRead; overview?: ReactNode | ((riskDetails: ReactNode) => ReactNode); sourceSummary?: ReactNode; mode?: 'workspace' | 'report';
   problemFacts?: readonly (readonly [string, string])[];
   submissionChecks?: readonly { path: string; message: string }[];
   onRefreshChecks?: () => void;
   onLocateStageCheck?: (path: string) => void;
-  hasUnsavedChanges?: boolean;
+  checking?: boolean; checkFailed?: boolean;
   teamOptionsPath?: string; teamOrganizationId?: string; chapterTarget?: { section: string; row?: string };
   onChange: (change: (current: EightDDocument) => EightDDocument) => void;
 };
@@ -35,7 +37,64 @@ export function EightDField({ label, children }: { label: string; children: Reac
   return <label className={styles.field}><span>{label}</span>{children}</label>;
 }
 
-export function EightDDocumentEditor({ problemId, domain = 'process', portal = false, resource, anchorId = problemId, document: doc, disabled, removalBlocked = false, read, overview, sourceSummary, mode, problemFacts = [], submissionChecks, onRefreshChecks, onLocateStageCheck, hasUnsavedChanges, teamOptionsPath, teamOrganizationId, chapterTarget, onChange }: Props) {
+function D7CompletionSelect({ label, value, completedValue, disabled, fileIds, resource, read, onChange, children }: {
+  label: string; value: string; completedValue: string; disabled: boolean; fileIds: string[]; resource: FileResource;
+  read: EightDRead; onChange: (value: string, usableFileId?: string) => void; children: ReactNode;
+}) {
+  const text = useEightDText();
+  const warningId = useId();
+  const pending = useRef<AbortController>(undefined);
+  const [checking, setChecking] = useState(false);
+  const [warning, setWarning] = useState(false);
+  useLayoutEffect(() => () => pending.current?.abort(), []);
+
+  async function select(next: string) {
+    pending.current?.abort();
+    pending.current = undefined;
+    setWarning(false);
+    setChecking(false);
+    if (next !== completedValue) {
+      onChange(next);
+      return;
+    }
+    if (!fileIds.length) {
+      setWarning(true);
+      return;
+    }
+
+    const controller = new AbortController();
+    pending.current = controller;
+    setChecking(true);
+    try {
+      const fileId = await Promise.any([...new Set(fileIds)].map(async id => {
+        const file = await read<Attachment>(`/api/v1/files/${encodeURIComponent(id)}`, { signal: controller.signal, cache: 'no-store' });
+        const sameResourceType = file.resourceType === resource.resourceType
+          || resource.resourceType === 'supplier-eight-d-supplement' && file.resourceType === 'supplier-quality';
+        if (file.id !== id || !sameResourceType || file.resourceId !== resource.resourceId || !canDownloadAttachment(file)) {
+          throw new Error('D7_EVIDENCE_UNAVAILABLE');
+        }
+        return id;
+      }));
+      if (!controller.signal.aborted) onChange(next, fileId);
+    } catch {
+      if (!controller.signal.aborted) setWarning(true);
+    } finally {
+      if (pending.current === controller) {
+        pending.current = undefined;
+        if (!controller.signal.aborted) setChecking(false);
+        controller.abort();
+      }
+    }
+  }
+
+  return <div className={styles.field}>
+    <select aria-label={label} aria-busy={checking || undefined} aria-describedby={warning ? warningId : undefined}
+      disabled={disabled} value={value} onChange={event => void select(event.target.value)}>{children}</select>
+    {warning && <small id={warningId} role="alert">{text('完成前请上传附件，且至少一份通过安全扫描。', 'Attach at least one file that has passed the security scan before marking complete.')}</small>}
+  </div>;
+}
+
+export function EightDDocumentEditor({ problemId, domain = 'process', portal = false, resource, anchorId = problemId, document: doc, disabled, removalBlocked = false, read, overview, sourceSummary, mode, problemFacts = [], submissionChecks, onRefreshChecks, onLocateStageCheck, checking, checkFailed, teamOptionsPath, teamOrganizationId, chapterTarget, onChange }: Props) {
   const text = useEightDText();
   const process = domain === 'process' && !portal && (!resource || resource.resourceType === 'process-eight-d');
   const chapterView = mode === 'workspace' || (mode === undefined && overview !== undefined);
@@ -48,6 +107,7 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
   const [dismissedSuggestions, setDismissedSuggestions] = useState<string[]>([]);
   const [pendingRemoval, setPendingRemoval] = useState<{ change: () => void; hasFiles: boolean }>();
   const [showLessons, setShowLessons] = useState(false);
+  const [lessonsVisited, setLessonsVisited] = useState(false);
   const [teamSelection, setTeamSelection] = useState<string | true>();
   const [analysisPanelVisited, setAnalysisPanelVisited] = useState(false);
   const editorId = useId();
@@ -64,12 +124,21 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
     ['D7', text('横向展开与标准化', 'Horizontal deployment and standardization')], ['D8', text('结案总结', 'Closure summary')],
   ];
   const savedDocumentNames = useRef(new Set(doc.standardization.map(row => row.id)));
+  const completionScope = (ids: string[]) => JSON.stringify([fileResource.resourceType, fileResource.resourceId, disabled, ids]);
   const update = <K extends keyof EightDDocument>(key: K, value: EightDDocument[K] | ((current: EightDDocument[K]) => EightDDocument[K])) => { if (!disabled) onChange(current => ({ ...current, [key]: typeof value === 'function' ? value(current[key]) : value })); };
-  const area = (label: string, value: string, change: (value: string) => void) => <EightDField label={label}><textarea aria-label={label} disabled={disabled} value={value} onChange={event => change(event.target.value)} /></EightDField>;
+  const area = (label: string, value: string, change: (value: string) => void, options?: { placeholder?: string; hideLabel?: boolean; path?: string }) => {
+    const field = <textarea aria-label={label} data-eight-d-path={options?.path} placeholder={disabled ? undefined : options?.placeholder} disabled={disabled} value={value} onChange={event => change(event.target.value)} />;
+    return options?.hideLabel ? <div className={styles.field}>{field}</div> : <EightDField label={label}>{field}</EightDField>;
+  };
   const input = (label: string, value: string | null, change: (value: string) => void, type = 'text', list?: string) => <EightDField label={label}><input type={type} list={list} aria-label={label} disabled={disabled} value={type === 'date' ? value?.slice(0, 10) ?? '' : value ?? ''} onChange={event => change(event.target.value)} /></EightDField>;
   const quantity = (label: string, value: number | null, change: (value: number | null) => void) => <EightDField label={label}><input type="number" min={0} step={1} aria-label={label} disabled={disabled} value={value ?? ''} onChange={event => change(event.target.value === '' ? null : Number(event.target.value))} /></EightDField>;
+  const riskDetails = area(text('风险判定说明', 'Risk assessment explanation'), doc.riskAssessment ?? '', riskAssessment => update('riskAssessment', riskAssessment));
+  const aiPlaceholder = !disabled && <Button size="small" disabled>{text('AI 辅助（待开放）', 'AI assistance (coming soon)')}</Button>;
   // Merge each receipt against current state, including multiple CLEAN callbacks in one render.
-  const evidence = (label: string, ids: string[], change: (apply: (current: string[]) => string[]) => void, options?: { inlineImages?: boolean; preserveAvailableFile?: boolean }) => <EightDEvidenceSection label={label} problemId={problemId} resource={fileResource} fileIds={ids} {...options} readOnly={disabled} read={read} onChange={next => change(current => [...current.filter(id => !ids.includes(id) || next.includes(id)), ...next.filter(id => !current.includes(id))])} />;
+  const evidence = (label: string, ids: string[], change: (apply: (current: string[]) => string[]) => void, options?: { inlineImages?: boolean; preserveAvailableFile?: boolean; row?: boolean }) => {
+    const Component = options?.row ? EightDRowAttachments : EightDEvidenceSection;
+    return <Component label={label} problemId={problemId} resource={fileResource} fileIds={ids} inlineImages={options?.inlineImages} preserveAvailableFile={options?.preserveAvailableFile} readOnly={disabled} read={read} onChange={next => change(current => [...current.filter(id => !ids.includes(id) || next.includes(id)), ...next.filter(id => !current.includes(id))])} />;
+  };
   const remove = (label: string, change: () => void) => !disabled && <Popconfirm title={label} description={text('仅修改当前草稿，保存后才生效。', 'Only changes the current draft; takes effect after saving.')} okText={text('确认移除', 'Confirm removal')} cancelText={text('取消', 'Cancel')} onConfirm={() => { if (!disabled && !removalBlocked) change(); }}><Button danger disabled={removalBlocked} aria-label={label}>{label}</Button></Popconfirm>;
   const requestRemoval = (change: () => void, hasContent: boolean, hasFiles = false) => {
     if (disabled || removalBlocked) return;
@@ -190,7 +259,7 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
       {pendingRemoval?.hasFiles && <p>{text('保存后将从当前报告移除该条目的附件关联。', 'Saving removes this entry’s attachment links from the current report.')}</p>}
       {!pendingRemoval?.hasFiles && <p>{text('仅修改当前草稿，保存后才生效。', 'Only changes the current draft; takes effect after saving.')}</p>}
     </Modal>
-    {modernView && section('input', chapters[0][1], <>{overview}{area(text('风险判定说明', 'Risk assessment explanation'), doc.riskAssessment ?? '', riskAssessment => update('riskAssessment', riskAssessment))}</>)}
+    {modernView && section('input', chapters[0][1], typeof overview === 'function' ? overview(riskDetails) : <>{overview}{riskDetails}</>)}
     {modernView && section('D1', chapters[1][1], entryTable(chapters[1][1], [text('姓名', 'Name'), text('部门', 'Department'), text('职务', 'Position'), text('职责分工', 'Responsibility')],
       (doc.team ?? []).map((row, index) => {
         type Row = components['schemas']['ProcessEightDTeamMemberDto'];
@@ -212,7 +281,7 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
     {section('D2', text('问题描述', 'Problem description'), <>
       {mode === undefined && sourceSummary}
       <div className={styles.descriptionTools}>
-        {area(text('D2 问题描述', 'D2 Description'), doc.description, value => update('description', value))}
+        {area(text('D2 问题描述', 'D2 Description'), doc.description, value => update('description', value), { hideLabel: true })}
         <EightDDescriptionTools value={doc.description} facts={problemFacts} disabled={disabled} onApply={value => update('description', value)} />
       </div>
       <div className={styles.imageGroups}>
@@ -237,7 +306,7 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
             input(text('临时措施责任部门 / 人', 'Temporary measure department / owner'), row.departmentOwner, departmentOwner => change({ departmentOwner }), 'text', ownerList),
             input(columns[2], row.introducedAt, introducedAt => change({ introducedAt: introducedAt || null }), 'date'),
           ], <>
-            {evidence(text('临时措施附件', 'Temporary measure evidence'), fileIds, apply => change(current => ({ fileIds: apply(current.fileIds) })))}
+            {evidence(text('临时措施附件', 'Temporary measure evidence'), fileIds, apply => change(current => ({ fileIds: apply(current.fileIds) })), { row: true })}
             {removeEntry(`${text('移除临时措施', 'Remove temporary measure')} ${index + 1}`, () => update('temporaryMeasures', rows => rows.filter(item => item.id !== id)), hasEntryContent(values), fileIds.length > 0)}
           </>);
         }
@@ -256,7 +325,7 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
     {section('D4', text('根因分析', 'Root cause analysis'), <>
       {area(text('分析过程描述', 'Analysis process description'), doc.analysisProcess, value => update('analysisProcess', value))}
       {(!chapterView || analysisPanelVisited) && <EightDAnalysisAttachments resource={fileResource} fileIds={doc.analysisFileIds} readOnly={disabled} read={read} onChange={value => update('analysisFileIds', value)} />}
-      <div className={styles.fields}>{area(text('发生因', 'Occurrence cause'), doc.occurrenceCause, value => update('occurrenceCause', value))}{area(text('流出因', 'Escape cause'), doc.escapeCause, value => update('escapeCause', value))}{area(text('系统因（可选）', 'System cause (optional)'), doc.systemCause, value => update('systemCause', value))}</div>
+      <div className={styles.fields}>{area(text('发生因', 'Occurrence cause'), doc.occurrenceCause, value => update('occurrenceCause', value), { path: 'occurrenceCause' })}{area(text('流出因', 'Escape cause'), doc.escapeCause, value => update('escapeCause', value), { path: 'escapeCause' })}{area(text('系统因（可选）', 'System cause (optional)'), doc.systemCause, value => update('systemCause', value))}</div>
     </>)}
     {(['plan', 'verification'] as const).filter(phase => modernView || phase === 'plan').map(phase => {
       const planning = phase === 'plan';
@@ -305,7 +374,7 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
         const effectiveness = <EightDField label={effectivenessLabel}><select aria-label={effectivenessLabel} disabled={disabled} value={effectivenessValue} onChange={event => change({ effective: event.target.value === '' ? null : event.target.value === 'true' })}>
           {Object.entries(effectivenessLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select></EightDField>;
-        const verificationEvidence = verify && evidence(text('验证附件', 'Verification evidence'), verificationFileIds, apply => change(current => ({ verificationFileIds: apply(current.verificationFileIds) })));
+        const verificationEvidence = verify && evidence(text('验证附件', 'Verification evidence'), verificationFileIds, apply => change(current => ({ verificationFileIds: apply(current.verificationFileIds) })), { row: true });
 
         if (useList && planning && !disabled) return inlineRow(`corrective-plan-${id}`, path, [actionText, cause, owner, plannedAt], removal);
         if (useList && planning) return inlineRow(`corrective-plan-${id}`, path, [
@@ -357,13 +426,14 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
           const tracking = doc.effectTracking ?? { startDate: null, startOrderNumber: '', productionQuantity: null, defectQuantity: null, result: '', judgement: '' };
           const change = (patch: Partial<typeof tracking>) => update('effectTracking', current => ({ ...tracking, ...current, ...patch }));
           return <div className={styles.entryGroup}><h4>{text('效果跟踪', 'Effect tracking')}</h4>
-            {process && <p>{text('可从措施全部导入后的下一批次生产起，持续监控三个月。', 'Consider monitoring for three months from the next production batch after all measures are implemented.')}</p>}
             <div className={styles.fields}>
               {input(text('开始日期', 'Start date'), tracking.startDate, startDate => change({ startDate: startDate || null }), 'date')}
               {input(process ? text('开始订单号', 'Starting order number') : text('跟踪批次或单号', 'Tracking lot or reference'), tracking.startOrderNumber, startOrderNumber => change({ startOrderNumber }))}
               {quantity(process ? text('生产数量', 'Production quantity') : text('跟踪数量', 'Tracked quantity'), tracking.productionQuantity, productionQuantity => change({ productionQuantity }))}
               {quantity(text('不良数量', 'Defect quantity'), tracking.defectQuantity, defectQuantity => change({ defectQuantity }))}
-              {area(text('确认结果', 'Confirmed result'), tracking.result, result => change({ result }))}
+              {area(text('确认结果', 'Confirmed result'), tracking.result, result => change({ result }), process ? {
+                placeholder: text('例如，从措施全部导入后的下一批次起跟踪三个月，记录实际确认结果。', 'For example, monitor for three months from the next batch after implementation and record the actual results.'),
+              } : undefined)}
               {input(text('判断', 'Judgement'), tracking.judgement, judgement => change({ judgement }))}
             </div>
           </div>;
@@ -373,7 +443,7 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
     {section('D7', text('横向展开与标准化', 'Horizontal deployment and standardization'), <>
       <div className={styles.entryGroup}>{(() => {
         const title = text('横向展开', 'Horizontal deployment');
-        const columns = [text('展开范围', 'Deployment scope'), text('排查结果', 'Inspection result'), text('展开措施', 'Deployment action'), text('展开责任人', 'Deployment owner'), text('展开完成情况', 'Deployment completion'), text('附件', 'Attachments')];
+        const columns = [text('展开范围', 'Deployment scope'), text('排查结果', 'Inspection result'), text('展开措施', 'Deployment action'), text('展开责任人', 'Deployment owner'), text('完成情况', 'Completion'), text('附件', 'Attachments')];
         const rows = doc.horizontalDeployment.map((row, index) => {
         type Row = components['schemas']['ProcessEightDHorizontalDeploymentDto'];
         const change = (patch: Partial<Row> | ((current: Row) => Partial<Row>)) => update('horizontalDeployment', rows => rows.map(item => item.id === row.id ? { ...item, ...(typeof patch === 'function' ? patch(item) : patch) } : item));
@@ -383,10 +453,16 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
             area(columns[1], row.inspectionResult, inspectionResult => change({ inspectionResult })),
             area(columns[2], row.action, action => change({ action })),
             input(columns[3], row.owner, owner => change({ owner })),
-            <>{area(columns[4], row.completion, completion => change({ completion }))}<label>
-              <input type="checkbox" disabled={disabled || !fileIds.length && !row.completed} checked={row.completed === true} onChange={event => change({ completed: event.target.checked })} /> {text('已完成', 'Completed')}
-            </label>{!disabled && !fileIds.length && <small>{text('完成前请上传附件', 'Attach a file before marking complete')}</small>}</>,
-            evidence(text('展开附件', 'Deployment attachments'), fileIds, apply => change(current => ({ fileIds: apply(current.fileIds) })), { preserveAvailableFile: row.completed === true }),
+            <div className={styles.field}>
+              <D7CompletionSelect key={completionScope(fileIds)} label={columns[4]} disabled={disabled} value={row.completed ? 'completed' : 'incomplete'}
+                completedValue="completed" fileIds={fileIds} resource={fileResource} read={read}
+                onChange={(value, usableFileId) => change(current => usableFileId && !current.fileIds.includes(usableFileId) ? {} : { completed: value === 'completed' })}>
+                <option value="incomplete">{text('未完成', 'Incomplete')}</option>
+                <option value="completed">{text('已完成', 'Completed')}</option>
+              </D7CompletionSelect>
+              {row.completion && <small>{row.completion}</small>}
+            </div>,
+            evidence(text('展开附件', 'Deployment attachments'), fileIds, apply => change(current => ({ fileIds: apply(current.fileIds) })), { row: true, preserveAvailableFile: row.completed === true }),
           ], removeEntry(`${text('移除横向展开', 'Remove horizontal deployment')} ${index + 1}`, () => update('horizontalDeployment', rows => rows.filter(item => item.id !== id)), hasEntryContent(values), fileIds.length > 0));
         });
         return <><div className={styles.groupHeading}><h4>{title}</h4>{addButton(text('增加横向展开', 'Add horizontal deployment'), () => update('horizontalDeployment', current => [...current, { id: crypto.randomUUID(), scope: '', inspectionResult: '', action: '', owner: '', completion: '', fileIds: [] }]))}</div>
@@ -396,14 +472,18 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
         const title = text('标准化文件', 'Standardization documents');
         const columns = [text('序号', 'No.'), text('相关文件', 'Related document'), text('是否需更新', 'Update needed'), text('部门 / 主导者', 'Department / lead'), text('计划完成日期', 'Planned completion date'), text('实际完成日期', 'Actual completion date'), text('状态', 'Status'), text('附件', 'Attachments')];
         const rows = doc.standardization.map((row, index) => {
-          const change = (patch: Partial<components['schemas']['ProcessEightDStandardizationDto']>) => update('standardization', rows => rows.map(item => item.id === row.id ? { ...item, ...patch } : item));
+          type Row = components['schemas']['ProcessEightDStandardizationDto'];
+          const change = (patch: Partial<Row>, usableFileId?: string) => update('standardization', rows => rows.map(item =>
+            item.id === row.id && (!usableFileId || item.fileIds?.includes(usableFileId)) ? { ...item, ...patch } : item));
           const prefix = row.documentName || `${text('新增文件', 'New document')} ${index + 1}`;
           const path = `standardization[${index}]`;
-          const status = <select aria-label={`${prefix} ${columns[6]}`} disabled={disabled} value={row.status} onChange={event => change({ status: event.target.value })}>
+          const { id, key, documentName, fileIds = [], ...values } = row;
+          const status = <D7CompletionSelect key={completionScope(fileIds)} label={`${prefix} ${columns[6]}`} disabled={disabled} value={row.status}
+            completedValue="COMPLETED" fileIds={fileIds} resource={fileResource} read={read} onChange={(status, usableFileId) => change({ status }, usableFileId)}>
             <option value="">{text('待确认', 'Unconfirmed')}</option><option value="PENDING">{text('待处理', 'Pending')}</option>
-            <option value="COMPLETED" disabled={!row.fileIds?.length}>{text('已完成', 'Completed')}</option><option value="NOT_APPLICABLE">{text('不适用', 'Not applicable')}</option>
+            <option value="COMPLETED">{text('已完成', 'Completed')}</option><option value="NOT_APPLICABLE">{text('不适用', 'Not applicable')}</option>
             {row.status && !['PENDING', 'COMPLETED', 'NOT_APPLICABLE'].includes(row.status) && <option value={row.status}>{row.status}</option>}
-          </select>;
+          </D7CompletionSelect>;
           const cells = [index + 1,
             savedDocumentNames.current.has(row.id) ? <span>{row.documentName}</span> : input(`${prefix} ${text('文件名称', 'Document name')}`, row.documentName, documentName => change({ documentName })),
             <select aria-label={`${prefix} ${text('是否更新', 'Update needed')}`} disabled={disabled} value={row.needsUpdate === null ? '' : String(row.needsUpdate)} onChange={event => change({ needsUpdate: event.target.value === '' ? null : event.target.value === 'true' })}>
@@ -413,9 +493,8 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
             input(`${prefix} ${text('计划日期', 'Planned date')}`, row.plannedAt, plannedAt => change({ plannedAt: plannedAt || null }), 'date'),
             input(`${prefix} ${text('完成日期', 'Completion date')}`, row.completedAt, completedAt => change({ completedAt: completedAt || null }), 'date'),
           ];
-          const { id, key, documentName, fileIds = [], ...values } = row;
           const hasContent = hasEntryContent(values) || (id !== key && documentName.trim() !== '');
-          return inlineRow(id, path, [...cells, status, evidence(text('标准化附件', 'Standardization attachments'), fileIds, apply => update('standardization', current => current.map(item => item.id === id ? { ...item, fileIds: apply(item.fileIds ?? []) } : item)), { preserveAvailableFile: row.status === 'COMPLETED' })],
+          return inlineRow(id, path, [...cells, status, evidence(text('标准化附件', 'Standardization attachments'), fileIds, apply => update('standardization', current => current.map(item => item.id === id ? { ...item, fileIds: apply(item.fileIds ?? []) } : item)), { row: true, preserveAvailableFile: row.status === 'COMPLETED' })],
             removeEntry(`${text('移除标准化文件', 'Remove standardization document')} ${index + 1}`, () => update('standardization', current => current.filter(item => item.id !== id)), hasContent, fileIds.length > 0));
         });
         return <><div className={styles.groupHeading}><h4>{title}</h4>{addButton(text('增加标准化文件', 'Add standardization document'), () => update('standardization', current => [...current, { id: crypto.randomUUID(), key: `custom-${crypto.randomUUID()}`, documentName: '', needsUpdate: null, departmentOwner: '', plannedAt: null, completedAt: null, status: '', reason: '', fileIds: [] }]))}</div>
@@ -424,28 +503,37 @@ export function EightDDocumentEditor({ problemId, domain = 'process', portal = f
     </>)}
     {section('D8', text('结案总结', 'Closure summary'), <>
       {mode !== 'report' && <div className={styles.entryGroup}><div className={styles.groupHeading}><h4>{text('结案自动检查', 'Automatic closure checks')}</h4>
-        {onRefreshChecks && <Button size="small" onClick={onRefreshChecks}>{text('重新检查', 'Recheck')}</Button>}
+        {onRefreshChecks && <Button size="small" loading={checking} onClick={onRefreshChecks}>{text('重新检查', 'Recheck')}</Button>}
       </div>
-        {hasUnsavedChanges && <p>{text('以下结果基于最近保存的版本。保存草稿后会重新检查。', 'Results apply to the last saved version. Save the draft to refresh the checks.')}</p>}
-        {!submissionChecks ? <p>{text('尚无正式提交检查结果。', 'No final submission check results yet.')}</p> : submissionChecks.length ? <ul>{submissionChecks.map(({ path, message }, index) => {
+        {checkFailed && <p role="alert">{text('检查失败，请重试。', 'Check failed. Please retry.')}</p>}
+        {submissionChecks && (submissionChecks.length ? <ul>{submissionChecks.map(({ path, message }, index) => {
           const location = chapterView ? eightDFieldLocation(path) : undefined;
           return <li key={`${path}:${index}`}>
           {onLocateStageCheck && /^(analysisCompletedAt|submissionDueAt)$/.test(path) ? <Button type="link" onClick={() => onLocateStageCheck(path)}>{message}</Button>
-            : location && !(hasUnsavedChanges && location.row) ? <Button type="link" onClick={() => {
+            : location ? <Button type="link" onClick={() => {
             setSelection({ chapter: location.section, target: chapterTarget, issue: location });
             requestAnimationFrame(() => {
               const destination = document.getElementById(`eight-d-${anchorId}-${location.section}`);
-              const row = Array.from(destination?.querySelectorAll<HTMLElement>('[data-eight-d-path]') ?? []).find(element => element.dataset.eightDPath === location.row);
+              const targetPath = location.row ?? path.replace(/^document\./, '');
+              const row = Array.from(destination?.querySelectorAll<HTMLElement>('[data-eight-d-path]') ?? []).find(element => element.dataset.eightDPath === targetPath);
               (row ?? destination)?.focus();
               (row ?? destination)?.scrollIntoView?.({ block: 'center' });
             });
           }}>{message}</Button> : message}
           </li>;
-        })}</ul> : <p role="status">{text('当前保存版通过内容检查，流程状态以系统为准。', 'The saved version passes content checks. Workflow status is determined by the system.')}</p>}
+        })}</ul> : <p role="status">{text('检查通过', 'Checks passed')}</p>)}
       </div>}
-      {area(text('D8 结案总结', 'D8 Closure summary'), doc.closureSummary, value => update('closureSummary', value))}
-      {showLessons && area(text('经验教训', 'Lessons learned'), doc.lessonsLearned ?? '', value => update('lessonsLearned', value))}
-    </>, <Button aria-expanded={showLessons} onClick={() => setShowLessons(value => !value)}>{text('经验教训', 'Lessons learned')}</Button>)}
+      <div className={styles.entryGroup}>
+        {area(text('结案总结', 'Closure summary'), doc.closureSummary, value => update('closureSummary', value), { hideLabel: true })}
+        {aiPlaceholder}
+      </div>
+      {lessonsVisited && <section hidden={!showLessons} className={styles.entryGroup} aria-label={text('经验教训', 'Lessons learned')}>
+        {input(text('经验教训标题', 'Lesson title'), doc.lessonsLearnedTitle ?? '', value => update('lessonsLearnedTitle', value))}
+        {area(text('经验教训', 'Lessons learned'), doc.lessonsLearned ?? '', value => update('lessonsLearned', value))}
+        {area(text('经验适用简要说明', 'Applicability'), doc.lessonsLearnedApplicability ?? '', value => update('lessonsLearnedApplicability', value))}
+        <Space wrap>{evidence(text('经验教训附件（可选）', 'Lesson attachments (optional)'), doc.lessonsLearnedFileIds ?? [], apply => update('lessonsLearnedFileIds', current => apply(current ?? [])), { row: true })}{aiPlaceholder}</Space>
+      </section>}
+    </>, <Button type="primary" icon={<BookOpen size={16} />} aria-expanded={showLessons} onClick={() => { setLessonsVisited(true); setShowLessons(value => !value); }}>{text('经验教训', 'Lessons learned')}</Button>)}
     </div>
   </div>;
 }

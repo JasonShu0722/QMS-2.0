@@ -1,6 +1,6 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { useState, type ComponentProps } from 'react';
-import { expect, it, vi } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { LanguageProvider } from '../../i18n/Language';
 import { EightDDocumentEditor } from './EightDDocumentEditor';
 import type { EightDDocument } from './eight-d';
@@ -14,6 +14,8 @@ const empty: EightDDocument = {
   analysisProcess: '', analysisFileIds: [], occurrenceCause: '', escapeCause: '', systemCause: '', correctiveActions: [],
   horizontalDeployment: [], standardization: [], closureSummary: '',
 };
+
+afterEach(() => vi.unstubAllGlobals());
 
 function mount(document: Partial<EightDDocument>, props: Partial<ComponentProps<typeof EightDDocumentEditor>> = {}) {
   const changed = vi.fn();
@@ -38,8 +40,107 @@ it('renders the injected process source summary before D2 description and eviden
   mount({}, { sourceSummary: <p>来源事实</p> });
   const source = screen.getByText('来源事实');
   const description = screen.getByLabelText('D2 问题描述');
+  expect(screen.queryByText('D2 问题描述')).not.toBeInTheDocument();
   expect(source.compareDocumentPosition(description)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   expect(source.closest('section')).toContainElement(screen.getByLabelText('OK 图片说明'));
+});
+
+it('keeps the D6 tracking example in the confirmation input only', () => {
+  const changed = mount({});
+  chapter('D6');
+  const result = screen.getByRole('textbox', { name: '确认结果' });
+  expect(result).toHaveValue('');
+  expect(result).toHaveAttribute('placeholder', expect.stringContaining('三个月'));
+  expect(screen.queryByText(/持续监控三个月/)).not.toBeInTheDocument();
+  expect(changed).not.toHaveBeenCalled();
+  fireEvent.change(result, { target: { value: '跟踪两周，无复发' } });
+  expect(result).toHaveValue('跟踪两周，无复发');
+});
+
+it('selects D7 completion without discarding an existing completion note', () => {
+  const changed = mount({ horizontalDeployment: [{ ...deployment, completion: '已复查', fileIds: [] }] });
+  chapter('D7');
+  const completion = screen.getByRole('combobox', { name: '完成情况' });
+  expect(screen.getByText('已复查')).toBeVisible();
+  expect(screen.queryByText('完成前请上传附件')).not.toBeInTheDocument();
+  fireEvent.change(completion, { target: { value: 'completed' } });
+  expect(screen.getByRole('alert')).toHaveTextContent('完成前请上传附件');
+  expect(completion).toHaveValue('incomplete');
+  expect(changed).not.toHaveBeenCalled();
+});
+
+it.each([
+  { document: { horizontalDeployment: [deployment] }, label: '完成情况', previous: 'incomplete', completed: 'completed', fileId: 'deployment-file' },
+  { document: { standardization: [{ ...standard, fileIds: ['standard-file'] }] }, label: 'SOP 标准作业指导书 状态', previous: '', completed: 'COMPLETED', fileId: 'standard-file' },
+])('requires usable evidence before setting $label to completed', async ({ document, label, previous, completed, fileId }) => {
+  const existing = { id: fileId, resourceType: 'process-eight-d', resourceId: 'entry-test', status: 'AVAILABLE', scanStatus: 'CLEAN' };
+  const read = vi.fn();
+  const changed = mount(document, { read });
+  chapter('D7');
+  const status = screen.getByRole('combobox', { name: label });
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  for (const file of [
+    { ...existing, status: 'QUARANTINED', scanStatus: 'PENDING' },
+    { ...existing, status: 'QUARANTINED', scanStatus: 'INFECTED' },
+    { ...existing, status: 'DELETED' },
+    { ...existing, resourceId: 'different-problem' },
+  ]) {
+    read.mockResolvedValueOnce(file);
+    fireEvent.change(status, { target: { value: completed } });
+    expect(await screen.findByRole('alert')).toHaveTextContent('完成前请上传附件');
+    expect(status).toHaveValue(previous);
+    expect(changed).not.toHaveBeenCalled();
+  }
+  read.mockResolvedValueOnce(existing);
+  fireEvent.change(status, { target: { value: completed } });
+  await waitFor(() => expect(status).toHaveValue(completed));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(changed).toHaveBeenCalledTimes(1);
+});
+
+it('accepts existing supplier response evidence on the same closed supplement', async () => {
+  const read = vi.fn().mockResolvedValue({ id: 'deployment-file', resourceType: 'supplier-quality', resourceId: 'entry-test', status: 'AVAILABLE', scanStatus: 'CLEAN' });
+  mount({ horizontalDeployment: [deployment] }, { read, resource: { resourceType: 'supplier-eight-d-supplement', resourceId: 'entry-test' } });
+  chapter('D7');
+  const status = screen.getByRole('combobox', { name: '完成情况' });
+  fireEvent.change(status, { target: { value: 'completed' } });
+  await waitFor(() => expect(status).toHaveValue('completed'));
+});
+
+it.each([
+  { document: { horizontalDeployment: [{ ...deployment, completed: true, fileIds: ['clean', 'rejected'] }] }, label: '展开附件' },
+  { document: { standardization: [{ ...standard, status: 'COMPLETED', fileIds: ['clean', 'rejected'] }] }, label: '标准化附件' },
+])('protects the last usable file in the $label dialog', async ({ document, label }) => {
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+    const id = path.split('/').at(-1);
+    return Response.json({ id, resourceType: 'process-eight-d', resourceId: 'entry-test', originalName: `${id}.txt`, contentType: 'text/plain', version: 1, sizeBytes: 12,
+      status: id === 'clean' ? 'AVAILABLE' : 'QUARANTINED', scanStatus: id === 'clean' ? 'CLEAN' : 'INFECTED' });
+  }));
+  mount(document);
+  chapter('D7');
+  fireEvent.click(screen.getByRole('button', { name: `${label} · 有附件` }));
+  const panel = within(await screen.findByRole('dialog', { name: `${label} (2)` }));
+  const cleanCard = (await panel.findByText('clean.txt')).closest('.attachment-panel__file') as HTMLElement;
+  const rejectedCard = panel.getByText('rejected.txt').closest('.attachment-panel__file') as HTMLElement;
+  await waitFor(() => {
+    expect(within(cleanCard).getByRole('button', { name: '从本项移除附件' })).toBeDisabled();
+    expect(within(rejectedCard).getByRole('button', { name: '从本项移除附件' })).toBeEnabled();
+  });
+});
+
+it('ignores a completion check after choosing a different status', async () => {
+  const file = { id: 'standard-file', resourceType: 'process-eight-d', resourceId: 'entry-test', status: 'AVAILABLE', scanStatus: 'CLEAN' };
+  let resolveFile!: (value: typeof file) => void;
+  const read = vi.fn(() => new Promise(resolve => { resolveFile = resolve; }));
+  const changed = mount({ standardization: [{ ...standard, fileIds: [file.id] }] }, { read: read as NonNullable<Parameters<typeof mount>[1]>['read'] });
+  chapter('D7');
+  const status = screen.getByRole('combobox', { name: 'SOP 标准作业指导书 状态' });
+  fireEvent.change(status, { target: { value: 'COMPLETED' } });
+  expect(status).toHaveValue('');
+  fireEvent.change(status, { target: { value: 'PENDING' } });
+  await act(async () => resolveFile(file));
+  expect(status).toHaveValue('PENDING');
+  expect(changed).toHaveBeenCalledTimes(1);
 });
 
 it('edits targeted D3 containment in its row without expanding details', () => {
@@ -135,14 +236,14 @@ it('compares D5 plans and D6 results by action, and opens only the selected comp
   expect(results.getByRole('combobox', { name: '措施 2 人工有效性结论' })).toHaveValue('false');
   const secondResult = within(results.getByRole('button', { name: '详情 措施 2' }).closest('tr')!);
   expect(secondResult.getByText(/待填写：.*实施结果.*改善前.*改善后.*实际首批断点/)).toBeVisible();
-  expect(results.getByText('验证附件 (1)')).not.toBeVisible();
+  expect(results.queryByRole('button', { name: '验证附件 · 有附件' })).not.toBeInTheDocument();
   expect(results.queryByRole('button', { name: '移除措施 1' })).not.toBeInTheDocument();
   fireEvent.click(results.getByRole('button', { name: '详情 措施 1' }));
   const comparison = within(results.getByRole('group', { name: '改善前后对照' }));
   expect(comparison.getByRole('textbox', { name: '措施 1 改善前' })).toHaveValue('10 / 100');
   expect(comparison.getByRole('textbox', { name: '措施 1 改善后' })).toHaveValue('1 / 100');
-  expect(results.getByText('验证附件 (1)')).toBeVisible();
-  expect(results.queryByText('措施附件 (1)')).not.toBeInTheDocument();
+  expect(results.getByRole('button', { name: '验证附件 · 有附件' })).toBeVisible();
+  expect(results.queryByRole('button', { name: /措施附件/ })).not.toBeInTheDocument();
 });
 
 it('opens a targeted D6 detail and keeps historical comparison and row evidence read-only', () => {
@@ -156,7 +257,7 @@ it('opens a targeted D6 detail and keeps historical comparison and row evidence 
   expect(results.getByDisplayValue('历史改善后')).toBeDisabled();
   expect(results.getByRole('cell', { name: '无效' })).toBeVisible();
   expect(results.queryByRole('combobox', { name: '措施 1 人工有效性结论' })).not.toBeInTheDocument();
-  expect(results.getByText('验证附件 (1)')).toBeVisible();
+  expect(results.getByRole('button', { name: '验证附件 · 有附件' })).toBeVisible();
   expect(screen.queryByRole('button', { name: /移除措施|增加永久措施/ })).not.toBeInTheDocument();
   expect(changed).not.toHaveBeenCalled();
 });
@@ -166,28 +267,28 @@ it('shows D7 evidence in each row without detail or reason and only unlinks afte
   chapter('D7');
   expect(screen.queryByRole('textbox', { name: /理由/ })).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /详情/ })).not.toBeInTheDocument();
-  expect(within(screen.getByRole('region', { name: '标准化文件' })).getByText('标准化附件 (0)')).toBeVisible();
-  expect(within(screen.getByRole('region', { name: '横向展开' })).getByText('展开附件 (1)')).toBeVisible();
+  expect(within(screen.getByRole('region', { name: '标准化文件' })).getByRole('button', { name: '标准化附件 · 无附件' })).toBeVisible();
+  expect(within(screen.getByRole('region', { name: '横向展开' })).getByRole('button', { name: '展开附件 · 有附件' })).toBeVisible();
   fireEvent.click(button('移除标准化文件 1'));
   expect(changed).toHaveBeenCalledTimes(1);
   expect(screen.queryByText(standard.documentName)).not.toBeInTheDocument();
-  expect(screen.getByText('展开附件 (1)')).toBeVisible();
+  expect(button('展开附件 · 有附件')).toBeVisible();
   fireEvent.click(button('移除横向展开 1'));
   await screen.findByText(/从当前报告移除该条目的附件关联/);
   fireEvent.click(button('取消'));
   expect(changed).toHaveBeenCalledTimes(1);
-  expect(screen.getByText('展开附件 (1)')).toBeVisible();
+  expect(button('展开附件 · 有附件')).toBeVisible();
   fireEvent.click(button('移除横向展开 1'));
   fireEvent.click(await screen.findByRole('button', { name: '确认移除' }));
   expect(changed).toHaveBeenCalledTimes(2);
-  expect(screen.queryByText('展开附件 (1)')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '展开附件 · 有附件' })).not.toBeInTheDocument();
 });
 
 it('presents historical D7 rows and evidence without editing or removing records', () => {
   const changed = mount({ horizontalDeployment: [{ ...deployment, inspectionResult: '历史排查' }] }, { disabled: true });
   chapter('D7');
   expect(screen.getByDisplayValue('历史排查')).toBeDisabled();
-  expect(screen.getByText('展开附件 (1)')).toBeVisible();
+  expect(button('展开附件 · 有附件')).toBeVisible();
   expect(screen.queryByRole('button', { name: /移除|增加/ })).not.toBeInTheDocument();
   expect(changed).not.toHaveBeenCalled();
 });
@@ -211,7 +312,7 @@ it.each([
   const table = within(screen.getByRole('region', { name: '标准化文件' }));
   expect(table.getByRole('columnheader', { name: '附件' })).toBeVisible();
   expect(table.queryByRole('textbox', { name: /理由/ })).not.toBeInTheDocument();
-  expect(screen.getByText('展开附件 (1)')).toBeVisible();
+  expect(button('展开附件 · 有附件')).toBeVisible();
   expect(button('移除横向展开 1')).toBeVisible();
   expect(button('移除标准化文件 1')).toBeVisible();
 });

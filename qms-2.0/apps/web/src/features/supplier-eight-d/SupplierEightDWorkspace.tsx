@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEightDReceipt } from '../process-eight-d/useEightDReceipt';
-import { Alert, Button, Modal, Space, Spin, Tabs, Tag } from 'antd';
+import { Alert, Button, Modal, Space, Spin, Tabs } from 'antd';
 import { ApiError, apiRequest, csrfToken } from '../../api/client';
 import { useNavigationBusy, useNavigationGuard, useUnsavedChanges } from '../../layouts/UnsavedChanges';
 import { useWorkTabsStore } from '../../work-tabs/workTabsStore';
 import { EightDDocumentEditor, EightDField } from '../process-eight-d/EightDDocumentEditor';
 import { EightDEvidenceScopeContext } from '../process-eight-d/EightDEvidenceScope';
 import { EightDProblemInput } from '../process-eight-d/EightDProblemInput';
+import { EightDWorkspaceHeader } from '../internal-eight-d/EightDWorkspaceHeader';
 import { aborted, eightDFieldLocation, isFeaturePermissionDenied, roundPath, useEightDStyle, useEightDText, type EightDRead } from '../process-eight-d/eight-d';
 import { ClosureTaskInbox } from '../tasks/ClosureTaskInbox';
 import { useCustomerLedgerWrite } from '../customer-quality/customer-ledger-write';
@@ -54,9 +55,10 @@ function Workspace({ supplierProblemId, portal, onDenied, session }: SupplierEig
   const [closureDate, setClosureDate] = useState('');
   const [inbox, setInbox] = useState(false);
   const [flowLogOpen, setFlowLogOpen] = useState(false);
+  const [plansOpen, setPlansOpen] = useState(false);
   const [tab, setTab] = useState<View>('workspace');
   const [fieldTarget, setFieldTarget] = useState<ReturnType<typeof eightDFieldLocation>>();
-  const [refreshedChecks, setRefreshedChecks] = useState<{ report: SupplierReport; issues: SupplierReport['submissionIssues'] }>();
+  const [refreshedChecks, setRefreshedChecks] = useState<{ report: SupplierReport; draft: NonNullable<typeof draft>; issues?: SupplierReport['submissionIssues']; failed?: boolean }>();
   const [evidencePending, setEvidencePending] = useState(0);
   const panels = useRef(new Set<string>());
   const lifetime = useRef(new AbortController());
@@ -68,8 +70,7 @@ function Workspace({ supplierProblemId, portal, onDenied, session }: SupplierEig
   const identity = useRef<{ problemId: string; organizationId: string }>(undefined);
   const completion = useRef<Parameters<SupplierCommand>[3]>(undefined);
   const sequence = useRef(0);
-  const checkSequence = useRef(0);
-  const stages = useRef<HTMLElement>(null);
+  const checkRequest = useRef<AbortController>(undefined);
   const actionForm = useRef<HTMLElement>(null);
   const actionTrigger = useRef<HTMLElement | null>(null);
   const deniedCallback = useRef(onDenied); deniedCallback.current = onDenied;
@@ -108,7 +109,9 @@ function Workspace({ supplierProblemId, portal, onDenied, session }: SupplierEig
       return value;
     } catch (cause) {
       const activeReport = identity.current;
-      if (!signal.aborted && !portal && activeReport && path === roundPath(activeReport.problemId) && isFeaturePermissionDenied(cause)) {
+      const refusedCheck = path === `${base}/closure-check` && cause instanceof ApiError && cause.status === 403;
+      const refusedHistory = !portal && activeReport && path === roundPath(activeReport.problemId) && isFeaturePermissionDenied(cause);
+      if (!signal.aborted && activeReport && (refusedCheck || refusedHistory)) {
         try {
           const saved = await apiRequest<SupplierReport>(base, { signal }, { replayAfterReauthentication: false });
           if (!signal.aborted && (saved.supplierProblemId !== supplierProblemId || saved.problemId !== activeReport.problemId || saved.organizationId !== activeReport.organizationId)) {
@@ -199,17 +202,21 @@ function Workspace({ supplierProblemId, portal, onDenied, session }: SupplierEig
     } else setTab(next);
   };
   const refreshChecks = async () => {
-    if (!report || locked || !can('submit')) return;
-    const request = ++checkSequence.current;
-    setRefreshedChecks({ report, issues: undefined });
+    if (!report || !draft || locked || !editable || report.closedAt) return;
+    checkRequest.current?.abort();
+    const request = new AbortController();
+    checkRequest.current = request;
+    setRefreshedChecks({ report, draft });
     try {
-      const saved = await read<SupplierReport>(base);
-      if (!valid(saved) || request !== checkSequence.current) return;
-      if (!saved.allowedActions.includes('report')) setTab('workspace');
-      setRefreshedChecks({ report, issues: saved.rowVersion === report.rowVersion && saved.contentVersion === report.contentVersion
-        && saved.instanceVersion === report.instanceVersion ? saved.submissionIssues : undefined });
-    } catch { return; }
+      const issues = await read<NonNullable<SupplierReport['submissionIssues']>>(`${base}/closure-check`, {
+        method: 'POST', signal: request.signal, body: JSON.stringify({ document: draft }),
+      });
+      if (request === checkRequest.current) setRefreshedChecks({ report, draft, issues });
+    } catch (cause) {
+      if (!aborted(cause) && request === checkRequest.current) setRefreshedChecks({ report, draft, failed: true });
+    }
   };
+  const activeChecks = refreshedChecks?.report === report && refreshedChecks?.draft === draft ? refreshedChecks : undefined;
   useEffect(() => {
     if (action) actionForm.current?.querySelector<HTMLElement>('input:not(:disabled),textarea:not(:disabled),select:not(:disabled),button:not(:disabled)')?.focus();
     else actionTrigger.current?.focus();
@@ -222,10 +229,33 @@ function Workspace({ supplierProblemId, portal, onDenied, session }: SupplierEig
     target?.focus({ preventScroll: true });
     target?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }, [fieldTarget, supplierProblemId, tab]);
-  const statusText = new Map([['PROCESSING', text('办理中', 'Processing')], ['IN_REVIEW', text('审批中', 'In review')], ['CLOSED', text('已关闭', 'Closed')], ['ARCHIVED', text('已归档', 'Archived')]]);
-  const riskText = new Map([['LOW', text('低风险', 'Low risk')], ['MEDIUM', text('中风险', 'Medium risk')], ['HIGH', text('高风险', 'High risk')], ['CRITICAL', text('重大风险', 'Critical risk')]]);
   return <EightDEvidenceScopeContext.Provider value={evidenceScope}><section className={styles.workspace} style={css} aria-label={text('供应商8D工作区', 'Supplier 8D workspace')}>
-    <header className={styles.header}><div><h2>{report?.reportNumber ?? text('供应商8D', 'Supplier 8D')}</h2>{report && <Space wrap><Tag>{statusText.get(report.status) ?? report.status}</Tag><Tag>{riskText.get(report.severity) ?? report.severity}</Tag><span>{text('记录版本', 'Row version')} {report.rowVersion} · {text('内容版本', 'Content version')} {report.contentVersion}</span></Space>}</div><Space wrap><Button disabled={busy || pending || evidencePending > 0} onClick={() => leave(() => { setAction(undefined); setFormDirty(false); void load(); })}>{text('刷新工作区', 'Refresh workspace')}</Button>{report && <Button onClick={() => setFlowLogOpen(true)}>{text('流程日志', 'Workflow log')}</Button>}</Space></header>
+    <EightDWorkspaceHeader
+      title={report?.title.trim() || report?.reportNumber || text('供应商8D', 'Supplier 8D')}
+      report={report} plansOpen={plansOpen} onPlansOpenChange={setPlansOpen}
+      plans={report && {
+        details: [
+          ['SQE', report.sqeUserId],
+          [text('责任科室', 'Responsible section'), report.responsibleSectionDepartmentId],
+          [text('记录版本', 'Row version'), String(report.rowVersion)],
+          [text('内容版本', 'Content version'), String(report.contentVersion)],
+        ],
+        dates: [
+          [text('分析', 'Analysis'), report.analysisDueAt, report.analysisCompletedAt],
+          [text('完整提交', 'Complete submission'), report.submissionDueAt, report.submittedAt],
+          [text('关闭', 'Closure'), report.closureDueAt, report.closedAt],
+        ],
+      }}
+      actions={<>
+        {tab === 'workspace' && report && draft && versions && <>
+          {editable && <Button type="primary" loading={busy} disabled={locked || !!action || evidencePending > 0} onClick={() => void run(base, 'PUT', { ...versions, document: draft })}>{report.closedAt ? text('保存内部补充', 'Save internal supplement') : text('保存草稿', 'Save draft')}</Button>}
+          {['analysis-complete', 'submit', 'deadlines'].filter(name => can(name) && !report.closedAt && !inReview && (!portal || name !== 'deadlines')).map(name => <Button key={name} disabled={locked || dirty || !!action || evidencePending > 0} onClick={() => open(name)}>{name === 'analysis-complete' ? text('确认分析完成并设置正式提交期限', 'Confirm analysis and set the final submission deadline') : name === 'submit' ? text('完整提交', 'Submit complete report') : text('设置期限', 'Set deadlines')}</Button>)}
+          {!portal && can('disclosure-preview') && <Button disabled={locked || dirty || !!action || evidencePending > 0} onClick={() => open('disclosure')}>{text('披露预览与释放', 'Preview and release disclosure')}</Button>}
+          {(can('deadline-extensions') || can('request-extension')) && <Button disabled={locked || dirty || !!action || evidencePending > 0} onClick={() => open('extensions')}>{text('期限与延期', 'Deadlines and extensions')}</Button>}
+        </>}
+        <Button disabled={busy || pending || evidencePending > 0} onClick={() => leave(() => { setAction(undefined); setFormDirty(false); void load(); })}>{text('刷新工作区', 'Refresh workspace')}</Button>
+        {report && <Button onClick={() => setFlowLogOpen(true)}>{text('流程日志', 'Workflow log')}</Button>}
+      </>} />
     {(error || pending) && <Alert role="alert" type="error" title={pending ? text('写入结果未知：原内容与幂等键已冻结，仅可重试原请求。', 'Write outcome unknown. Retry only the frozen original request.') : error} description={<ul>{Object.entries(fields).map(([path, messages]) => <li key={path}>{eightDFieldLocation(path) ? <button type="button" disabled={locked} onClick={() => setFieldTarget(eightDFieldLocation(path))}>{path}</button> : <code>{path}</code>} · {messages.join(' / ')}</li>)}</ul>} />}
     {conflict && <Button disabled={busy || loading} onClick={() => void load(true)}>{text('刷新基线并保留草稿', 'Refresh baseline and keep draft')}</Button>}
     {pending && <Button loading={busy} disabled={busy || evidencePending > 0} onClick={() => void run()}>{text('重试原请求', 'Retry original request')}</Button>}
@@ -233,16 +263,7 @@ function Workspace({ supplierProblemId, portal, onDenied, session }: SupplierEig
     {loading && <Spin aria-label={text('正在加载工作区', 'Loading workspace')} />}
     {report && draft && versions && <>
       {tab === 'workspace' && <>
-      <section className={styles.section} ref={stages} tabIndex={-1}><h3>{report.title}</h3><p>SQE：{report.sqeUserId} · {text('责任科室', 'Responsible section')}：{report.responsibleSectionDepartmentId}</p>
-        <div className={styles.scroll}><table><thead><tr><th>{text('阶段', 'Stage')}</th><th>{text('计划', 'Planned')}</th><th>{text('实际', 'Actual')}</th></tr></thead><tbody>{[
-          [text('分析', 'Analysis'), report.analysisDueAt, report.analysisCompletedAt], [text('完整提交', 'Complete submission'), report.submissionDueAt, report.submittedAt], [text('关闭', 'Closure'), report.closureDueAt, report.closedAt],
-        ].map(([label, planned, actual]) => <tr key={label}><th scope="row">{label}</th><td>{planned || '—'}</td><td>{actual || '—'}</td></tr>)}</tbody></table></div>
-        <Space wrap>{editable && <Button type="primary" loading={busy} disabled={locked || !!action || evidencePending > 0} onClick={() => void run(base, 'PUT', { ...versions, document: draft })}>{report.closedAt ? text('保存内部补充', 'Save internal supplement') : text('保存草稿', 'Save draft')}</Button>}
-          {['analysis-complete', 'submit', 'deadlines'].filter(name => can(name) && !report.closedAt && !inReview && (!portal || name !== 'deadlines')).map(name => <Button key={name} disabled={locked || dirty || !!action || evidencePending > 0} onClick={() => open(name)}>{name === 'analysis-complete' ? text('确认分析完成并设置正式提交期限', 'Confirm analysis and set the final submission deadline') : name === 'submit' ? text('完整提交', 'Submit complete report') : text('设置期限', 'Set deadlines')}</Button>)}
-          {!portal && can('disclosure-preview') && <Button disabled={locked || dirty || !!action || evidencePending > 0} onClick={() => open('disclosure')}>{text('披露预览与释放', 'Preview and release disclosure')}</Button>}
-          {(can('deadline-extensions') || can('request-extension')) && <Button disabled={locked || dirty || !!action || evidencePending > 0} onClick={() => open('extensions')}>{text('期限与延期', 'Deadlines and extensions')}</Button>}
-        </Space>{dirty && <p role="status">{text('有未保存草稿，请先保存，再执行其他操作。', 'Unsaved draft. Save before other actions.')}</p>}
-      </section>
+      {dirty && <p role="status">{text('有未保存草稿，请先保存，再执行其他操作。', 'Unsaved draft. Save before other actions.')}</p>}
       {report.status === 'IN_REVIEW' && <Alert type="info" title={portal ? text('在审锁版：SQE先审，管理侧随后处理；任一退回均须整轮重审。', 'Review locked: SQE first, then management. Any return restarts the whole round.') : text('在审锁版', 'Review locked')} />}
       {report.closedAt && <Alert type="info" title={portal ? text('已关闭，仅显示获准版本。', 'Closed. Only authorized versions are shown.') : text('已关闭：内部补充不改变原批准依据、审批结果或实际关闭时间，不向供应商公开。', 'Closed: internal supplements do not change the approved basis, decisions or actual closure date and are not shared with the supplier.')} />}
       {action && <section ref={actionForm} className={styles.section} role="region" aria-label={text('操作表单', 'Action form')}>
@@ -263,18 +284,19 @@ function Workspace({ supplierProblemId, portal, onDenied, session }: SupplierEig
       <Tabs className={styles.viewTabs} activeKey={tab} onChange={switchTab} destroyOnHidden items={[
         { key: 'workspace', label: text('工作区', 'Workspace'), disabled: tab !== 'workspace' && (locked || evidencePending > 0), children: tab === 'workspace' ? (
           <EightDDocumentEditor problemId={supplierProblemId} portal={portal} document={draft} mode="workspace" chapterTarget={fieldTarget}
-            overview={<EightDProblemInput sources={[]} severity={report.severity} observation={report.title} />}
+            overview={riskDetails => <EightDProblemInput sources={[]} severity={report.severity} observation={report.title} riskDetails={riskDetails} />}
             problemFacts={report.title.trim() ? [[text('初始现象', 'Initial observation'), report.title]] : []}
-            teamOptionsPath={`${base}/team-options`} submissionChecks={refreshedChecks?.report === report ? refreshedChecks.issues : report.submissionIssues} hasUnsavedChanges={dirty}
-            onRefreshChecks={can('submit') ? () => void refreshChecks() : undefined}
+            teamOptionsPath={`${base}/team-options`} submissionChecks={activeChecks ? activeChecks.issues : dirty ? undefined : report.submissionIssues}
+            checking={!!activeChecks && !activeChecks.issues && !activeChecks.failed} checkFailed={activeChecks?.failed}
+            onRefreshChecks={editable && !report.closedAt ? () => void refreshChecks() : undefined}
             onLocateStageCheck={() => {
               if (can('analysis-complete') && !inReview && !report.closedAt && !dirty && !locked && !action && !panels.current.size) open('analysis-complete');
               else if (!portal && can('deadlines') && !inReview && !report.closedAt && !dirty && !locked && !action && !panels.current.size) open('deadlines');
-              else { stages.current?.focus({ preventScroll: true }); stages.current?.scrollIntoView?.({ block: 'nearest' }); }
+              else setPlansOpen(true);
             }}
             resource={{ resourceType: report.closedAt && !portal ? 'supplier-eight-d-supplement' : 'supplier-quality', resourceId: supplierProblemId }}
             disabled={!editable || locked || !!action} removalBlocked={evidencePending > 0} read={read}
-            onChange={change => { if (editable && !locked && !action) { setDraft(value => value && change(value)); setDirty(true); setReceipt(false); } }} />
+            onChange={change => { if (editable && !locked && !action) { checkRequest.current?.abort(); setDraft(value => value && change(value)); setDirty(true); setReceipt(false); } }} />
         ) : null },
         ...(can('report') ? [{ key: 'report', label: text('报告预览', 'Report preview'), disabled: tab !== 'report' && (locked || !!action || evidencePending > 0), children: tab === 'report' ? <div className={styles.reportPanel} tabIndex={0} role="region" aria-label={text('报告正文与版本', 'Report content and versions')}><SupplierControlledReport report={report} base={base} portal={portal} read={read} /></div> : null }] : []),
       ]} />

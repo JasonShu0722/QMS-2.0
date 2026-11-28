@@ -27,6 +27,7 @@ const fieldSections: Record<keyof EightDDocument, string> = {
   description: 'D2', okDescription: 'D2', ngDescription: 'D2', okFileIds: 'D2', ngFileIds: 'D2', temporaryMeasures: 'D3', containment: 'D3', optionalAffectedContainment: 'D3', optionalAffectedScope: 'D3',
   analysisProcess: 'D4', analysisFileIds: 'D4', occurrenceCause: 'D4', escapeCause: 'D4', systemCause: 'D4', correctiveActions: 'D5-D6',
   effectTracking: 'D6', horizontalDeployment: 'D7', standardization: 'D7', closureSummary: 'D8', lessonsLearned: 'D8',
+  lessonsLearnedTitle: 'D8', lessonsLearnedApplicability: 'D8', lessonsLearnedFileIds: 'D8',
 };
 // Only map server-returned paths to existing UI regions; this is not a client validation policy.
 export function eightDFieldLocation(path: string) {
@@ -52,5 +53,5 @@ export function useEightDSeverityText() {
 export const aborted = (cause: unknown) => cause instanceof DOMException && cause.name === 'AbortError';
 export function useEightDStyle(): CSSProperties {
   const { token } = theme.useToken();
-  return { '--ed-bg': token.colorBgContainer, '--ed-input': token.colorBgContainer, '--ed-text': token.colorText, '--ed-primary': token.colorPrimary, '--ed-border': token.colorBorderSecondary, '--ed-fill': token.colorFillAlter } as CSSProperties;
+  return { '--ed-bg': token.colorBgContainer, '--ed-input': token.colorBgContainer, '--ed-text': token.colorText, '--ed-muted': token.colorTextSecondary, '--ed-primary': token.colorPrimary, '--ed-border': token.colorBorderSecondary, '--ed-fill': token.colorFillAlter } as CSSProperties;
 }

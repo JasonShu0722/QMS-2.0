@@ -43,9 +43,11 @@ function NullableBoolean() {
   return applyDecorators(ApiProperty({ type: Boolean, nullable: true }), ValidateIf((_object, value) => value !== null), IsBoolean());
 }
 
-function FileIds() {
+function FileIds(optional = false) {
+  const property = optional ? ApiPropertyOptional : ApiProperty;
   return applyDecorators(
-    ApiProperty({ type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: PROCESS_EIGHT_D_MAX_FILES }),
+    property({ type: 'array', items: { type: 'string', format: 'uuid' }, maxItems: PROCESS_EIGHT_D_MAX_FILES }),
+    ...(optional ? [ValidateIf((_object, value) => value !== undefined)] : []),
     IsArray(), ArrayMaxSize(PROCESS_EIGHT_D_MAX_FILES), IsUUID('all', { each: true }),
   );
 }
@@ -192,4 +194,7 @@ export class ProcessEightDDocumentDto {
   @Rows(ProcessEightDStandardizationDto) standardization: ProcessEightDStandardizationDto[] = [];
   @Text() closureSummary = '';
   @OptionalText() lessonsLearned?: string = undefined;
+  @OptionalText() lessonsLearnedTitle?: string = undefined;
+  @OptionalText() lessonsLearnedApplicability?: string = undefined;
+  @FileIds(true) lessonsLearnedFileIds?: string[] = undefined;
 }

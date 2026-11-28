@@ -23,7 +23,7 @@ import type { WorkflowAdministrativeInvalidationInput, WorkflowAdministrativeTar
 import { canonical, isClosureReviewNode, jsonObject, matchesCondition } from '../workflow/workflow-runtime-policy.js';
 import { WorkflowRuntimeService } from '../workflow/workflow-runtime.service.js';
 import { createWorkflowStart, persistWorkflowMutation } from '../workflow/workflow-start.js';
-import { analysisCompletionIssues, completedD7EvidenceIssues, completedD7EvidenceRows, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from '../process-quality/process-eight-d-document.js';
+import { analysisCompletionIssues, analysisPlan, completedD7EvidenceIssues, completedD7EvidenceRows, documentFileIds, emptyProcessEightDDocument, normalizeProcessEightDDocument, ProcessEightDDocumentError, submissionIssues } from '../process-quality/process-eight-d-document.js';
 import type { EightDTeamOptionsQueryDto } from '../process-quality/process-eight-d-document-team.dto.js';
 import { eightDError as fail, eightDRequestDigest } from '../process-quality/process-eight-d-policy.js';
 import { SupplierWorkflowBindingService } from './supplier-workflow-binding.service.js';
@@ -57,6 +57,20 @@ export class SupplierEightDService {
       const record = await this.lockRecord(tx, actor, id, true);
       await this.authorizeRead(tx, actor, record);
       return this.model(tx, actor, record);
+    });
+  }
+
+  async closureCheck(actor: SupplierEightDActor, id: string, draft: unknown) {
+    return this.transaction(async tx => {
+      const record = await this.lockRecord(tx, actor, id, true);
+      await this.authorizeReply(tx, actor, record);
+      this.editable(record);
+      const document = this.normalizeDraft(draft);
+      const ids = documentFileIds(document);
+      const available = ids.length
+        ? await this.files.reportEvidenceAvailableIds(tx, actor, { resourceType: 'supplier-quality', resourceId: record.supplier.id }, ids) : new Set<string>();
+      const analysisCompletedAt = canonical(analysisPlan(document)) === canonical(analysisPlan(this.document(record))) ? record.control.analysisCompletedAt : null;
+      return submissionIssues(document, { analysisCompletedAt, submissionDueAt: record.control.submissionDueAt }, available);
     });
   }
 
@@ -392,10 +406,13 @@ export class SupplierEightDService {
     });
   }
 
-  async save(actor: SupplierEightDActor, id: string, input: SaveSupplierEightDDto, traceId: string, key: string) {
-    let document;
-    try { document = normalizeProcessEightDDocument(input.document); }
+  private normalizeDraft(input: unknown) {
+    try { return normalizeProcessEightDDocument(input); }
     catch (error) { if (error instanceof ProcessEightDDocumentError) throw new ControlledValidationException('SUPPLIER_EIGHT_D_DOCUMENT_INVALID', error.issues); throw error; }
+  }
+
+  async save(actor: SupplierEightDActor, id: string, input: SaveSupplierEightDDto, traceId: string, key: string) {
+    const document = this.normalizeDraft(input.document);
     return this.command(actor, id, input, 'SAVE', traceId, key, async (tx, record) => {
       await this.authorizeSave(tx, actor, record);
       if (!record.control.closedAt) this.editable(record);
@@ -407,9 +424,7 @@ export class SupplierEightDService {
         if (issues.length) throw new ControlledValidationException('SUPPLIER_EIGHT_D_DOCUMENT_INVALID', issues);
       });
       if (canonical(previous) === canonical(document)) return;
-      const plan = (d: typeof document) => ({ analysisProcess: d.analysisProcess, occurrenceCause: d.occurrenceCause, escapeCause: d.escapeCause, systemCause: d.systemCause,
-        analysisFileIds: d.analysisFileIds, correctiveActions: d.correctiveActions.map(a => ({ id: a.id, causeKind: a.causeKind, action: a.action, owner: a.owner, plannedAt: a.plannedAt, verificationMethod: a.verificationMethod })) });
-      const analysisChanged = canonical(plan(previous)) !== canonical(plan(document));
+      const analysisChanged = canonical(analysisPlan(previous)) !== canonical(analysisPlan(document));
       await tx.supplierResponseDraft.upsert({ where: { problemId: id }, create: { problemId: id, content: json(document), updatedById: actor.id }, update: { content: json(document), updatedById: actor.id } });
       await this.bump(tx, actor, record, record.control.closedAt ? Prisma.empty : Prisma.sql`, analysis_completed_at = ${analysisChanged ? null : record.control.analysisCompletedAt}::timestamptz`, true);
       if (record.control.closedAt) await tx.$executeRaw`INSERT INTO supplier_eight_d_supplements (id, organization_id, supplier_problem_id, approved_revision_id, content_version, document, evidence, updated_by)

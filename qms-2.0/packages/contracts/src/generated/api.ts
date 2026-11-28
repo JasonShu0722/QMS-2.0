@@ -3191,6 +3191,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/supplier-quality/eight-d/{id}/closure-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierEightDController_closureCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/supplier-quality/eight-d/{id}/analysis-complete": {
         parameters: {
             query?: never;
@@ -3281,6 +3297,22 @@ export interface paths {
         get: operations["SupplierPortalEightDController_teamOptions"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/supplier-portal/eight-d/{id}/closure-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["SupplierPortalEightDController_closureCheck"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4887,6 +4919,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/customer-quality/eight-d/{id}/closure-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["CustomerEightDController_closureCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/customer-quality/eight-d/{id}/analysis-complete": {
         parameters: {
             query?: never;
@@ -5713,6 +5761,22 @@ export interface paths {
         get: operations["ProcessEightDController_flowRecords"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/process-quality/eight-d/{id}/closure-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ProcessEightDController_closureCheck"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6865,6 +6929,22 @@ export interface paths {
         get: operations["NewProductEightDController_teamOptions"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/new-product-quality/eight-d/{id}/closure-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["NewProductEightDController_closureCheck"];
         delete?: never;
         options?: never;
         head?: never;
@@ -12743,6 +12823,9 @@ export interface components {
             standardization: components["schemas"]["ProcessEightDStandardizationDto"][];
             closureSummary: string;
             lessonsLearned?: string;
+            lessonsLearnedTitle?: string;
+            lessonsLearnedApplicability?: string;
+            lessonsLearnedFileIds?: string[];
         };
         ProcessEightDSubmissionIssueDto: {
             path: string;
@@ -12851,6 +12934,11 @@ export interface components {
         SaveSupplierEightDDto: {
             expectedRowVersion: number;
             expectedInstanceVersion: number;
+            document: components["schemas"]["ProcessEightDDocumentDto"];
+        };
+        ProcessEightDClosureCheckDto: {
+            /** Format: uuid */
+            organizationId?: string;
             document: components["schemas"]["ProcessEightDDocumentDto"];
         };
         SupplierEightDAnalysisCompleteDto: {
@@ -27604,6 +27692,41 @@ export interface operations {
             };
         };
     };
+    SupplierEightDController_closureCheck: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessEightDClosureCheckDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDSubmissionIssueDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     SupplierEightDController_analysisComplete: {
         parameters: {
             query?: never;
@@ -27831,6 +27954,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EightDTeamOptionsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    SupplierPortalEightDController_closureCheck: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessEightDClosureCheckDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDSubmissionIssueDto"][];
                 };
             };
             default: {
@@ -31754,6 +31912,41 @@ export interface operations {
             };
         };
     };
+    CustomerEightDController_closureCheck: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessEightDClosureCheckDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDSubmissionIssueDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     CustomerEightDController_analysis: {
         parameters: {
             query?: never;
@@ -33928,6 +34121,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProcessEightDFlowRecordDto"][];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ProcessEightDController_closureCheck: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessEightDClosureCheckDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDSubmissionIssueDto"][];
                 };
             };
             default: {
@@ -36822,6 +37050,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EightDTeamOptionsDto"];
+                };
+            };
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    NewProductEightDController_closureCheck: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-csrf-token": string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProcessEightDClosureCheckDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessEightDSubmissionIssueDto"][];
                 };
             };
             default: {

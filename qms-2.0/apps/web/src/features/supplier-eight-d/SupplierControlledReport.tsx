@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Spin, Tag } from 'antd';
+import { Alert, Button, Spin } from 'antd';
 import type { components } from '@qms/contracts';
 import { ApiError } from '../../api/client';
-import { AttachmentPanel } from '../attachments/AttachmentPanel';
 import { EightDField } from '../process-eight-d/EightDDocumentEditor';
-import { EightDReportDocument, matchesReportSelection } from '../process-eight-d/EightDControlledReport';
+import { EightDReportDocument, ReportApproval, ReportCover, ReportFacts, ReportSources, matchesReportSelection } from '../process-eight-d/EightDControlledReport';
 import { useEightDEvidenceScope } from '../process-eight-d/EightDEvidenceScope';
 import { aborted, useEightDText, type EightDRead } from '../process-eight-d/eight-d';
 import styles from '../process-eight-d/controlled-report.module.css';
@@ -12,9 +11,6 @@ import type { SupplierReport } from './supplier-eight-d';
 
 type Controlled = components['schemas']['SupplierEightDControlledReportDto'];
 type RevisionPage = components['schemas']['SupplierEightDRevisionPageDto'];
-function metadata(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
-}
 export function SupplierControlledReport({ report, base, portal, read }: { report: SupplierReport; base: string; portal: boolean; read: EightDRead }) {
   const text = useEightDText();
   const scope = useEightDEvidenceScope();
@@ -39,8 +35,6 @@ export function SupplierControlledReport({ report, base, portal, read }: { repor
   const fingerprint = controlled?.previewFingerprint;
   const snapshot = controlled?.snapshot;
   const problem = snapshot?.problem ?? {};
-  const rounds = snapshot?.approvalRounds ?? (snapshot?.approval ? [snapshot.approval] : []);
-  const show = (value: unknown) => typeof value === 'string' && value !== '' || typeof value === 'number' && Number.isFinite(value) ? String(value) : text('未记录', 'Not recorded');
   const historyScope = JSON.stringify([base, report.rowVersion]);
   useEffect(() => { setSelection('CURRENT'); }, [historyScope]);
   const before = cursor?.scope === historyScope ? cursor.before : undefined;
@@ -96,65 +90,33 @@ export function SupplierControlledReport({ report, base, portal, read }: { repor
     {!historyError && nextBefore !== null && <Button disabled={busy || historyLoading} onClick={() => setCursor({ scope: historyScope, before: nextBefore })}>{text('加载更多历史版本', 'Load more historical revisions')}</Button>}
     <Button disabled={busy} onClick={() => setRevision(n => n + 1)}>{text('刷新报告', 'Refresh report')}</Button><Button disabled={!fingerprint || busy || failure?.conflict} loading={busy} onClick={() => void download()}>{text('授权下载 PDF', 'Download authorized PDF')}</Button>
     </div>
-    {portal && <p>{text('报告只含服务端已保存内容。原批准依据保持固定，当前内部补充不向供应商公开。', 'Reports contain server-saved content only. The approved basis is immutable; current internal supplements are not public to suppliers.')}</p>}
     {failure && <Alert type="error" title={failure.conflict ? text('报告版本已变化，请刷新预览后下载。', 'The report changed. Refresh the preview before downloading.') : text('报告读取或下载失败，请检查版本与权限后刷新。', 'Report read or download failed. Check the version and permissions.')} />}
     {!loaded ? <Spin aria-label={text('正在加载报告预览', 'Loading report preview')} /> : !controlled ? <Alert type="error" title={text('报告读取或下载失败，请检查版本与权限后刷新。', 'Report read or download failed. Check the version and permissions.')} /> : <article className={styles.article} aria-label={controlled.reportNumber}>
-      <header className={styles.cover}><h2>{typeof problem.title === 'string' && problem.title ? problem.title : controlled.reportNumber}</h2><Tag>{controlled.label}</Tag><p>{controlled.view} · {text('内容版本', 'Content version')} {controlled.contentVersion} · {text('记录版本', 'Row version')} {controlled.rowVersion} · {controlled.generatedAt}</p></header>
+      <ReportCover report={controlled} title={controlled.snapshot.document.title || (typeof problem.title === 'string' && problem.title) || controlled.reportNumber} severity={problem.severity ?? snapshot?.severity} />
       <section aria-label={text('所选版本基础事实', 'Selected version facts')}>
         <h3>{text('基础事实', 'Basic facts')}</h3>
-        <dl className={styles.facts}>{[
-          [text('报告单号', 'Report number'), problem.reportNumber], [text('标题', 'Title'), problem.title],
+        <ReportFacts entries={[
           [text('物料编码', 'Material code'), problem.materialCode], [text('物料类别', 'Material category'), problem.materialCategory],
           [text('不良描述', 'Defect description'), problem.defectDescription], [text('不良数量', 'Defect quantity'), problem.defectQuantity],
-          [text('风险等级', 'Severity'), problem.severity], [text('创建时间', 'Created at'), problem.createdAt],
-        ].map(([label, value]) => <div key={String(label)}><dt>{String(label)}</dt><dd>{show(value)}</dd></div>)}</dl>
+          [text('发起时间', 'Created at'), problem.createdAt],
+        ]} />
       </section>
-      <section aria-label={text('所选版本阶段时间', 'Selected version stage dates')}>
+      {[controlled.snapshot.deadlines.analysisDueAt, controlled.snapshot.analysisCompletedAt, controlled.snapshot.deadlines.submissionDueAt,
+        controlled.snapshot.submittedAt, controlled.snapshot.deadlines.closureDueAt, problem.closedAt].some(Boolean) && <section aria-label={text('所选版本阶段时间', 'Selected version stage dates')}>
         <h3>{text('阶段计划与实际时间', 'Planned and actual stage dates')}</h3>
-        <dl className={styles.facts}>{[
+        <ReportFacts entries={[
           [text('分析计划', 'Analysis due'), controlled.snapshot.deadlines.analysisDueAt], [text('分析完成', 'Analysis completed'), controlled.snapshot.analysisCompletedAt],
           [text('完整提交计划', 'Submission due'), controlled.snapshot.deadlines.submissionDueAt], [text('完整提交时间', 'Submitted at'), controlled.snapshot.submittedAt],
           [text('关闭计划', 'Closure due'), controlled.snapshot.deadlines.closureDueAt], [text('实际关闭时间', 'Closed at'), problem.closedAt],
-        ].map(([label, value]) => <div key={String(label)}><dt>{String(label)}</dt><dd>{show(value)}</dd></div>)}</dl>
-      </section>
+        ]} />
+      </section>}
+      {!portal && <ReportSources sources={controlled.snapshot.sources} />}
       <EightDReportDocument document={controlled.snapshot.document} attachments={controlled.attachments} />
-      <section aria-label={text('所选版本审批与关闭依据', 'Selected version approval and closure basis')}>
-        <h3>{text('审批与关闭依据', 'Approval and closure basis')}</h3>
-        <dl className={styles.facts}>{[
-          [text('修订标识', 'Revision ID'), controlled.revisionId], [text('正文版本', 'Content version'), controlled.snapshot.contentVersion],
-          [text('数据版本', 'Row version'), controlled.snapshot.rowVersion], [text('流程版本', 'Instance version'), controlled.snapshot.instance.version],
-          [text('流程状态', 'Instance status'), controlled.snapshot.instance.status],
-        ].map(([label, value]) => <div key={String(label)}><dt>{String(label)}</dt><dd>{show(value)}</dd></div>)}</dl>
-        {!rounds.length && <p>{text('本版无批准记录（未批准）', 'No approval record in this version (unapproved)')}</p>}
-        {rounds.map((value, index) => {
-          const round = metadata(value);
-          return <section key={index} aria-label={`${text('审批轮次', 'Approval round')} ${show(round.roundNumber)}`}>
-            <h4>{text('审批轮次', 'Approval round')} {show(round.roundNumber)}</h4>
-            <dl className={styles.facts}>{[
-              [text('轮次结果', 'Round result'), round.status], [text('固定正文版本', 'Pinned content version'), round.contentVersion],
-              [text('轮次版本', 'Round version'), round.version], [text('发起时间', 'Started at'), round.createdAt],
-              [text('轮次更新时间', 'Round updated at'), round.updatedAt],
-            ].map(([label, value]) => <div key={String(label)}><dt>{String(label)}</dt><dd>{show(value)}</dd></div>)}</dl>
-            {(Array.isArray(round.duties) ? round.duties : []).map((value, index) => {
-              const duty = metadata(value);
-              return <section key={index} aria-label={`${text('审批职责', 'Approval duty')} ${index + 1}`}>
-                <dl className={styles.facts}>{[
-                  [text('职责', 'Duty'), duty.duty], [text('职责结果', 'Duty result'), duty.status], [text('确认时间', 'Decided at'), duty.decidedAt],
-                  ...portal ? [] : [[text('职责用户标识', 'Assigned user ID'), duty.userId], [text('确认用户标识', 'Deciding user ID'), duty.decidedBy], [text('意见', 'Comment'), duty.comment]],
-                ].map(([label, value]) => <div key={String(label)}><dt>{String(label)}</dt><dd>{show(value)}</dd></div>)}</dl>
-              </section>;
-            })}
-          </section>;
-        })}
-      </section>
+      <ReportApproval report={controlled} portal={portal} />
       {!portal && controlled.status === 'CLOSED_SUPPLEMENT' && <section aria-label={text('内部补充版本说明', 'Internal supplement version notice')}>
         <p>{text('关闭后内部补充，非原批准版，不对供应商公开。', 'Post-closure internal supplement, not the original approved version and not public to suppliers.')}</p>
-        <dl className={styles.facts}><div><dt>{text('补充更新时间', 'Supplement updated at')}</dt><dd>{show(problem.supplementUpdatedAt)}</dd></div></dl>
+        <ReportFacts entries={[[text('补充更新时间', 'Supplement updated at'), problem.supplementUpdatedAt]]} />
       </section>}
-      <section><h3>{text('版本附件', 'Version attachments')}</h3>
-      <ul>{controlled.attachments.map(file => <li key={file.id}>{file.originalName} · {file.rendering} · {file.note} · {file.uses.join(', ')}</li>)}</ul>
-      <AttachmentPanel variant="standard" resource={{ resourceType: !portal && controlled.status === 'CLOSED_SUPPLEMENT' ? 'supplier-eight-d-supplement' : 'supplier-quality', resourceId: report.supplierProblemId }} fileIds={controlled.attachments.map(file => file.id)} readOnly onAccessDenied={scope.onAccessDenied} onPendingChange={scope.onPendingChange} />
-      </section>
     </article>}
   </div>;
 }

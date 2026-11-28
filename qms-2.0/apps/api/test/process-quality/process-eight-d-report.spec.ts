@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { HttpException } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
+import { crc32, deflateSync } from 'node:zlib';
 import { jest } from '@jest/globals';
 import { emptyProcessEightDDocument } from '../../src/modules/process-quality/process-eight-d-document.js';
 import { ProcessEightDReportService } from '../../src/modules/process-quality/process-eight-d-report.service.js';
@@ -255,7 +256,52 @@ it.each(['read', 'pdf'] as const)('%s audits final report-permission revocation 
     outcome: 'DENIED', traceId: 'revoked-trace', metadata: { permissionCode: 'process-quality:issues:report', reasonCode: 'PROCESS_EIGHT_D_REPORT_ACCESS_DENIED' } }));
 });
 
-it('budgets repeated image references before rendering rather than only unique attachments', async () => {
+it('lists an over-dimension image in the internal preview and its matching PDF', async () => {
+  const s = setup(true);
+  const oversized = Buffer.from(png);
+  oversized.writeUInt32BE(8193, 16);
+  s.ref.sizeBytes = oversized.length;
+  s.ref.sha256 = createHash('sha256').update(oversized).digest('hex');
+  s.storage.readVersion.mockImplementation(async function* () { yield oversized; });
+
+  const preview = await s.service.read(actor, id, {}, 'preview');
+  expect(preview.attachments).toEqual([expect.objectContaining({ id: fileId, rendering: 'LISTED' })]);
+  const pdf = await s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'pdf');
+  expect(pdf.content.subarray(0, 5).toString()).toBe('%PDF-');
+  expect(pdf.content.toString('latin1')).not.toMatch(/\/Subtype\s+\/Image\b/);
+});
+
+it('lists the third 3500 × 3500 image in preview and PDF regardless of evidence query order', async () => {
+  const s = setup(true);
+  const chunk = (type: string, data: Buffer) => {
+    const body = Buffer.concat([Buffer.from(type), data]);
+    const result = Buffer.alloc(data.length + 12);
+    result.writeUInt32BE(data.length);
+    body.copy(result, 4);
+    result.writeUInt32BE(crc32(body), result.length - 4);
+    return result;
+  };
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(3500);
+  header.writeUInt32BE(3500, 4);
+  header[8] = 8;
+  const bytes = Buffer.concat([png.subarray(0, 8), chunk('IHDR', header),
+    chunk('IDAT', deflateSync(Buffer.alloc(3501 * 3500))), chunk('IEND', Buffer.alloc(0))]);
+  const ids = Array.from({ length: 3 }, randomUUID).sort();
+  s.result.snapshot.document.okFileIds = ids;
+  const refs = ids.map((attachmentId, index) => ({ ...s.ref, id: attachmentId, objectKey: randomUUID(), originalName: `sample-${index + 1}.png`,
+    sizeBytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }));
+  s.files.readReportEvidence.mockResolvedValue([...refs].reverse());
+  s.storage.readVersion.mockImplementation(async function* () { yield bytes; });
+  const preview = await s.service.read(actor, id, {}, 'preview');
+  expect(ids.map(attachmentId => preview.attachments.find(file => file.id === attachmentId)?.rendering)).toEqual(['EMBEDDED', 'EMBEDDED', 'LISTED']);
+  s.files.readReportEvidence.mockResolvedValue(refs);
+  const pdf = await s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'pdf');
+  expect(pdf.content.subarray(0, 5).toString()).toBe('%PDF-');
+  expect(pdf.content.toString('latin1').match(/\/Subtype\s+\/Image\b/g)).toHaveLength(2);
+}, 30000);
+
+it('lists a repeated image that exceeds the cumulative pixel budget', async () => {
   const s = setup(true); const header = Buffer.from(png.subarray(0, 33));
   header.writeUInt32BE(4000, 16); header.writeUInt32BE(4000, 20);
   s.result.snapshot.document.temporaryMeasures = Array.from({ length: 3 }, (_, index) => ({
@@ -263,9 +309,9 @@ it('budgets repeated image references before rendering rather than only unique a
   }));
   s.ref.sizeBytes = header.length; s.ref.sha256 = createHash('sha256').update(header).digest('hex');
   s.storage.readVersion.mockImplementation(async function* () { yield header; });
-  await expect(s.service.pdf(actor, id, {}, 'trace')).rejects.toMatchObject({ status: 413 });
-  expect(s.core.readReport).toHaveBeenCalledTimes(1);
-  expect(s.audit.record).not.toHaveBeenCalled();
+  const preview = await s.service.read(actor, id, {}, 'preview');
+  expect(preview.attachments).toEqual([expect.objectContaining({ id: fileId, rendering: 'LISTED' })]);
+  await expect(s.service.pdf(actor, id, { previewFingerprint: preview.previewFingerprint }, 'pdf')).resolves.toMatchObject({ contentType: 'application/pdf' });
 });
 
 it('propagates final authorization revocation and storage errors rather than swallowing them into a PDF', async () => {

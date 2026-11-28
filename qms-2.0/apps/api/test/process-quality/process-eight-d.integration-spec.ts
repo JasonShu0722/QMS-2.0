@@ -256,6 +256,35 @@ describe('process 8D real domain transactions with managed workflow configuratio
     expect(detached.submissionIssues).toEqual([]);
   }, 30_000);
 
+  it('checks unsaved D8 drafts through the guarded route and persists lessons without attachments', async () => {
+    const f = await fixture(), id = await f.issue();
+    const saved = await f.read(id);
+    const app = (await Test.createTestingModule({ imports: [AppModule] }).compile()).createNestApplication();
+    app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }));
+    app.useGlobalFilters(new GlobalExceptionFilter());
+    try {
+      await app.init();
+      const csrf = randomUUID();
+      const check = async (userId: string, draft: object, status: number, csrfHeader = csrf) => {
+        const token = await app.get(SessionService).create(userId, app.get(PrismaService), { mfaVerified: true });
+        return request(app.getHttpServer()).post(`/api/v1/process-quality/eight-d/${id}/closure-check`)
+          .set('Cookie', [`qms_session=${token}`, `qms_csrf=${csrf}`]).set('x-csrf-token', csrfHeader).send({ document: draft }).expect(status);
+      };
+      const lessons = { lessonsLearned: 'Check fixture at shift start', lessonsLearnedTitle: 'Fixture inspection',
+        lessonsLearnedApplicability: 'Fixtures using the same clamp' };
+      const reasons = (rows: { path: string }[]) => rows.filter(row => ['occurrenceCause', 'escapeCause'].includes(row.path)).map(row => row.path);
+      expect(reasons((await check(f.owner.user.id, lessons, 200)).body)).toEqual(['occurrenceCause', 'escapeCause']);
+      expect(reasons((await check(f.owner.user.id, { ...lessons, occurrenceCause: 'Fixture drift' }, 200)).body)).toEqual(['escapeCause']);
+      const draft = { ...f.draft(), ...lessons };
+      expect(reasons((await check(f.owner.user.id, draft, 200)).body)).toEqual([]);
+      await check(f.collaborator.user.id, draft, 403);
+      await check(f.owner.user.id, draft, 403, randomUUID());
+      expect(await f.read(id)).toMatchObject({ version: saved.version, contentVersion: saved.contentVersion, document: saved.document });
+      await service.save(f.owner.actor, id, { expectedVersion: saved.version, document: draft }, randomUUID(), randomUUID());
+      expect((await f.read(id)).document).toMatchObject(lessons);
+    } finally { await app.close(); }
+  }, 30_000);
+
   it('persists deleted D7 preset rows through HTTP save, reopen and report projection', async () => {
     const f = await fixture(), id = await f.issue();
     const permission = await prisma.permission.upsert({ where: { code: 'process-quality:issues:report' }, create: { code: 'process-quality:issues:report', name: '8D report' }, update: {} });

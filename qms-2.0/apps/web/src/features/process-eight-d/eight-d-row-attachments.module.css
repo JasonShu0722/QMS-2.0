@@ -1,0 +1,9 @@
+.trigger {
+  flex: none;
+}
+
+.content {
+  max-block-size: 60dvh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+}

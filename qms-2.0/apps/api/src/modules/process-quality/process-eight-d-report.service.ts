@@ -18,7 +18,7 @@ import { INTERNAL_EIGHT_D_DOMAINS } from '../../common/eight-d/internal-eight-d-
 import { reportPreviewFingerprint, reportPreviewFingerprintPattern } from '../../common/eight-d/report-preview-fingerprint.js';
 export type { InternalEightDReportCore, InternalEightDReportDescriptor } from '../../common/eight-d/internal-eight-d-report.js';
 import { ProcessEightDControlledReportDto, type ProcessEightDReportAttachmentDto, type ProcessEightDReportQueryDto, type ProcessEightDReportSnapshotDto } from './process-eight-d-report.dto.js';
-import { REPORT_IMAGE_MAX_BYTES, REPORT_TOTAL_IMAGE_BYTES, REPORT_TOTAL_IMAGE_PIXELS, renderProcessEightDPdf, reportImageSize } from './process-eight-d-pdf.js';
+import { REPORT_IMAGE_MAX_BYTES, renderProcessEightDPdf, reportImageBudget } from './process-eight-d-pdf.js';
 import { ServiceOperationReceiptService } from '../task-notification/service-operation-receipt.service.js';
 
 type ReadResult = Awaited<ReturnType<InternalEightDReportCore['readReport']>>;
@@ -33,6 +33,7 @@ export function reportAttachmentUses(document: ProcessEightDReportSnapshotDto['d
   document.correctiveActions.forEach(row => { add(row.fileIds, `D5 / D6 措施 ${row.id}`); add(row.verificationFileIds, `D6 验证 ${row.id}`); });
   document.horizontalDeployment.forEach(row => add(row.fileIds, `D7 横展 ${row.id}`));
   document.standardization.forEach(row => add(row.fileIds ?? [], `D7 标准化 ${row.id}`));
+  add(document.lessonsLearnedFileIds ?? [], 'D8 经验教训');
   return uses;
 }
 
@@ -62,6 +63,7 @@ export class ProcessEightDReportService {
     this.validate(actor, problemId, query);
     const selected = await this.transaction(tx => this.select(tx, actor, problemId, query));
     const previewFingerprint = this.checkPreview(selected.report, query.previewFingerprint);
+    await this.images(selected, false);
     await this.finish(actor, problemId, query, selected, traceId, 'READ');
     return { ...selected.report, previewFingerprint };
   }
@@ -71,7 +73,7 @@ export class ProcessEightDReportService {
     const selected = await this.transaction(tx => this.select(tx, actor, problemId, query));
     if (query.previewFingerprint !== undefined) this.checkPreview(selected.report, query.previewFingerprint);
     // No storage/network access inside database transactions. References are server-owned and fixed first.
-    const images = await this.images(selected);
+    const images = await this.images(selected, true);
     const executionId = randomUUID(), startedAt = new Date();
     const observe = async (status: 'STARTED' | 'SUCCEEDED' | 'FAILED') => {
       try { await this.operationReceipts?.recordPdf(selected.result.record.problem.organizationId, this.domain.domainCode, executionId, status, startedAt); }
@@ -171,12 +173,12 @@ export class ProcessEightDReportService {
         generatedAt: new Date().toISOString(), snapshot, attachments } };
   }
 
-  private async images(selected: Selection): Promise<Map<string, Buffer>> {
-    const images = new Map<string, Buffer>(); let total = 0; let pixels = 0;
-    for (const file of selected.refs) {
+  private async images(selected: Selection, retainBytes: boolean): Promise<Map<string, Buffer>> {
+    const images = new Map<string, Buffer>();
+    const budget = reportImageBudget();
+    for (const file of [...selected.refs].sort((left, right) => left.id.localeCompare(right.id))) {
       const attachment = selected.report.attachments.find(value => value.id === file.id)!;
-      if (attachment.rendering !== 'EMBEDDED') continue;
-      if (total + file.sizeBytes > REPORT_TOTAL_IMAGE_BYTES) this.fail('PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT', 413);
+      if (!budget.read(attachment)) continue;
       const chunks: Buffer[] = []; let received = 0;
       try {
         for await (const chunk of this.storage.readVersion(file.objectKey, file.objectVersionId, REPORT_IMAGE_MAX_BYTES)) {
@@ -192,18 +194,11 @@ export class ProcessEightDReportService {
       const bytes = Buffer.concat(chunks);
       if (received !== file.sizeBytes || createHash('sha256').update(bytes).digest('hex') !== file.sha256) this.fail('PROCESS_EIGHT_D_REPORT_OBJECT_INVALID', 409);
       try {
-        const size = reportImageSize(bytes, file.contentType);
-        pixels += size.width * size.height * attachment.uses.length;
+        if (budget.embed(attachment, bytes) && retainBytes) images.set(file.id, bytes);
       }
       catch (error) {
-        if (error instanceof Error && error.message === 'PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT') {
-          attachment.rendering = 'LISTED'; attachment.note = '图像像素超过 8192 边长或 1600 万像素上限，未嵌入；请使用正常授权下载';
-          continue;
-        }
         this.fail('PROCESS_EIGHT_D_REPORT_IMAGE_INVALID', 422);
       }
-      if (pixels > REPORT_TOTAL_IMAGE_PIXELS) this.fail('PROCESS_EIGHT_D_REPORT_IMAGE_LIMIT', 413);
-      images.set(file.id, bytes); total += received;
     }
     return images;
   }
